@@ -42,4 +42,8 @@ router.get("/invoices/:id", ctrl.getInvoice);
 router.post("/invoices/generate", ctrl.generateInvoice);
 router.patch("/invoices/:id", ctrl.updateInvoice);
 
+// Reports (live, generated from real data)
+router.get("/reports", ctrl.listReports);
+router.get("/reports/:type", ctrl.generateReport);
+
 module.exports = router;

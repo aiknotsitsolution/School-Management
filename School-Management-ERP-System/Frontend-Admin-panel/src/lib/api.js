@@ -83,6 +83,10 @@ export const api = {
     summary: () => request("/platform/analytics"),
   },
   platform: {
+    reports: {
+      catalog: () => request("/platform/reports"),
+      generate: (type, params = "") => request(`/platform/reports/${type}${params ? `?${params}` : ""}`),
+    },
     auditLogs: (params = "") => request(`/platform/audit-logs${params ? `?${params}` : ""}`),
     schools: {
       list: (params = "") => request(`/platform/schools${params ? `?${params}` : ""}`),

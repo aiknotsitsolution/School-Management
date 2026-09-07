@@ -1175,6 +1175,220 @@ const updateSchoolOnboarding = async (req, res) => {
   }
 };
 
+// --------------------------------------------------------------------------
+// Reports (live, generated on demand from real platform data)
+// --------------------------------------------------------------------------
+
+const REPORT_CATALOG = [
+  {
+    id: "tenant-directory",
+    title: "Tenant directory",
+    category: "Schools",
+    description: "Every tenant school with status, plan, onboarding stage and active-user count.",
+  },
+  {
+    id: "user-roster",
+    title: "User roster",
+    category: "Users & Access",
+    description: "All platform users (excluding platform owner) with role, school, status and login activity.",
+  },
+  {
+    id: "subscription-ledger",
+    title: "Subscription ledger",
+    category: "Billing",
+    description: "Every subscription across all schools with plan, price snapshot and key billing dates.",
+  },
+  {
+    id: "invoice-ledger",
+    title: "Invoice ledger",
+    category: "Billing",
+    description: "All generated invoices with amount, status and payment dates.",
+  },
+  {
+    id: "revenue-summary",
+    title: "Revenue summary",
+    category: "Billing",
+    description: "MRR, ARPU, collected vs outstanding and invoice counts at this moment.",
+  },
+];
+
+const buildDaysAgo = (days) => new Date(new Date().getTime() - days * 24 * 60 * 60 * 1000);
+
+const applyDateWindow = (req, filter, dateField = "createdAt") => {
+  if (req.query.from || req.query.to) {
+    filter[dateField] = {};
+    if (req.query.from) filter[dateField].$gte = new Date(req.query.from);
+    if (req.query.to) filter[dateField].$lte = new Date(req.query.to);
+  }
+  return filter;
+};
+
+const reportGenerators = {
+  "tenant-directory": async (req) => {
+    const filter = applyDateWindow(req, {});
+    if (req.query.status) filter.status = req.query.status;
+    const schools = await School.find(filter).sort({ createdAt: -1 }).lean();
+    const userCounts = await User.aggregate([
+      { $match: { deletedAt: null, schoolId: { $ne: null } } },
+      { $group: { _id: "$schoolId", users: { $sum: 1 } } },
+    ]);
+    const countMap = Object.fromEntries(userCounts.map((r) => [String(r._id), r.users]));
+    return schools.map((school) => ({
+      school: school.name,
+      code: school.code,
+      status: school.status,
+      plan: school.plan,
+      onboarding: school.onboarding?.status || "created",
+      city: school.city || null,
+      activeUsers: countMap[String(school._id)] || 0,
+      createdAt: school.createdAt,
+    }));
+  },
+
+  "user-roster": async (req) => {
+    const filter = applyDateWindow(req, { role: { $ne: "super_admin" } });
+    if (req.query.role) filter.role = req.query.role;
+    if (req.query.includeDeleted === "true") delete filter.deletedAt;
+    else filter.deletedAt = null;
+    const users = await User.find(filter).sort({ createdAt: -1 }).limit(1000).lean();
+    const schoolIds = [...new Set(users.map((u) => u.schoolId).filter(Boolean))];
+    const schools = await School.find({ _id: { $in: schoolIds } }).select("name code").lean();
+    const schoolMap = Object.fromEntries(schools.map((s) => [String(s._id), s.name]));
+    return users.map((user) => ({
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      school: user.schoolId ? schoolMap[String(user.schoolId)] || null : null,
+      status: user.deletedAt ? "removed" : user.isActive ? "active" : "inactive",
+      lastLogin: user.lastLogin || null,
+      lastActivity: user.lastActivity || null,
+      createdAt: user.createdAt,
+    }));
+  },
+
+  "subscription-ledger": async (req) => {
+    const filter = applyDateWindow(req);
+    if (req.query.status) filter.status = req.query.status;
+    const subs = await Subscription.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(2000)
+      .populate("schoolId", "name code")
+      .populate("planId", "name code")
+      .lean();
+    return subs.map((sub) => ({
+      school: sub.schoolId?.name || null,
+      code: sub.schoolId?.code || null,
+      plan: sub.planId?.name || null,
+      planCode: sub.planId?.code || null,
+      status: sub.status,
+      price: sub.price,
+      currency: sub.currency,
+      cycle: sub.billingCycle,
+      start: sub.startDate,
+      trialEnd: sub.trialEndDate || null,
+      nextBilling: sub.nextBillingDate || null,
+      createdAt: sub.createdAt,
+    }));
+  },
+
+  "invoice-ledger": async (req) => {
+    const filter = applyDateWindow(req);
+    if (req.query.status) filter.status = req.query.status;
+    const invoices = await BillingInvoice.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(2000)
+      .populate("schoolId", "name code")
+      .lean();
+    return invoices.map((inv) => ({
+      invoiceNumber: inv.invoiceNumber,
+      school: inv.schoolId?.name || null,
+      amount: inv.amount,
+      currency: inv.currency,
+      status: inv.status,
+      periodStart: inv.periodStart || null,
+      periodEnd: inv.periodEnd || null,
+      dueDate: inv.dueDate || null,
+      paidAt: inv.paidAt || null,
+      createdAt: inv.createdAt,
+    }));
+  },
+
+  "revenue-summary": async () => {
+    const [current, revenueRows] = await Promise.all([
+      Subscription.find({ status: { $in: CURRENT_SUBSCRIPTION_STATUSES } }).lean(),
+      BillingInvoice.aggregate([
+        { $match: { status: { $ne: "void" } } },
+        { $group: { _id: "$status", total: { $sum: "$amount" }, n: { $sum: 1 } } },
+      ]),
+    ]);
+    const revenueByStatus = Object.fromEntries(revenueRows.map((r) => [r._id, r]));
+    let mrr = 0;
+    let payingCount = 0;
+    for (const sub of current) {
+      const monthly = sub.billingCycle === "yearly" ? (sub.price || 0) / 12 : sub.price || 0;
+      if (monthly > 0) {
+        mrr += monthly;
+        payingCount++;
+      }
+    }
+    mrr = Math.round(mrr * 100) / 100;
+    const collected = revenueByStatus.paid?.total || 0;
+    const outstanding = (revenueByStatus.issued?.total || 0) + (revenueByStatus.overdue?.total || 0);
+    return {
+      metric: [
+        { metric: "Current subscriptions", value: String(current.length) },
+        { metric: "MRR (₹)", value: mrr.toFixed(2) },
+        { metric: "ARPU per paying school (₹/mo)", value: payingCount ? (mrr / payingCount).toFixed(2) : "0.00" },
+        { metric: "Collected (₹)", value: collected.toFixed(2) },
+        { metric: "Outstanding (₹)", value: outstanding.toFixed(2) },
+        { metric: "Paid invoices", value: String(revenueByStatus.paid?.n || 0) },
+        { metric: "Issued invoices", value: String(revenueByStatus.issued?.n || 0) },
+        { metric: "Overdue invoices", value: String(revenueByStatus.overdue?.n || 0) },
+        { metric: "Draft invoices", value: String(revenueByStatus.draft?.n || 0) },
+      ],
+    };
+  },
+};
+
+const listReports = async (req, res) => {
+  try {
+    res.json({ success: true, data: REPORT_CATALOG });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const generateReport = async (req, res) => {
+  try {
+    const { type } = req.params;
+    const definition = REPORT_CATALOG.find((r) => r.id === type);
+    const generator = reportGenerators[type];
+    if (!definition || !generator) {
+      return res.status(404).json({ success: false, message: "Unknown report type" });
+    }
+    const rows = await generator(req);
+    const wrapped = rows && rows.metric ? rows.metric : rows;
+    await writeAudit({
+      req,
+      user: req.user,
+      action: "report.generated",
+      targetType: "report",
+      message: `Generated report: ${type}`,
+      result: "success",
+    });
+    res.json({
+      success: true,
+      data: {
+        meta: { type: definition.id, title: definition.title, generatedAt: new Date(), rowCount: wrapped.length },
+        columns: Object.keys(wrapped[0] || {}),
+        rows: wrapped,
+      },
+    });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
 module.exports = {
   listPlans,
   getPlan,
@@ -1190,6 +1404,8 @@ module.exports = {
   generateInvoice,
   updateInvoice,
   getPlatformAnalytics,
+  listReports,
+  generateReport,
   listAuditLogs,
   listPlatformUsers,
   getUser360,
