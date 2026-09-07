@@ -1,6 +1,8 @@
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const { getPermissionsFor } = require("../utils/permissions");
+const { getJwtSecret } = require("../utils/jwtSecret");
+const JWT_SECRET = getJwtSecret();
 
 const verifyToken = async (req, res, next) => {
   const header = req.headers.authorization;
@@ -8,7 +10,7 @@ const verifyToken = async (req, res, next) => {
     return res.status(401).json({ success: false, message: "No token provided" });
   }
   try {
-    const decoded = jwt.verify(header.split(" ")[1], process.env.JWT_SECRET);
+    const decoded = jwt.verify(header.split(" ")[1], JWT_SECRET);
     const UserModel = mongoose.models.User;
     if (process.env.TOKEN_VALIDATION !== "off" && UserModel) {
       const user = await UserModel.findById(decoded.id).select("isActive schoolId").lean();

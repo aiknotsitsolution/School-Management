@@ -5,6 +5,7 @@ const School = require("../models/School");
 const { validatePassword } = require("../utils/password");
 const { getPermissionsFor } = require("../utils/permissions");
 const { generateAccessToken, generateRefreshToken } = require("../utils/generateToken");
+const { getJwtSecret } = require("../utils/jwtSecret");
 
 const VALID_ROLES = ["super_admin", "school_admin", "class_teacher", "staff", "student"];
 const SCHOOL_ADMIN_CREATABLE = ["class_teacher", "staff", "student"];
@@ -140,7 +141,7 @@ const refreshToken = async (req, res) => {
     const { refreshToken } = req.body;
     if (!refreshToken) return res.status(400).json({ success: false, message: "refreshToken is required" });
 
-    const decoded = jwt.verify(refreshToken, process.env.JWT_SECRET);
+    const decoded = jwt.verify(refreshToken, getJwtSecret());
     const user = await User.findById(decoded.id);
     if (!user || !user.isActive) return res.status(401).json({ success: false, message: "Invalid refresh token" });
 

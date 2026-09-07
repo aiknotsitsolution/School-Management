@@ -74,7 +74,7 @@ Ownership is enforced server-side (e.g. a student token can never fetch another 
 ```bash
 # 1. copy env
 cp .env.example .env
-# edit .env if needed (JWT_SECRET must be the SAME value used by every service)
+# edit .env if needed (JWT_SECRET must be the SAME value used by every service, and at least 32 characters — services fail to start otherwise)
 
 # 2. install deps for every service
 npm run install:all

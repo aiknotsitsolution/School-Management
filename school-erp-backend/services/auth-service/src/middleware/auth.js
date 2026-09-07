@@ -1,6 +1,8 @@
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const { getPermissionsFor } = require("../utils/permissions");
+const { getJwtSecret } = require("../utils/jwtSecret");
+const JWT_SECRET = getJwtSecret();
 
 // Decodes the JWT and attaches the tenant + role payload to req.user.
 // When the User model is registered (auth-service), also validates that the
@@ -11,7 +13,7 @@ const verifyToken = async (req, res, next) => {
     return res.status(401).json({ success: false, message: "No token provided" });
   }
   try {
-    const decoded = jwt.verify(header.split(" ")[1], process.env.JWT_SECRET);
+    const decoded = jwt.verify(header.split(" ")[1], JWT_SECRET);
 
     const UserModel = mongoose.models.User;
     if (process.env.TOKEN_VALIDATION !== "off" && UserModel) {

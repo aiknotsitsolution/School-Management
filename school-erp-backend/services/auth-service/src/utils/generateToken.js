@@ -1,4 +1,5 @@
 const jwt = require("jsonwebtoken");
+const { getJwtSecret } = require("./jwtSecret");
 
 // JWT v2 payload carries tenant + role data so every downstream service can
 // enforce scoping without a DB round trip. Access tokens are short-lived on
@@ -15,12 +16,12 @@ const generateAccessToken = (user) =>
       section: user.section || null,
       linkedStudentIds: user.linkedStudentIds || [],
     },
-    process.env.JWT_SECRET,
+    getJwtSecret(),
     { expiresIn: process.env.JWT_EXPIRES_IN || "30m" }
   );
 
 const generateRefreshToken = (user) =>
-  jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+  jwt.sign({ id: user._id }, getJwtSecret(), {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
   });
 
