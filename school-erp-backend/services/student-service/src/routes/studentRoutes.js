@@ -1,15 +1,15 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/studentController");
-const { verifyToken, authorizeRoles, restrictToOwnStudent } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission, restrictToOwnStudent } = require("../middleware/auth");
 
-router.use(verifyToken);
+router.use(verifyToken, resolveTenant, requireTenant);
 
-router.post("/", authorizeRoles("admin"), ctrl.createStudent);
-router.get("/stats/summary", authorizeRoles("admin", "teacher"), ctrl.bulkStats);
-router.get("/", authorizeRoles("admin", "teacher", "student", "parent"), ctrl.getStudents);
-router.get("/:id", restrictToOwnStudent((req) => req.params.id), ctrl.getStudentById);
-router.put("/:id", authorizeRoles("admin"), ctrl.updateStudent);
-router.delete("/:id", authorizeRoles("admin"), ctrl.deleteStudent);
+router.post("/", requirePermission("students:write"), ctrl.createStudent);
+router.get("/stats/summary", requirePermission("students:read"), ctrl.bulkStats);
+router.get("/", requirePermission("students:read"), ctrl.getStudents);
+router.get("/:id", requirePermission("students:read"), restrictToOwnStudent((req) => req.params.id), ctrl.getStudentById);
+router.put("/:id", requirePermission("students:write"), ctrl.updateStudent);
+router.delete("/:id", requirePermission("students:write"), ctrl.deleteStudent);
 
 module.exports = router;

@@ -12,7 +12,13 @@ const PORT = process.env.AUTH_SERVICE_PORT || 5001;
 connectDB();
 
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+      : true,
+  })
+);
 app.use(morgan("dev"));
 app.use(express.json());
 

@@ -3,14 +3,18 @@
   "version": "1.0.0",
   "private": true,
   "description": "Scalable MERN microservices backend for School Management ERP System",
-  "scripts": {
+"scripts": {
     "install:all": "npm install --prefix api-gateway && npm install --prefix services/auth-service && npm install --prefix services/student-service && npm install --prefix services/staff-service && npm install --prefix services/academic-service && npm install --prefix services/fee-service && npm install --prefix services/communication-service && npm install --prefix services/library-service && npm install --prefix services/facility-service",
     "dev:all": "node scripts/dev-all.js",
     "docker:up": "docker-compose up --build",
     "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f"
+    "docker:logs": "docker-compose logs -f",
+    "seed": "node scripts/seed-full.js",
+    "seed:seed-only": "node scripts/seed-full.js --seed-only"
   },
   "devDependencies": {
-    "dotenv": "^17.4.2"
+    "dotenv": "^17.4.2",
+    "mongoose": "^8.5.1",
+    "bcryptjs": "^2.4.3"
   }
 }

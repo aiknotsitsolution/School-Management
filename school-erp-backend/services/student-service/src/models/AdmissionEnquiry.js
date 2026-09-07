@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const enquirySchema = new mongoose.Schema(
   {
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     childName: { type: String, required: true },
     parentName: { type: String, required: true },
     classApplied: { type: String, required: true },

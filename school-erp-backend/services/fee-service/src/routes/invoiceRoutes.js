@@ -1,10 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/invoiceController");
-const { verifyToken, authorizeRoles, scopeStudentQuery } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStudentQuery } = require("../middleware/auth");
 
-router.use(verifyToken);
-router.post("/", authorizeRoles("admin"), ctrl.createInvoice);
-router.get("/", authorizeRoles("admin", "student", "parent"), scopeStudentQuery, ctrl.getInvoices);
+router.use(verifyToken, resolveTenant, requireTenant);
+
+router.post("/", requirePermission("fees:collect"), ctrl.createInvoice);
+router.get("/", requirePermission("fees:read"), scopeStudentQuery, ctrl.getInvoices);
 
 module.exports = router;

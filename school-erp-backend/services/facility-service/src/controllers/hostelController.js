@@ -2,7 +2,7 @@ const Hostel = require("../models/Hostel");
 
 const createRoom = async (req, res) => {
   try {
-    const room = await Hostel.create(req.body);
+    const room = await Hostel.create({ ...req.body, schoolId: req.tenantId });
     res.status(201).json({ success: true, data: room });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -12,7 +12,8 @@ const createRoom = async (req, res) => {
 const getRooms = async (req, res) => {
   try {
     const { studentId } = req.query;
-    const filter = studentId ? { occupants: studentId } : {};
+    const filter = { schoolId: req.tenantId };
+    if (studentId) filter.occupants = studentId;
     const data = await Hostel.find(filter);
     res.json({ success: true, count: data.length, data });
   } catch (err) {
@@ -23,11 +24,8 @@ const getRooms = async (req, res) => {
 const allotRoom = async (req, res) => {
   try {
     const { studentId } = req.body;
-    const room = await Hostel.findById(req.params.id);
-    if (!room)
-      return res
-        .status(404)
-        .json({ success: false, message: "Room not found" });
+    const room = await Hostel.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    if (!room) return res.status(404).json({ success: false, message: "Room not found" });
     if (room.occupants.length >= room.capacity) {
       return res.status(400).json({ success: false, message: "Room is full" });
     }
@@ -41,15 +39,12 @@ const allotRoom = async (req, res) => {
 
 const vacateRoom = async (req, res) => {
   try {
-    const room = await Hostel.findByIdAndUpdate(
-      req.params.id,
+    const room = await Hostel.findOneAndUpdate(
+      { _id: req.params.id, schoolId: req.tenantId },
       { $pull: { occupants: req.body.studentId } },
       { new: true },
     );
-    if (!room)
-      return res
-        .status(404)
-        .json({ success: false, message: "Room not found" });
+    if (!room) return res.status(404).json({ success: false, message: "Room not found" });
     res.json({ success: true, data: room });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -58,15 +53,11 @@ const vacateRoom = async (req, res) => {
 
 const deleteRoom = async (req, res) => {
   try {
-    const room = await Hostel.findById(req.params.id);
-    if (!room)
-      return res
-        .status(404)
-        .json({ success: false, message: "Room not found" });
-    if (room.occupants.length)
-      return res
-        .status(400)
-        .json({ success: false, message: "Move out occupants first" });
+    const room = await Hostel.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    if (!room) return res.status(404).json({ success: false, message: "Room not found" });
+    if (room.occupants.length) {
+      return res.status(400).json({ success: false, message: "Move out occupants first" });
+    }
     await room.deleteOne();
     res.json({ success: true, message: "Room deleted" });
   } catch (err) {

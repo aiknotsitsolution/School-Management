@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const issueSchema = new mongoose.Schema(
   {
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     bookId: { type: mongoose.Schema.Types.ObjectId, ref: "Book", required: true },
     borrowerId: { type: String, required: true }, // studentId or staffId
     borrowerType: { type: String, enum: ["student", "staff"], required: true },

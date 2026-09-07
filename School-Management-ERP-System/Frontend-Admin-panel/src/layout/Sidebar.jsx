@@ -1,4 +1,5 @@
 import { NavLink } from "react-router-dom";
+import { useSelector } from "react-redux";
 import {
   LayoutDashboard,
   CalendarCheck,
@@ -23,71 +24,99 @@ import {
   BedDouble,
   Banknote,
   UserCog,
+  Building2,
+  UserRoundCog,
 } from "lucide-react";
-const school = {
-  shortName: "School ERP",
-  session: String(new Date().getFullYear()),
-};
+import { selectSchool, selectUser } from "../store/selectors";
+import { canSeeNavigation } from "../lib/scope";
 
 const groups = [
   {
+    label: "Platform",
+    items: [{ to: "/platform", icon: LayoutDashboard, label: "Platform Dashboard", end: true, scope: "platform" }],
+  },
+  {
+    label: "Schools",
+    items: [{ to: "/platform?tab=schools", icon: Building2, label: "Schools Management", scope: "platform" }],
+  },
+  {
+    label: "Users & Access",
+    items: [{ to: "/platform?tab=users", icon: UserRoundCog, label: "Users & Access", scope: "platform" }],
+  },
+  {
     label: "My Dashboards",
     items: [
-      { to: "/", icon: LayoutDashboard, label: "Admin Dashboard", end: true },
-      { to: "/teacher-dashboard", icon: UserCog, label: "Class Teacher" },
-      { to: "/student-dashboard", icon: GraduationCap, label: "Student / Parent" },
+      { to: "/", icon: LayoutDashboard, label: "Admin Dashboard", end: true, roles: ["super_admin", "school_admin"] },
+      { to: "/staff-dashboard", icon: LayoutDashboard, label: "My Dashboard", end: true, roles: ["staff"] },
+      { to: "/teacher-dashboard", icon: UserCog, label: "Class Teacher", roles: ["school_admin", "class_teacher"] },
+      { to: "/student-dashboard", icon: GraduationCap, label: "Student / Parent", roles: ["school_admin", "student"] },
     ],
   },
   {
     label: "Academics",
     items: [
-      { to: "/attendance", icon: CalendarCheck, label: "Attendance" },
-      { to: "/timetable", icon: CalendarDays, label: "Timetable" },
-      { to: "/homework", icon: BookOpenCheck, label: "Homework" },
-      { to: "/examination", icon: ClipboardList, label: "Examination" },
-      { to: "/report-card", icon: ScrollText, label: "Report Card" },
-      { to: "/library", icon: BookOpen, label: "Library Management" },
-      { to: "/students", icon: Users, label: "Student Database" },
+      { to: "/attendance", icon: CalendarCheck, label: "Attendance", perm: "attendance:read" },
+      { to: "/timetable", icon: CalendarDays, label: "Timetable", perm: "timetable:read" },
+      { to: "/homework", icon: BookOpenCheck, label: "Homework", perm: "homework:read" },
+      { to: "/examination", icon: ClipboardList, label: "Examination", perm: "exams:read" },
+      { to: "/report-card", icon: ScrollText, label: "Report Card", perm: "marks:read" },
+      { to: "/library", icon: BookOpen, label: "Library Management", perm: "library:read" },
+      { to: "/students", icon: Users, label: "Student Database", perm: "students:read" },
     ],
   },
   {
     label: "Admissions & Outreach",
     items: [
-      { to: "/admission-enquiry", icon: UserPlus, label: "Admission Enquiry" },
-      { to: "/communication", icon: MessageSquare, label: "Communication" },
-      { to: "/notice-board", icon: Bell, label: "Notice Board" },
-      { to: "/events", icon: PartyPopper, label: "Events" },
+      { to: "/admission-enquiry", icon: UserPlus, label: "Admission Enquiry", perm: "admissions:read" },
+      { to: "/communication", icon: MessageSquare, label: "Communication", roles: ["school_admin", "class_teacher", "staff"] },
+      { to: "/notice-board", icon: Bell, label: "Notice Board", perm: "notices:read" },
+      { to: "/events", icon: PartyPopper, label: "Events", perm: "events:read" },
     ],
   },
   {
     label: "Finance",
     items: [
-      { to: "/fees-collection", icon: Wallet, label: "Fees Collection" },
-      { to: "/online-payment", icon: CreditCard, label: "Online Fees Payment" },
+      { to: "/fees-collection", icon: Wallet, label: "Fees Collection", perm: "fees:collect" },
+      { to: "/online-payment", icon: CreditCard, label: "Online Fees Payment", perm: "fees:read" },
     ],
   },
   {
     label: "Operations",
     items: [
-      { to: "/inventory", icon: Boxes, label: "Inventory Management" },
-      { to: "/bus-tracking", icon: Bus, label: "Bus Tracking" },
-      { to: "/hostel", icon: BedDouble, label: "Hostel Management" },
+      { to: "/inventory", icon: Boxes, label: "Inventory Management", perm: "inventory:read" },
+      { to: "/bus-tracking", icon: Bus, label: "Bus Tracking", perm: "transport:read" },
+      { to: "/hostel", icon: BedDouble, label: "Hostel Management", perm: "hostel:read" },
     ],
   },
   {
     label: "Human Resources",
     items: [
-      { to: "/leave", icon: CalendarDays, label: "Leave Management" },
-      { to: "/payroll", icon: Banknote, label: "Payroll / Salary" },
+      { to: "/leave", icon: FileBarChart2, label: "Leave Management", perm: "leaves:apply" },
+      { to: "/payroll", icon: Banknote, label: "Payroll / Salary", perm: "payroll:view" },
     ],
   },
   {
     label: "Insights",
-    items: [{ to: "/reports", icon: BarChart3, label: "Reports" }],
+    items: [{ to: "/reports", icon: BarChart3, label: "Reports", perm: "reports:view" }],
+  },
+  {
+    label: "Administration",
+    items: [
+      { to: "/users", icon: UserRoundCog, label: "Users & Access", perm: "users:manage" },
+    ],
   },
 ];
 
 export default function Sidebar({ open, onClose }) {
+  const school = useSelector(selectSchool);
+  const user = useSelector(selectUser);
+  const role = user?.role || "school_admin";
+
+  const canSee = (item) => canSeeNavigation(item, user, role);
+
+  const brandName = school?.shortName || "School ERP";
+  const brandSession = school?.session ? `ERP · ${school.session}` : `ERP · ${new Date().getFullYear()}`;
+
   return (
     <>
       {open && (
@@ -108,10 +137,10 @@ export default function Sidebar({ open, onClose }) {
             </div>
             <div className="leading-tight">
               <p className="font-display font-bold text-[15px] tracking-tight">
-                {school.shortName}
+                {brandName}
               </p>
               <p className="text-[11px] text-white/50">
-                ERP · {school.session}
+                {role === "super_admin" ? "Platform Owner" : brandSession}
               </p>
             </div>
           </div>
@@ -124,36 +153,50 @@ export default function Sidebar({ open, onClose }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto scrollbar-thin py-4 px-3">
-          {groups.map((group) => (
-            <div key={group.label} className="mb-5">
-              <p className="px-3 mb-1.5 text-[11px] font-semibold text-white/35 tracking-wide">
-                {group.label}
-              </p>
-              <div className="space-y-0.5">
-                {group.items.map((item) => (
-                  <NavLink
-                    key={item.to}
-                    to={item.to}
-                    end={item.end}
-                    onClick={onClose}
-                    className={({ isActive }) =>
-                      `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors ${
-                        isActive
-                          ? "bg-amber text-ink"
-                          : "text-white/70 hover:bg-white/10 hover:text-white"
-                      }`
-                    }
-                  >
-                    <item.icon size={17} strokeWidth={2} />
-                    {item.label}
-                  </NavLink>
-                ))}
+          {groups.map((group) => {
+            const items = group.items.filter(canSee);
+            if (items.length === 0) return null;
+            return (
+              <div key={group.label} className="mb-5">
+                <p className="px-3 mb-1.5 text-[11px] font-semibold text-white/35 tracking-wide">
+                  {group.label}
+                </p>
+                <div className="space-y-0.5">
+                  {items.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      end={item.end}
+                      onClick={onClose}
+                      className={({ isActive }) =>
+                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors ${
+                          isActive
+                            ? "bg-amber text-ink"
+                            : "text-white/70 hover:bg-white/10 hover:text-white"
+                        }`
+                      }
+                    >
+                      <item.icon size={17} strokeWidth={2} />
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
 
         <div className="p-4 border-t border-white/10 shrink-0">
+          {school && (
+            <div className="rounded-xl bg-white/5 p-3.5 mb-3">
+              <p className="text-[12px] font-semibold text-white/90">
+                {school.name}
+              </p>
+              <p className="text-[11px] text-white/50 mt-0.5">
+                {school.code} · {school.session}
+              </p>
+            </div>
+          )}
           <div className="rounded-xl bg-white/5 p-3.5">
             <p className="text-[12.5px] font-semibold text-white/90">
               Need help?

@@ -1,13 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/enquiryController");
-const { verifyToken, authorizeRoles } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission } = require("../middleware/auth");
 
-router.use(verifyToken, authorizeRoles("admin", "teacher"));
+router.use(verifyToken, resolveTenant, requireTenant);
 
-router.post("/", ctrl.createEnquiry);
-router.get("/", ctrl.getEnquiries);
-router.put("/:id", ctrl.updateEnquiry);
-router.delete("/:id", ctrl.deleteEnquiry);
+router.post("/", requirePermission("enquiries:write"), ctrl.createEnquiry);
+router.get("/", requirePermission("enquiries:read"), ctrl.getEnquiries);
+router.put("/:id", requirePermission("enquiries:write"), ctrl.updateEnquiry);
+router.delete("/:id", requirePermission("enquiries:write"), ctrl.deleteEnquiry);
 
 module.exports = router;

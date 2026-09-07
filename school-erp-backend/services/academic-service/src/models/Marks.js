@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const marksSchema = new mongoose.Schema(
   {
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     studentId: { type: String, required: true },
     examId: { type: mongoose.Schema.Types.ObjectId, ref: "Exam", required: true },
     examName: { type: String, required: true },
@@ -15,7 +16,7 @@ const marksSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-marksSchema.index({ studentId: 1, examId: 1, subject: 1 }, { unique: true });
+marksSchema.index({ schoolId: 1, studentId: 1, examId: 1, subject: 1 }, { unique: true });
 
 marksSchema.pre("save", function (next) {
   const pct = (this.marksObtained / this.maxMarks) * 100;

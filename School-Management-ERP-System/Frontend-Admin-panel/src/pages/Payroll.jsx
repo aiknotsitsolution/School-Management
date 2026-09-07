@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { PermissionGate } from "../lib/permissions";
 import {
   Plus,
   Wallet,
@@ -217,9 +218,11 @@ export default function Payroll() {
             <Button variant="outline" onClick={exportCsv}>
               <Download size={15} /> Export CSV
             </Button>
-            <Button variant="amber" onClick={openAdd}>
-              <Plus size={15} /> Add Employee
-            </Button>
+            <PermissionGate permission="payroll:admin">
+              <Button variant="amber" onClick={openAdd}>
+                <Plus size={15} /> Add Employee
+              </Button>
+            </PermissionGate>
           </>
         }
       />

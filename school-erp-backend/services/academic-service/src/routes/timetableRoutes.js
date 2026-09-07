@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/timetableController");
-const { verifyToken, authorizeRoles } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission } = require("../middleware/auth");
 
-router.use(verifyToken);
-router.post("/", authorizeRoles("admin"), ctrl.upsertTimetable);
-router.get("/", authorizeRoles("admin", "teacher", "student", "parent"), ctrl.getTimetable);
-router.delete("/:id", authorizeRoles("admin"), ctrl.deleteTimetable);
+router.use(verifyToken, resolveTenant, requireTenant);
+
+router.post("/", requirePermission("timetable:write"), ctrl.upsertTimetable);
+router.get("/", requirePermission("timetable:read"), ctrl.getTimetable);
+router.delete("/:id", requirePermission("timetable:write"), ctrl.deleteTimetable);
 
 module.exports = router;

@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const payrollSchema = new mongoose.Schema(
   {
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     staffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: true },
     month: { type: String, required: true }, // e.g. "September"
     year: { type: Number, required: true },
@@ -15,6 +16,6 @@ const payrollSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-payrollSchema.index({ staffId: 1, month: 1, year: 1 }, { unique: true });
+payrollSchema.index({ schoolId: 1, staffId: 1, month: 1, year: 1 }, { unique: true });
 
 module.exports = mongoose.model("Payroll", payrollSchema);

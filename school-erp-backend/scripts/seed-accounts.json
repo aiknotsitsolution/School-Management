@@ -1,0 +1,278 @@
+[
+  {
+    "school": "Platform",
+    "name": "AI Knots IT - Administrator",
+    "email": "administrator@aiknotsit.com",
+    "password": "Administrator@321",
+    "role": "super_admin",
+    "note": "password unchanged if pre-existing"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Rohit Mehra",
+    "email": "principal@lotusvalley.edu.in",
+    "password": "Admin@321",
+    "role": "school_admin"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Sneha Iyer",
+    "email": "ct-5a@lotusvalley.edu.in",
+    "password": "Teacher@123",
+    "role": "class_teacher",
+    "class": "5",
+    "section": "A"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Vikram Joshi",
+    "email": "ct-6a@lotusvalley.edu.in",
+    "password": "Teacher@123",
+    "role": "class_teacher",
+    "class": "6",
+    "section": "A"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Farhan Qureshi",
+    "email": "ct-7a@lotusvalley.edu.in",
+    "password": "Teacher@123",
+    "role": "class_teacher",
+    "class": "7",
+    "section": "A"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Priyanka Khatri",
+    "email": "admissioncounsellor@lotusvalley.edu.in",
+    "password": "Staff@123",
+    "role": "staff",
+    "designation": "admission_counsellor"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Nilesh Agarwal",
+    "email": "accountant@lotusvalley.edu.in",
+    "password": "Staff@123",
+    "role": "staff",
+    "designation": "accountant"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Sneha Kulkarni",
+    "email": "librarian@lotusvalley.edu.in",
+    "password": "Staff@123",
+    "role": "staff",
+    "designation": "librarian"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Ritu Sharma",
+    "email": "receptionist@lotusvalley.edu.in",
+    "password": "Staff@123",
+    "role": "staff",
+    "designation": "receptionist"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Sanjay Rane",
+    "email": "transport@lotusvalley.edu.in",
+    "password": "Staff@123",
+    "role": "staff",
+    "designation": "transport"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Aarav Sharma",
+    "email": "aarav.sharma@lotusvalley.edu.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-001"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Diya Kapoor",
+    "email": "diya.kapoor@lotusvalley.edu.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-002"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Aarush Deshmukh",
+    "email": "aarush.deshmukh@lotusvalley.edu.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-003"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Aarohi Deshmukh",
+    "email": "aarohi.deshmukh@lotusvalley.edu.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-004"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Ishaan Iyer",
+    "email": "ishaan.iyer@lotusvalley.edu.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-005"
+  },
+  {
+    "school": "lotus-valley",
+    "name": "Pari Malhotra",
+    "email": "pari.malhotra@lotusvalley.edu.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-006"
+  },
+  {
+    "school": "greenwood",
+    "name": "Meenakshi Raghavan",
+    "email": "principal@greenwood.ac.in",
+    "password": "Admin@321",
+    "role": "school_admin"
+  },
+  {
+    "school": "greenwood",
+    "name": "Sneha Iyer",
+    "email": "ct-5a@greenwood.ac.in",
+    "password": "Teacher@123",
+    "role": "class_teacher",
+    "class": "5",
+    "section": "A"
+  },
+  {
+    "school": "greenwood",
+    "name": "Vikram Joshi",
+    "email": "ct-6a@greenwood.ac.in",
+    "password": "Teacher@123",
+    "role": "class_teacher",
+    "class": "6",
+    "section": "A"
+  },
+  {
+    "school": "greenwood",
+    "name": "Farhan Qureshi",
+    "email": "ct-7a@greenwood.ac.in",
+    "password": "Teacher@123",
+    "role": "class_teacher",
+    "class": "7",
+    "section": "A"
+  },
+  {
+    "school": "greenwood",
+    "name": "Priyanka Khatri",
+    "email": "admissioncounsellor@greenwood.ac.in",
+    "password": "Staff@123",
+    "role": "staff",
+    "designation": "admission_counsellor"
+  },
+  {
+    "school": "greenwood",
+    "name": "Nilesh Agarwal",
+    "email": "accountant@greenwood.ac.in",
+    "password": "Staff@123",
+    "role": "staff",
+    "designation": "accountant"
+  },
+  {
+    "school": "greenwood",
+    "name": "Sneha Kulkarni",
+    "email": "librarian@greenwood.ac.in",
+    "password": "Staff@123",
+    "role": "staff",
+    "designation": "librarian"
+  },
+  {
+    "school": "greenwood",
+    "name": "Ritu Sharma",
+    "email": "receptionist@greenwood.ac.in",
+    "password": "Staff@123",
+    "role": "staff",
+    "designation": "receptionist"
+  },
+  {
+    "school": "greenwood",
+    "name": "Sanjay Rane",
+    "email": "transport@greenwood.ac.in",
+    "password": "Staff@123",
+    "role": "staff",
+    "designation": "transport"
+  },
+  {
+    "school": "greenwood",
+    "name": "Aarav Sharma",
+    "email": "aarav.sharma@greenwood.ac.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-001"
+  },
+  {
+    "school": "greenwood",
+    "name": "Diya Kapoor",
+    "email": "diya.kapoor@greenwood.ac.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-002"
+  },
+  {
+    "school": "greenwood",
+    "name": "Aarush Deshmukh",
+    "email": "aarush.deshmukh@greenwood.ac.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-003"
+  },
+  {
+    "school": "greenwood",
+    "name": "Aarohi Deshmukh",
+    "email": "aarohi.deshmukh@greenwood.ac.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-004"
+  },
+  {
+    "school": "greenwood",
+    "name": "Ishaan Iyer",
+    "email": "ishaan.iyer@greenwood.ac.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-005"
+  },
+  {
+    "school": "greenwood",
+    "name": "Pari Malhotra",
+    "email": "pari.malhotra@greenwood.ac.in",
+    "password": "Student@123",
+    "role": "student",
+    "class": "5",
+    "section": "A",
+    "admissionNo": "STU-5A-006"
+  }
+]

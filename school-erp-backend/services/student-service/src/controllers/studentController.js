@@ -2,7 +2,7 @@ const Student = require("../models/Student");
 
 const createStudent = async (req, res) => {
   try {
-    const student = await Student.create(req.body);
+    const student = await Student.create({ ...req.body, schoolId: req.tenantId });
     res.status(201).json({ success: true, data: student });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -12,14 +12,10 @@ const createStudent = async (req, res) => {
 const getStudents = async (req, res) => {
   try {
     const { class: cls, section, status, search, page = 1, limit = 20 } = req.query;
-    const filter = {};
+    const filter = { schoolId: req.tenantId };
 
-    // Teachers implicitly scoped to their class via query params from client;
-    // Students/parents only ever see their own record(s)
     if (req.user.role === "student") {
-      filter._id = req.user.refId;
-    } else if (req.user.role === "parent") {
-      filter._id = { $in: req.user.linkedStudentIds || [] };
+      filter.admissionNo = req.user.refId;
     }
 
     if (cls) filter.class = cls;
@@ -41,7 +37,7 @@ const getStudents = async (req, res) => {
 
 const getStudentById = async (req, res) => {
   try {
-    const student = await Student.findById(req.params.id);
+    const student = await Student.findOne({ _id: req.params.id, schoolId: req.tenantId });
     if (!student) return res.status(404).json({ success: false, message: "Student not found" });
     res.json({ success: true, data: student });
   } catch (err) {
@@ -51,7 +47,11 @@ const getStudentById = async (req, res) => {
 
 const updateStudent = async (req, res) => {
   try {
-    const student = await Student.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const student = await Student.findOneAndUpdate(
+      { _id: req.params.id, schoolId: req.tenantId },
+      req.body,
+      { new: true, runValidators: true },
+    );
     if (!student) return res.status(404).json({ success: false, message: "Student not found" });
     res.json({ success: true, data: student });
   } catch (err) {
@@ -61,7 +61,7 @@ const updateStudent = async (req, res) => {
 
 const deleteStudent = async (req, res) => {
   try {
-    const student = await Student.findByIdAndDelete(req.params.id);
+    const student = await Student.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
     if (!student) return res.status(404).json({ success: false, message: "Student not found" });
     res.json({ success: true, message: "Student deleted" });
   } catch (err) {
@@ -71,9 +71,12 @@ const deleteStudent = async (req, res) => {
 
 const bulkStats = async (req, res) => {
   try {
-    const total = await Student.countDocuments();
-    const byClass = await Student.aggregate([{ $group: { _id: "$class", count: { $sum: 1 } } }]);
-    const active = await Student.countDocuments({ status: "Active" });
+    const total = await Student.countDocuments({ schoolId: req.tenantId });
+    const byClass = await Student.aggregate([
+      { $match: { schoolId: req.tenantId } },
+      { $group: { _id: "$class", count: { $sum: 1 } } },
+    ]);
+    const active = await Student.countDocuments({ schoolId: req.tenantId, status: "Active" });
     res.json({ success: true, data: { total, active, byClass } });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

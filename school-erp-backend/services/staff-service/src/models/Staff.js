@@ -2,7 +2,8 @@ const mongoose = require("mongoose");
 
 const staffSchema = new mongoose.Schema(
   {
-    employeeId: { type: String, required: true, unique: true },
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    employeeId: { type: String, required: true },
     userId: { type: String, default: null },
     name: { type: String, required: true },
     designation: { type: String, required: true }, // Principal, PGT Physics, TGT Maths, etc.
@@ -21,5 +22,7 @@ const staffSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+staffSchema.index({ schoolId: 1, employeeId: 1 }, { unique: true });
 
 module.exports = mongoose.model("Staff", staffSchema);

@@ -1,18 +1,29 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/authController");
-const { verifyToken, authorizeRoles } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requirePermission, authorizeRoles } = require("../middleware/auth");
 
-router.post("/register", ctrl.register);
+// Public
 router.post("/login", ctrl.login);
 router.post("/refresh-token", ctrl.refreshToken);
 
-router.get("/me", verifyToken, ctrl.getMe);
+// Protected - account self-service
+router.get("/me", verifyToken, resolveTenant, ctrl.getMe);
 router.post("/change-password", verifyToken, ctrl.changePassword);
 router.get("/verify", verifyToken, ctrl.verify);
 
-router.get("/users", verifyToken, authorizeRoles("admin"), ctrl.listUsers);
-router.patch("/users/:id/status", verifyToken, authorizeRoles("admin"), ctrl.updateUserStatus);
-router.delete("/users/:id", verifyToken, authorizeRoles("admin"), ctrl.deleteUser);
+// User management - admin only (no public self-register).
+// /register kept as an alias for backwards compat but requires auth + permission.
+router.post("/register", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.createUser);
+router.post("/users", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.createUser);
+router.get("/users", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.listUsers);
+router.patch("/users/:id/status", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.updateUserStatus);
+router.delete("/users/:id", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.deleteUser);
+
+// School / tenant management - platform owner only
+router.post("/schools", verifyToken, authorizeRoles("super_admin"), ctrl.createSchool);
+router.get("/schools", verifyToken, authorizeRoles("super_admin"), ctrl.listSchools);
+router.get("/schools/:id", verifyToken, authorizeRoles("super_admin"), ctrl.getSchool);
+router.patch("/schools/:id", verifyToken, authorizeRoles("super_admin"), ctrl.updateSchool);
 
 module.exports = router;

@@ -27,6 +27,7 @@ import {
 } from "../components/UI";
 const initialStudents = [];
 import { api } from "../lib/api";
+import { PermissionGate } from "../lib/permissions";
 
 const CLASS_OPTIONS = [
   "All",
@@ -245,9 +246,11 @@ export default function Students() {
             : `${list.length} students enrolled across Nursery to Class 12.`
         }
         right={
-          <Button variant="amber" onClick={openAdd}>
-            <Plus size={15} /> Add Student
-          </Button>
+          <PermissionGate permission="students:write">
+            <Button variant="amber" onClick={openAdd}>
+              <Plus size={15} /> Add Student
+            </Button>
+          </PermissionGate>
         }
       />
       {apiError && (
@@ -340,9 +343,11 @@ export default function Students() {
             <p className="text-[13px] text-slate-text/60 mt-1">
               Try different filters or add a new student.
             </p>
-            <Button variant="amber" className="mt-4" onClick={openAdd}>
-              <Plus size={15} /> Add Student
-            </Button>
+            <PermissionGate permission="students:write">
+              <Button variant="amber" className="mt-4" onClick={openAdd}>
+                <Plus size={15} /> Add Student
+              </Button>
+            </PermissionGate>
           </div>
         ) : (
           <div className="overflow-x-auto -mx-5">
@@ -405,12 +410,14 @@ export default function Students() {
                       className="px-5 py-3 text-right"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <button
-                        onClick={() => openEdit(s)}
-                        className="text-[12.5px] font-medium text-info hover:underline inline-flex items-center gap-1"
-                      >
-                        <Pencil size={12} /> Edit
-                      </button>
+                      <PermissionGate permission="students:write">
+                        <button
+                          onClick={() => openEdit(s)}
+                          className="text-[12.5px] font-medium text-info hover:underline inline-flex items-center gap-1"
+                        >
+                          <Pencil size={12} /> Edit
+                        </button>
+                      </PermissionGate>
                     </td>
                   </tr>
                 ))}
@@ -512,13 +519,15 @@ export default function Students() {
               </div>
 
               <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  className="flex-1 justify-center"
-                  onClick={() => openEdit(selected)}
-                >
-                  <Pencil size={14} /> Edit
-                </Button>
+                <PermissionGate permission="students:write">
+                  <Button
+                    variant="outline"
+                    className="flex-1 justify-center"
+                    onClick={() => openEdit(selected)}
+                  >
+                    <Pencil size={14} /> Edit
+                  </Button>
+                </PermissionGate>
                 <Button
                   variant="amber"
                   className="flex-1 justify-center"

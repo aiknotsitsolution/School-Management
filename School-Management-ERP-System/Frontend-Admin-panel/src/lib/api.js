@@ -1,18 +1,36 @@
+import { store } from "../store";
+import { setTokens, logout } from "../store/authSlice";
+
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || "http://localhost:5000/api";
 
+const json = (method, body) => ({ method, body: JSON.stringify(body) });
+
 async function request(path, options = {}) {
-  const token = localStorage.getItem("erp_access_token");
+  const { auth } = store.getState();
+  const token = auth.accessToken || localStorage.getItem("erp_access_token");
+  const user = auth.user || JSON.parse(localStorage.getItem("erp_user") || "null");
+  const passiveSchoolId =
+    auth.activeSchoolId || localStorage.getItem("erp_active_school");
+
+  // super_admin impersonates a school via X-School-Id; everyone else's tenant
+  // comes from their JWT.
+  const includeSchoolHeader =
+    user?.role === "super_admin" && passiveSchoolId;
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       "Content-Type": "application/json",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(includeSchoolHeader ? { "X-School-Id": passiveSchoolId } : {}),
       ...options.headers,
     },
   });
   if (response.status === 401 && !options._retry) {
-    const refreshToken = localStorage.getItem("erp_refresh_token");
+    const refreshToken =
+      (auth && (auth.refreshToken || localStorage.getItem("erp_refresh_token"))) ||
+      localStorage.getItem("erp_refresh_token");
     if (refreshToken) {
       const refreshResponse = await fetch(
         `${API_BASE_URL}/auth/refresh-token`,
@@ -20,13 +38,16 @@ async function request(path, options = {}) {
       );
       const refreshBody = await refreshResponse.json().catch(() => ({}));
       if (refreshResponse.ok && refreshBody.data?.accessToken) {
-        localStorage.setItem("erp_access_token", refreshBody.data.accessToken);
+        store.dispatch(
+          setTokens({
+            accessToken: refreshBody.data.accessToken,
+            refreshToken: refreshBody.data.refreshToken,
+          }),
+        );
         return request(path, { ...options, _retry: true });
       }
     }
-    localStorage.removeItem("erp_access_token");
-    localStorage.removeItem("erp_refresh_token");
-    localStorage.removeItem("erp_user");
+    store.dispatch(logout());
   }
   const body = await response.json().catch(() => ({}));
   if (!response.ok || body.success === false) {
@@ -35,16 +56,20 @@ async function request(path, options = {}) {
   return body;
 }
 
-const json = (method, body) => ({ method, body: JSON.stringify(body) });
-
 export const api = {
   login: (credentials) => request("/auth/login", json("POST", credentials)),
-  register: (user) => request("/auth/register", json("POST", user)),
   me: () => request("/auth/me"),
-  logout: () => {
-    localStorage.removeItem("erp_access_token");
-    localStorage.removeItem("erp_refresh_token");
-    localStorage.removeItem("erp_user");
+  users: {
+    list: (schoolId) =>
+      request(`/auth/users${schoolId ? `?schoolId=${schoolId}` : ""}`),
+    create: (user) => request("/auth/users", json("POST", user)),
+    updateStatus: (id, isActive) =>
+      request(`/auth/users/${id}/status`, json("PATCH", { isActive })),
+    remove: (id) => request(`/auth/users/${id}`, { method: "DELETE" }),
+  },
+  schools: {
+    list: () => request("/auth/schools"),
+    create: (school) => request("/auth/schools", json("POST", school)),
   },
   students: {
     list: (params = "") => request(`/students${params ? `?${params}` : ""}`),
@@ -67,18 +92,18 @@ export const api = {
     mark: (records) => request("/attendance/mark", json("POST", { records })),
   },
   timetable: {
-    list: () => request("/timetable"),
+    list: (params = "") => request(`/timetable${params ? `?${params}` : ""}`),
     save: (item) => request("/timetable", json("POST", item)),
     remove: (id) => request(`/timetable/${id}`, { method: "DELETE" }),
   },
   homework: {
-    list: () => request("/homework"),
+    list: (params = "") => request(`/homework${params ? `?${params}` : ""}`),
     create: (item) => request("/homework", json("POST", item)),
     update: (id, item) => request(`/homework/${id}`, json("PUT", item)),
     remove: (id) => request(`/homework/${id}`, { method: "DELETE" }),
   },
   exams: {
-    list: () => request("/exams"),
+    list: (params = "") => request(`/exams${params ? `?${params}` : ""}`),
     create: (item) => request("/exams", json("POST", item)),
     update: (id, item) => request(`/exams/${id}`, json("PUT", item)),
     remove: (id) => request(`/exams/${id}`, { method: "DELETE" }),
