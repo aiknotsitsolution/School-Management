@@ -4,7 +4,7 @@ const net = require("net");
 const path = require("path");
 
 const root = path.resolve(__dirname, "..");
-dotenv.config({ path: path.join(root, ".env") });
+dotenv.config({ path: path.join(root, ".env"), override: true });
 const services = [
   ["gateway", "api-gateway", 5000],
   ["auth", "services/auth-service", 5001],
@@ -65,7 +65,13 @@ async function startServices() {
 function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
-  children.forEach((child) => child.kill());
+  children.forEach((child) => {
+    if (process.platform === "win32" && child.pid) {
+      spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"]);
+    } else {
+      child.kill();
+    }
+  });
   setTimeout(() => process.exit(0), 500);
 }
 

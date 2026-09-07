@@ -19,7 +19,9 @@ app.use(cors());
 app.use(morgan("dev"));
 app.use(express.json());
 
-app.get("/health", (req, res) => res.json({ success: true, service: "academic-service", status: "UP" }));
+app.get("/health", (req, res) =>
+  res.json({ success: true, service: "academic-service", status: "UP" }),
+);
 app.use("/api/timetable", timetableRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/homework", homeworkRoutes);

@@ -7,7 +7,6 @@ const connectDB = require("./config/db");
 const staffRoutes = require("./routes/staffRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
-
 const app = express();
 const PORT = process.env.STAFF_SERVICE_PORT || 5003;
 
@@ -17,7 +16,9 @@ app.use(cors());
 app.use(morgan("dev"));
 app.use(express.json());
 
-app.get("/health", (req, res) => res.json({ success: true, service: "staff-service", status: "UP" }));
+app.get("/health", (req, res) =>
+  res.json({ success: true, service: "staff-service", status: "UP" }),
+);
 app.use("/api/staff", staffRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/payroll", payrollRoutes);

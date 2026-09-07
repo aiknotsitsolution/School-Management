@@ -1,16 +1,24 @@
+// src/config/db.js
+
 const mongoose = require("mongoose");
 
 const connectDB = async () => {
   try {
-    const mongoURI =
-      process.env.MONGO_URI || "mongodb://localhost:27017/erp_auth";
+    const mongoUri = process.env.MONGO_URI || process.env.MONGODB_URI;
 
-    await mongoose.connect(mongoURI);
+    if (!mongoUri) {
+      throw new Error("MONGODB_URI is not defined");
+    }
 
-    console.log("[auth-service] MongoDB connected successfully");
+    await mongoose.connect(mongoUri, {
+      serverSelectionTimeoutMS: 5000,
+      connectTimeoutMS: 5000,
+      bufferCommands: false,
+    });
+
+    console.log("✅ MongoDB connected");
   } catch (error) {
-    console.error("[auth-service] MongoDB connection failed:", error.message);
-
+    console.error("❌ MongoDB Connection Error:", error.message);
     process.exit(1);
   }
 };
