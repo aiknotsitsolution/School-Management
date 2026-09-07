@@ -4,6 +4,7 @@ const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
 
 const SEED_ONLY = process.argv.includes("--seed-only");
 const BASE =
@@ -71,7 +72,7 @@ const schoolDays = (start, end) => {
 const rng = (i, mod) => (i * 17 + 5) % mod;
 
 const COLLECTIONS = {
-  auth: ["schools", "users"],
+  auth: ["schools", "users", "plans", "subscriptions", "billinginvoices"],
   student: ["students", "admissionenquiries"],
   staff: ["staffs", "leaves", "payrolls"],
   academic: ["attendances", "exams", "homeworks", "marks", "timetables"],
@@ -197,7 +198,10 @@ async function wipe(m) {
   console.log("\n[wipe] clearing all service collections…");
   const removed = await m.auth.models.users.deleteMany({ role: { $ne: "super_admin" } });
   await m.auth.models.schools.deleteMany({});
-  let killed = 2;
+  await m.auth.models.plans.deleteMany({});
+  await m.auth.models.subscriptions.deleteMany({});
+  await m.auth.models.billinginvoices.deleteMany({});
+  let killed = 5;
   const dropIndexes = async (svc, coll) => {
     try {
       await m[svc].models[coll].collection.dropIndexes();
@@ -698,6 +702,99 @@ async function seedSchool(school, m) {
 }
 
 // ---------------------------------------------------------------------------
+// Platform billing defaults: plans, one current subscription per school, and a
+// sample invoice. Idempotent — mirrors auth-service ensureBillingDefaults.
+// ---------------------------------------------------------------------------
+const BILLING_PLANS = [
+  {
+    name: "Trial", code: "trial", description: "Free trial to explore the platform",
+    price: 0, currency: "INR", billingCycle: "monthly", trialDays: 14,
+    features: ["Up to 50 students", "Core modules", "Email support"],
+    limits: { students: 50, staff: 10, teachers: 5, adminUsers: 2, branches: 1, storageGB: 5 },
+    isActive: true, isPublic: true, sortOrder: 1,
+  },
+  {
+    name: "Basic", code: "basic", description: "For growing schools",
+    price: 999, currency: "INR", billingCycle: "monthly", trialDays: 14,
+    features: ["Up to 500 students", "All core modules", "1 branch", "Standard support"],
+    limits: { students: 500, staff: 60, teachers: 40, adminUsers: 5, branches: 1, storageGB: 50 },
+    isActive: true, isPublic: true, sortOrder: 2,
+  },
+  {
+    name: "Standard", code: "standard", description: "For established schools (multi-branch)",
+    price: 2499, currency: "INR", billingCycle: "monthly", trialDays: 14,
+    features: ["Up to 2,000 students", "All core modules", "Up to 3 branches", "Priority support"],
+    limits: { students: 2000, staff: 250, teachers: 150, adminUsers: 10, branches: 3, storageGB: 200 },
+    isActive: true, isPublic: true, sortOrder: 3,
+  },
+  {
+    name: "Premium", code: "premium", description: "For large institutions & chains",
+    price: 4999, currency: "INR", billingCycle: "monthly", trialDays: 14,
+    features: ["Unlimited students", "All modules + event/transport", "Unlimited branches", "Dedicated success manager"],
+    limits: { students: null, staff: null, teachers: null, adminUsers: null, branches: null, storageGB: null },
+    isActive: true, isPublic: true, sortOrder: 4,
+  },
+];
+
+async function seedBilling(m) {
+  console.log("\n=== Platform Billing (plans / subscriptions / invoices) ===");
+  const planDocs = {};
+  for (const plan of BILLING_PLANS) {
+    await m.auth.models.plans.updateOne(
+      { code: plan.code },
+      { $setOnInsert: plan },
+      { upsert: true, setDefaultsOnInsert: true, new: true },
+    );
+    planDocs[plan.code] = await m.auth.models.plans.findOne({ code: plan.code }).lean();
+  }
+
+  const schools = await m.auth.models.schools.find({}).lean();
+  let createdSubs = 0;
+  let createdInvoices = 0;
+  for (const school of schools) {
+    const plan = planDocs[school.plan] || planDocs.trial;
+    if (!plan) continue;
+    const existing = await m.auth.models.subscriptions
+      .findOne({ schoolId: school._id, status: { $in: ["trialing", "active", "past_due"] } })
+      .lean();
+    if (existing) continue;
+
+    const start = new Date();
+    const trialEnd = addDays(start, plan.trialDays || 0);
+    const sub = await m.auth.models.subscriptions.create({
+      schoolId: school._id,
+      planId: plan._id,
+      status: plan.trialDays > 0 ? "trialing" : "active",
+      startDate: start,
+      trialStartDate: plan.trialDays > 0 ? start : null,
+      trialEndDate: plan.trialDays > 0 ? trialEnd : null,
+      currentPeriodStart: start,
+      currentPeriodEnd: trialEnd,
+      nextBillingDate: trialEnd,
+      billingCycle: plan.billingCycle,
+      price: plan.price,
+      currency: plan.currency,
+      metadata: { source: "seed-full" },
+    });
+    createdSubs++;
+
+    const inv = await m.auth.models.billinginvoices.create({
+      invoiceNumber: `INV-${start.getUTCFullYear()}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`,
+      schoolId: school._id,
+      subscriptionId: sub._id,
+      amount: plan.price || 0,
+      currency: plan.currency,
+      status: "issued",
+      periodStart: start,
+      periodEnd: trialEnd,
+      dueDate: addDays(new Date(), 7),
+    });
+    if (inv) createdInvoices++;
+  }
+  console.log(`[billing] ${Object.keys(planDocs).length} plans, ${createdSubs} subscriptions, ${createdInvoices} invoices`);
+}
+
+// ---------------------------------------------------------------------------
 // Main
 // ---------------------------------------------------------------------------
 async function main() {
@@ -723,6 +820,8 @@ async function main() {
   accounts.push({ school: "Platform", name: platform.name || "Platform Admin", email: platform.email, password: "Administrator@321", role: "super_admin", note: "password unchanged if pre-existing" });
 
   for (const school of SCHOOLS) await seedSchool(school, m);
+
+  await seedBilling(m);
 
   // dump credentials
   const outPath = path.join(__dirname, "seed-accounts.json");

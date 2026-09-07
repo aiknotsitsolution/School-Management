@@ -7,6 +7,7 @@ const {
 } = require("../models/Subscription");
 const BillingInvoice = require("../models/BillingInvoice");
 const School = require("../models/School");
+const User = require("../models/User");
 
 // --------------------------------------------------------------------------
 // Small domain helpers
@@ -700,6 +701,138 @@ const updateInvoice = async (req, res) => {
   }
 };
 
+// --------------------------------------------------------------------------
+// Platform analytics (Platform Owner dashboard KPIs)
+// --------------------------------------------------------------------------
+
+const getPlatformAnalytics = async (req, res) => {
+  try {
+    // Tenant footprint
+    const [schools, activeSchools, users] = await Promise.all([
+      School.countDocuments({}),
+      School.countDocuments({ status: "active" }),
+      User.countDocuments({ role: { $ne: "super_admin" } }),
+    ]);
+
+    // Subscription status distribution
+    const statusRows = await Subscription.aggregate([
+      { $group: { _id: "$status", n: { $sum: 1 } } },
+    ]);
+    const byStatus = Object.fromEntries(
+      statusRows.map((r) => [r._id, r.n]),
+    );
+
+    // Current subscriptions -> MRR / ARPU + plan distribution + expiring soon
+    const current = await Subscription.find({
+      status: { $in: CURRENT_SUBSCRIPTION_STATUSES },
+    })
+      .populate("schoolId", "_id name code status")
+      .populate("planId", "_id name code")
+      .lean();
+
+    const currentTotal = current.length;
+    const toMonthly = (sub) =>
+      sub.billingCycle === "yearly" ? (sub.price || 0) / 12 : sub.price || 0;
+    let mrr = 0;
+    let payingCount = 0;
+    for (const sub of current) {
+      const monthly = toMonthly(sub);
+      if (monthly > 0) {
+        mrr += monthly;
+        payingCount++;
+      }
+    }
+    mrr = Math.round(mrr * 100) / 100;
+
+    const planDistribution = {};
+    for (const sub of current) {
+      const code = sub.planId?.code || "unknown";
+      planDistribution[code] = (planDistribution[code] || 0) + 1;
+    }
+    const distribution = Object.entries(planDistribution)
+      .map(([plan, count]) => ({ plan, count }))
+      .sort((a, b) => b.count - a.count);
+
+    const now = new Date();
+    const soonLimit = addDays(now, 14);
+    const expiringSoon = current
+      .map((sub) => {
+        const reference =
+          sub.status === "trialing"
+            ? sub.trialEndDate || sub.nextBillingDate
+            : sub.nextBillingDate;
+        return { sub, reference: reference ? new Date(reference) : null };
+      })
+      .filter(({ reference }) => reference && reference <= soonLimit)
+      .sort((a, b) => a.reference - b.reference)
+      .slice(0, 5)
+      .map(({ sub, reference }) => ({
+        ...toSubscriptionJson(sub),
+        nextBillingDate: reference,
+      }));
+
+    // Revenue from invoices
+    const revenueRows = await BillingInvoice.aggregate([
+      { $match: { status: { $ne: "void" } } },
+      {
+        $group: {
+          _id: "$status",
+          total: { $sum: "$amount" },
+          n: { $sum: 1 },
+        },
+      },
+    ]);
+    const revenueByStatus = Object.fromEntries(
+      revenueRows.map((r) => [r._id, r]),
+    );
+    const collected = revenueByStatus.paid?.total || 0;
+    const outstanding =
+      (revenueByStatus.issued?.total || 0) + (revenueByStatus.overdue?.total || 0);
+
+    res.json({
+      success: true,
+      data: {
+        generatedAt: new Date(),
+        schools,
+        activeSchools,
+        users,
+        subscriptions: {
+          total:
+          (byStatus.trialing || 0) +
+          (byStatus.active || 0) +
+          (byStatus.past_due || 0) +
+          (byStatus.cancelled || 0) +
+          (byStatus.expired || 0) +
+          (byStatus.suspended || 0),
+          current: currentTotal,
+          trialing: byStatus.trialing || 0,
+          active: byStatus.active || 0,
+          past_due: byStatus.past_due || 0,
+          suspended: byStatus.suspended || 0,
+          cancelled: byStatus.cancelled || 0,
+          expired: byStatus.expired || 0,
+        },
+        mrr,
+        arpu: payingCount ? Math.round((mrr / payingCount) * 100) / 100 : 0,
+        planDistribution: distribution,
+        expiringSoon,
+        revenue: {
+          collected,
+          outstanding,
+          invoices: {
+            paid: revenueByStatus.paid?.n || 0,
+            issued: revenueByStatus.issued?.n || 0,
+            overdue: revenueByStatus.overdue?.n || 0,
+            draft: revenueByStatus.draft?.n || 0,
+          },
+        },
+      },
+    });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
 module.exports = {
   listPlans,
   getPlan,
@@ -714,5 +847,6 @@ module.exports = {
   getInvoice,
   generateInvoice,
   updateInvoice,
+  getPlatformAnalytics,
   formatMoney,
 };

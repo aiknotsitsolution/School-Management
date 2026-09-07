@@ -6,12 +6,14 @@ import {
   Users,
   CheckCircle2,
   Eye,
+  TrendingUp,
 } from "lucide-react";
 import { api } from "../lib/api";
-import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../components/UI";
+import { Button, Card, Input, PageIntro, Pill, Select, StatCard, toast } from "../components/UI";
 
 const roleOptions = ["school_admin", "class_teacher", "staff", "student"];
-const planOptions = ["trial", "basic", "standard", "premium"];
+const fmtDate = (value) =>
+  value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
 const tabFromParams = (searchParams) =>
   searchParams.get("tab") === "users" ? "users" : "schools";
@@ -41,6 +43,8 @@ export default function Platform() {
   });
   const [gridSchoolId, setGridSchoolId] = useState("");
   const [loading, setLoading] = useState(false);
+  const [stats, setStats] = useState(null);
+  const [availablePlans, setAvailablePlans] = useState([]);
 
   useEffect(() => {
     api.schools
@@ -61,6 +65,13 @@ export default function Platform() {
       .then(({ data }) => setUsers(data || []))
       .catch((err) => toast(err.message, "error"));
   }, [tab, gridSchoolId]);
+
+  useEffect(() => {
+    api.analytics.summary().then(({ data }) => setStats(data)).catch(() => {});
+  }, []);
+  useEffect(() => {
+    api.plans.list().then(({ data }) => setAvailablePlans(data || [])).catch(() => {});
+  }, []);
 
   const createSchool = async (event) => {
     event.preventDefault();
@@ -140,6 +151,40 @@ export default function Platform() {
           </div>
         }
       />
+
+      {stats && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-5">
+          <StatCard
+            label="Schools"
+            value={stats.schools}
+            sub={`${stats.activeSchools} active`}
+            accent="amber"
+          />
+          <StatCard
+            label="Current Subscriptions"
+            value={stats.subscriptions.current}
+            sub={`${stats.subscriptions.trialing} trialing · ${stats.subscriptions.cancelled} cancelled`}
+            accent="success"
+          />
+          <StatCard
+            icon={TrendingUp}
+            label="MRR"
+            value={`₹${Math.round(stats.mrr).toLocaleString("en-IN")}`}
+            sub={`ARPU ₹${Math.round(stats.arpu).toLocaleString("en-IN")}`}
+            accent="info"
+          />
+          <StatCard
+            label="Expiring in 14 days"
+            value={stats.expiringSoon.length}
+            sub={
+              stats.expiringSoon.length > 0
+                ? `${stats.revenue.collected.toLocaleString("en-IN")} collected`
+                : "All clear"
+            }
+            accent={stats.expiringSoon.length > 0 ? "alert" : "success"}
+          />
+        </div>
+      )}
 
       <div className="flex gap-2 mb-5">
         <button
@@ -237,9 +282,9 @@ export default function Platform() {
                     setSchoolForm({ ...schoolForm, plan: event.target.value })
                   }
                 >
-                  {planOptions.map((plan) => (
-                    <option key={plan} value={plan}>
-                      {plan}
+                  {availablePlans.map((plan) => (
+                    <option key={plan.code} value={plan.code}>
+                      {plan.name}
                     </option>
                   ))}
                 </Select>
@@ -248,11 +293,27 @@ export default function Platform() {
                 <Plus size={15} /> {loading ? "Creating..." : "Create school"}
               </Button>
               <p className="text-[11.5px] text-slate-text/60 leading-relaxed">
-                After creating a school, select it in the top-bar switcher, then
-                create its admin account in the Tenant Users tab.
-              </p>
-            </form>
-          </Card>
+                  After creating a school, select it in the top-bar switcher, then
+                  create its admin account in the Tenant Users tab.
+                </p>
+              </form>
+            </Card>
+
+            {stats?.expiringSoon?.length > 0 && (
+              <Card title="Expiring soon" className="lg:col-span-2 mt-0">
+                <div className="divide-y divide-black/[0.06]">
+                  {stats.expiringSoon.map((sub) => (
+                    <div key={sub._id} className="flex items-center justify-between gap-2 text-[12.5px] py-2.5 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <p className="font-semibold text-ink truncate">{sub.school?.name || "—"}</p>
+                        <p className="text-slate-text/70">{sub.plan?.name} · {sub.status}</p>
+                      </div>
+                      <span className="text-slate-text/60 whitespace-nowrap">{fmtDate(sub.nextBillingDate)}</span>
+                    </div>
+                  ))}
+                </div>
+              </Card>
+            )}
         </div>
       ) : (
         <div className="grid lg:grid-cols-5 gap-5">

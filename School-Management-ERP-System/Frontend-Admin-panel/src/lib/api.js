@@ -71,6 +71,40 @@ export const api = {
     list: () => request("/auth/schools"),
     create: (school) => request("/auth/schools", json("POST", school)),
   },
+  plans: {
+    list: (params = "") => request(`/platform/plans${params ? `?${params}` : ""}`),
+    get: (id) => request(`/platform/plans/${id}`),
+    create: (plan) => request("/platform/plans", json("POST", plan)),
+    update: (id, plan) => request(`/platform/plans/${id}`, json("PATCH", plan)),
+    remove: (id) => request(`/platform/plans/${id}`, { method: "DELETE" }),
+  },
+  analytics: {
+    summary: () => request("/platform/analytics"),
+  },
+  subscriptions: {
+    list: (params = "") => request(`/platform/subscriptions${params ? `?${params}` : ""}`),
+    get: (id) => request(`/platform/subscriptions/${id}`),
+    assign: (schoolId, planId, effectiveDate) =>
+      request(
+        "/platform/subscriptions",
+        json("POST", { schoolId, planId, effectiveDate }),
+      ),
+    act: (id, action, extra = {}) =>
+      request(`/platform/subscriptions/${id}`, json("PATCH", { action, ...extra })),
+  },
+  billing: {
+    invoices: {
+      list: (params = "") => request(`/platform/invoices${params ? `?${params}` : ""}`),
+      get: (id) => request(`/platform/invoices/${id}`),
+      generate: (subscriptionId, period = {}) =>
+        request(
+          "/platform/invoices/generate",
+          json("POST", { subscriptionId, ...period }),
+        ),
+      updateStatus: (id, status) =>
+        request(`/platform/invoices/${id}`, json("PATCH", { status })),
+    },
+  },
   students: {
     list: (params = "") => request(`/students${params ? `?${params}` : ""}`),
     create: (student) => request("/students", json("POST", student)),

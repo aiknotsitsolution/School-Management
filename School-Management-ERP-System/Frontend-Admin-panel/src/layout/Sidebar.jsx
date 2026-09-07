@@ -44,6 +44,13 @@ const groups = [
     items: [{ to: "/platform?tab=users", icon: UserRoundCog, label: "Users & Access", scope: "platform" }],
   },
   {
+    label: "Billing & Subscriptions",
+    items: [
+      { to: "/platform/plans", icon: Banknote, label: "Plans & Pricing", scope: "platform" },
+      { to: "/platform/subscriptions", icon: CreditCard, label: "Subscriptions", scope: "platform" },
+    ],
+  },
+  {
     label: "My Dashboards",
     items: [
       { to: "/", icon: LayoutDashboard, label: "Admin Dashboard", end: true, roles: ["super_admin", "school_admin"] },

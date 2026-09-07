@@ -25,6 +25,8 @@ const titles = {
   "/bus-tracking": "Bus Tracking",
   "/reports": "Reports & Analytics",
   "/platform": "Platform Dashboard",
+  "/platform/plans": "Plans & Pricing",
+  "/platform/subscriptions": "Subscriptions",
 };
 
 export default function Layout() {

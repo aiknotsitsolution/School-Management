@@ -7,6 +7,9 @@ const { verifyToken, authorizeRoles } = require("../middleware/auth");
 // platform and never fall under a school tenant scope.
 router.use(verifyToken, authorizeRoles("super_admin"));
 
+// Analytics
+router.get("/analytics", ctrl.getPlatformAnalytics);
+
 // Plans
 router.get("/plans", ctrl.listPlans);
 router.get("/plans/:id", ctrl.getPlan);

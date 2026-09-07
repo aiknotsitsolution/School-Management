@@ -27,6 +27,8 @@ import StudentDashboard from "./pages/StudentDashboard";
 import StaffDashboard from "./pages/StaffDashboard";
 import Platform from "./pages/Platform";
 import Users from "./pages/Users";
+import Plans from "./pages/Plans";
+import Subscriptions from "./pages/Subscriptions";
 import {
   selectIsAuthenticated,
   selectRole,
@@ -82,6 +84,22 @@ export default function App() {
             element={
               <RequireRole roles={["super_admin"]} fallback="/student-dashboard">
                 <Platform />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/platform/plans"
+            element={
+              <RequireRole roles={["super_admin"]} fallback="/">
+                <Plans />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/platform/subscriptions"
+            element={
+              <RequireRole roles={["super_admin"]} fallback="/">
+                <Subscriptions />
               </RequireRole>
             }
           />
