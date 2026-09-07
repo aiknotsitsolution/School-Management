@@ -33,15 +33,37 @@ import { canSeeNavigation } from "../lib/scope";
 const groups = [
   {
     label: "Platform",
-    items: [{ to: "/platform", icon: LayoutDashboard, label: "Platform Dashboard", end: true, scope: "platform" }],
+    items: [
+      {
+        to: "/platform",
+        icon: LayoutDashboard,
+        label: "Platform Dashboard",
+        end: true,
+        scope: "platform",
+      },
+    ],
   },
   {
     label: "Schools",
-    items: [{ to: "/platform?tab=schools", icon: Building2, label: "Schools Management", scope: "platform" }],
+    items: [
+      {
+        to: "/platform?tab=schools",
+        icon: Building2,
+        label: "Schools Management",
+        scope: "platform",
+      },
+    ],
   },
   {
     label: "Users & Access",
-    items: [{ to: "/platform?tab=users", icon: UserRoundCog, label: "Users & Access", scope: "platform" }],
+    items: [
+      {
+        to: "/platform?tab=users",
+        icon: UserRoundCog,
+        label: "Users & Access",
+        scope: "platform",
+      },
+    ],
   },
   {
     label: "Billing & Subscriptions",
@@ -53,63 +75,193 @@ const groups = [
   {
     label: "My Dashboards",
     items: [
-      { to: "/", icon: LayoutDashboard, label: "Admin Dashboard", end: true, roles: ["super_admin", "school_admin"] },
-      { to: "/staff-dashboard", icon: LayoutDashboard, label: "My Dashboard", end: true, roles: ["staff"] },
-      { to: "/teacher-dashboard", icon: UserCog, label: "Class Teacher", roles: ["school_admin", "class_teacher"] },
-      { to: "/student-dashboard", icon: GraduationCap, label: "Student / Parent", roles: ["school_admin", "student"] },
+      {
+        to: "/",
+        icon: LayoutDashboard,
+        label: "Admin Dashboard",
+        end: true,
+        roles: ["super_admin", "school_admin"],
+      },
+      {
+        to: "/staff-dashboard",
+        icon: LayoutDashboard,
+        label: "My Dashboard",
+        end: true,
+        roles: ["staff"],
+      },
+      {
+        to: "/teacher-dashboard",
+        icon: UserCog,
+        label: "Class Teacher",
+        roles: ["school_admin", "class_teacher"],
+      },
+      {
+        to: "/student-dashboard",
+        icon: GraduationCap,
+        label: "Student / Parent",
+        roles: ["school_admin", "student"],
+      },
     ],
   },
   {
     label: "Academics",
     items: [
-      { to: "/attendance", icon: CalendarCheck, label: "Attendance", perm: "attendance:read" },
-      { to: "/timetable", icon: CalendarDays, label: "Timetable", perm: "timetable:read" },
-      { to: "/homework", icon: BookOpenCheck, label: "Homework", perm: "homework:read" },
-      { to: "/examination", icon: ClipboardList, label: "Examination", perm: "exams:read" },
-      { to: "/report-card", icon: ScrollText, label: "Report Card", perm: "marks:read" },
-      { to: "/library", icon: BookOpen, label: "Library Management", perm: "library:read" },
-      { to: "/students", icon: Users, label: "Student Database", perm: "students:read" },
+      {
+        to: "/attendance",
+        icon: CalendarCheck,
+        label: "Attendance",
+        perm: "attendance:read",
+      },
+      {
+        to: "/timetable",
+        icon: CalendarDays,
+        label: "Timetable",
+        perm: "timetable:read",
+      },
+      {
+        to: "/homework",
+        icon: BookOpenCheck,
+        label: "Homework",
+        perm: "homework:read",
+      },
+      {
+        to: "/examination",
+        icon: ClipboardList,
+        label: "Examination",
+        perm: "exams:read",
+      },
+      {
+        to: "/report-card",
+        icon: ScrollText,
+        label: "Report Card",
+        perm: "marks:read",
+      },
+      {
+        to: "/library",
+        icon: BookOpen,
+        label: "Library Management",
+        perm: "library:read",
+      },
+      {
+        to: "/addstudent",
+        icon: UserPlus,
+        label: "Add Student",
+        perm: "students:write",
+      },
+      {
+        to: "/students",
+        icon: Users,
+        label: "Student Database",
+        perm: "students:read",
+      },
     ],
   },
   {
     label: "Admissions & Outreach",
     items: [
-      { to: "/admission-enquiry", icon: UserPlus, label: "Admission Enquiry", perm: "admissions:read" },
-      { to: "/communication", icon: MessageSquare, label: "Communication", roles: ["school_admin", "class_teacher", "staff"] },
-      { to: "/notice-board", icon: Bell, label: "Notice Board", perm: "notices:read" },
-      { to: "/events", icon: PartyPopper, label: "Events", perm: "events:read" },
+      {
+        to: "/admission-enquiry",
+        icon: UserPlus,
+        label: "Admission Enquiry",
+        perm: "admissions:read",
+      },
+      {
+        to: "/communication",
+        icon: MessageSquare,
+        label: "Communication",
+        roles: ["school_admin", "class_teacher", "staff"],
+      },
+      {
+        to: "/notice-board",
+        icon: Bell,
+        label: "Notice Board",
+        perm: "notices:read",
+      },
+      {
+        to: "/events",
+        icon: PartyPopper,
+        label: "Events",
+        perm: "events:read",
+      },
     ],
   },
   {
     label: "Finance",
     items: [
-      { to: "/fees-collection", icon: Wallet, label: "Fees Collection", perm: "fees:collect" },
-      { to: "/online-payment", icon: CreditCard, label: "Online Fees Payment", perm: "fees:read" },
+      {
+        to: "/fees-collection",
+        icon: Wallet,
+        label: "Fees Collection",
+        perm: "fees:collect",
+      },
+      {
+        to: "/online-payment",
+        icon: CreditCard,
+        label: "Online Fees Payment",
+        perm: "fees:read",
+      },
     ],
   },
   {
     label: "Operations",
     items: [
-      { to: "/inventory", icon: Boxes, label: "Inventory Management", perm: "inventory:read" },
-      { to: "/bus-tracking", icon: Bus, label: "Bus Tracking", perm: "transport:read" },
-      { to: "/hostel", icon: BedDouble, label: "Hostel Management", perm: "hostel:read" },
+      {
+        to: "/inventory",
+        icon: Boxes,
+        label: "Inventory Management",
+        perm: "inventory:read",
+      },
+      {
+        to: "/bus-tracking",
+        icon: Bus,
+        label: "Bus Tracking",
+        perm: "transport:read",
+      },
+      {
+        to: "/hostel",
+        icon: BedDouble,
+        label: "Hostel Management",
+        perm: "hostel:read",
+      },
     ],
   },
   {
     label: "Human Resources",
     items: [
-      { to: "/leave", icon: FileBarChart2, label: "Leave Management", perm: "leaves:apply" },
-      { to: "/payroll", icon: Banknote, label: "Payroll / Salary", perm: "payroll:view" },
+      {
+        to: "/leave",
+        icon: FileBarChart2,
+        label: "Leave Management",
+        perm: "leaves:apply",
+      },
+      {
+        to: "/payroll",
+        icon: Banknote,
+        label: "Payroll / Salary",
+        perm: "payroll:view",
+      },
     ],
   },
   {
     label: "Insights",
-    items: [{ to: "/reports", icon: BarChart3, label: "Reports", perm: "reports:view" }],
+    items: [
+      {
+        to: "/reports",
+        icon: BarChart3,
+        label: "Reports",
+        perm: "reports:view",
+      },
+    ],
   },
   {
     label: "Administration",
     items: [
-      { to: "/users", icon: UserRoundCog, label: "Users & Access", perm: "users:manage" },
+      {
+        to: "/users",
+        icon: UserRoundCog,
+        label: "Users & Access",
+        perm: "users:manage",
+      },
     ],
   },
 ];
@@ -122,7 +274,9 @@ export default function Sidebar({ open, onClose }) {
   const canSee = (item) => canSeeNavigation(item, user, role);
 
   const brandName = school?.shortName || "School ERP";
-  const brandSession = school?.session ? `ERP · ${school.session}` : `ERP · ${new Date().getFullYear()}`;
+  const brandSession = school?.session
+    ? `ERP · ${school.session}`
+    : `ERP · ${new Date().getFullYear()}`;
 
   return (
     <>

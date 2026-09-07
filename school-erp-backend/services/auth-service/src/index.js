@@ -1,15 +1,22 @@
 require("dotenv").config();
+
+const dns = require("node:dns");
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
+
 const express = require("express");
 const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
-const connectDB = require("./config/db");
+const mongoose = require("mongoose");
+
 const authRoutes = require("./routes/authRoutes");
 const platformRoutes = require("./routes/platformRoutes");
 const ensureBillingDefaults = require("./init/ensureBillingDefaults");
 
 const app = express();
 const PORT = process.env.AUTH_SERVICE_PORT || 5001;
+
+const connectDB = () => mongoose.connect(process.env.MONGODB_URI);
 
 const start = async () => {
   try {
@@ -30,12 +37,14 @@ app.use(
     origin: process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
       : true,
-  })
+  }),
 );
 app.use(morgan("dev"));
 app.use(express.json());
 
-app.get("/health", (req, res) => res.json({ success: true, service: "auth-service", status: "UP" }));
+app.get("/health", (req, res) =>
+  res.json({ success: true, service: "auth-service", status: "UP" }),
+);
 app.use("/api/auth", authRoutes);
 app.use("/api/platform", platformRoutes);
 

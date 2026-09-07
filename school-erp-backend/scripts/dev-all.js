@@ -1,10 +1,11 @@
 const { spawn } = require("child_process");
 const dotenv = require("dotenv");
+const http = require("http");
 const net = require("net");
 const path = require("path");
 
 const root = path.resolve(__dirname, "..");
-dotenv.config({ path: path.join(root, ".env") });
+dotenv.config({ path: path.join(root, ".env"), override: true });
 const services = [
   ["gateway", "api-gateway", 5000],
   ["auth", "services/auth-service", 5001],
@@ -26,6 +27,33 @@ function isPortOpen(port) {
     });
     socket.once("error", () => resolve(false));
   });
+}
+
+function checkHealth(port) {
+  return new Promise((resolve) => {
+    const request = http.get(
+      { host: "127.0.0.1", port, path: "/health", timeout: 1500 },
+      (response) => {
+        response.resume();
+        resolve(response.statusCode === 200);
+      },
+    );
+    request.on("error", () => resolve(false));
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(false);
+    });
+  });
+}
+
+async function printStatus() {
+  console.log("\nService status:");
+  for (const [name, directory, port] of services) {
+    const healthy = await checkHealth(port);
+    const status = healthy ? "RUNNING" : "UNHEALTHY";
+    console.log(`[${name}] ${status} http://localhost:${port}`);
+  }
+  console.log("");
 }
 
 let children = [];
@@ -60,12 +88,24 @@ async function startServices() {
     });
     children.push(child);
   }
+
+  setTimeout(() => {
+    printStatus().catch((error) =>
+      console.error("Status check failed:", error),
+    );
+  }, 1500);
 }
 
 function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
-  children.forEach((child) => child.kill());
+  children.forEach((child) => {
+    if (process.platform === "win32" && child.pid) {
+      spawn("taskkill", ["/pid", String(child.pid), "/t", "/f"]);
+    } else {
+      child.kill();
+    }
+  });
   setTimeout(() => process.exit(0), 500);
 }
 

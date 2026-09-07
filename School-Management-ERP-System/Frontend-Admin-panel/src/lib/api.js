@@ -7,21 +7,21 @@ const API_BASE_URL =
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
 
 async function request(path, options = {}) {
+  const isFormData = options.body instanceof FormData;
   const { auth } = store.getState();
   const token = auth.accessToken || localStorage.getItem("erp_access_token");
-  const user = auth.user || JSON.parse(localStorage.getItem("erp_user") || "null");
+  const user =
+    auth.user || JSON.parse(localStorage.getItem("erp_user") || "null");
   const passiveSchoolId =
     auth.activeSchoolId || localStorage.getItem("erp_active_school");
 
   // super_admin impersonates a school via X-School-Id; everyone else's tenant
   // comes from their JWT.
-  const includeSchoolHeader =
-    user?.role === "super_admin" && passiveSchoolId;
-
+  const includeSchoolHeader = user?.role === "super_admin" && passiveSchoolId;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(includeSchoolHeader ? { "X-School-Id": passiveSchoolId } : {}),
       ...options.headers,
@@ -29,7 +29,8 @@ async function request(path, options = {}) {
   });
   if (response.status === 401 && !options._retry) {
     const refreshToken =
-      (auth && (auth.refreshToken || localStorage.getItem("erp_refresh_token"))) ||
+      (auth &&
+        (auth.refreshToken || localStorage.getItem("erp_refresh_token"))) ||
       localStorage.getItem("erp_refresh_token");
     if (refreshToken) {
       const refreshResponse = await fetch(
@@ -108,6 +109,14 @@ export const api = {
   students: {
     list: (params = "") => request(`/students${params ? `?${params}` : ""}`),
     create: (student) => request("/students", json("POST", student)),
+    uploadPhoto: (file) => {
+      const formData = new FormData();
+      formData.append("photo", file);
+      return request("/students/upload-photo", {
+        method: "POST",
+        body: formData,
+      });
+    },
     update: (id, student) => request(`/students/${id}`, json("PUT", student)),
     remove: (id) => request(`/students/${id}`, { method: "DELETE" }),
     stats: () => request("/students/stats/summary"),

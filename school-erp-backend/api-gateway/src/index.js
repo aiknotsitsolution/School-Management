@@ -8,6 +8,7 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 
 const app = express();
 const PORT = process.env.GATEWAY_PORT || 5000;
+const PROXY_TIMEOUT_MS = Number(process.env.PROXY_TIMEOUT_MS || 10000);
 
 app.use(helmet());
 app.use(cors());
@@ -125,11 +126,18 @@ routes.forEach(({ path, target }) => {
     createProxyMiddleware({
       target,
       changeOrigin: true,
+      timeout: PROXY_TIMEOUT_MS,
+      proxyTimeout: PROXY_TIMEOUT_MS,
       pathRewrite: (_requestPath, req) => req.originalUrl,
-      onError: (err, req, res) => {
-        res
-          .status(502)
-          .json({ success: false, message: `Service unreachable: ${target}` });
+      on: {
+        error: (_error, _request, response) => {
+          if (!response.headersSent) {
+            response.status(503).json({
+              success: false,
+              message: "Requested service is temporarily unavailable",
+            });
+          }
+        },
       },
     }),
   );

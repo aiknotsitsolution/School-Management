@@ -22,6 +22,7 @@ import Library from "./pages/Library";
 import Leave from "./pages/Leave";
 import Hostel from "./pages/Hostel";
 import Payroll from "./pages/Payroll";
+import AddStudent from "./pages/AddStudent";
 import ClassTeacherDashboard from "./pages/ClassTeacherDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import StaffDashboard from "./pages/StaffDashboard";
@@ -82,7 +83,10 @@ export default function App() {
           <Route
             path="/platform"
             element={
-              <RequireRole roles={["super_admin"]} fallback="/student-dashboard">
+              <RequireRole
+                roles={["super_admin"]}
+                fallback="/student-dashboard"
+              >
                 <Platform />
               </RequireRole>
             }
@@ -194,7 +198,14 @@ export default function App() {
           <Route
             path="/communication"
             element={
-              <RequireRole roles={["school_admin", "class_teacher", "staff", "super_admin"]}>
+              <RequireRole
+                roles={[
+                  "school_admin",
+                  "class_teacher",
+                  "staff",
+                  "super_admin",
+                ]}
+              >
                 <Communication />
               </RequireRole>
             }
@@ -287,6 +298,7 @@ export default function App() {
               </RequirePermission>
             }
           />
+          <Route path="/addstudent" element={<AddStudent />} />
         </Route>
       </Routes>
     </BrowserRouter>
