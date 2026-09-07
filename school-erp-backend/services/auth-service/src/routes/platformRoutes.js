@@ -46,4 +46,8 @@ router.patch("/invoices/:id", ctrl.updateInvoice);
 router.get("/reports", ctrl.listReports);
 router.get("/reports/:type", ctrl.generateReport);
 
+// Platform settings
+router.get("/settings", ctrl.getPlatformSettings);
+router.patch("/settings", ctrl.updatePlatformSettings);
+
 module.exports = router;

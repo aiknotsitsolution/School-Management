@@ -83,6 +83,10 @@ export const api = {
     summary: () => request("/platform/analytics"),
   },
   platform: {
+    settings: {
+      get: () => request("/platform/settings"),
+      update: (payload) => request("/platform/settings", { method: "PATCH", body: JSON.stringify(payload) }),
+    },
     reports: {
       catalog: () => request("/platform/reports"),
       generate: (type, params = "") => request(`/platform/reports/${type}${params ? `?${params}` : ""}`),

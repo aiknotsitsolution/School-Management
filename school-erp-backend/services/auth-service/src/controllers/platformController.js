@@ -9,6 +9,7 @@ const BillingInvoice = require("../models/BillingInvoice");
 const School = require("../models/School");
 const User = require("../models/User");
 const AuditLog = require("../models/AuditLog");
+const PlatformSetting = require("../models/PlatformSetting");
 const { writeAudit } = require("../utils/audit");
 
 // --------------------------------------------------------------------------
@@ -1389,6 +1390,112 @@ const generateReport = async (req, res) => {
   }
 };
 
+// --------------------------------------------------------------------------
+// Platform Settings (secrets-free; only whitelisted keys, change-driven)
+// --------------------------------------------------------------------------
+
+const SETTING_DEFS = {
+  "platform.name": { label: "Platform name", section: "general", type: "string", help: "Display name shown across the platform.", default: "Brightwood ERP" },
+  "support.email": { label: "Support email", section: "general", type: "string", help: "Public support contact shown on signup and help pages.", default: "support@example.com" },
+  "security.sessionTimeoutMinutes": { label: "Session timeout (minutes)", section: "security", type: "number", min: 5, max: 1440, help: "Idle time before access tokens are considered stale.", default: 120 },
+  "security.requireEmailVerification": { label: "Require email verification", section: "security", type: "boolean", help: "Block logins until a user verifies their email address.", default: true },
+  "billing.defaultCurrency": { label: "Default currency", section: "billing", type: "string", options: ["INR", "USD", "EUR"], help: "Currency used for new subscriptions and invoices.", default: "INR" },
+  "billing.overdueGraceDays": { label: "Overdue grace (days)", section: "billing", type: "number", min: 0, max: 365, help: "Days after an invoice is due before it is flagged overdue.", default: 7 },
+  "notifications.renewalReminderDays": { label: "Renewal reminder (days before)", section: "notifications", type: "number", min: 0, max: 120, help: "How far in advance renewal reminders are sent to schools.", default: 7 },
+};
+
+const coerceSettingValue = (def, value) => {
+  if (def.type === "boolean") return Boolean(value);
+  if (def.type === "number") {
+    const n = Number(value);
+    if (!Number.isFinite(n)) throw Object.assign(new Error(`Invalid number for setting`), { status: 400 });
+    if (def.min !== undefined && n < def.min) throw Object.assign(new Error(`Value must be >= ${def.min}`), { status: 400 });
+    if (def.max !== undefined && n > def.max) throw Object.assign(new Error(`Value must be <= ${def.max}`), { status: 400 });
+    return n;
+  }
+  if (def.options && !def.options.includes(value)) {
+    throw Object.assign(new Error(`Invalid value, expected one of: ${def.options.join(", ")}`), { status: 400 });
+  }
+  return String(value);
+};
+
+const getPlatformSettings = async (req, res) => {
+  try {
+    const stored = await PlatformSetting.find().lean();
+    const map = Object.fromEntries(stored.map((s) => [s.key, s]));
+    const data = Object.entries(SETTING_DEFS).map(([key, def]) => ({
+      key,
+      label: def.label,
+      section: def.section,
+      type: def.type,
+      value: key in map ? map[key].value : def.default,
+      default: def.default,
+      min: def.min,
+      max: def.max,
+      options: def.options,
+      help: def.help,
+      updatedAt: map[key]?.updatedAt || null,
+    }));
+    res.json({ success: true, data });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const updatePlatformSettings = async (req, res) => {
+  try {
+    const body = req.body || {};
+    const allowed = Object.keys(SETTING_DEFS);
+    const entries = Object.entries(body);
+    if (entries.length === 0) {
+      return res.status(400).json({ success: false, message: "No settings provided" });
+    }
+    const coerced = [];
+    for (const [key, raw] of entries) {
+      const def = SETTING_DEFS[key];
+      if (!def) {
+        const err = new Error(`Key is not editable: ${key}`);
+        err.status = 400;
+        throw err;
+      }
+      coerced.push([key, coerceSettingValue(def, raw)]);
+    }
+    for (const [key, value] of coerced) {
+      await PlatformSetting.findOneAndUpdate(
+        { key },
+        { key, value, updatedBy: req.user?.email || null },
+        { upsert: true, new: true }
+      );
+    }
+    await writeAudit({
+      req,
+      user: req.user,
+      action: "settings.changed",
+      targetType: "setting",
+      message: `Updated platform setting(s): ${coerced.map(([k]) => k).join(", ")}`,
+      result: "success",
+    });
+    const stored = await PlatformSetting.find().lean();
+    const map = Object.fromEntries(stored.map((s) => [s.key, s]));
+    const data = Object.entries(SETTING_DEFS).map(([key, def]) => ({
+      key,
+      label: def.label,
+      section: def.section,
+      type: def.type,
+      value: key in map ? map[key].value : def.default,
+      default: def.default,
+      min: def.min,
+      max: def.max,
+      options: def.options,
+      help: def.help,
+      updatedAt: map[key]?.updatedAt || null,
+    }));
+    res.json({ success: true, data });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
 module.exports = {
   listPlans,
   getPlan,
@@ -1406,6 +1513,8 @@ module.exports = {
   getPlatformAnalytics,
   listReports,
   generateReport,
+  getPlatformSettings,
+  updatePlatformSettings,
   listAuditLogs,
   listPlatformUsers,
   getUser360,
