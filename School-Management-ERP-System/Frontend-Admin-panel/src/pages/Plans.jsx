@@ -309,12 +309,12 @@ export default function Plans() {
                 <Button variant="primary" className="flex-1 justify-center" onClick={() => openEdit(plan)}>
                   <Pencil size={14} /> Edit
                 </Button>
-                <Button variant="outline" onClick={() => toggleActive(plan)} title={plan.isActive ? "Deactivate" : "Activate"}>
-                  <Power size={14} />
-                </Button>
-                <Button variant="outline" onClick={() => remove(plan)} title="Delete (only if unused)">
-                  <Trash2 size={14} />
-                </Button>
+<Button variant="outline" onClick={() => toggleActive(plan)} title={plan.isActive ? "Deactivate (archive) — no longer assignable" : "Activate (un-archive)"}>
+          <Power size={14} />
+        </Button>
+        <Button variant="outline" onClick={() => remove(plan)} title="Delete (only if never used)"> 
+          <Trash2 size={14} />
+        </Button>
               </div>
             </Card>
           ))}

@@ -39,7 +39,7 @@ export default function Subscriptions() {
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(1);
   const [pages, setPages] = useState(0);
-  const [filters, setFilters] = useState({ q: "", status: "", plan: "" });
+  const [filters, setFilters] = useState({ q: "", status: "", plan: "", expiringWithin: "" });
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -54,6 +54,7 @@ export default function Subscriptions() {
       if (f.q) params.set("q", f.q);
       if (f.status) params.set("status", f.status);
       if (f.plan) params.set("plan", f.plan);
+      if (f.expiringWithin) params.set("expiringWithin", f.expiringWithin);
       params.set("page", String(page));
       setLoading(true);
       api.subscriptions
@@ -137,6 +138,44 @@ export default function Subscriptions() {
         title="Subscriptions"
         description="Every tenant school has exactly one current subscription. Plan changes supersede the old one and auto-generate an invoice."
       />
+
+      <div className="flex items-center gap-2 mb-4">
+        <span className="text-[12.5px] font-semibold text-slate-text/70">Expiring:</span>
+        {[
+          { days: 7, label: "Next 7 days" },
+          { days: 15, label: "Next 15 days" },
+          { days: 30, label: "Next 30 days" },
+        ].map((bucket) => {
+          const active = filters.expiringWithin === String(bucket.days);
+          return (
+            <button
+              key={bucket.days}
+              onClick={() => {
+                setFilters({ ...filters, expiringWithin: active ? "" : String(bucket.days), status: "" });
+                setPage(1);
+              }}
+              className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors ${
+                active
+                  ? "bg-alert text-white"
+                  : "bg-white text-ink border border-black/10 hover:bg-paper"
+              }`}
+            >
+              {bucket.label}
+            </button>
+          );
+        })}
+        {filters.expiringWithin && (
+          <button
+            onClick={() => {
+              setFilters({ ...filters, expiringWithin: "" });
+              setPage(1);
+            }}
+            className="text-[12px] font-semibold text-slate-text/60 hover:text-ink"
+          >
+            Clear
+          </button>
+        )}
+      </div>
 
       <Card className="mb-5" bodyClassName="p-4">
         <form

@@ -340,6 +340,19 @@ const listSubscriptions = async (req, res) => {
     if (req.query.plan) filter.planId = asObjectId(req.query.plan, "plan");
     if (req.query.status) filter.status = req.query.status;
 
+    // "Expiring within N days" — reference date is trial end (trialing) or next
+    // billing date (active/past_due). Enables the operator's 7/15/30-day buckets.
+    if (req.query.expiringWithin) {
+      const days = parseInt(req.query.expiringWithin, 10);
+      if (Number.isInteger(days) && days > 0) {
+        const cutoff = addDays(new Date(), days);
+        filter.$or = [
+          { status: "trialing", trialEndDate: { $lte: cutoff } },
+          { status: { $in: ["active", "past_due"] }, nextBillingDate: { $lte: cutoff } },
+        ];
+      }
+    }
+
     if (req.query.q) {
       const q = req.query.q.trim();
       const schools = await School.find({
