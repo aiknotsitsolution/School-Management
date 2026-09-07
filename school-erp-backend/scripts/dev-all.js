@@ -1,5 +1,6 @@
 const { spawn } = require("child_process");
 const dotenv = require("dotenv");
+const http = require("http");
 const net = require("net");
 const path = require("path");
 
@@ -26,6 +27,33 @@ function isPortOpen(port) {
     });
     socket.once("error", () => resolve(false));
   });
+}
+
+function checkHealth(port) {
+  return new Promise((resolve) => {
+    const request = http.get(
+      { host: "127.0.0.1", port, path: "/health", timeout: 1500 },
+      (response) => {
+        response.resume();
+        resolve(response.statusCode === 200);
+      },
+    );
+    request.on("error", () => resolve(false));
+    request.on("timeout", () => {
+      request.destroy();
+      resolve(false);
+    });
+  });
+}
+
+async function printStatus() {
+  console.log("\nService status:");
+  for (const [name, directory, port] of services) {
+    const healthy = await checkHealth(port);
+    const status = healthy ? "RUNNING" : "UNHEALTHY";
+    console.log(`[${name}] ${status} http://localhost:${port}`);
+  }
+  console.log("");
 }
 
 let children = [];
@@ -60,6 +88,12 @@ async function startServices() {
     });
     children.push(child);
   }
+
+  setTimeout(() => {
+    printStatus().catch((error) =>
+      console.error("Status check failed:", error),
+    );
+  }, 1500);
 }
 
 function shutdown() {
