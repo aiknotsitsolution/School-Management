@@ -10,6 +10,19 @@ router.use(verifyToken, authorizeRoles("super_admin"));
 // Analytics
 router.get("/analytics", ctrl.getPlatformAnalytics);
 
+// Audit trail (read-only surface for the append-oriented store)
+router.get("/audit-logs", ctrl.listAuditLogs);
+
+// Platform users (list / 360)
+router.get("/users", ctrl.listPlatformUsers);
+router.get("/users/:id", ctrl.getUser360);
+
+// Schools management (list / 360 / lifecycle / onboarding)
+router.get("/schools", ctrl.listPlatformSchools);
+router.get("/schools/:id", ctrl.getSchool360);
+router.patch("/schools/:id/status", ctrl.updateSchoolStatus);
+router.patch("/schools/:id/onboarding", ctrl.updateSchoolOnboarding);
+
 // Plans
 router.get("/plans", ctrl.listPlans);
 router.get("/plans/:id", ctrl.getPlan);

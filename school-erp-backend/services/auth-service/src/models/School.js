@@ -10,6 +10,8 @@ const schoolSchema = new mongoose.Schema(
     phone: { type: String },
     email: { type: String, lowercase: true, trim: true },
     logo: { type: String },
+    website: { type: String, trim: true },
+    domain: { type: String, lowercase: true, trim: true },
     session: { type: String },
     plan: {
       type: String,
@@ -20,6 +22,16 @@ const schoolSchema = new mongoose.Schema(
       type: String,
       enum: ["active", "suspended"],
       default: "active",
+    },
+    onboarding: {
+      status: {
+        type: String,
+        enum: ["created", "configured", "subscribed", "live"],
+        default: "created",
+      },
+      appliedAt: { type: Date },
+      completedAt: { type: Date },
+      notes: { type: String },
     },
     settings: {
       default: {},

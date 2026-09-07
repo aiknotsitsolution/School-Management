@@ -36,11 +36,17 @@ const userSchema = new mongoose.Schema(
     linkedStudentIds: [{ type: String }],
     isActive: { type: Boolean, default: true },
     lastLogin: { type: Date },
+    lastActivity: { type: Date },
+    emailVerified: { type: Boolean, default: true },
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );
 
 userSchema.index({ schoolId: 1, role: 1 });
+userSchema.index({ isActive: 1, deletedAt: 1, createdAt: -1 });
+userSchema.index({ deletedAt: 1, createdAt: -1 });
+userSchema.index({ role: 1, deletedAt: 1 });
 
 module.exports = mongoose.model("User", userSchema);
 module.exports.STAFF_DESIGNATIONS = STAFF_DESIGNATIONS;

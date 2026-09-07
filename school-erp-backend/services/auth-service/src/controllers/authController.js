@@ -6,9 +6,27 @@ const { validatePassword } = require("../utils/password");
 const { getPermissionsFor } = require("../utils/permissions");
 const { generateAccessToken, generateRefreshToken } = require("../utils/generateToken");
 const { getJwtSecret } = require("../utils/jwtSecret");
+const { writeAudit } = require("../utils/audit");
 
 const VALID_ROLES = ["super_admin", "school_admin", "class_teacher", "staff", "student"];
 const SCHOOL_ADMIN_CREATABLE = ["class_teacher", "staff", "student"];
+
+// School fields a caller may update directly. Tenant identity (code) is
+// immutable after creation; anything else is ignored → no mass assignment.
+const SCHOOL_EDITABLE_FIELDS = [
+  "name",
+  "shortName",
+  "address",
+  "city",
+  "phone",
+  "email",
+  "logo",
+  "website",
+  "domain",
+  "session",
+  "plan",
+  "status",
+];
 
 const toPublicUser = (user) => ({
   id: user._id,
@@ -23,7 +41,12 @@ const toPublicUser = (user) => ({
   refId: user.refId || null,
   linkedStudentIds: user.linkedStudentIds || [],
   isActive: user.isActive !== false,
-  permissions: getPermissionsFor(user),
+  emailVerified: user.emailVerified !== false,
+  deletedAt: user.deletedAt || null,
+  lastLogin: user.lastLogin || null,
+  lastActivity: user.lastActivity || null,
+  createdAt: user.createdAt || null,
+  permissions: user.deletedAt ? [] : getPermissionsFor(user),
 });
 
 // Admin-only user creation (no public self-register). Enforces privilege
@@ -89,6 +112,7 @@ const createUser = async (req, res) => {
       message: "User created successfully",
       data: toPublicUser(user),
     });
+    await writeAudit({ req, user: creator, action: "user.created", targetType: "user", targetId: user._id, message: `Created ${role} user ${user.email}` });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -101,6 +125,7 @@ const login = async (req, res) => {
 
     const user = await User.findOne({ email }).select("+password");
     if (!user || !user.isActive) return res.status(401).json({ success: false, message: "Invalid credentials" });
+    if (user.deletedAt) return res.status(403).json({ success: false, message: "This account has been removed. Contact your school administrator." });
 
     const match = await bcrypt.compare(password, user.password);
     if (!match) return res.status(401).json({ success: false, message: "Invalid credentials" });
@@ -143,7 +168,7 @@ const refreshToken = async (req, res) => {
 
     const decoded = jwt.verify(refreshToken, getJwtSecret());
     const user = await User.findById(decoded.id);
-    if (!user || !user.isActive) return res.status(401).json({ success: false, message: "Invalid refresh token" });
+    if (!user || !user.isActive || user.deletedAt) return res.status(401).json({ success: false, message: "Invalid refresh token" });
 
     const accessToken = generateAccessToken(user);
     const newRefresh = generateRefreshToken(user);
@@ -189,8 +214,8 @@ const changePassword = async (req, res) => {
 
 const listUsers = async (req, res) => {
   try {
-    const { role, schoolId } = req.query;
-    const filter = {};
+    const { role, schoolId, page = 1, limit = 50 } = req.query;
+    const filter = { deletedAt: null };
 
     if (req.user.role === "super_admin") {
       const sid = schoolId || req.header("X-School-Id") || null;
@@ -200,8 +225,15 @@ const listUsers = async (req, res) => {
     }
     if (role) filter.role = role;
 
-    const users = await User.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, count: users.length, data: users.map(toPublicUser) });
+    const p = Math.max(1, parseInt(page, 10) || 1);
+    const l = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));
+    const skip = (p - 1) * l;
+
+    const [users, total] = await Promise.all([
+      User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(l),
+      User.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: users.length, total, page: p, limit: l, pages: Math.ceil(total / l), data: users.map(toPublicUser) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -230,24 +262,76 @@ const loadManageableUser = async (editor, targetId) => {
 const updateUserStatus = async (req, res) => {
   try {
     const { isActive } = req.body;
+    if (typeof isActive !== "boolean") return res.status(400).json({ success: false, message: "isActive must be a boolean" });
+
     const target = await loadManageableUser(req.user, req.params.id);
     if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
+    if (target.deletedAt) return res.status(400).json({ success: false, message: "Restore the user before changing status" });
 
     target.isActive = isActive;
     await target.save();
+    await writeAudit({ req, user: req.user, action: isActive ? "user.activated" : "user.deactivated", targetType: "user", targetId: target._id, message: `${isActive ? "Activated" : "Deactivated"} user ${target.email}` });
     res.json({ success: true, data: toPublicUser(target) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
+// Soft delete: preserves the record (and history) while locking access.
 const deleteUser = async (req, res) => {
   try {
     const target = await loadManageableUser(req.user, req.params.id);
     if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
+    if (String(target._id) === String(req.user.id)) {
+      return res.status(400).json({ success: false, message: "You cannot delete your own account" });
+    }
 
-    await User.findByIdAndDelete(target._id);
-    res.json({ success: true, message: "User deleted" });
+    target.deletedAt = new Date();
+    target.isActive = false;
+    await target.save();
+    await writeAudit({ req, user: req.user, action: "user.soft_deleted", targetType: "user", targetId: target._id, message: `Soft-deleted user ${target.email}` });
+    res.json({ success: true, message: "User removed and access revoked. History is preserved." });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Restore a soft-deleted user (super_admin / same-school school_admin).
+const restoreUser = async (req, res) => {
+  try {
+    const target = await loadManageableUser(req.user, req.params.id);
+    if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
+
+    target.deletedAt = null;
+    target.isActive = true;
+    await target.save();
+    await writeAudit({ req, user: req.user, action: "user.restored", targetType: "user", targetId: target._id, message: `Restored user ${target.email}` });
+    res.json({ success: true, message: "User restored", data: toPublicUser(target) });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Update editable profile fields for a manageable user (no roles/emails by
+// design here; role changes are a prompted, audited flow).
+const updateUser = async (req, res) => {
+  try {
+    const { designation, class: cls, section, phone, refId, name, linkedStudentIds } = req.body;
+    const target = await loadManageableUser(req.user, req.params.id);
+    if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
+    if (target.deletedAt) return res.status(400).json({ success: false, message: "Restore the user before editing" });
+
+    if (name !== undefined) target.name = String(name).trim();
+    if (designation !== undefined) target.designation = designation || null;
+    if (cls !== undefined) target.class = cls || null;
+    if (section !== undefined) target.section = section || null;
+    if (phone !== undefined) target.phone = phone || null;
+    if (refId !== undefined) target.refId = refId || null;
+    if (linkedStudentIds !== undefined) target.linkedStudentIds = Array.isArray(linkedStudentIds) ? linkedStudentIds : [];
+
+    await target.save();
+    await writeAudit({ req, user: req.user, action: "user.updated", targetType: "user", targetId: target._id, message: `Updated user ${target.email}` });
+    res.json({ success: true, data: toPublicUser(target) });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -265,6 +349,7 @@ const createSchool = async (req, res) => {
     if (existing) return res.status(409).json({ success: false, message: "School code already exists" });
 
     const school = await School.create({ name, code: codeSlug, shortName, address, city, phone, email, logo, session, plan, status });
+    await writeAudit({ req, user: req.user, action: "school.created", targetType: "school", targetId: school._id, message: `Created school ${name} (${codeSlug})` });
     res.status(201).json({ success: true, message: "School created successfully", data: school });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -292,8 +377,14 @@ const getSchool = async (req, res) => {
 
 const updateSchool = async (req, res) => {
   try {
-    const school = await School.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const patch = {};
+    for (const key of SCHOOL_EDITABLE_FIELDS) {
+      if (req.body[key] !== undefined) patch[key] = req.body[key];
+    }
+
+    const school = await School.findByIdAndUpdate(req.params.id, patch, { new: true, runValidators: true });
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
+    await writeAudit({ req, user: req.user, action: "school.updated", targetType: "school", targetId: school._id, message: `Updated school fields: ${Object.keys(patch).join(", ") || "(none)"}` });
     res.json({ success: true, message: "School updated successfully", data: school });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -306,7 +397,7 @@ const verify = async (req, res) => {
 
 module.exports = {
   createUser, login, refreshToken, getMe, changePassword,
-  listUsers, updateUserStatus, deleteUser,
+  listUsers, updateUserStatus, deleteUser, restoreUser, updateUser,
   createSchool, listSchools, getSchool, updateSchool,
   verify,
 };

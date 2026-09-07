@@ -18,7 +18,9 @@ router.post("/register", verifyToken, resolveTenant, requirePermission("users:ma
 router.post("/users", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.createUser);
 router.get("/users", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.listUsers);
 router.patch("/users/:id/status", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.updateUserStatus);
+router.patch("/users/:id", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.updateUser);
 router.delete("/users/:id", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.deleteUser);
+router.post("/users/:id/restore", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.restoreUser);
 
 // School / tenant management - platform owner only
 router.post("/schools", verifyToken, authorizeRoles("super_admin"), ctrl.createSchool);

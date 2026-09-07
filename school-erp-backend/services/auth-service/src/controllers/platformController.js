@@ -8,6 +8,8 @@ const {
 const BillingInvoice = require("../models/BillingInvoice");
 const School = require("../models/School");
 const User = require("../models/User");
+const AuditLog = require("../models/AuditLog");
+const { writeAudit } = require("../utils/audit");
 
 // --------------------------------------------------------------------------
 // Small domain helpers
@@ -279,6 +281,7 @@ const createPlan = async (req, res) => {
     const exists = await Plan.findOne({ code: payload.code });
     if (exists) return res.status(409).json({ success: false, message: "Plan code already exists" });
     const plan = await Plan.create(payload);
+    await writeAudit({ req, user: req.user, action: "plan.created", targetType: "plan", targetId: plan._id, message: `Created plan ${payload.code}` });
     res.status(201).json({ success: true, message: "Plan created", data: plan });
   } catch (err) {
     rawError(res, err);
@@ -293,6 +296,7 @@ const updatePlan = async (req, res) => {
     if (exists) return res.status(409).json({ success: false, message: "Plan code already exists" });
     const plan = await Plan.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
+    await writeAudit({ req, user: req.user, action: "plan.updated", targetType: "plan", targetId: plan._id, message: `Updated plan ${plan.code}` });
     res.json({ success: true, message: "Plan updated", data: plan });
   } catch (err) {
     rawError(res, err);
@@ -489,6 +493,7 @@ const createSubscription = async (req, res) => {
     });
     await School.updateOne({ _id: school._id }, { $set: { plan: plan.code } });
     await createInvoiceForSubscription(sub);
+    await writeAudit({ req, user: req.user, action: "subscription.created", targetType: "subscription", targetId: sub._id, message: `Assigned plan ${plan.code} to ${school.name}` });
 
     const loaded = await loadSubscription(sub._id);
     res.status(201).json({ success: true, message: "Subscription created", data: toSubscriptionJson(loaded) });
@@ -524,6 +529,7 @@ const updateSubscription = async (req, res) => {
         });
         await School.updateOne({ _id: sub.schoolId }, { $set: { plan: plan.code } });
         await createInvoiceForSubscription(next);
+        await writeAudit({ req, user: req.user, action: "subscription.changed", targetType: "subscription", targetId: next._id, message: `Changed subscription to plan ${plan.code}` });
         const loaded = await loadSubscription(next._id);
         return res.json({ success: true, message: "Plan changed", data: toSubscriptionJson(loaded) });
       }
@@ -542,6 +548,7 @@ const updateSubscription = async (req, res) => {
         sub.currentPeriodEnd = newEnd;
         sub.nextBillingDate = newEnd;
         await sub.save();
+        await writeAudit({ req, user: req.user, action: "subscription.changed", targetType: "subscription", targetId: sub._id, message: `Extended trial by ${days} days` });
         const loaded = await loadSubscription(sub._id);
         return res.json({ success: true, message: "Trial extended", data: toSubscriptionJson(loaded) });
       }
@@ -554,6 +561,7 @@ const updateSubscription = async (req, res) => {
         sub.suspendedAt = new Date();
         sub.nextBillingDate = null;
         await sub.save();
+        await writeAudit({ req, user: req.user, action: "subscription.suspended", targetType: "subscription", targetId: sub._id, message: "Subscription suspended" });
         const loaded = await loadSubscription(sub._id);
         return res.json({ success: true, message: "Subscription suspended", data: toSubscriptionJson(loaded) });
       }
@@ -576,6 +584,7 @@ const updateSubscription = async (req, res) => {
         sub.cancelledAt = null;
         sub.endedAt = null;
         await sub.save();
+        await writeAudit({ req, user: req.user, action: "subscription.reactivated", targetType: "subscription", targetId: sub._id, message: "Subscription reactivated" });
         const loaded = await loadSubscription(sub._id);
         return res.json({ success: true, message: "Subscription reactivated", data: toSubscriptionJson(loaded) });
       }
@@ -589,6 +598,7 @@ const updateSubscription = async (req, res) => {
         sub.endedAt = new Date();
         sub.nextBillingDate = null;
         await sub.save();
+        await writeAudit({ req, user: req.user, action: "subscription.cancelled", targetType: "subscription", targetId: sub._id, message: "Subscription cancelled" });
         const loaded = await loadSubscription(sub._id);
         return res.json({ success: true, message: "Subscription cancelled", data: toSubscriptionJson(loaded) });
       }
@@ -656,6 +666,7 @@ const generateInvoice = async (req, res) => {
     if (!sub) return res.status(404).json({ success: false, message: "Subscription not found" });
 
     const invoice = await createInvoiceForSubscriptionWithPeriod(sub, periodStart, periodEnd);
+    await writeAudit({ req, user: req.user, action: "invoice.generated", targetType: "invoice", targetId: invoice._id, message: `Generated invoice ${invoice.invoiceNumber}` });
     return res.status(201).json({ success: true, message: "Invoice generated", data: toInvoiceJson(invoice.toJSON ? invoice : invoice) });
   } catch (err) {
     rawError(res, err);
@@ -695,6 +706,7 @@ const updateInvoice = async (req, res) => {
     invoice.status = status;
     invoice.paidAt = status === "paid" ? new Date() : undefined;
     await invoice.save();
+    await writeAudit({ req, user: req.user, action: "invoice.updated", targetType: "invoice", targetId: invoice._id, message: `Invoice ${invoice.invoiceNumber} → ${status}` });
     res.json({ success: true, message: "Invoice updated", data: toInvoiceJson(invoice.toJSON()) });
   } catch (err) {
     rawError(res, err);
@@ -705,34 +717,42 @@ const updateInvoice = async (req, res) => {
 // Platform analytics (Platform Owner dashboard KPIs)
 // --------------------------------------------------------------------------
 
+const monthKey = (date) => {
+  const d = new Date(date);
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+};
+
+const buildMonthSeries = (count) => {
+  const series = [];
+  const now = new Date();
+  for (let i = count - 1; i >= 0; i--) {
+    const cursor = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
+    series.push({ month: monthKey(cursor), label: cursor.toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }), count: 0 });
+  }
+  return series;
+};
+
 const getPlatformAnalytics = async (req, res) => {
   try {
     // Tenant footprint
     const [schools, activeSchools, users] = await Promise.all([
       School.countDocuments({}),
       School.countDocuments({ status: "active" }),
-      User.countDocuments({ role: { $ne: "super_admin" } }),
+      User.countDocuments({ role: { $ne: "super_admin" }, deletedAt: null }),
     ]);
 
     // Subscription status distribution
-    const statusRows = await Subscription.aggregate([
-      { $group: { _id: "$status", n: { $sum: 1 } } },
-    ]);
-    const byStatus = Object.fromEntries(
-      statusRows.map((r) => [r._id, r.n]),
-    );
+    const statusRows = await Subscription.aggregate([{ $group: { _id: "$status", n: { $sum: 1 } } }]);
+    const byStatus = Object.fromEntries(statusRows.map((r) => [r._id, r.n]));
 
     // Current subscriptions -> MRR / ARPU + plan distribution + expiring soon
-    const current = await Subscription.find({
-      status: { $in: CURRENT_SUBSCRIPTION_STATUSES },
-    })
+    const current = await Subscription.find({ status: { $in: CURRENT_SUBSCRIPTION_STATUSES } })
       .populate("schoolId", "_id name code status")
       .populate("planId", "_id name code")
       .lean();
 
     const currentTotal = current.length;
-    const toMonthly = (sub) =>
-      sub.billingCycle === "yearly" ? (sub.price || 0) / 12 : sub.price || 0;
+    const toMonthly = (sub) => (sub.billingCycle === "yearly" ? (sub.price || 0) / 12 : sub.price || 0);
     let mrr = 0;
     let payingCount = 0;
     for (const sub of current) {
@@ -755,55 +775,125 @@ const getPlatformAnalytics = async (req, res) => {
 
     const now = new Date();
     const soonLimit = addDays(now, 14);
+
+    const withReference = (sub) => {
+      const reference = sub.status === "trialing" ? sub.trialEndDate || sub.nextBillingDate : sub.nextBillingDate;
+      return { sub, reference: reference ? new Date(reference) : null };
+    };
+
     const expiringSoon = current
-      .map((sub) => {
-        const reference =
-          sub.status === "trialing"
-            ? sub.trialEndDate || sub.nextBillingDate
-            : sub.nextBillingDate;
-        return { sub, reference: reference ? new Date(reference) : null };
-      })
+      .map(withReference)
       .filter(({ reference }) => reference && reference <= soonLimit)
       .sort((a, b) => a.reference - b.reference)
       .slice(0, 5)
-      .map(({ sub, reference }) => ({
-        ...toSubscriptionJson(sub),
-        nextBillingDate: reference,
-      }));
+      .map(({ sub, reference }) => ({ ...toSubscriptionJson(sub), nextBillingDate: reference }));
 
     // Revenue from invoices
     const revenueRows = await BillingInvoice.aggregate([
       { $match: { status: { $ne: "void" } } },
-      {
-        $group: {
-          _id: "$status",
-          total: { $sum: "$amount" },
-          n: { $sum: 1 },
-        },
-      },
+      { $group: { _id: "$status", total: { $sum: "$amount" }, n: { $sum: 1 } } },
     ]);
-    const revenueByStatus = Object.fromEntries(
-      revenueRows.map((r) => [r._id, r]),
-    );
+    const revenueByStatus = Object.fromEntries(revenueRows.map((r) => [r._id, r]));
     const collected = revenueByStatus.paid?.total || 0;
-    const outstanding =
-      (revenueByStatus.issued?.total || 0) + (revenueByStatus.overdue?.total || 0);
+    const outstanding = (revenueByStatus.issued?.total || 0) + (revenueByStatus.overdue?.total || 0);
+
+    // School growth (last 12 months, by createdAt)
+    const growthSeries = buildMonthSeries(12);
+    const growthRows = await School.aggregate([
+      { $group: { _id: { $dateToString: { format: "%Y-%m", date: "$createdAt" } }, n: { $sum: 1 } } },
+    ]);
+    const growthMap = Object.fromEntries(growthRows.map((r) => [r._id, r.n]));
+    for (const point of growthSeries) point.count = growthMap[point.month] || 0;
+
+    // Subscription distribution buckets for charting
+    const SUB_LABELS = { trialing: "Trialing", active: "Active", past_due: "Past due", suspended: "Suspended", cancelled: "Cancelled", expired: "Expired" };
+    const subscriptionDistribution = Object.entries(SUB_LABELS).map(([status, label]) => ({ status, label, count: byStatus[status] || 0 }));
+
+    // Expiring buckets: 7 / 15 / 30 days
+    const expiringItems = current.map(withReference).filter(({ reference }) => reference).sort((a, b) => a.reference - b.reference);
+    const expiringSubscriptions = {
+      in7: 0,
+      in15: 0,
+      in30: 0,
+      items: expiringItems.slice(0, 10).map(({ sub, reference }) => ({ ...toSubscriptionJson(sub), reference })),
+    };
+    for (const it of expiringItems) {
+      const days = Math.ceil((it.reference - now) / 86400000);
+      if (days <= 30) expiringSubscriptions.in30++;
+      if (days <= 15) expiringSubscriptions.in15++;
+      if (days <= 7) expiringSubscriptions.in7++;
+    }
+
+    // Onboarding funnel
+    const onboardingRows = await School.aggregate([{ $group: { _id: "$onboarding.status", n: { $sum: 1 } } }]);
+    const onboardingMap = Object.fromEntries(onboardingRows.map((r) => [r._id, r.n]));
+    const funnelSteps = ["created", "configured", "subscribed", "live"];
+    const funnel = funnelSteps.map((step) => ({ step: step === "live" ? "live" : step, count: onboardingMap[step] || 0 }));
+
+    // Recent activity from the audit trail (never exposes secrets)
+    const recentActivity = await AuditLog.find({})
+      .sort({ createdAt: -1 })
+      .limit(8)
+      .select("actorId actorEmail actorRole action targetType targetId message result createdAt")
+      .lean();
+
+    // Alerts for the operator's attention
+    const alerts = [];
+    const expiring7 = expiringItems.filter(({ reference }) => reference <= addDays(now, 7));
+    if (expiring7.length) alerts.push({ severity: "warning", type: "subscription_expiring", message: `${expiring7.length} subscription(s) expire within 7 days` });
+    if ((revenueByStatus.overdue?.n || 0) > 0) {
+      alerts.push({ severity: "warning", type: "invoices_overdue", message: `${revenueByStatus.overdue.n} invoice(s) overdue totalling ${(revenueByStatus.overdue.total || 0).toFixed(2)}` });
+    }
+    const noSubActive = await School.countDocuments({ status: "active", "_id": { $nin: current.map((c) => c.schoolId?._id || c.schoolId).filter(Boolean) } });
+    if (noSubActive) alerts.push({ severity: "info", type: "schools_without_subscription", message: `${noSubActive} active school(s) have no current subscription` });
 
     res.json({
       success: true,
       data: {
         generatedAt: new Date(),
+        // ---- structured dashboard contract ----
+        overview: {
+          schools: { total: schools, active: activeSchools },
+          users: { total: users },
+          subscriptions: {
+            total: (byStatus.trialing || 0) + (byStatus.active || 0) + (byStatus.past_due || 0) + (byStatus.cancelled || 0) + (byStatus.expired || 0) + (byStatus.suspended || 0),
+            current: currentTotal,
+            byStatus,
+          },
+          mrr,
+          arpu: payingCount ? Math.round((mrr / payingCount) * 100) / 100 : 0,
+          payingSchools: payingCount,
+          revenue: { collected, outstanding },
+        },
+        schoolGrowth: growthSeries,
+        subscriptionDistribution,
+        planDistribution: distribution,
+        onboarding: { funnelMembers: Math.max(1, schools), funnel },
+        expiringSubscriptions,
+        revenue: {
+          collected,
+          outstanding,
+          invoices: {
+            paid: revenueByStatus.paid?.n || 0,
+            issued: revenueByStatus.issued?.n || 0,
+            overdue: revenueByStatus.overdue?.n || 0,
+            draft: revenueByStatus.draft?.n || 0,
+          },
+        },
+        recentActivity,
+        alerts,
+        // ---- legacy aliases (kept for backward compatibility) ----
         schools,
         activeSchools,
         users,
         subscriptions: {
           total:
-          (byStatus.trialing || 0) +
-          (byStatus.active || 0) +
-          (byStatus.past_due || 0) +
-          (byStatus.cancelled || 0) +
-          (byStatus.expired || 0) +
-          (byStatus.suspended || 0),
+            (byStatus.trialing || 0) +
+            (byStatus.active || 0) +
+            (byStatus.past_due || 0) +
+            (byStatus.cancelled || 0) +
+            (byStatus.expired || 0) +
+            (byStatus.suspended || 0),
           current: currentTotal,
           trialing: byStatus.trialing || 0,
           active: byStatus.active || 0,
@@ -833,6 +923,245 @@ const getPlatformAnalytics = async (req, res) => {
   }
 };
 
+// --------------------------------------------------------------------------
+// Audit log handler (append-oriented, read-only via API)
+// --------------------------------------------------------------------------
+
+const listAuditLogs = async (req, res) => {
+  try {
+    const { page, limit, skip } = paginate(req, 25);
+    const filter = {};
+    if (req.query.action) filter.action = req.query.action;
+    if (req.query.targetType) filter.targetType = req.query.targetType;
+    if (req.query.actorEmail) filter.actorEmail = { $regex: req.query.actorEmail, $options: "i" };
+    if (req.query.result) filter.result = req.query.result;
+
+    const total = await AuditLog.countDocuments(filter);
+    const docs = await AuditLog.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .lean();
+    res.json({ success: true, count: docs.length, total, page, pages: Math.ceil(total / limit) || 0, data: docs });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+// --------------------------------------------------------------------------
+// Platform user management (list / 360) — no mass assignment, no secrets
+// --------------------------------------------------------------------------
+
+const toPlatformUserJson = (raw) => ({
+  _id: raw._id,
+  name: raw.name,
+  email: raw.email,
+  role: raw.role,
+  schoolId: raw.schoolId || null,
+  designation: raw.designation || null,
+  class: raw.class || null,
+  section: raw.section || null,
+  phone: raw.phone || null,
+  isActive: raw.isActive !== false,
+  emailVerified: raw.emailVerified !== false,
+  deletedAt: raw.deletedAt || null,
+  lastLogin: raw.lastLogin || null,
+  lastActivity: raw.lastActivity || null,
+  createdAt: raw.createdAt,
+});
+
+const listPlatformUsers = async (req, res) => {
+  try {
+    const { page, limit, skip } = paginate(req, 25);
+    const { q, role, schoolId, includeDeleted } = req.query;
+    const filter = {};
+    if (includeDeleted !== "true") filter.deletedAt = null;
+    if (role) filter.role = role;
+    if (schoolId) filter.schoolId = asObjectId(schoolId, "schoolId");
+    if (q) {
+      const rx = { $regex: q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
+      filter.$or = [{ name: rx }, { email: rx }];
+    }
+
+    const total = await User.countDocuments(filter);
+    const docs = await User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
+    res.json({ success: true, count: docs.length, total, page, pages: Math.ceil(total / limit) || 0, data: docs.map(toPlatformUserJson) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const getUser360 = async (req, res) => {
+  try {
+    const id = asObjectId(req.params.id, "id");
+    const user = await User.findById(id).lean();
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+
+    let school = null;
+    if (user.schoolId) {
+      school = await School.findById(user.schoolId).select("name code shortName city status plan").lean();
+    }
+
+    let subscription = null;
+    if (user.schoolId) {
+      const sub = await Subscription.findOne({ schoolId: user.schoolId, status: { $in: CURRENT_SUBSCRIPTION_STATUSES } })
+        .populate("planId", "_id name code price currency billingCycle trialDays")
+        .sort({ createdAt: -1 })
+        .lean();
+      if (sub) subscription = toSubscriptionJson(sub);
+    }
+
+    const recentAudits = await AuditLog.find({ $or: [{ actorId: user._id }, { targetType: "user", targetId: user._id }] })
+      .sort({ createdAt: -1 })
+      .limit(10)
+      .lean();
+
+    res.json({ success: true, data: { user: toPlatformUserJson(user), school, subscription, recentAudits } });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+// --------------------------------------------------------------------------
+// School management (list / 360 / lifecycle / onboarding)
+// --------------------------------------------------------------------------
+
+const toSchoolJson = (raw) => ({
+  _id: raw._id,
+  name: raw.name,
+  code: raw.code,
+  shortName: raw.shortName || null,
+  city: raw.city || null,
+  status: raw.status,
+  plan: raw.plan,
+  onboarding: raw.onboarding || { status: "created", appliedAt: null, completedAt: null },
+  createdAt: raw.createdAt,
+  updatedAt: raw.updatedAt,
+});
+
+const listPlatformSchools = async (req, res) => {
+  try {
+    const { page, limit, skip } = paginate(req, 25);
+    const { q, status, plan, onboarding } = req.query;
+    const filter = {};
+    if (status) filter.status = status;
+    if (plan) filter.plan = plan;
+    if (onboarding) filter["onboarding.status"] = onboarding;
+    if (q) {
+      const rx = { $regex: q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
+      filter.$or = [{ name: rx }, { code: rx }, { shortName: rx }, { city: rx }];
+    }
+
+    const total = await School.countDocuments(filter);
+    const docs = await School.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
+    res.json({ success: true, count: docs.length, total, page, pages: Math.ceil(total / limit) || 0, data: docs.map(toSchoolJson) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const getSchool360 = async (req, res) => {
+  try {
+    const id = asObjectId(req.params.id, "id");
+    const school = await School.findById(id).lean();
+    if (!school) return res.status(404).json({ success: false, message: "School not found" });
+
+    const [adminUsers, activeUsers, subscription, recentInvoices] = await Promise.all([
+      User.find({ schoolId: id, role: "school_admin", deletedAt: null }).select("name email lastLogin isActive").sort({ createdAt: -1 }).limit(5).lean(),
+      User.countDocuments({ schoolId: id, role: { $ne: "super_admin" }, deletedAt: null }),
+      Subscription.findOne({ schoolId: id, status: { $in: CURRENT_SUBSCRIPTION_STATUSES } })
+        .populate("planId", "_id name code price currency billingCycle trialDays")
+        .sort({ createdAt: -1 })
+        .lean(),
+      BillingInvoice.find({ schoolId: id }).sort({ createdAt: -1 }).limit(5).lean(),
+    ]);
+
+    res.json({
+      success: true,
+      data: {
+        school: toSchoolJson(school),
+        admins: adminUsers,
+        activeUsers,
+        subscription: subscription ? toSubscriptionJson(subscription) : null,
+        recentInvoices: recentInvoices.map(toInvoiceJson),
+      },
+    });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const SCHOOL_LIFECYCLE = { active: "school.activated", suspended: "school.suspended" };
+
+const updateSchoolStatus = async (req, res) => {
+  try {
+    const { status, reason } = req.body || {};
+    if (!["active", "suspended"].includes(status)) {
+      return res.status(400).json({ success: false, message: "status must be one of: active, suspended" });
+    }
+    const school = await School.findById(req.params.id);
+    if (!school) return res.status(404).json({ success: false, message: "School not found" });
+
+    school.status = status;
+    const reasonText = (reason || "").toString().trim();
+    if (reasonText) school.settings = { ...(school.settings || {}), lastStatusReason: reasonText };
+    await school.save();
+
+    await writeAudit({
+      req,
+      user: req.user,
+      action: SCHOOL_LIFECYCLE[status],
+      targetType: "school",
+      targetId: school._id,
+      message: `School ${school.name} ${status === "active" ? "activated" : "suspended"}`,
+      reason: reasonText || null,
+    });
+    res.json({ success: true, message: `School ${status === "active" ? "activated" : "suspended"}`, data: toSchoolJson(school) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const ONBOARDING_FLOW = ["created", "configured", "subscribed", "live"];
+const nextOnboardingStep = (from, to) => {
+  const i = ONBOARDING_FLOW.indexOf(from);
+  const j = ONBOARDING_FLOW.indexOf(to);
+  return j >= 0 && (i === -1 || j > i);
+};
+
+const updateSchoolOnboarding = async (req, res) => {
+  try {
+    const { status, notes } = req.body || {};
+    const school = await School.findById(req.params.id);
+    if (!school) return res.status(404).json({ success: false, message: "School not found" });
+
+    const current = school.onboarding?.status || "created";
+    if (!nextOnboardingStep(current, status)) {
+      return res.status(400).json({ success: false, message: `Cannot move onboarding from ${current} to ${status}. Flow: ${ONBOARDING_FLOW.join(" → ")}` });
+    }
+
+    school.onboarding = {
+      status,
+      appliedAt: school.onboarding?.appliedAt || new Date(),
+      completedAt: status === "live" ? new Date() : school.onboarding?.completedAt || null,
+      notes: notes !== undefined ? String(notes).trim() : school.onboarding?.notes || "",
+    };
+    await school.save();
+
+    await writeAudit({
+      req,
+      user: req.user,
+      action: "school.updated",
+      targetType: "school",
+      targetId: school._id,
+      message: `Onboarding advanced ${current} → ${status}`,
+    });
+    res.json({ success: true, message: "Onboarding updated", data: toSchoolJson(school) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
 module.exports = {
   listPlans,
   getPlan,
@@ -848,5 +1177,12 @@ module.exports = {
   generateInvoice,
   updateInvoice,
   getPlatformAnalytics,
+  listAuditLogs,
+  listPlatformUsers,
+  getUser360,
+  listPlatformSchools,
+  getSchool360,
+  updateSchoolStatus,
+  updateSchoolOnboarding,
   formatMoney,
 };
