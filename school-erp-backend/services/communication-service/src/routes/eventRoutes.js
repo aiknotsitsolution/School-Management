@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/eventController");
-const { verifyToken, authorizeRoles } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission } = require("../middleware/auth");
 
-router.use(verifyToken);
-router.post("/", authorizeRoles("admin", "teacher"), ctrl.createEvent);
-router.get("/", ctrl.getEvents);
-router.put("/:id", authorizeRoles("admin", "teacher"), ctrl.updateEvent);
-router.delete("/:id", authorizeRoles("admin", "teacher"), ctrl.deleteEvent);
+router.use(verifyToken, resolveTenant, requireTenant);
+
+router.post("/", requirePermission("events:publish"), ctrl.createEvent);
+router.get("/", requirePermission("events:read"), ctrl.getEvents);
+router.put("/:id", requirePermission("events:publish"), ctrl.updateEvent);
+router.delete("/:id", requirePermission("events:publish"), ctrl.deleteEvent);
 
 module.exports = router;

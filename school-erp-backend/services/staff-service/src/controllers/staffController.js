@@ -2,7 +2,7 @@ const Staff = require("../models/Staff");
 
 const createStaff = async (req, res) => {
   try {
-    const staff = await Staff.create(req.body);
+    const staff = await Staff.create({ ...req.body, schoolId: req.tenantId });
     res.status(201).json({ success: true, data: staff });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -12,8 +12,12 @@ const createStaff = async (req, res) => {
 const getStaff = async (req, res) => {
   try {
     const { department, role, status, search } = req.query;
-    const filter = {};
-    if (req.user.role === "teacher") filter._id = req.user.refId;
+    const filter = { schoolId: req.tenantId };
+
+    if (["class_teacher", "staff"].includes(req.user.role)) {
+      filter._id = req.user.refId;
+    }
+
     if (department) filter.department = department;
     if (role) filter.role = role;
     if (status) filter.status = status;
@@ -28,7 +32,7 @@ const getStaff = async (req, res) => {
 
 const getStaffById = async (req, res) => {
   try {
-    const staff = await Staff.findById(req.params.id);
+    const staff = await Staff.findOne({ _id: req.params.id, schoolId: req.tenantId });
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
     res.json({ success: true, data: staff });
   } catch (err) {
@@ -38,7 +42,11 @@ const getStaffById = async (req, res) => {
 
 const updateStaff = async (req, res) => {
   try {
-    const staff = await Staff.findByIdAndUpdate(req.params.id, req.body, { new: true, runValidators: true });
+    const staff = await Staff.findOneAndUpdate(
+      { _id: req.params.id, schoolId: req.tenantId },
+      req.body,
+      { new: true, runValidators: true },
+    );
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
     res.json({ success: true, data: staff });
   } catch (err) {
@@ -48,7 +56,8 @@ const updateStaff = async (req, res) => {
 
 const deleteStaff = async (req, res) => {
   try {
-    await Staff.findByIdAndDelete(req.params.id);
+    const staff = await Staff.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
     res.json({ success: true, message: "Staff removed" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

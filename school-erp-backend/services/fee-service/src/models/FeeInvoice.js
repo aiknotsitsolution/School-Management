@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const invoiceSchema = new mongoose.Schema(
   {
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     studentId: { type: String, required: true },
     class: { type: String },
     feeType: { type: String, required: true },

@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/transportController");
-const { verifyToken, authorizeRoles } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStudentParam } = require("../middleware/auth");
 
-router.use(verifyToken);
-router.post("/", authorizeRoles("admin"), ctrl.createRoute);
-router.get("/", authorizeRoles("admin", "teacher", "student", "parent"), ctrl.getRoutes);
-router.patch("/:id/location", authorizeRoles("admin", "teacher"), ctrl.updateLocation);
-router.patch("/:id/assign", authorizeRoles("admin"), ctrl.assignStudent);
+router.use(verifyToken, resolveTenant, requireTenant);
+
+router.post("/", requirePermission("transport:update"), ctrl.createRoute);
+router.get("/", requirePermission("transport:read"), scopeStudentParam("studentId"), ctrl.getRoutes);
+router.patch("/:id/location", requirePermission("transport:update"), ctrl.updateLocation);
+router.patch("/:id/assign", requirePermission("transport:update"), ctrl.assignStudent);
 
 module.exports = router;

@@ -1,10 +1,11 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/examController");
-const { verifyToken, authorizeRoles, scopeStudentQuery } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStudentQuery } = require("../middleware/auth");
 
-router.use(verifyToken);
-router.post("/", authorizeRoles("teacher", "admin"), ctrl.enterMarks);
-router.get("/report-card", authorizeRoles("admin", "teacher", "student", "parent"), scopeStudentQuery, ctrl.getReportCard);
+router.use(verifyToken, resolveTenant, requireTenant);
+
+router.post("/", requirePermission("marks:write"), ctrl.enterMarks);
+router.get("/report-card", requirePermission("marks:read"), scopeStudentQuery, ctrl.getReportCard);
 
 module.exports = router;

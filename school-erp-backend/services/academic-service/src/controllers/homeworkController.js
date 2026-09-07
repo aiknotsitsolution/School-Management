@@ -2,7 +2,7 @@ const Homework = require("../models/Homework");
 
 const createHomework = async (req, res) => {
   try {
-    const homework = await Homework.create({ ...req.body, assignedBy: req.user.name });
+    const homework = await Homework.create({ ...req.body, schoolId: req.tenantId, assignedBy: req.user.name });
     res.status(201).json({ success: true, data: homework });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -12,7 +12,7 @@ const createHomework = async (req, res) => {
 const getHomework = async (req, res) => {
   try {
     const { class: cls, section, subject } = req.query;
-    const filter = {};
+    const filter = { schoolId: req.tenantId };
     if (cls) filter.class = cls;
     if (section) filter.section = section;
     if (subject) filter.subject = subject;
@@ -25,7 +25,11 @@ const getHomework = async (req, res) => {
 
 const updateHomework = async (req, res) => {
   try {
-    const hw = await Homework.findByIdAndUpdate(req.params.id, req.body, { new: true });
+    const hw = await Homework.findOneAndUpdate(
+      { _id: req.params.id, schoolId: req.tenantId },
+      req.body,
+      { new: true },
+    );
     if (!hw) return res.status(404).json({ success: false, message: "Homework not found" });
     res.json({ success: true, data: hw });
   } catch (err) {
@@ -35,7 +39,8 @@ const updateHomework = async (req, res) => {
 
 const deleteHomework = async (req, res) => {
   try {
-    await Homework.findByIdAndDelete(req.params.id);
+    const hw = await Homework.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    if (!hw) return res.status(404).json({ success: false, message: "Homework not found" });
     res.json({ success: true, message: "Homework deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

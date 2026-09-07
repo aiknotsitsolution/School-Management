@@ -1,17 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/hostelController");
-const { verifyToken, authorizeRoles } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission } = require("../middleware/auth");
 
-router.use(verifyToken);
-router.post("/", authorizeRoles("admin"), ctrl.createRoom);
-router.get(
-  "/",
-  authorizeRoles("admin", "teacher", "student", "parent"),
-  ctrl.getRooms,
-);
-router.patch("/:id/allot", authorizeRoles("admin"), ctrl.allotRoom);
-router.patch("/:id/vacate", authorizeRoles("admin"), ctrl.vacateRoom);
-router.delete("/:id", authorizeRoles("admin"), ctrl.deleteRoom);
+router.use(verifyToken, resolveTenant, requireTenant);
+
+router.post("/", requirePermission("hostel:manage"), ctrl.createRoom);
+router.get("/", requirePermission("hostel:read"), ctrl.getRooms);
+router.patch("/:id/allot", requirePermission("hostel:manage"), ctrl.allotRoom);
+router.patch("/:id/vacate", requirePermission("hostel:manage"), ctrl.vacateRoom);
+router.delete("/:id", requirePermission("hostel:manage"), ctrl.deleteRoom);
 
 module.exports = router;

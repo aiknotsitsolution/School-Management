@@ -2,7 +2,7 @@ const FeeStructure = require("../models/FeeStructure");
 
 const createStructure = async (req, res) => {
   try {
-    const structure = await FeeStructure.create(req.body);
+    const structure = await FeeStructure.create({ ...req.body, schoolId: req.tenantId });
     res.status(201).json({ success: true, data: structure });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -12,7 +12,7 @@ const createStructure = async (req, res) => {
 const getStructures = async (req, res) => {
   try {
     const { class: cls, session } = req.query;
-    const filter = {};
+    const filter = { schoolId: req.tenantId };
     if (cls) filter.class = cls;
     if (session) filter.session = session;
     const data = await FeeStructure.find(filter);
@@ -24,7 +24,8 @@ const getStructures = async (req, res) => {
 
 const deleteStructure = async (req, res) => {
   try {
-    await FeeStructure.findByIdAndDelete(req.params.id);
+    const struct = await FeeStructure.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    if (!struct) return res.status(404).json({ success: false, message: "Fee structure not found" });
     res.json({ success: true, message: "Fee structure removed" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

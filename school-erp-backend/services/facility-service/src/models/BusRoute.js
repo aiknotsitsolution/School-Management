@@ -4,7 +4,8 @@ const stopSchema = new mongoose.Schema({ name: String, time: String }, { _id: fa
 
 const busRouteSchema = new mongoose.Schema(
   {
-    routeNo: { type: String, required: true, unique: true },
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    routeNo: { type: String, required: true },
     driverName: { type: String },
     driverContact: { type: String },
     vehicleNo: { type: String },
@@ -18,5 +19,7 @@ const busRouteSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+busRouteSchema.index({ schoolId: 1, routeNo: 1 }, { unique: true });
 
 module.exports = mongoose.model("BusRoute", busRouteSchema);

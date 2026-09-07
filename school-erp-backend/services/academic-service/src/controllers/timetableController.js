@@ -4,9 +4,9 @@ const upsertTimetable = async (req, res) => {
   try {
     const { class: cls, section, day } = req.body;
     const timetable = await Timetable.findOneAndUpdate(
-      { class: cls, section, day },
-      req.body,
-      { new: true, upsert: true, runValidators: true }
+      { schoolId: req.tenantId, class: cls, section, day },
+      { ...req.body, schoolId: req.tenantId },
+      { new: true, upsert: true, runValidators: true },
     );
     res.status(201).json({ success: true, data: timetable });
   } catch (err) {
@@ -17,7 +17,7 @@ const upsertTimetable = async (req, res) => {
 const getTimetable = async (req, res) => {
   try {
     const { class: cls, section } = req.query;
-    const filter = {};
+    const filter = { schoolId: req.tenantId };
     if (cls) filter.class = cls;
     if (section) filter.section = section;
     const data = await Timetable.find(filter);
@@ -29,7 +29,8 @@ const getTimetable = async (req, res) => {
 
 const deleteTimetable = async (req, res) => {
   try {
-    await Timetable.findByIdAndDelete(req.params.id);
+    const slot = await Timetable.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    if (!slot) return res.status(404).json({ success: false, message: "Timetable slot not found" });
     res.json({ success: true, message: "Timetable slot removed" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

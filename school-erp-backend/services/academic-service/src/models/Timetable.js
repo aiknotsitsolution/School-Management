@@ -13,6 +13,7 @@ const periodSchema = new mongoose.Schema(
 
 const timetableSchema = new mongoose.Schema(
   {
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     class: { type: String, required: true },
     section: { type: String, required: true },
     day: {
@@ -25,6 +26,6 @@ const timetableSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-timetableSchema.index({ class: 1, section: 1, day: 1 }, { unique: true });
+timetableSchema.index({ schoolId: 1, class: 1, section: 1, day: 1 }, { unique: true });
 
 module.exports = mongoose.model("Timetable", timetableSchema);

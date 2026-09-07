@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/feeStructureController");
-const { verifyToken, authorizeRoles } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission } = require("../middleware/auth");
 
-router.use(verifyToken);
-router.post("/", authorizeRoles("admin"), ctrl.createStructure);
-router.get("/", authorizeRoles("admin", "teacher", "student", "parent"), ctrl.getStructures);
-router.delete("/:id", authorizeRoles("admin"), ctrl.deleteStructure);
+router.use(verifyToken, resolveTenant, requireTenant);
+
+router.post("/", requirePermission("fees:structure"), ctrl.createStructure);
+router.get("/", requirePermission("fees:read"), ctrl.getStructures);
+router.delete("/:id", requirePermission("fees:structure"), ctrl.deleteStructure);
 
 module.exports = router;

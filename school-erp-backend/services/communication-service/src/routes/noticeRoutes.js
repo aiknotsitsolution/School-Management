@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/noticeController");
-const { verifyToken, authorizeRoles } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission } = require("../middleware/auth");
 
-router.use(verifyToken);
-router.post("/", authorizeRoles("admin", "teacher"), ctrl.createNotice);
-router.get("/", ctrl.getNotices);
-router.delete("/:id", authorizeRoles("admin", "teacher"), ctrl.deleteNotice);
+router.use(verifyToken, resolveTenant, requireTenant);
+
+router.post("/", requirePermission("notices:publish"), ctrl.createNotice);
+router.get("/", requirePermission("notices:read"), ctrl.getNotices);
+router.delete("/:id", requirePermission("notices:publish"), ctrl.deleteNotice);
 
 module.exports = router;

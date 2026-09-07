@@ -1,12 +1,13 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/bookController");
-const { verifyToken, authorizeRoles } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission } = require("../middleware/auth");
 
-router.use(verifyToken);
-router.post("/", authorizeRoles("admin"), ctrl.addBook);
-router.get("/", ctrl.getBooks);
-router.put("/:id", authorizeRoles("admin"), ctrl.updateBook);
-router.delete("/:id", authorizeRoles("admin"), ctrl.deleteBook);
+router.use(verifyToken, resolveTenant, requireTenant);
+
+router.post("/", requirePermission("library:manage"), ctrl.addBook);
+router.get("/", requirePermission("library:read"), ctrl.getBooks);
+router.put("/:id", requirePermission("library:manage"), ctrl.updateBook);
+router.delete("/:id", requirePermission("library:manage"), ctrl.deleteBook);
 
 module.exports = router;

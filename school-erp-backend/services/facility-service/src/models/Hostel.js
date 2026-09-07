@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const hostelSchema = new mongoose.Schema(
   {
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     roomNo: { type: String, required: true },
     block: { type: String, required: true },
     floor: { type: Number, default: 1 },

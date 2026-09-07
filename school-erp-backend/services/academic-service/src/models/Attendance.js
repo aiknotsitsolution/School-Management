@@ -2,6 +2,7 @@ const mongoose = require("mongoose");
 
 const attendanceSchema = new mongoose.Schema(
   {
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     studentId: { type: String, required: true },
     class: { type: String, required: true },
     section: { type: String, required: true },
@@ -13,6 +14,6 @@ const attendanceSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-attendanceSchema.index({ studentId: 1, date: 1 }, { unique: true });
+attendanceSchema.index({ schoolId: 1, studentId: 1, date: 1 }, { unique: true });
 
 module.exports = mongoose.model("Attendance", attendanceSchema);

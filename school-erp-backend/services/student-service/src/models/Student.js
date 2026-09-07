@@ -2,7 +2,8 @@ const mongoose = require("mongoose");
 
 const studentSchema = new mongoose.Schema(
   {
-    admissionNo: { type: String, required: true, unique: true },
+    schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    admissionNo: { type: String, required: true },
     userId: { type: String, default: null }, // link to auth-service User._id
     name: { type: String, required: true },
     dob: { type: Date },
@@ -28,5 +29,7 @@ const studentSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+
+studentSchema.index({ schoolId: 1, admissionNo: 1 }, { unique: true });
 
 module.exports = mongoose.model("Student", studentSchema);

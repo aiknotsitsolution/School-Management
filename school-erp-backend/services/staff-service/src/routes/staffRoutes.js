@@ -1,14 +1,14 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/staffController");
-const { verifyToken, authorizeRoles, restrictToOwnStaff } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission, restrictToOwnStaff } = require("../middleware/auth");
 
-router.use(verifyToken);
+router.use(verifyToken, resolveTenant, requireTenant);
 
-router.post("/", authorizeRoles("admin"), ctrl.createStaff);
-router.get("/", authorizeRoles("admin", "teacher"), ctrl.getStaff);
-router.get("/:id", restrictToOwnStaff((req) => req.params.id), ctrl.getStaffById);
-router.put("/:id", authorizeRoles("admin"), ctrl.updateStaff);
-router.delete("/:id", authorizeRoles("admin"), ctrl.deleteStaff);
+router.post("/", requirePermission("staff:write"), ctrl.createStaff);
+router.get("/", requirePermission("staff:read"), ctrl.getStaff);
+router.get("/:id", requirePermission("staff:read"), restrictToOwnStaff((req) => req.params.id), ctrl.getStaffById);
+router.put("/:id", requirePermission("staff:write"), ctrl.updateStaff);
+router.delete("/:id", requirePermission("staff:write"), ctrl.deleteStaff);
 
 module.exports = router;

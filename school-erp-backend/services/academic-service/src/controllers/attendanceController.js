@@ -1,6 +1,5 @@
 const Attendance = require("../models/Attendance");
 
-// Bulk mark attendance for a whole class in one call
 const markAttendance = async (req, res) => {
   try {
     const { records } = req.body; // [{ studentId, class, section, date, status, remarks }]
@@ -9,8 +8,8 @@ const markAttendance = async (req, res) => {
     }
     const ops = records.map((r) => ({
       updateOne: {
-        filter: { studentId: r.studentId, date: new Date(r.date) },
-        update: { ...r, date: new Date(r.date), markedBy: req.user.name },
+        filter: { schoolId: req.tenantId, studentId: r.studentId, date: new Date(r.date) },
+        update: { ...r, schoolId: req.tenantId, date: new Date(r.date), markedBy: req.user.name },
         upsert: true,
       },
     }));
@@ -24,7 +23,7 @@ const markAttendance = async (req, res) => {
 const getAttendance = async (req, res) => {
   try {
     const { studentId, class: cls, section, from, to } = req.query;
-    const filter = {};
+    const filter = { schoolId: req.tenantId };
     if (studentId) filter.studentId = studentId;
     if (cls) filter.class = cls;
     if (section) filter.section = section;

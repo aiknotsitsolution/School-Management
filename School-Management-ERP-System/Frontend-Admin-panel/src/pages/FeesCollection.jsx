@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import useLocalStorage from "../hooks/useLocalStorage";
 import { api } from "../lib/api";
+import { PermissionGate } from "../lib/permissions";
 import {
   Plus,
   Wallet,
@@ -179,9 +180,11 @@ export default function FeesCollection() {
         title="Fees Collection"
         description="Track payments, dues and receipts across the school."
         right={
-          <Button variant="amber" onClick={openAdd}>
-            <Plus size={15} /> Record Payment
-          </Button>
+          <PermissionGate permission="fees:collect">
+            <Button variant="amber" onClick={openAdd}>
+              <Plus size={15} /> Record Payment
+            </Button>
+          </PermissionGate>
         }
       />
 
@@ -274,9 +277,11 @@ export default function FeesCollection() {
             <p className="text-[13px] text-slate-text/60 mt-1">
               Try changing filters or record a new payment.
             </p>
-            <Button variant="amber" className="mt-4" onClick={openAdd}>
-              <Plus size={15} /> Record Payment
-            </Button>
+            <PermissionGate permission="fees:collect">
+              <Button variant="amber" className="mt-4" onClick={openAdd}>
+                <Plus size={15} /> Record Payment
+              </Button>
+            </PermissionGate>
           </div>
         ) : (
           <div className="overflow-x-auto -mx-5">
@@ -320,6 +325,7 @@ export default function FeesCollection() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-1">
+                        <PermissionGate permission="fees:collect">
                         <button
                           onClick={() => openEdit(t)}
                           className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-info transition-colors"
@@ -334,6 +340,7 @@ export default function FeesCollection() {
                         >
                           <Trash2 size={14} />
                         </button>
+                      </PermissionGate>
                       </div>
                     </td>
                   </tr>
