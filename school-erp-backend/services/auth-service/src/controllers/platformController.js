@@ -1,0 +1,718 @@
+const mongoose = require("mongoose");
+const crypto = require("crypto");
+const Plan = require("../models/Plan");
+const Subscription = require("../models/Subscription");
+const {
+  CURRENT_SUBSCRIPTION_STATUSES,
+} = require("../models/Subscription");
+const BillingInvoice = require("../models/BillingInvoice");
+const School = require("../models/School");
+
+// --------------------------------------------------------------------------
+// Small domain helpers
+// --------------------------------------------------------------------------
+
+const addDays = (date, days) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+const addMonths = (date, months) => {
+  const d = new Date(date);
+  d.setMonth(d.getMonth() + months);
+  return d;
+};
+
+const generateInvoiceNumber = () => {
+  const year = new Date().getUTCFullYear();
+  return `INV-${year}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
+};
+
+const asObjectId = (value, field) => {
+  if (!mongoose.Types.ObjectId.isValid(value)) {
+    const err = new Error(`${field} is invalid`);
+    err.status = 400;
+    throw err;
+  }
+  return mongoose.Types.ObjectId.createFromHexString(String(value));
+};
+
+const isFiniteNumber = (v) => typeof v === "number" && Number.isFinite(v);
+const isNullableLimit = (v) => v === null || v === undefined || (isFiniteNumber(v) && v >= 0);
+
+// Build billing dates for a new subscription. Trial wins while it is running.
+const buildSubscriptionDates = (plan, startDate) => {
+  const start = new Date(startDate || new Date());
+  const dates = {
+    startDate: start,
+    currentPeriodStart: start,
+    trialStartDate: null,
+    trialEndDate: null,
+    currentPeriodEnd: null,
+    nextBillingDate: null,
+    status: plan.trialDays > 0 ? "trialing" : "active",
+  };
+  if (plan.trialDays > 0) {
+    dates.trialStartDate = start;
+    dates.trialEndDate = addDays(start, plan.trialDays);
+    dates.currentPeriodEnd = dates.trialEndDate;
+    dates.nextBillingDate = dates.trialEndDate;
+  } else {
+    const cycleMonths = plan.billingCycle === "yearly" ? 12 : 1;
+    dates.currentPeriodEnd = addMonths(start, cycleMonths);
+    dates.nextBillingDate = dates.currentPeriodEnd;
+  }
+  return dates;
+};
+
+// Atomically close any current subscription for a school so the partial unique
+// index never allows two current subscriptions to coexist.
+const closeCurrentSubscriptions = (schoolId, { reason = "superseded", extra = {} } = {}) =>
+  Subscription.updateMany(
+    { schoolId, status: { $in: CURRENT_SUBSCRIPTION_STATUSES } },
+    {
+      $set: {
+        status: "cancelled",
+        cancelledAt: new Date(),
+        endedAt: new Date(),
+        nextBillingDate: null,
+        "metadata.closedReason": reason,
+        ...extra,
+      },
+    }
+  );
+
+const formatMoney = (planOrSub) => ({
+  amount: planOrSub.price,
+  currency: planOrSub.currency,
+  cycle: planOrSub.billingCycle,
+});
+
+const toSubscriptionJson = (raw) => {
+  const school = raw.schoolId && raw.schoolId._id ? raw.schoolId : { _id: raw.schoolId };
+  const plan = raw.planId && raw.planId._id ? raw.planId : { _id: raw.planId };
+  return {
+    _id: raw._id,
+    school: school._id
+      ? { _id: school._id, name: school.name, code: school.code, shortName: school.shortName, status: school.status }
+      : null,
+    plan: plan._id
+      ? { _id: plan._id, name: plan.name, code: plan.code, price: plan.price, currency: plan.currency, billingCycle: plan.billingCycle, trialDays: plan.trialDays }
+      : null,
+    status: raw.status,
+    startDate: raw.startDate,
+    trialStartDate: raw.trialStartDate,
+    trialEndDate: raw.trialEndDate,
+    currentPeriodStart: raw.currentPeriodStart,
+    currentPeriodEnd: raw.currentPeriodEnd,
+    nextBillingDate: raw.nextBillingDate,
+    cancelledAt: raw.cancelledAt,
+    suspendedAt: raw.suspendedAt,
+    endedAt: raw.endedAt,
+    billingCycle: raw.billingCycle,
+    price: raw.price,
+    currency: raw.currency,
+    paymentProvider: raw.paymentProvider,
+    createdAt: raw.createdAt,
+    updatedAt: raw.updatedAt,
+  };
+};
+
+const toInvoiceJson = (raw) => ({
+  _id: raw._id,
+  invoiceNumber: raw.invoiceNumber,
+  school: raw.schoolId && raw.schoolId._id
+    ? { _id: raw.schoolId._id, name: raw.schoolId.name, code: raw.schoolId.code }
+    : { _id: raw.schoolId },
+  subscriptionId: raw.subscriptionId && raw.subscriptionId._id ? raw.subscriptionId._id : raw.subscriptionId,
+  amount: raw.amount,
+  currency: raw.currency,
+  status: raw.status,
+  periodStart: raw.periodStart,
+  periodEnd: raw.periodEnd,
+  dueDate: raw.dueDate,
+  paidAt: raw.paidAt,
+  createdAt: raw.createdAt,
+});
+
+const paginate = (req, defaultLimit = 25) => {
+  const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+  const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || defaultLimit));
+  return { page, limit, skip: (page - 1) * limit };
+};
+
+const rawError = (res, err) => {
+  if (err.status) return res.status(err.status).json({ success: false, message: err.message });
+  if (err.code === 11000) {
+    return res.status(409).json({ success: false, message: "Duplicate entry violates a unique constraint" });
+  }
+  console.error("[platform] unexpected error:", err.message);
+  return res.status(500).json({ success: false, message: "Something went wrong" });
+};
+
+// --------------------------------------------------------------------------
+// Plan validation (explicit whitelist — mass assignment protection)
+// --------------------------------------------------------------------------
+
+const PLAN_FIELDS = [
+  "name",
+  "code",
+  "description",
+  "price",
+  "currency",
+  "billingCycle",
+  "trialDays",
+  "features",
+  "limits",
+  "isActive",
+  "isPublic",
+  "sortOrder",
+];
+const LIMIT_FIELDS = ["students", "staff", "teachers", "adminUsers", "branches", "storageGB"];
+
+function sanitizePlanPayload(body) {
+  const out = {};
+  for (const key of PLAN_FIELDS) {
+    if (body[key] !== undefined) out[key] = body[key];
+  }
+  if (out.name !== undefined) out.name = String(out.name).trim();
+  if (out.code !== undefined) out.code = String(out.code).trim().toLowerCase().replace(/[^a-z0-9-]/g, "-");
+  if (out.description !== undefined) out.description = String(out.description).trim();
+  if (out.currency !== undefined) out.currency = String(out.currency).trim().toUpperCase();
+  if (out.features !== undefined) out.features = (Array.isArray(out.features) ? out.features : []).map((f) => String(f).trim()).filter(Boolean);
+  if (out.limits !== undefined) {
+    const clean = {};
+    for (const key of LIMIT_FIELDS) {
+      if (out.limits[key] !== undefined && out.limits[key] !== null && out.limits[key] !== "") {
+        clean[key] = Number(out.limits[key]);
+      } else if (out.limits[key] !== undefined) {
+        clean[key] = null;
+      }
+    }
+    out.limits = clean;
+  }
+  return out;
+}
+
+function validatePlanPayload(payload, { partial = false } = {}) {
+  if (!partial || payload.name !== undefined) {
+    if (!payload.name || payload.name.length < 2) {
+      const err = new Error("Plan name must be at least 2 characters");
+      err.status = 400;
+      throw err;
+    }
+  }
+  if (!partial || payload.code !== undefined) {
+    if (!payload.code || payload.code.length < 2) {
+      const err = new Error("Plan code is required");
+      err.status = 400;
+      throw err;
+    }
+  }
+  if (payload.price !== undefined) {
+    if (!isFiniteNumber(payload.price) || payload.price < 0) {
+      const err = new Error("Price must be a number >= 0");
+      err.status = 400;
+      throw err;
+    }
+  }
+  if (payload.currency !== undefined) {
+    if (!/^[A-Z]{3}$/.test(payload.currency)) {
+      const err = new Error("Currency must be a 3-letter code (e.g. INR)");
+      err.status = 400;
+      throw err;
+    }
+  }
+  if (payload.billingCycle !== undefined && !["monthly", "yearly"].includes(payload.billingCycle)) {
+    const err = new Error("Billing cycle must be monthly or yearly");
+    err.status = 400;
+    throw err;
+  }
+  if (payload.trialDays !== undefined && (!isFiniteNumber(payload.trialDays) || payload.trialDays < 0)) {
+    const err = new Error("Trial days must be a number >= 0");
+    err.status = 400;
+    throw err;
+  }
+  if (payload.sortOrder !== undefined && !isFiniteNumber(payload.sortOrder)) {
+    const err = new Error("Sort order must be a number");
+    err.status = 400;
+    throw err;
+  }
+  if (payload.limits !== undefined) {
+    for (const key of Object.keys(payload.limits)) {
+      if (!LIMIT_FIELDS.includes(key) || !isNullableLimit(payload.limits[key])) {
+        const err = new Error(`Invalid limit: ${key} (use a number >= 0 or null for unlimited)`);
+        err.status = 400;
+        throw err;
+      }
+    }
+  }
+}
+
+// --------------------------------------------------------------------------
+// Plan handlers
+// --------------------------------------------------------------------------
+
+const listPlans = async (req, res) => {
+  try {
+    const filter = {};
+    if (req.query.status === "active") filter.isActive = true;
+    if (req.query.status === "inactive") filter.isActive = false;
+    const plans = await Plan.find(filter).sort({ sortOrder: 1, createdAt: -1 }).lean();
+    res.json({ success: true, count: plans.length, data: plans });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const getPlan = async (req, res) => {
+  try {
+    const plan = await Plan.findById(req.params.id).lean();
+    if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
+    res.json({ success: true, data: plan });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const createPlan = async (req, res) => {
+  try {
+    const payload = sanitizePlanPayload(req.body || {});
+    validatePlanPayload(payload);
+    const exists = await Plan.findOne({ code: payload.code });
+    if (exists) return res.status(409).json({ success: false, message: "Plan code already exists" });
+    const plan = await Plan.create(payload);
+    res.status(201).json({ success: true, message: "Plan created", data: plan });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const updatePlan = async (req, res) => {
+  try {
+    const payload = sanitizePlanPayload(req.body || {});
+    validatePlanPayload(payload, { partial: true });
+    const exists = await Plan.findOne({ code: payload.code, _id: { $ne: req.params.id } });
+    if (exists) return res.status(409).json({ success: false, message: "Plan code already exists" });
+    const plan = await Plan.findByIdAndUpdate(req.params.id, payload, { new: true, runValidators: true });
+    if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
+    res.json({ success: true, message: "Plan updated", data: plan });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+// Hard delete only allowed when the plan has no subscription history at all.
+const deletePlan = async (req, res) => {
+  try {
+    const plan = await Plan.findById(req.params.id);
+    if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
+    const used = await Subscription.exists({ planId: plan._id });
+    if (used) {
+      return res.status(409).json({ success: false, message: "Plan has subscription history — deactivate instead of deleting" });
+    }
+    await Plan.deleteOne({ _id: plan._id });
+    res.json({ success: true, message: "Plan deleted" });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+// --------------------------------------------------------------------------
+// Subscription handlers
+// --------------------------------------------------------------------------
+
+const loadSubscription = async (id) => {
+  const sub = await Subscription.findById(id)
+    .populate("schoolId", "_id name code shortName status")
+    .populate("planId", "_id name code price currency billingCycle trialDays")
+    .lean();
+  return sub;
+};
+
+const listSubscriptions = async (req, res) => {
+  try {
+    const { page, limit, skip } = paginate(req);
+    const filter = {};
+
+    if (req.query.schoolId) filter.schoolId = asObjectId(req.query.schoolId, "schoolId");
+    if (req.query.plan) filter.planId = asObjectId(req.query.plan, "plan");
+    if (req.query.status) filter.status = req.query.status;
+
+    if (req.query.q) {
+      const q = req.query.q.trim();
+      const schools = await School.find({
+        $or: [
+          { name: { $regex: q, $options: "i" } },
+          { code: { $regex: q, $options: "i" } },
+          { shortName: { $regex: q, $options: "i" } },
+        ],
+      })
+        .select("_id")
+        .lean();
+      const ids = schools.map((s) => s._id);
+      if (ids.length === 0) {
+        return res.json({ success: true, count: 0, total: 0, page, pages: 0, data: [] });
+      }
+      filter.schoolId = { $in: ids };
+    }
+
+    const total = await Subscription.countDocuments(filter);
+    const subs = await Subscription.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("schoolId", "_id name code shortName status")
+      .populate("planId", "_id name code price currency billingCycle trialDays")
+      .lean();
+    res.json({
+      success: true,
+      count: subs.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 0,
+      data: subs.map(toSubscriptionJson),
+    });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const getSubscription = async (req, res) => {
+  try {
+    const sub = await loadSubscription(req.params.id);
+    if (!sub) return res.status(404).json({ success: false, message: "Subscription not found" });
+    const invoices = await BillingInvoice.find({ subscriptionId: sub._id })
+      .sort({ createdAt: -1 })
+      .limit(20)
+      .lean();
+    const history = await Subscription.find({ schoolId: sub.schoolId._id || sub.schoolId })
+      .sort({ createdAt: -1 })
+      .limit(25)
+      .populate("planId", "_id name code price currency billingCycle trialDays")
+      .lean();
+    res.json({
+      success: true,
+      data: {
+        ...toSubscriptionJson(sub),
+        invoices: invoices.map(toInvoiceJson),
+        history: history.map(toSubscriptionJson),
+      },
+    });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const loadPlanOrThrow = async (planId) => {
+  if (!mongoose.Types.ObjectId.isValid(planId)) {
+    const err = new Error("planId is invalid");
+    err.status = 400;
+    throw err;
+  }
+  const plan = await Plan.findById(planId);
+  if (!plan) {
+    const err = new Error("Plan not found");
+    err.status = 404;
+    throw err;
+  }
+  if (!plan.isActive) {
+    const err = new Error("Inactive plans cannot be assigned");
+    err.status = 409;
+    throw err;
+  }
+  return plan;
+};
+
+const loadSchoolOrThrow = async (schoolId) => {
+  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+    const err = new Error("schoolId is invalid");
+    err.status = 400;
+    throw err;
+  }
+  const school = await School.findById(schoolId);
+  if (!school) {
+    const err = new Error("School not found");
+    err.status = 404;
+    throw err;
+  }
+  return school;
+};
+
+const createInvoiceForSubscription = async (sub) => {
+  if (!sub.price) return null;
+  const invoiceNumber = generateInvoiceNumber();
+  const invoice = new BillingInvoice({
+    invoiceNumber,
+    schoolId: sub.schoolId,
+    subscriptionId: sub._id,
+    amount: sub.price,
+    currency: sub.currency,
+    status: "issued",
+    periodStart: sub.currentPeriodStart || sub.startDate,
+    periodEnd: sub.currentPeriodEnd || sub.nextBillingDate,
+    dueDate: addDays(new Date(), 7),
+  });
+  try {
+    await invoice.save();
+  } catch (err) {
+    if (err.code !== 11000) throw err;
+  }
+  return invoice;
+};
+
+const createSubscription = async (req, res) => {
+  try {
+    const { schoolId, planId, effectiveDate } = req.body || {};
+    if (!schoolId || !planId) {
+      return res.status(400).json({ success: false, message: "schoolId and planId are required" });
+    }
+    const school = await loadSchoolOrThrow(schoolId);
+    const plan = await loadPlanOrThrow(planId);
+
+    const dates = buildSubscriptionDates(plan, effectiveDate);
+
+    // Close any existing current subscription BEFORE inserting (partial index
+    // guarantees a school can never hold two current subscriptions).
+    await closeCurrentSubscriptions(school._id, { reason: "assign-plan" });
+
+    const sub = await Subscription.create({
+      schoolId: school._id,
+      planId: plan._id,
+      status: dates.status,
+      startDate: dates.startDate,
+      trialStartDate: dates.trialStartDate,
+      trialEndDate: dates.trialEndDate,
+      currentPeriodStart: dates.currentPeriodStart,
+      currentPeriodEnd: dates.currentPeriodEnd,
+      nextBillingDate: dates.nextBillingDate,
+      billingCycle: plan.billingCycle,
+      price: plan.price,
+      currency: plan.currency,
+    });
+    await School.updateOne({ _id: school._id }, { $set: { plan: plan.code } });
+    await createInvoiceForSubscription(sub);
+
+    const loaded = await loadSubscription(sub._id);
+    res.status(201).json({ success: true, message: "Subscription created", data: toSubscriptionJson(loaded) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const updateSubscription = async (req, res) => {
+  try {
+    const { action } = req.body || {};
+    const sub = await Subscription.findById(req.params.id);
+    if (!sub) return res.status(404).json({ success: false, message: "Subscription not found" });
+
+    switch (action) {
+      case "changePlan": {
+        const plan = await loadPlanOrThrow(req.body.planId);
+        const dates = buildSubscriptionDates(plan, req.body.effectiveDate);
+        await closeCurrentSubscriptions(sub.schoolId, { reason: "plan-change" });
+        const next = await Subscription.create({
+          schoolId: sub.schoolId,
+          planId: plan._id,
+          status: dates.status,
+          startDate: dates.startDate,
+          trialStartDate: dates.trialStartDate,
+          trialEndDate: dates.trialEndDate,
+          currentPeriodStart: dates.currentPeriodStart,
+          currentPeriodEnd: dates.currentPeriodEnd,
+          nextBillingDate: dates.nextBillingDate,
+          billingCycle: plan.billingCycle,
+          price: plan.price,
+          currency: plan.currency,
+        });
+        await School.updateOne({ _id: sub.schoolId }, { $set: { plan: plan.code } });
+        await createInvoiceForSubscription(next);
+        const loaded = await loadSubscription(next._id);
+        return res.json({ success: true, message: "Plan changed", data: toSubscriptionJson(loaded) });
+      }
+
+      case "extendTrial": {
+        if (sub.status !== "trialing") {
+          return res.status(400).json({ success: false, message: "Only trialing subscriptions can be extended" });
+        }
+        const days = parseInt(req.body.days, 10);
+        if (!Number.isInteger(days) || days <= 0) {
+          return res.status(400).json({ success: false, message: "days must be a positive integer" });
+        }
+        const base = sub.trialEndDate && sub.trialEndDate > new Date() ? sub.trialEndDate : new Date();
+        const newEnd = addDays(base, days);
+        sub.trialEndDate = newEnd;
+        sub.currentPeriodEnd = newEnd;
+        sub.nextBillingDate = newEnd;
+        await sub.save();
+        const loaded = await loadSubscription(sub._id);
+        return res.json({ success: true, message: "Trial extended", data: toSubscriptionJson(loaded) });
+      }
+
+      case "suspend": {
+        if (!CURRENT_SUBSCRIPTION_STATUSES.includes(sub.status)) {
+          return res.status(400).json({ success: false, message: "Subscription is not current" });
+        }
+        sub.status = "suspended";
+        sub.suspendedAt = new Date();
+        sub.nextBillingDate = null;
+        await sub.save();
+        const loaded = await loadSubscription(sub._id);
+        return res.json({ success: true, message: "Subscription suspended", data: toSubscriptionJson(loaded) });
+      }
+
+      case "reactivate": {
+        if (["trialing", "active", "past_due"].includes(sub.status)) {
+          return res.status(400).json({ success: false, message: "Subscription is already current" });
+        }
+        const plan = await Plan.findById(sub.planId);
+        if (!plan || !plan.isActive) {
+          return res.status(400).json({ success: false, message: "Linked plan is not active" });
+        }
+        const cycleMonths = sub.billingCycle === "yearly" ? 12 : 1;
+        const now = new Date();
+        sub.status = "active";
+        sub.currentPeriodStart = now;
+        sub.currentPeriodEnd = addMonths(now, cycleMonths);
+        sub.nextBillingDate = sub.currentPeriodEnd;
+        sub.suspendedAt = null;
+        sub.cancelledAt = null;
+        sub.endedAt = null;
+        await sub.save();
+        const loaded = await loadSubscription(sub._id);
+        return res.json({ success: true, message: "Subscription reactivated", data: toSubscriptionJson(loaded) });
+      }
+
+      case "cancel": {
+        if (["cancelled", "expired"].includes(sub.status)) {
+          return res.status(400).json({ success: false, message: "Subscription already ended" });
+        }
+        sub.status = "cancelled";
+        sub.cancelledAt = new Date();
+        sub.endedAt = new Date();
+        sub.nextBillingDate = null;
+        await sub.save();
+        const loaded = await loadSubscription(sub._id);
+        return res.json({ success: true, message: "Subscription cancelled", data: toSubscriptionJson(loaded) });
+      }
+
+      default:
+        return res.status(400).json({
+          success: false,
+          message: "action must be one of: changePlan, extendTrial, suspend, reactivate, cancel",
+        });
+    }
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+// --------------------------------------------------------------------------
+// Billing / invoice handlers
+// --------------------------------------------------------------------------
+
+const listInvoices = async (req, res) => {
+  try {
+    const { page, limit, skip } = paginate(req);
+    const filter = {};
+    if (req.query.schoolId) filter.schoolId = asObjectId(req.query.schoolId, "schoolId");
+    if (req.query.subscriptionId) filter.subscriptionId = asObjectId(req.query.subscriptionId, "subscriptionId");
+    if (req.query.status) filter.status = req.query.status;
+
+    const total = await BillingInvoice.countDocuments(filter);
+    const invoices = await BillingInvoice.find(filter)
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit)
+      .populate("schoolId", "_id name code")
+      .lean();
+    res.json({
+      success: true,
+      count: invoices.length,
+      total,
+      page,
+      pages: Math.ceil(total / limit) || 0,
+      data: invoices.map(toInvoiceJson),
+    });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const getInvoice = async (req, res) => {
+  try {
+    const invoice = await BillingInvoice.findById(req.params.id)
+      .populate("schoolId", "_id name code")
+      .lean();
+    if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
+    res.json({ success: true, data: toInvoiceJson(invoice) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const generateInvoice = async (req, res) => {
+  try {
+    const { subscriptionId, periodStart, periodEnd } = req.body || {};
+    if (!subscriptionId) return res.status(400).json({ success: false, message: "subscriptionId is required" });
+    const sub = await Subscription.findById(subscriptionId);
+    if (!sub) return res.status(404).json({ success: false, message: "Subscription not found" });
+
+    const invoice = await createInvoiceForSubscriptionWithPeriod(sub, periodStart, periodEnd);
+    return res.status(201).json({ success: true, message: "Invoice generated", data: toInvoiceJson(invoice.toJSON ? invoice : invoice) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const createInvoiceForSubscriptionWithPeriod = async (sub, periodStart, periodEnd) => {
+  const invoiceNumber = generateInvoiceNumber();
+  const invoice = new BillingInvoice({
+    invoiceNumber,
+    schoolId: sub.schoolId,
+    subscriptionId: sub._id,
+    amount: sub.price,
+    currency: sub.currency,
+    status: "issued",
+    periodStart: periodStart ? new Date(periodStart) : sub.currentPeriodStart || sub.startDate,
+    periodEnd: periodEnd ? new Date(periodEnd) : sub.currentPeriodEnd || sub.nextBillingDate,
+    dueDate: addDays(new Date(), 7),
+  });
+  try {
+    await invoice.save();
+  } catch (err) {
+    if (err.code !== 11000) throw err;
+  }
+  return invoice;
+};
+
+const updateInvoice = async (req, res) => {
+  try {
+    const { status } = req.body || {};
+    const allowed = ["draft", "issued", "paid", "void", "overdue"];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ success: false, message: `status must be one of: ${allowed.join(", ")}` });
+    }
+    const invoice = await BillingInvoice.findById(req.params.id);
+    if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
+    invoice.status = status;
+    invoice.paidAt = status === "paid" ? new Date() : undefined;
+    await invoice.save();
+    res.json({ success: true, message: "Invoice updated", data: toInvoiceJson(invoice.toJSON()) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+module.exports = {
+  listPlans,
+  getPlan,
+  createPlan,
+  updatePlan,
+  deletePlan,
+  listSubscriptions,
+  getSubscription,
+  createSubscription,
+  updateSubscription,
+  listInvoices,
+  getInvoice,
+  generateInvoice,
+  updateInvoice,
+  formatMoney,
+};

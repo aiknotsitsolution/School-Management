@@ -42,6 +42,10 @@ const routes = [
     target: process.env.AUTH_SERVICE_URL || "http://localhost:5001",
   },
   {
+    path: "/api/platform",
+    target: process.env.AUTH_SERVICE_URL || "http://localhost:5001",
+  },
+  {
     path: "/api/students",
     target: process.env.STUDENT_SERVICE_URL || "http://localhost:5002",
   },
