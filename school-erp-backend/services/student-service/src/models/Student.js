@@ -16,11 +16,17 @@ const studentSchema = new mongoose.Schema(
     parentName: { type: String },
     parentContact: { type: String },
     parentEmail: { type: String },
+    motherName: { type: String },
+    house: { type: String },
     admissionDate: { type: Date, default: Date.now },
     feeCategory: { type: String, default: "Regular" },
-    status: { type: String, enum: ["Active", "Inactive", "Alumni", "Transferred"], default: "Active" },
+    status: {
+      type: String,
+      enum: ["Active", "Inactive", "Alumni", "Transferred"],
+      default: "Active",
+    },
   },
-  { timestamps: true }
+  { timestamps: true },
 );
 
 module.exports = mongoose.model("Student", studentSchema);

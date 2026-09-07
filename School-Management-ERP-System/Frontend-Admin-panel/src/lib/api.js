@@ -3,10 +3,11 @@ const API_BASE_URL =
 
 async function request(path, options = {}) {
   const token = localStorage.getItem("erp_access_token");
+  const isFormData = options.body instanceof FormData;
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
-      "Content-Type": "application/json",
+      ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...options.headers,
     },
@@ -49,6 +50,14 @@ export const api = {
   students: {
     list: (params = "") => request(`/students${params ? `?${params}` : ""}`),
     create: (student) => request("/students", json("POST", student)),
+    uploadPhoto: (file) => {
+      const formData = new FormData();
+      formData.append("photo", file);
+      return request("/students/upload-photo", {
+        method: "POST",
+        body: formData,
+      });
+    },
     update: (id, student) => request(`/students/${id}`, json("PUT", student)),
     remove: (id) => request(`/students/${id}`, { method: "DELETE" }),
     stats: () => request("/students/stats/summary"),

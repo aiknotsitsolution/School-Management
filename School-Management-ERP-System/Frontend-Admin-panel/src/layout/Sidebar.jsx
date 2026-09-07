@@ -42,6 +42,7 @@ const groups = [
       { to: "/examination", icon: ClipboardList, label: "Examination" },
       { to: "/report-card", icon: ScrollText, label: "Report Card" },
       { to: "/library", icon: BookOpen, label: "Library Management" },
+      { to: "/addstudent", icon: UserPlus, label: "Add Student" },
       { to: "/students", icon: Users, label: "Student Database" },
     ],
   },

@@ -21,6 +21,7 @@ import Library from "./pages/Library";
 import Leave from "./pages/Leave";
 import Hostel from "./pages/Hostel";
 import Payroll from "./pages/Payroll";
+import AddStudent from "./pages/AddStudent";
 
 function ProtectedLayout() {
   if (!localStorage.getItem("erp_access_token")) {
@@ -55,6 +56,7 @@ export default function App() {
           <Route path="/leave" element={<Leave />} />
           <Route path="/hostel" element={<Hostel />} />
           <Route path="/payroll" element={<Payroll />} />
+          <Route path="/addstudent" element={<AddStudent />} />
         </Route>
       </Routes>
     </BrowserRouter>
