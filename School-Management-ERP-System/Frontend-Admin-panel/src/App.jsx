@@ -29,6 +29,7 @@ import StaffDashboard from "./pages/StaffDashboard";
 import PlatformDashboard from "./pages/platform/PlatformDashboard";
 import SchoolOnboarding from "./pages/platform/SchoolOnboarding";
 import SchoolsManagement from "./pages/platform/SchoolsManagement";
+import SchoolDetail from "./pages/platform/SchoolDetail";
 import PlatformUsers from "./pages/platform/PlatformUsers";
 import AuditLogs from "./pages/platform/AuditLogs";
 import PlatformReports from "./pages/platform/PlatformReports";
@@ -110,6 +111,14 @@ export default function App() {
             element={
               <RequireRole roles={["super_admin"]} fallback="/">
                 <SchoolsManagement />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/platform/schools/:id"
+            element={
+              <RequireRole roles={["super_admin"]} fallback="/">
+                <SchoolDetail />
               </RequireRole>
             }
           />

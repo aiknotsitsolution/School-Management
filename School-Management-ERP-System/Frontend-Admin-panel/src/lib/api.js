@@ -82,6 +82,27 @@ export const api = {
   analytics: {
     summary: () => request("/platform/analytics"),
   },
+  platform: {
+    auditLogs: (params = "") => request(`/platform/audit-logs${params ? `?${params}` : ""}`),
+    schools: {
+      list: (params = "") => request(`/platform/schools${params ? `?${params}` : ""}`),
+      get360: (id) => request(`/platform/schools/${id}`),
+      setStatus: (id, status, reason) =>
+        request(`/platform/schools/${id}/status`, json("PATCH", { status, reason })),
+      updateOnboarding: (id, status, notes) =>
+        request(`/platform/schools/${id}/onboarding`, json("PATCH", { status, notes })),
+    },
+    users: {
+      list: (params = "") => request(`/platform/users${params ? `?${params}` : ""}`),
+      get360: (id) => request(`/platform/users/${id}`),
+      update: (id, user) => request(`/auth/users/${id}`, json("PATCH", user)),
+      setStatus: (id, isActive) =>
+        request(`/auth/users/${id}/status`, json("PATCH", { isActive })),
+      remove: (id) => request(`/auth/users/${id}`, { method: "DELETE" }),
+      restore: (id) =>
+        request(`/auth/users/${id}/restore`, { method: "POST" }),
+    },
+  },
   subscriptions: {
     list: (params = "") => request(`/platform/subscriptions${params ? `?${params}` : ""}`),
     get: (id) => request(`/platform/subscriptions/${id}`),
