@@ -5,6 +5,8 @@ import Topbar from "./Topbar";
 
 const titles = {
   "/": "Dashboard",
+  "/teacher-dashboard": "Class Teacher Dashboard",
+  "/student-dashboard": "Student / Parent Dashboard",
   "/attendance": "Attendance",
   "/timetable": "Timetable",
   "/homework": "Homework",

@@ -21,12 +21,30 @@ import Library from "./pages/Library";
 import Leave from "./pages/Leave";
 import Hostel from "./pages/Hostel";
 import Payroll from "./pages/Payroll";
+import ClassTeacherDashboard from "./pages/ClassTeacherDashboard";
+import StudentDashboard from "./pages/StudentDashboard";
 
+// Role-based dashboard routing (dummy for now). Reads the role from the
+// persisted user object so each persona lands on their own dashboard.
 function ProtectedLayout() {
   if (!localStorage.getItem("erp_access_token")) {
     return <Navigate to="/login" replace />;
   }
   return <Layout />;
+}
+
+// If a role-specific home route is requested, redirect to the matching
+// dashboard. Falls back to the generic admin dashboard.
+function HomeRedirect() {
+  const currentUser =
+    typeof window !== "undefined" && localStorage.getItem("erp_user")
+      ? JSON.parse(localStorage.getItem("erp_user"))
+      : null;
+  const role = currentUser?.role || "admin";
+  if (role === "teacher") return <Navigate to="/teacher-dashboard" replace />;
+  if (role === "student" || role === "parent")
+    return <Navigate to="/student-dashboard" replace />;
+  return <Dashboard />;
 }
 
 export default function App() {
@@ -35,7 +53,9 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route element={<ProtectedLayout />}>
-          <Route path="/" element={<Dashboard />} />
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="/teacher-dashboard" element={<ClassTeacherDashboard />} />
+          <Route path="/student-dashboard" element={<StudentDashboard />} />
           <Route path="/attendance" element={<Attendance />} />
           <Route path="/timetable" element={<Timetable />} />
           <Route path="/homework" element={<Homework />} />

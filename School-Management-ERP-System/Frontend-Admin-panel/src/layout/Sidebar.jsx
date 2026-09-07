@@ -22,6 +22,7 @@ import {
   BookOpen,
   BedDouble,
   Banknote,
+  UserCog,
 } from "lucide-react";
 const school = {
   shortName: "School ERP",
@@ -30,8 +31,12 @@ const school = {
 
 const groups = [
   {
-    label: "Overview",
-    items: [{ to: "/", icon: LayoutDashboard, label: "Dashboard", end: true }],
+    label: "My Dashboards",
+    items: [
+      { to: "/", icon: LayoutDashboard, label: "Admin Dashboard", end: true },
+      { to: "/teacher-dashboard", icon: UserCog, label: "Class Teacher" },
+      { to: "/student-dashboard", icon: GraduationCap, label: "Student / Parent" },
+    ],
   },
   {
     label: "Academics",
