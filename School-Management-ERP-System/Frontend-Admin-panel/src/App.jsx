@@ -26,7 +26,13 @@ import AddStudent from "./pages/AddStudent";
 import ClassTeacherDashboard from "./pages/ClassTeacherDashboard";
 import StudentDashboard from "./pages/StudentDashboard";
 import StaffDashboard from "./pages/StaffDashboard";
-import Platform from "./pages/Platform";
+import PlatformDashboard from "./pages/platform/PlatformDashboard";
+import SchoolOnboarding from "./pages/platform/SchoolOnboarding";
+import SchoolsManagement from "./pages/platform/SchoolsManagement";
+import PlatformUsers from "./pages/platform/PlatformUsers";
+import AuditLogs from "./pages/platform/AuditLogs";
+import PlatformReports from "./pages/platform/PlatformReports";
+import PlatformSettings from "./pages/platform/PlatformSettings";
 import Users from "./pages/Users";
 import Plans from "./pages/Plans";
 import Subscriptions from "./pages/Subscriptions";
@@ -87,7 +93,55 @@ export default function App() {
                 roles={["super_admin"]}
                 fallback="/student-dashboard"
               >
-                <Platform />
+                <PlatformDashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/platform/onboarding"
+            element={
+              <RequireRole roles={["super_admin"]} fallback="/">
+                <SchoolOnboarding />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/platform/schools"
+            element={
+              <RequireRole roles={["super_admin"]} fallback="/">
+                <SchoolsManagement />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/platform/users"
+            element={
+              <RequireRole roles={["super_admin"]} fallback="/">
+                <PlatformUsers />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/platform/audit"
+            element={
+              <RequireRole roles={["super_admin"]} fallback="/">
+                <AuditLogs />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/platform/reports"
+            element={
+              <RequireRole roles={["super_admin"]} fallback="/">
+                <PlatformReports />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/platform/settings"
+            element={
+              <RequireRole roles={["super_admin"]} fallback="/">
+                <PlatformSettings />
               </RequireRole>
             }
           />

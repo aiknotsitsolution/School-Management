@@ -25,6 +25,12 @@ const titles = {
   "/bus-tracking": "Bus Tracking",
   "/reports": "Reports & Analytics",
   "/platform": "Platform Dashboard",
+  "/platform/onboarding": "School Onboarding",
+  "/platform/schools": "Schools Management",
+  "/platform/users": "Users & Access",
+  "/platform/audit": "Audit Logs",
+  "/platform/reports": "Platform Reports",
+  "/platform/settings": "Platform Settings",
   "/platform/plans": "Plans & Pricing",
   "/platform/subscriptions": "Subscriptions",
 };

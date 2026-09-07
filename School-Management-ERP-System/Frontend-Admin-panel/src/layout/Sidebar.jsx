@@ -37,17 +37,23 @@ const groups = [
       {
         to: "/platform",
         icon: LayoutDashboard,
-        label: "Platform Dashboard",
+        label: "Dashboard",
         end: true,
         scope: "platform",
       },
     ],
   },
   {
-    label: "Schools",
+    label: "School Operations",
     items: [
       {
-        to: "/platform?tab=schools",
+        to: "/platform/onboarding",
+        icon: UserPlus,
+        label: "School Onboarding",
+        scope: "platform",
+      },
+      {
+        to: "/platform/schools",
         icon: Building2,
         label: "Schools Management",
         scope: "platform",
@@ -55,21 +61,49 @@ const groups = [
     ],
   },
   {
-    label: "Users & Access",
+    label: "Access & Security",
     items: [
       {
-        to: "/platform?tab=users",
+        to: "/platform/users",
         icon: UserRoundCog,
         label: "Users & Access",
+        scope: "platform",
+      },
+      {
+        to: "/platform/audit",
+        icon: ScrollText,
+        label: "Audit Logs",
         scope: "platform",
       },
     ],
   },
   {
-    label: "Billing & Subscriptions",
+    label: "Billing & Monetization",
     items: [
       { to: "/platform/plans", icon: Banknote, label: "Plans & Pricing", scope: "platform" },
       { to: "/platform/subscriptions", icon: CreditCard, label: "Subscriptions", scope: "platform" },
+    ],
+  },
+  {
+    label: "Insights",
+    items: [
+      {
+        to: "/platform/reports",
+        icon: BarChart3,
+        label: "Reports",
+        scope: "platform",
+      },
+    ],
+  },
+  {
+    label: "System",
+    items: [
+      {
+        to: "/platform/settings",
+        icon: UserCog,
+        label: "Settings",
+        scope: "platform",
+      },
     ],
   },
   {
