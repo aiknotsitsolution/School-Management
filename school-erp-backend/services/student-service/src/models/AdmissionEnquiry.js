@@ -8,6 +8,11 @@ const enquirySchema = new mongoose.Schema(
     classApplied: { type: String, required: true },
     contact: { type: String, required: true },
     email: { type: String },
+    // Admission ID assigned when the enquiry is confirmed/admitted. Links the
+    // enquiry to the Platform Student User / Student Profile addressing the
+    // same Admission ID (never auto-creates a duplicate student).
+    admissionNo: { type: String, default: null },
+    section: { type: String, default: null },
     source: { type: String, enum: ["Website", "Referral", "Walk-in", "Phone", "Other"], default: "Other" },
     status: {
       type: String,

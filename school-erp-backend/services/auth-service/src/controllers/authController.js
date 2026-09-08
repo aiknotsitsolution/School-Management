@@ -28,6 +28,59 @@ const SCHOOL_EDITABLE_FIELDS = [
   "status",
 ];
 
+// Student-role linking: enforce `PlatformUser.refId === Student.admissionNo`
+// within the SAME school. When the student record already exists it is linked
+// (and blocked if already owned by another active account); when it does not,
+// a safe incomplete shell/draft is created for the Admission Counsellor.
+const ensureStudentLink = async ({ schoolId, admissionId, userId, name, cls, section }) => {
+  try {
+    const { getStudentModel } = require("../db/studentDb");
+    const Student = await getStudentModel();
+
+    const existing = await Student.findOne({ schoolId, admissionNo: admissionId });
+    if (existing) {
+      if (existing.userId) {
+        const linked = await User.findById(existing.userId).lean();
+        if (linked && !linked.deletedAt && String(linked._id) !== String(userId)) {
+          return { status: 409, message: "This Admission ID is already linked to another active account" };
+        }
+      }
+      await Student.updateOne({ _id: existing._id }, { $set: { userId: String(userId) } });
+      return { linked: existing._id };
+    }
+
+    const created = await Student.create({
+      schoolId,
+      admissionNo: admissionId,
+      userId: String(userId),
+      name: name ? String(name).trim() : "Student",
+      class: cls || null,
+      section: section || null,
+      profileStatus: "incomplete",
+    });
+    return { linked: created._id, created: true };
+  } catch (err) {
+    return { status: 503, message: `Cannot link student profile: ${err.message}` };
+  }
+};
+
+// True when the given Admission ID already maps to a student record in this
+// school. Non-fatal on infrastructure failure so it only ever *prevents* an
+// unsafe assignment, never blocks legitimate school operations.
+const studentExistsFor = async (schoolId, admissionNo) => {
+  try {
+    const { getStudentModel } = require("../db/studentDb");
+    const Student = await getStudentModel();
+    return Boolean(
+      await Student.findOne({ schoolId, admissionNo })
+        .select("_id")
+        .lean(),
+    );
+  } catch {
+    return null;
+  }
+};
+
 const toPublicUser = (user) => ({
   id: user._id,
   name: user.name,
@@ -89,6 +142,28 @@ const createUser = async (req, res) => {
       return res.status(400).json({ success: false, message: "class is required for class_teacher role" });
     }
 
+    const admissionId = role === "student" ? String(refId || "").trim() : null;
+    if (role === "student" && !admissionId) {
+      return res.status(400).json({ success: false, message: "Admission ID (refId) is required for student accounts" });
+    }
+
+    // An Admission Counsellor's own refId (Staff ID) must NEVER collide with a
+    // student's Admission ID — otherwise their lookup logic could address
+    // someone else's profile.
+    if (
+      role === "staff" &&
+      designation === "admission_counsellor" &&
+      String(refId || "").trim()
+    ) {
+      const collides = await studentExistsFor(schoolId, String(refId).trim());
+      if (collides) {
+        return res.status(409).json({
+          success: false,
+          message: "This ID belongs to an admitted student — it cannot be used as a counsellor's Staff ID",
+        });
+      }
+    }
+
     const existing = await User.findOne({ email });
     if (existing) return res.status(409).json({ success: false, message: "Email already registered" });
 
@@ -103,9 +178,27 @@ const createUser = async (req, res) => {
       class: cls || undefined,
       section: section || undefined,
       phone,
-      refId: refId || null,
+      refId: role === "student" ? String(refId).trim() : refId || null,
       linkedStudentIds,
     });
+
+    // Student accounts must resolve to a real student record in the SAME
+    // school (PlatformUser.refId === Student.admissionNo). Failing to link
+    // (e.g. cross-school ID, duplicate ownership) rolls the account back.
+    if (role === "student") {
+      const linkResult = await ensureStudentLink({
+        schoolId,
+        admissionId,
+        userId: user._id,
+        name,
+        cls,
+        section,
+      });
+      if (linkResult.status) {
+        await User.deleteOne({ _id: user._id }).catch(() => {});
+        return res.status(linkResult.status).json({ success: false, message: linkResult.message });
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -326,7 +419,42 @@ const updateUser = async (req, res) => {
     if (cls !== undefined) target.class = cls || null;
     if (section !== undefined) target.section = section || null;
     if (phone !== undefined) target.phone = phone || null;
-    if (refId !== undefined) target.refId = refId || null;
+    if (target.role === "student") {
+      const newRef = refId !== undefined ? String(refId || "").trim() : (target.refId || "");
+      if (!newRef) {
+        return res.status(400).json({ success: false, message: "Admission ID is required for student accounts" });
+      }
+      if (newRef !== target.refId) {
+        const linkResult = await ensureStudentLink({
+          schoolId: target.schoolId,
+          admissionId: newRef,
+          userId: target._id,
+          name: target.name,
+          cls: target.class,
+          section: target.section,
+        });
+        if (linkResult.status) {
+          return res.status(linkResult.status).json({ success: false, message: linkResult.message });
+        }
+      }
+      target.refId = newRef;
+    } else if (refId !== undefined) {
+      const trimmed = String(refId || "").trim();
+      if (
+        target.role === "staff" &&
+        (target.designation || designation) === "admission_counsellor" &&
+        trimmed
+      ) {
+        const collides = await studentExistsFor(target.schoolId, trimmed);
+        if (collides) {
+          return res.status(409).json({
+            success: false,
+            message: "This ID belongs to an admitted student — it cannot be used as a counsellor's Staff ID",
+          });
+        }
+      }
+      target.refId = trimmed || null;
+    }
     if (linkedStudentIds !== undefined) target.linkedStudentIds = Array.isArray(linkedStudentIds) ? linkedStudentIds : [];
 
     await target.save();

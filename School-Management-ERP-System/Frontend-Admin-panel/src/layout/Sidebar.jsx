@@ -124,6 +124,14 @@ const groups = [
         roles: ["staff"],
       },
       {
+        to: "/admission-counsellor",
+        icon: ClipboardList,
+        label: "Counsellor Workspace",
+        end: true,
+        roles: ["staff"],
+        designation: "admission_counsellor",
+      },
+      {
         to: "/teacher-dashboard",
         icon: UserCog,
         label: "Class Teacher",

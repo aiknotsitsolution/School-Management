@@ -137,7 +137,12 @@ export const api = {
   },
   students: {
     list: (params = "") => request(`/students${params ? `?${params}` : ""}`),
+    get: (id) => request(`/students/${id}`),
     create: (student) => request("/students", json("POST", student)),
+    me: () => request("/students/me"),
+    counsellorStats: () => request("/students/counsellor/stats"),
+    completeProfile: (id) =>
+      request(`/students/${id}/complete-profile`, { method: "POST" }),
     uploadPhoto: (file) => {
       const formData = new FormData();
       formData.append("photo", file);

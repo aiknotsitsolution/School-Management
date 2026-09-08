@@ -51,6 +51,7 @@ const BLOOD_GROUP_OPTIONS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
 const EMPTY_FORM = {
   name: "",
+  admissionNo: "",
   rollNo: "",
   class: "8",
   section: "A",
@@ -110,6 +111,10 @@ export default function AddStudent() {
       setError("Student name is required.");
       return;
     }
+    if (!form.admissionNo.trim()) {
+      setError("Admission ID is required.");
+      return;
+    }
     if (!form.rollNo.trim()) {
       setError("Roll number is required.");
       return;
@@ -131,6 +136,7 @@ export default function AddStudent() {
 
       await api.students.create({
         name: form.name.trim(),
+        admissionNo: form.admissionNo.trim(),
         rollNo: form.rollNo.trim(),
         class: form.class,
         section: form.section,
@@ -234,6 +240,21 @@ export default function AddStudent() {
                 onChange={(e) => update("rollNo", e.target.value)}
                 required
               />
+            </div>
+
+            <div>
+              <label className="block text-[12.5px] font-medium text-slate-text/70 mb-1.5">
+                Admission ID <span className="text-alert">*</span>
+              </label>
+              <Input
+                placeholder="e.g. STU-5A-001"
+                value={form.admissionNo}
+                onChange={(e) => update("admissionNo", e.target.value)}
+                required
+              />
+              <p className="text-[11.5px] text-slate-text/60 mt-1">
+                This is the student's login ID — it must match the ticket issued at admission.
+              </p>
             </div>
 
             <div>

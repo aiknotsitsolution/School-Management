@@ -80,6 +80,7 @@ function emptyForm() {
     house: "Aravali",
     feeStatus: "Pending",
     attendance: 95,
+    admissionNo: "",
   };
 }
 
@@ -92,6 +93,7 @@ function normalizeStudent(student) {
   return {
     ...student,
     id: student.id || student._id || student.admissionNo,
+    admissionNo: student.admissionNo || "",
     roll: Number(student.roll ?? student.rollNo ?? 0),
     contact: student.contact || student.parentContact || "",
     email: student.email || student.parentEmail || "",
@@ -162,6 +164,7 @@ export default function Students() {
           !q ||
           s.name.toLowerCase().includes(q) ||
           s.id.toLowerCase().includes(q) ||
+          (s.admissionNo || "").toLowerCase().includes(q) ||
           String(s.roll).includes(q) ||
           (s.contact || "").includes(q);
         return matchClass && matchSection && matchQuery;
@@ -203,6 +206,7 @@ export default function Students() {
       house: student.house || "Aravali",
       feeStatus: student.feeStatus || "Pending",
       attendance: student.attendance || 95,
+      admissionNo: student.admissionNo || "",
     });
     setShowModal(true);
     setSelected(null);
@@ -214,9 +218,13 @@ export default function Students() {
 
   const handleSave = async () => {
     if (!form.name.trim() || !form.roll) return;
+    if (!editId && !form.admissionNo.trim()) {
+      setApiError("Admission ID is required when adding a student");
+      return;
+    }
 
     try {
-      const payload = toApiStudent(form, editId || `STU-${Date.now()}`);
+      const payload = toApiStudent(form, form.admissionNo.trim());
       const response = editId
         ? await api.students.update(editId, payload)
         : await api.students.create(payload);
@@ -355,6 +363,7 @@ export default function Students() {
               <thead>
                 <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
                   <th className="px-5 py-2.5 font-semibold">Student</th>
+                  <th className="px-5 py-2.5 font-semibold">Admission ID</th>
                   <th className="px-5 py-2.5 font-semibold">Class</th>
                   <th className="px-5 py-2.5 font-semibold">Roll No.</th>
                   <th className="px-5 py-2.5 font-semibold">Attendance</th>
@@ -378,10 +387,15 @@ export default function Students() {
                         <div>
                           <p className="font-semibold text-ink">{s.name}</p>
                           <p className="text-[11.5px] text-slate-text/55">
-                            {s.id}
+                            Roll {s.roll}
                           </p>
                         </div>
                       </div>
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className="font-mono text-[12.5px] bg-paper px-2 py-1 rounded">
+                        {s.admissionNo || "—"}
+                      </span>
                     </td>
                     <td className="px-5 py-3 text-slate-text">
                       {formatClass(s.class)}-{s.section}
@@ -577,6 +591,25 @@ export default function Students() {
                     value={form.name}
                     onChange={(e) => updateForm("name", e.target.value)}
                   />
+                </div>
+
+                <div className="sm:col-span-2">
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Admission ID {editId ? "" : "*"}
+                  </label>
+                  <Input
+                    placeholder="e.g. STU-5A-001"
+                    autoComplete="off"
+                    disabled={Boolean(editId)}
+                    className={editId ? "bg-paper cursor-not-allowed" : undefined}
+                    value={form.admissionNo}
+                    onChange={(e) => updateForm("admissionNo", e.target.value)}
+                  />
+                  <p className="text-[11.5px] text-slate-text/60 mt-1">
+                    {editId
+                      ? "Tied to the platform account — change it from Users & Access."
+                      : "Must match the ticket's Admission ID so the student login links correctly."}
+                  </p>
                 </div>
 
                 <div>

@@ -37,7 +37,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - MONGO_URI=mongodb://mongo:27017/erp_auth
+      - AUTH_MONGODB_URI=mongodb://mongo:27017/erp_auth
     depends_on:
       - mongo
     networks:
@@ -49,7 +49,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - MONGO_URI=mongodb://mongo:27017/erp_student
+      - STUDENT_MONGODB_URI=mongodb://mongo:27017/erp_student
     depends_on:
       - mongo
     networks:
@@ -61,7 +61,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - MONGO_URI=mongodb://mongo:27017/erp_staff
+      - STAFF_MONGODB_URI=mongodb://mongo:27017/erp_staff
     depends_on:
       - mongo
     networks:
@@ -73,7 +73,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - MONGO_URI=mongodb://mongo:27017/erp_academic
+      - ACADEMIC_MONGODB_URI=mongodb://mongo:27017/erp_academic
     depends_on:
       - mongo
     networks:
@@ -85,7 +85,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - MONGO_URI=mongodb://mongo:27017/erp_fee
+      - FEE_MONGODB_URI=mongodb://mongo:27017/erp_fee
     depends_on:
       - mongo
     networks:
@@ -97,7 +97,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - MONGO_URI=mongodb://mongo:27017/erp_communication
+      - COMMUNICATION_MONGODB_URI=mongodb://mongo:27017/erp_communication
     depends_on:
       - mongo
     networks:
@@ -109,7 +109,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - MONGO_URI=mongodb://mongo:27017/erp_library
+      - LIBRARY_MONGODB_URI=mongodb://mongo:27017/erp_library
     depends_on:
       - mongo
     networks:
@@ -121,7 +121,7 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      - MONGO_URI=mongodb://mongo:27017/erp_facility
+      - FACILITY_MONGODB_URI=mongodb://mongo:27017/erp_facility
     depends_on:
       - mongo
     networks:

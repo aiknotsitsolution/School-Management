@@ -100,6 +100,7 @@ function emptyForm() {
     source: "Website",
     status: "New",
     followUp: "",
+    admissionNo: "",
   };
 }
 
@@ -128,6 +129,7 @@ export default function AdmissionEnquiry() {
                 : item.status === "Rejected"
                   ? "Declined"
                   : item.status,
+            admissionNo: item.admissionNo || "",
           })),
         );
       })
@@ -144,6 +146,7 @@ export default function AdmissionEnquiry() {
         e.parentName.toLowerCase().includes(q) ||
         e.classApplied.toLowerCase().includes(q) ||
         e.id.toLowerCase().includes(q) ||
+        (e.admissionNo || "").toLowerCase().includes(q) ||
         (e.contact || "").includes(q);
       return matchStatus && matchQuery;
     });
@@ -177,6 +180,7 @@ export default function AdmissionEnquiry() {
       source: item.source,
       status: item.status,
       followUp: item.followUp === "—" ? "" : item.followUp,
+      admissionNo: item.admissionNo || "",
     });
     setShowModal(true);
   };
@@ -193,6 +197,13 @@ export default function AdmissionEnquiry() {
     )
       return;
 
+    if (form.status === "Admission Confirmed" && !form.admissionNo.trim()) {
+      setLoadError(
+        "Admission ID is required before confirming an admission",
+      );
+      return;
+    }
+
     const payload = {
       childName: form.childName.trim(),
       parentName: form.parentName.trim(),
@@ -201,6 +212,7 @@ export default function AdmissionEnquiry() {
       source: backendSource[form.source] || "Other",
       status: backendStatus[form.status] || "New",
       followUpDate: form.followUp || undefined,
+      admissionNo: form.admissionNo.trim() || undefined,
     };
 
     try {
@@ -348,6 +360,7 @@ export default function AdmissionEnquiry() {
                 <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/6">
                   <th className="px-5 py-2.5 font-semibold">Enquiry ID</th>
                   <th className="px-5 py-2.5 font-semibold">Child</th>
+                  <th className="px-5 py-2.5 font-semibold">Admission ID</th>
                   <th className="px-5 py-2.5 font-semibold">Parent</th>
                   <th className="px-5 py-2.5 font-semibold">Class Applied</th>
                   <th className="px-5 py-2.5 font-semibold">Contact</th>
@@ -369,6 +382,11 @@ export default function AdmissionEnquiry() {
                     <td className="px-5 py-3 font-medium text-ink">{e.id}</td>
                     <td className="px-5 py-3 font-semibold text-ink">
                       {e.childName}
+                    </td>
+                    <td className="px-5 py-3">
+                      <span className="font-mono text-[12.5px] bg-paper px-2 py-1 rounded">
+                        {e.admissionNo || "—"}
+                      </span>
                     </td>
                     <td className="px-5 py-3 text-slate-text">
                       {e.parentName}
@@ -472,6 +490,25 @@ export default function AdmissionEnquiry() {
                     value={form.parentName}
                     onChange={(e) => updateForm("parentName", e.target.value)}
                   />
+                </div>
+
+                <div className="col-span-2">
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Admission ID{" "}
+                    {form.status === "Admission Confirmed" && (
+                      <span className="text-alert">*</span>
+                    )}
+                  </label>
+                  <Input
+                    placeholder="e.g. STU-5A-001"
+                    autoComplete="off"
+                    value={form.admissionNo}
+                    onChange={(e) => updateForm("admissionNo", e.target.value)}
+                  />
+                  <p className="text-[11.5px] text-slate-text/60 mt-1">
+                    Required once the admission is confirmed — links the
+                    enquiry to the student's login ticket.
+                  </p>
                 </div>
 
                 <div>

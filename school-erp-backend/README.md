@@ -82,17 +82,18 @@ npm run install:all
 # 3. make sure MongoDB is running locally on 27017
 mongod
 
-# 4. open 9 terminals (or use pm2 / concurrently) and start each service:
-cd services/auth-service && MONGO_URI=mongodb+srv://atlaknotssolutions_db_user:pOokSSkkiGVWknWq@cluster0.kgscxhb.mongodb.net/?appName=Cluster0 node src/index.js
-cd services/student-service && MONGO_URI=mongodb://localhost:27017/erp_student node src/index.js
-cd services/staff-service && MONGO_URI=mongodb://localhost:27017/erp_staff node src/index.js
-cd services/academic-service && MONGO_URI=mongodb://localhost:27017/erp_academic node src/index.js
-cd services/fee-service && MONGO_URI=mongodb://localhost:27017/erp_fee node src/index.js
-cd services/communication-service && MONGO_URI=mongodb://localhost:27017/erp_communication node src/index.js
-cd services/library-service && MONGO_URI=mongodb://localhost:27017/erp_library node src/index.js
-cd services/facility-service && MONGO_URI=mongodb://localhost:27017/erp_facility node src/index.js
-cd api-gateway && node src/index.js
+# 4. start everything with one command (loads root .env, passes env to all services)
+npm run dev:all
 ```
+
+> **Note:** MongoDB URIs live in the root `.env` as one variable per service
+> (`AUTH_MONGODB_URI`, `STUDENT_MONGODB_URI`, ...). Each service reads **only its own**
+> variable, e.g. `process.env.AUTH_MONGODB_URI`. Fill in the same values in `.env.example`
+> as you do in `.env` — the template is committed, `.env` is gitignored.
+
+> **Security:** never commit a real MongoDB URI (especially an Atlas SRV string with
+> username/password) to this README or any other repo file. Use `mongodb://localhost:27017/<db>`
+> in documentation.
 
 ## 4. Run with Docker (recommended)
 

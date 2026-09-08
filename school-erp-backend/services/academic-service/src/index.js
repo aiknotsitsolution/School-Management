@@ -25,7 +25,7 @@ app.use(morgan("dev"));
 app.use(express.json());
 
 mongoose
-  .connect(process.env.MONGODB_URI)
+  .connect(process.env.ACADEMIC_MONGODB_URI)
   .then(() => {
     console.log("✅ MongoDB Connected Successfully");
   })

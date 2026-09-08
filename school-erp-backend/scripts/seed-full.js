@@ -10,7 +10,20 @@ const SEED_ONLY = process.argv.includes("--seed-only");
 const BASE =
   process.env.MONGO_URI || process.env.MONGO_URI_BASE || "mongodb://localhost:27017";
 
-function dbURI(db) {
+// Prefer the per-service *_MONGODB_URI vars used by the running services;
+// fall back to deriving the URI from the shared cluster BASE above when the
+// service-specific variable is not set.
+function dbURI(db, service) {
+  const direct = service ? process.env[`${service.toUpperCase()}_MONGODB_URI`] : null;
+  if (direct && String(direct).trim()) {
+    try {
+      new URL(direct);
+      return direct;
+    } catch (e) {
+      console.error(`[config] invalid ${service.toUpperCase()}_MONGODB_URI: ${direct}`);
+      process.exit(1);
+    }
+  }
   try {
     const u = new URL(BASE);
     u.pathname = "/" + db;
@@ -34,7 +47,7 @@ const DB_FOR = {
 };
 
 function connect(name) {
-  const conn = mongoose.createConnection(dbURI(DB_FOR[name]));
+  const conn = mongoose.createConnection(dbURI(DB_FOR[name], name));
   conn.asPromise().then(() => console.log(`[db] ${name} connected -> ${dbURI(DB_FOR[name])}`));
   const models = {};
   COLLECTIONS[name].forEach((c) => {

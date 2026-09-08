@@ -28,6 +28,7 @@ const ROLE_SCOPE = {
 export const canSeeNavigation = (item, user, role) => {
   const scope = ROLE_SCOPE[role] || SCHOOL_SCOPE;
 
+  if (scope !== SCHOOL_SCOPE && item.scope !== PLATFORM_SCOPE) return false;
   if (item.scope === PLATFORM_SCOPE) {
     return scope === PLATFORM_SCOPE && (!item.roles || item.roles.includes(role));
   }
@@ -35,5 +36,8 @@ export const canSeeNavigation = (item, user, role) => {
   if (scope !== SCHOOL_SCOPE) return false;
   if (item.perm && !hasPermission(user, item.perm)) return false;
   if (item.roles && !item.roles.includes(role)) return false;
+  // Optional staff-designation filter (e.g. Admission Counsellor workspace).
+  if (item.designation && String(user?.designation || "") !== item.designation)
+    return false;
   return true;
 };

@@ -37,6 +37,8 @@ import PlatformSettings from "./pages/platform/PlatformSettings";
 import Users from "./pages/Users";
 import Plans from "./pages/Plans";
 import Subscriptions from "./pages/Subscriptions";
+import CounsellorWorkspace from "./pages/CounsellorWorkspace";
+import StudentCompleteProfile from "./pages/StudentCompleteProfile";
 import {
   selectIsAuthenticated,
   selectRole,
@@ -68,6 +70,16 @@ function RequirePermission({ permission, children, fallback = "/" }) {
   return children;
 }
 
+// Admission Counsellors are a Staff designation — the workspace is only
+// reachable by a staff account explicitly marked as one.
+function RequireCounsellor({ children, fallback = "/" }) {
+  const user = useSelector(selectUser);
+  const isCounsellor =
+    user?.role === "staff" && user?.designation === "admission_counsellor";
+  if (!isCounsellor) return <Navigate to={fallback} replace />;
+  return children;
+}
+
 function HomeRedirect() {
   const user = useSelector(selectUser);
   const role = user?.role || "admin";
@@ -76,7 +88,11 @@ function HomeRedirect() {
     return <Navigate to="/teacher-dashboard" replace />;
   if (role === "student" || role === "parent")
     return <Navigate to="/student-dashboard" replace />;
-  if (role === "staff") return <Navigate to="/staff-dashboard" replace />;
+  if (role === "staff") {
+    if (user?.designation === "admission_counsellor")
+      return <Navigate to="/admission-counsellor" replace />;
+    return <Navigate to="/staff-dashboard" replace />;
+  }
   return <Dashboard />;
 }
 
@@ -361,7 +377,30 @@ export default function App() {
               </RequirePermission>
             }
           />
-          <Route path="/addstudent" element={<AddStudent />} />
+          <Route
+            path="/addstudent"
+            element={
+              <RequirePermission permission="students:write">
+                <AddStudent />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/students/complete/:id"
+            element={
+              <RequirePermission permission="students:write">
+                <StudentCompleteProfile />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/admission-counsellor"
+            element={
+              <RequireCounsellor>
+                <CounsellorWorkspace />
+              </RequireCounsellor>
+            }
+          />
         </Route>
       </Routes>
     </BrowserRouter>

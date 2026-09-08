@@ -10,6 +10,8 @@ import {
   Ban,
   CheckCircle2,
   Eye,
+  FilterX,
+  Building2,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../../components/UI";
@@ -20,6 +22,21 @@ const ROLE_LABELS = {
   class_teacher: "Class Teacher",
   staff: "Staff",
   student: "Student",
+};
+
+const DESIGNATION_OPTIONS = [
+  "admission_counsellor",
+  "accountant",
+  "librarian",
+  "receptionist",
+  "transport",
+];
+const DESIGNATION_LABELS = {
+  admission_counsellor: "Admission Counsellor",
+  accountant: "Accountant",
+  librarian: "Librarian",
+  receptionist: "Receptionist",
+  transport: "Transport Coordinator",
 };
 
 const fmtDate = (value) =>
@@ -45,13 +62,66 @@ const emptyForm = () => ({
   refId: "",
 });
 
+// refId (kept as refId in the API payload) maps to a role-specific identity
+// field: Admission ID for students, Staff ID for staff/teachers, and nothing
+// needed for school admins / platform owner.
+const REF_ID_FIELDS = {
+  student: { label: "Admission ID", placeholder: "Enter Admission ID", required: true },
+  staff: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
+  class_teacher: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
+  school_admin: { label: "Ref ID", disabled: true, placeholder: "Not required for this role" },
+  super_admin: null,
+};
+
+const refIdFieldFor = (role) => REF_ID_FIELDS[role] || null;
+
+function RefIdField({ field, value, onChange, withLabel = true }) {
+  if (!field) return null;
+  const input = (
+    <Input
+      required={field.disabled ? undefined : field.required}
+      disabled={field.disabled}
+      readOnly={field.disabled}
+      placeholder={field.placeholder}
+      autoComplete="off"
+      className={field.disabled ? "bg-paper cursor-not-allowed" : undefined}
+      value={value || ""}
+      onChange={onChange}
+    />
+  );
+  if (!withLabel) return input;
+  if (field.disabled) {
+    return (
+      <div>
+        <span className="text-[11.5px] font-semibold text-slate-text/60 uppercase block mb-1">
+          {field.label}
+        </span>
+        {input}
+      </div>
+    );
+  }
+  return (
+    <div>
+      <span className="text-[11.5px] font-semibold text-slate-text/60 uppercase block mb-1">
+        {field.label}
+        {!field.required && (
+          <span className="normal-case font-medium text-slate-text/40"> · optional</span>
+        )}
+      </span>
+      {input}
+    </div>
+  );
+}
+
 export default function PlatformUsers() {
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(0);
   const [page, setPage] = useState(1);
   const [q, setQ] = useState("");
+  const [debouncedQ, setDebouncedQ] = useState("");
   const [role, setRole] = useState("");
+  const [schoolId, setSchoolId] = useState("");
   const [includeDeleted, setIncludeDeleted] = useState(false);
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -60,6 +130,7 @@ export default function PlatformUsers() {
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [busy, setBusy] = useState(false);
+  const [createdCredential, setCreatedCredential] = useState(null);
 
   useEffect(() => {
     api.schools
@@ -69,9 +140,15 @@ export default function PlatformUsers() {
   }, []);
 
   useEffect(() => {
+    const timer = setTimeout(() => setDebouncedQ(q), 350);
+    return () => clearTimeout(timer);
+  }, [q]);
+
+  useEffect(() => {
     const params = new URLSearchParams();
-    if (q.trim()) params.set("q", q.trim());
+    if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
     if (role) params.set("role", role);
+    if (schoolId) params.set("schoolId", schoolId);
     if (includeDeleted) params.set("includeDeleted", "true");
     params.set("page", String(page));
     params.set("limit", "20");
@@ -85,9 +162,11 @@ export default function PlatformUsers() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [q, role, includeDeleted, page, refreshKey]);
+  }, [debouncedQ, role, schoolId, includeDeleted, page, refreshKey]);
 
   const schoolNameOf = (id) => schools.find((s) => String(s._id || s.id) === String(id))?.name || "—";
+
+  const refField = refIdFieldFor(form.role);
 
   const refresh = () => setRefreshKey((key) => key + 1);
   const resetForm = () => setForm(emptyForm());
@@ -150,6 +229,10 @@ export default function PlatformUsers() {
       toast("Pick a school for school-scoped roles", "error");
       return;
     }
+    if (form.role === "student" && !form.refId.trim()) {
+      toast("Admission ID is required for student accounts", "error");
+      return;
+    }
     setBusy(true);
     try {
       await api.users.create({
@@ -164,6 +247,15 @@ export default function PlatformUsers() {
         refId: form.refId.trim() || undefined,
       });
       toast("User created");
+      // Credentials are only shareable at creation time — the API never
+      // returns the password again, so surface them in a copy dialog now.
+      setCreatedCredential({
+        name: form.name.trim(),
+        email: form.email.trim().toLowerCase(),
+        role: form.role,
+        admissionId: form.role === "student" ? form.refId.trim() : null,
+        password: form.password,
+      });
       setCreating(false);
       resetForm();
       refresh();
@@ -202,9 +294,9 @@ export default function PlatformUsers() {
         <Card title="Create a platform user" className="mb-5" action={<X size={15} className="cursor-pointer text-slate-text/60" onClick={() => setCreating(false)} />}>
           <form className="space-y-3.5" onSubmit={createUser}>
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
-              <Input required placeholder="Full name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
-              <Input required type="email" placeholder="Email (login)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              <Input required type="password" placeholder="Password (min 6 chars)" minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <Input required placeholder="Full name" autoComplete="off" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              <Input required type="email" placeholder="Email (login)" autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              <Input required type="password" placeholder="Password (min 6 chars)" autoComplete="new-password" minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               <Select required value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 {Object.entries(ROLE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
@@ -222,12 +314,25 @@ export default function PlatformUsers() {
               ) : (
                 <Input disabled placeholder="Platform-owner has no school" className="bg-paper" />
               )}
-              {form.role === "staff" ? (
-                <Input placeholder="Designation (accountant, librarian…)" value={form.designation} onChange={(e) => setForm({ ...form, designation: e.target.value })} />
-              ) : form.role === "class_teacher" ? (
-                <Input placeholder="Class" value={form.className} onChange={(e) => setForm({ ...form, className: e.target.value })} />
-              ) : (
-                <Input placeholder="Ref ID (optional)" value={form.refId} onChange={(e) => setForm({ ...form, refId: e.target.value })} />
+              {form.role === "staff" && (
+                <Select
+                  placeholder="Select designation"
+                  value={form.designation}
+                  onChange={(e) => setForm({ ...form, designation: e.target.value })}
+                >
+                  <option value="">Select designation…</option>
+                  {DESIGNATION_OPTIONS.map((value) => (
+                    <option key={value} value={value}>
+                      {DESIGNATION_LABELS[value]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+              {form.role === "class_teacher" && (
+                <Input placeholder="Class" autoComplete="off" value={form.className} onChange={(e) => setForm({ ...form, className: e.target.value })} />
+              )}
+              {refField && (
+                <RefIdField withLabel={false} field={refField} value={form.refId} onChange={(e) => setForm({ ...form, refId: e.target.value })} />
               )}
             </div>
             <div className="flex justify-end gap-2">
@@ -239,8 +344,8 @@ export default function PlatformUsers() {
       )}
 
       <Card bodyClassName="p-5">
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
-          <div className="relative">
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/50" />
             <Input
               placeholder="Search name or email"
@@ -249,12 +354,23 @@ export default function PlatformUsers() {
               onChange={(event) => { setQ(event.target.value); setPage(1); }}
             />
           </div>
-          <Select value={role} onChange={(event) => { setRole(event.target.value); setPage(1); }}>
+          <Select value={role} onChange={(event) => { setRole(event.target.value); setPage(1); }} className="w-44">
             <option value="">All roles</option>
             {Object.entries(ROLE_LABELS).map(([value, label]) => (
               <option key={value} value={value}>{label}</option>
             ))}
           </Select>
+          <div className="relative">
+            <Building2 size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/50 pointer-events-none" />
+            <Select value={schoolId} onChange={(event) => { setSchoolId(event.target.value); setPage(1); }} className="pl-9 w-64">
+              <option value="">All schools</option>
+              {schools.map((item) => (
+                <option key={item._id || item.id} value={item._id || item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </Select>
+          </div>
           <label className="flex items-center gap-2 text-[13px] text-slate-text cursor-pointer select-none">
             <input
               type="checkbox"
@@ -264,7 +380,24 @@ export default function PlatformUsers() {
             />
             Include removed users
           </label>
+          {(q.trim() || role || schoolId || includeDeleted) && (
+            <button
+              onClick={() => { setQ(""); setRole(""); setSchoolId(""); setIncludeDeleted(false); setPage(1); }}
+              className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink bg-paper px-3 py-2 rounded-lg border border-black/[0.06] hover:bg-alert/10 hover:text-alert transition-colors"
+            >
+              <FilterX size={13} /> Reset filters
+            </button>
+          )}
         </div>
+
+        {!loading && (
+          <p className="text-[12px] text-slate-text/60 mb-3">
+            Showing {rows.length} of {total} user{total === 1 ? "" : "s"}
+            {schoolId ? ` · ${schoolNameOf(schoolId)}` : ""}
+            {role ? ` · ${(ROLE_LABELS[role] || role).toLowerCase()}` : ""}
+            {includeDeleted ? " · incl. removed" : ""}
+          </p>
+        )}
 
         {loading ? (
           <p className="text-[13px] text-slate-text/70 py-8 text-center">Loading users…</p>
@@ -367,6 +500,61 @@ export default function PlatformUsers() {
         )}
       </Card>
 
+      {createdCredential && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5">
+            <h3 className="font-display font-bold text-ink text-lg">Account created</h3>
+            <p className="text-[12.5px] text-slate-text/70 mt-1">
+              Share these sign-in details with {createdCredential.name} now. The password is
+              shown only at creation time and cannot be retrieved later.
+            </p>
+            <div className="mt-4 space-y-2.5 text-[13px]">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+                <div>
+                  <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Email</p>
+                  <p className="text-ink font-medium break-all">{createdCredential.email}</p>
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(createdCredential.email); toast("Email copied"); }}
+                  className="text-[12px] font-semibold text-info bg-info/10 px-2.5 py-1.5 rounded-lg hover:bg-info/20 shrink-0"
+                >
+                  Copy
+                </button>
+              </div>
+              {createdCredential.admissionId && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+                  <div>
+                    <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Admission ID</p>
+                    <p className="text-ink font-medium">{createdCredential.admissionId}</p>
+                  </div>
+                  <button
+                    onClick={() => { navigator.clipboard?.writeText(createdCredential.admissionId); toast("Admission ID copied"); }}
+                    className="text-[12px] font-semibold text-info bg-info/10 px-2.5 py-1.5 rounded-lg hover:bg-info/20 shrink-0"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+                <div>
+                  <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Password</p>
+                  <p className="text-ink font-medium break-all">{createdCredential.password}</p>
+                </div>
+                <button
+                  onClick={() => { navigator.clipboard?.writeText(createdCredential.password); toast("Password copied"); }}
+                  className="text-[12px] font-semibold text-info bg-info/10 px-2.5 py-1.5 rounded-lg hover:bg-info/20 shrink-0"
+                >
+                  Copy
+                </button>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end">
+              <Button variant="amber" onClick={() => setCreatedCredential(null)}>Done</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {selected && (
         <div className="fixed inset-0 z-40 bg-black/30 flex justify-end" onClick={() => setSelected(null)}>
           <div
@@ -393,6 +581,7 @@ export default function PlatformUsers() {
 
 function User360({ data, schoolName, onClose, onChanged, onEdit, onToggleActive, onRemove, onRestore, busy }) {
   const user = data.user;
+  const refField = refIdFieldFor(user.role);
   const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState({
     name: user.name,
@@ -453,10 +642,9 @@ function User360({ data, schoolName, onClose, onChanged, onEdit, onToggleActive,
             <span className="text-[11.5px] font-semibold text-slate-text/60 uppercase block mb-1">Designation</span>
             <Input value={draft.designation} onChange={(e) => setDraft({ ...draft, designation: e.target.value })} />
           </label>
-          <label className="block">
-            <span className="text-[11.5px] font-semibold text-slate-text/60 uppercase block mb-1">Ref ID</span>
-            <Input value={draft.refId} onChange={(e) => setDraft({ ...draft, refId: e.target.value })} />
-          </label>
+          {refField && (
+            <RefIdField field={refField} value={draft.refId} onChange={(e) => setDraft({ ...draft, refId: e.target.value })} />
+          )}
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-[11.5px] font-semibold text-slate-text/60 uppercase block mb-1">Class</span>
@@ -472,7 +660,7 @@ function User360({ data, schoolName, onClose, onChanged, onEdit, onToggleActive,
             <Button
               variant="amber"
               disabled={busy}
-              onClick={() => onEdit({ name: draft.name, phone: draft.phone || undefined, designation: draft.designation || undefined, class: draft.class || undefined, section: draft.section || undefined, refId: draft.refId || undefined }).then(saved)}
+              onClick={() => onEdit({ name: draft.name, phone: draft.phone || undefined, designation: draft.designation || undefined, class: draft.class || undefined, section: draft.section || undefined, refId: refField && !refField.disabled ? draft.refId || undefined : undefined }).then(saved)}
             >
               {busy ? "Saving…" : "Save changes"}
             </Button>

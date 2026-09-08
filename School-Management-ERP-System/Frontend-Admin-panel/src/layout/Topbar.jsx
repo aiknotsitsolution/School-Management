@@ -1,4 +1,3 @@
-import { useEffect, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
@@ -6,12 +5,10 @@ import {
   Search,
   Bell,
   ChevronDown,
-  Building2,
   LogOut,
 } from "lucide-react";
-import { api } from "../lib/api";
-import { selectActiveSchoolId, selectRole, selectSchool, selectUser } from "../store/selectors";
-import { logout, setActiveSchoolId } from "../store/authSlice";
+import { selectRole, selectUser } from "../store/selectors";
+import { logout } from "../store/authSlice";
 
 const roleLabel = (role, designation) => {
   if (role === "super_admin") return "Platform Owner";
@@ -41,27 +38,7 @@ export default function Topbar({ onMenuClick, title }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const user = useSelector(selectUser);
-  const school = useSelector(selectSchool);
   const role = useSelector(selectRole);
-  const activeSchoolId = useSelector(selectActiveSchoolId);
-  const [schools, setSchools] = useState([]);
-
-  const isSuperAdmin = role === "super_admin";
-  const scopedSchoolId = school?.id || activeSchoolId;
-
-  useEffect(() => {
-    if (!isSuperAdmin) return;
-    api.schools
-      .list()
-      .then(({ data }) => setSchools(data || []))
-      .catch(() => {});
-  }, [isSuperAdmin]);
-
-  const switchSchool = (id) => {
-    if (!id) return;
-    dispatch(setActiveSchoolId(id));
-    window.location.reload();
-  };
 
   const handleLogout = () => {
     dispatch(logout());
@@ -87,25 +64,6 @@ export default function Topbar({ onMenuClick, title }) {
             className="bg-transparent outline-none text-[13px] w-full placeholder:text-slate-text/50"
           />
         </div>
-
-        {isSuperAdmin && (
-          <div className="hidden sm:flex items-center gap-2 bg-paper rounded-lg px-3 py-1.5 border border-black/[0.06]">
-            <Building2 size={15} className="text-slate-text/60" />
-            <select
-              value={scopedSchoolId || ""}
-              onChange={(event) => switchSchool(event.target.value)}
-              className="bg-transparent outline-none text-[12.5px] font-medium text-ink max-w-[200px] truncate"
-              title="Active school (ascending tenant)"
-            >
-              <option value="">— No school —</option>
-              {schools.map((item) => (
-                <option key={item.id || item._id} value={item.id || item._id}>
-                  {item.name} ({item.code})
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
 
         <button className="relative w-9 h-9 rounded-full bg-paper border border-black/[0.06] flex items-center justify-center hover:bg-amber/10 transition-colors">
           <Bell size={17} className="text-ink" />

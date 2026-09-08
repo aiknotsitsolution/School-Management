@@ -43,11 +43,17 @@ export default function Login() {
           school: data.school,
         }),
       );
-      const target =
-        roleHome[data.user?.role] ||
-        (data.user?.role === "admin" || data.user?.role === "staff"
-          ? "/"
-          : "/student-dashboard");
+      const target = (() => {
+        if (data.user?.role === "staff" && data.user?.designation === "admission_counsellor") {
+          return "/admission-counsellor";
+        }
+        return (
+          roleHome[data.user?.role] ||
+          (data.user?.role === "admin" || data.user?.role === "staff"
+            ? "/"
+            : "/student-dashboard")
+        );
+      })();
       navigate(target, { replace: true });
     } catch (requestError) {
       setError(requestError.message);

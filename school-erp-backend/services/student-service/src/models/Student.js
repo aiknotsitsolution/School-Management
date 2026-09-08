@@ -8,8 +8,11 @@ const studentSchema = new mongoose.Schema(
     name: { type: String, required: true },
     dob: { type: Date },
     gender: { type: String, enum: ["Male", "Female", "Other"] },
-    class: { type: String, required: true },
-    section: { type: String, required: true },
+    // Required for a full profile but left optional so a platform-created
+    // shell/draft (see auth-service student linking) can exist until an
+    // Admission Counsellor completes it.
+    class: { type: String },
+    section: { type: String },
     rollNo: { type: String },
     bloodGroup: { type: String },
     address: { type: String },
@@ -26,10 +29,18 @@ const studentSchema = new mongoose.Schema(
       enum: ["Active", "Inactive", "Alumni", "Transferred"],
       default: "Active",
     },
+    // Profile-completion lifecycle, kept separate from lifecycle `status`.
+    profileStatus: {
+      type: String,
+      enum: ["incomplete", "complete"],
+      default: "incomplete",
+    },
+    profileCompletedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );
 
 studentSchema.index({ schoolId: 1, admissionNo: 1 }, { unique: true });
+studentSchema.index({ schoolId: 1, profileStatus: 1, createdAt: -1 });
 
 module.exports = mongoose.model("Student", studentSchema);

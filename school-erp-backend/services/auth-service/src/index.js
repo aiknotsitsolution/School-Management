@@ -16,7 +16,7 @@ const ensureBillingDefaults = require("./init/ensureBillingDefaults");
 const app = express();
 const PORT = process.env.AUTH_SERVICE_PORT || 5001;
 
-const connectDB = () => mongoose.connect(process.env.MONGODB_URI);
+const connectDB = () => mongoose.connect(process.env.AUTH_MONGODB_URI);
 
 const start = async () => {
   try {

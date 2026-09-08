@@ -76,7 +76,7 @@ export default function StudentDashboard() {
 
   useEffect(() => {
     Promise.allSettled([
-      api.students.list(),
+      api.students.me(),
       api.attendance.list(),
       api.marks.reportCard(),
       api.fees.invoices.list(),
@@ -91,7 +91,7 @@ export default function StudentDashboard() {
     ]).then((results) => {
       const value = (i) => (results[i].status === "fulfilled" ? results[i].value.data : null);
       setData({
-        profile: Array.isArray(value(0)) ? value(0)[0] || null : value(0) || null,
+        profile: value(0),
         attendance: value(1) || [],
         marks: value(2) || { subjects: [], percentage: 0, totalObtained: 0, totalMax: 0 },
         invoices: value(3) || [],

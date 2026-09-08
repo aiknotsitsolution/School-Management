@@ -18,6 +18,13 @@ router.get(
   requirePermission("students:read"),
   ctrl.bulkStats,
 );
+// "Current student" must be declared before the parameterized /:id route.
+router.get("/me", requirePermission("students:read"), ctrl.getMyStudent);
+router.get(
+  "/counsellor/stats",
+  requirePermission("students:read"),
+  ctrl.counsellorStats,
+);
 router.get("/", requirePermission("students:read"), ctrl.getStudents);
 router.get(
   "/:id",
@@ -26,6 +33,11 @@ router.get(
   ctrl.getStudentById,
 );
 router.put("/:id", requirePermission("students:write"), ctrl.updateStudent);
+router.post(
+  "/:id/complete-profile",
+  requirePermission("students:write"),
+  ctrl.completeProfile,
+);
 router.delete("/:id", requirePermission("students:write"), ctrl.deleteStudent);
 
 const upload = multer({
