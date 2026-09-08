@@ -1,4 +1,6 @@
 const Leave = require("../models/Leave");
+const Staff = require("../models/Staff");
+const { pushNotifications } = require("../utils/notify");
 
 const applyLeave = async (req, res) => {
   try {
@@ -33,9 +35,24 @@ const updateLeaveStatus = async (req, res) => {
       { new: true },
     );
     if (!leave) return res.status(404).json({ success: false, message: "Leave not found" });
-    res.json({ success: true, data: leave });
+
+    if (["Approved", "Rejected"].includes(status)) {
+      const staff = await Staff.findById(leave.staffId).select("userId employeeId name").lean();
+      if (staff?.userId) {
+        pushNotifications({
+          token: req.token,
+          schoolId: req.tenantId,
+          userIds: [staff.userId],
+          title: `Leave ${status}`,
+          message: `Your ${leave.leaveType || "leave"} request (${staff.employeeId || "—"}) was ${status.toLowerCase()}.`,
+          kind: "leave",
+          link: "/staff/leave",
+        });
+      }
+    }
+    return res.json({ success: true, data: leave });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
+    return res.status(400).json({ success: false, message: err.message });
   }
 };
 

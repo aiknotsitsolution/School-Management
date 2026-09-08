@@ -1,14 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSelector } from "react-redux";
 import { Printer, Download, Search } from "lucide-react";
 import { PageIntro, Card, Button, Select, Input } from "../components/UI";
 import { api } from "../lib/api";
-const school = {
-  name: "School Management ERP",
-  address: "",
-  affiliation: "",
-  session: String(new Date().getFullYear()),
-  logo: "S",
-};
+import { selectSchool } from "../store/selectors";
 
 function getGrade(pct) {
   if (pct >= 91) return "A1";
@@ -39,9 +34,15 @@ function formatClass(c) {
 }
 
 export default function ReportCard() {
+  const school = useSelector(selectSchool);
+  const schoolName = school?.name || "School Management ERP";
+  const schoolAddress = school?.address || "";
+  const schoolAffiliation = school?.affiliation || "";
+  const schoolLogo = (school?.shortName || "S").slice(0, 1).toUpperCase();
+  const session = school?.session || String(new Date().getFullYear());
   const [students, setStudents] = useState([]);
   const [selectedId, setSelectedId] = useState("");
-  const [term, setTerm] = useState("Term 2");
+  const [term, setTerm] = useState("Term 1");
   const [query, setQuery] = useState("");
   const [report, setReport] = useState(null);
   const [error, setError] = useState("");
@@ -70,8 +71,9 @@ export default function ReportCard() {
       setReport(null);
       return;
     }
+    const query = `studentId=${encodeURIComponent(selectedId)}&examName=${encodeURIComponent(term)}`;
     api.marks
-      .reportCard(`studentId=${encodeURIComponent(selectedId)}`)
+      .reportCard(query)
       .then(({ data }) => setReport(data))
       .catch((requestError) => setError(requestError.message));
   }, [selectedId, term]);
@@ -107,10 +109,11 @@ export default function ReportCard() {
   const total = results.reduce((a, r) => a + r.marks, 0);
   const maxTotal = results.reduce((a, r) => a + r.max, 0);
   const pct = maxTotal ? ((total / maxTotal) * 100).toFixed(1) : 0;
-  const overallGrade = getGrade(Number(pct));
-  const remark = getRemark(Number(pct));
+  const overallGrade = maxTotal ? getGrade(Number(pct)) : "—";
+  const remark = maxTotal ? getRemark(Number(pct)) : "";
+  const hasMarks = results.length > 0;
 
-  const attendancePct = student?.attendance ?? 90;
+  const attendancePct = student?.attendance;
 
   if (!student) {
     return (
@@ -190,22 +193,22 @@ export default function ReportCard() {
         <div className="p-6 sm:p-8 max-w-3xl mx-auto" id="report-card-print">
           {/* Header */}
           <div className="text-center border-b-2 border-ink pb-5 mb-6">
-            <p className="text-4xl leading-none">{school.logo}</p>
+            <p className="text-4xl leading-none">{schoolLogo}</p>
             <h2 className="font-display text-2xl font-bold text-ink mt-2 tracking-tight">
-              {school.name}
+              {schoolName}
             </h2>
             <p className="text-[12.5px] text-slate-text mt-1">
-              {school.address}
+              {schoolAddress}
             </p>
             <p className="text-[11.5px] text-slate-text/70">
-              {school.affiliation}
+              {schoolAffiliation}
             </p>
             <div className="mt-3 inline-flex items-center gap-2">
               <span className="font-display font-semibold text-amber-dark text-[14px]">
                 {term.toUpperCase()} — PROGRESS REPORT
               </span>
               <span className="text-[12.5px] text-slate-text/60">
-                · {school.session}
+                · {session}
               </span>
             </div>
           </div>
@@ -248,6 +251,16 @@ export default function ReportCard() {
           </div>
 
           {/* Marks Table */}
+          {!hasMarks && (
+            <div className="rounded-xl border border-black/[0.08] p-6 mb-6 text-center">
+              <p className="text-[13.5px] font-semibold text-ink">
+                No marks recorded for {term} yet
+              </p>
+              <p className="text-[12.5px] text-slate-text/60 mt-1">
+                Enter marks for this exam to generate a report card.
+              </p>
+            </div>
+          )}
           <div className="overflow-x-auto rounded-xl border border-black/[0.08] mb-6">
             <table className="w-full text-[13px]">
               <thead>
@@ -321,7 +334,7 @@ export default function ReportCard() {
                 Attendance
               </p>
               <p className="font-display text-2xl font-bold text-success mt-1">
-                {attendancePct}%
+                {attendancePct ? `${attendancePct}%` : "—"}
               </p>
             </div>
             <div className="rounded-xl border border-black/[0.08] p-3.5 text-center">
@@ -329,7 +342,7 @@ export default function ReportCard() {
                 Result
               </p>
               <p className="font-display text-lg font-bold text-success mt-1.5">
-                {Number(pct) >= 33 ? "PASS" : "FAIL"}
+                {hasMarks ? (Number(pct) >= 33 ? "PASS" : "FAIL") : "—"}
               </p>
             </div>
           </div>

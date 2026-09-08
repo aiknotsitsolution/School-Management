@@ -22,6 +22,7 @@ const verifyToken = async (req, res, next) => {
       }
     }
     req.user = decoded;
+    req.token = header.split(" ")[1];
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: "Invalid or expired token" });

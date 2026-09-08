@@ -54,15 +54,14 @@ const ROLE_PERMISSIONS = {
     "dashboard:view", "staff:read", "students:read", "attendance:read",
     "attendance:mark",
     "timetable:read", "homework:read", "homework:write", "exams:read",
-    "exams:write", "marks:read", "marks:write", "notices:read",
-    "leaves:apply", "leaves:approve", "reports:view",
+    "marks:read", "notices:read", "leaves:apply",
   ],
   staff: {},
   student: [
-    "dashboard:view", "students:read", "attendance:read", "homework:read",
+    "dashboard:view", "attendance:read", "homework:read",
     "exams:read", "marks:read", "fees:read", "library:read", "notices:read",
-    "events:read", "transport:read", "leaves:apply", "profile:read",
-    "profile:update",
+    "events:read", "transport:read", "hostel:read", "timetable:read",
+    "profile:read", "profile:update",
   ],
 };
 

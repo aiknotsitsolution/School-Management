@@ -21,7 +21,6 @@ import {
   StatCard,
   toast,
 } from "../components/UI";
-import useLocalStorage from "../hooks/useLocalStorage";
 import { api } from "../lib/api";
 const seed = [];
 const seedIssues = [];

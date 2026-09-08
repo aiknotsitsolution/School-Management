@@ -1,12 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/examController");
-const { verifyToken, resolveTenant, requireTenant, requirePermission } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStudentSchedule, scopeClassTeacher } = require("../middleware/auth");
 
 router.use(verifyToken, resolveTenant, requireTenant);
 
 router.post("/", requirePermission("exams:write"), ctrl.createExam);
-router.get("/", requirePermission("exams:read"), ctrl.getExams);
+router.get("/", requirePermission("exams:read"), scopeStudentSchedule(), scopeClassTeacher, ctrl.getExams);
 router.put("/:id", requirePermission("exams:write"), ctrl.updateExam);
 router.delete("/:id", requirePermission("exams:write"), ctrl.deleteExam);
 

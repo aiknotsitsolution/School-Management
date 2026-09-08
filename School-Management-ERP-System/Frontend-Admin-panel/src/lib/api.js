@@ -61,12 +61,15 @@ export const api = {
   login: (credentials) => request("/auth/login", json("POST", credentials)),
   me: () => request("/auth/me"),
   users: {
-    list: (schoolId) =>
-      request(`/auth/users${schoolId ? `?schoolId=${schoolId}` : ""}`),
+    list: (params = "") =>
+      request(`/auth/users${params ? `?${params}` : ""}`),
     create: (user) => request("/auth/users", json("POST", user)),
+    update: (id, user) => request(`/auth/users/${id}`, json("PATCH", user)),
     updateStatus: (id, isActive) =>
       request(`/auth/users/${id}/status`, json("PATCH", { isActive })),
     remove: (id) => request(`/auth/users/${id}`, { method: "DELETE" }),
+    restore: (id) =>
+      request(`/auth/users/${id}/restore`, { method: "POST" }),
   },
   schools: {
     list: () => request("/auth/schools"),
@@ -164,6 +167,18 @@ export const api = {
     update: (id, item) => request(`/admissions/${id}`, json("PUT", item)),
     remove: (id) => request(`/admissions/${id}`, { method: "DELETE" }),
   },
+  documents: {
+    list: (params = "") => request(`/documents${params ? `?${params}` : ""}`),
+    upload: (file, item) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      if (item?.title) formData.append("title", item.title);
+      if (item?.category) formData.append("category", item.category);
+      if (item?.studentId) formData.append("studentId", item.studentId);
+      return request("/documents", { method: "POST", body: formData });
+    },
+    remove: (id) => request(`/documents/${id}`, { method: "DELETE" }),
+  },
   attendance: {
     list: (params = "") => request(`/attendance${params ? `?${params}` : ""}`),
     mark: (records) => request("/attendance/mark", json("POST", { records })),
@@ -178,6 +193,16 @@ export const api = {
     create: (item) => request("/homework", json("POST", item)),
     update: (id, item) => request(`/homework/${id}`, json("PUT", item)),
     remove: (id) => request(`/homework/${id}`, { method: "DELETE" }),
+    submissions: {
+      myList: (params = "") =>
+        request(`/homework/submissions${params ? `?${params}` : ""}`),
+      submit: (homeworkId, item) =>
+        request(`/homework/submissions/${homeworkId}`, json("POST", item)),
+      review: (id, item) =>
+        request(`/homework/submissions/review/${id}`, json("PATCH", item)),
+      classList: (params = "") =>
+        request(`/homework/submissions/class/list${params ? `?${params}` : ""}`),
+    },
   },
   exams: {
     list: (params = "") => request(`/exams${params ? `?${params}` : ""}`),
@@ -189,6 +214,8 @@ export const api = {
     enter: (item) => request("/marks", json("POST", item)),
     reportCard: (params = "") =>
       request(`/marks/report-card${params ? `?${params}` : ""}`),
+    classSummary: (params = "") =>
+      request(`/marks/class-summary${params ? `?${params}` : ""}`),
   },
   fees: {
     structures: {
@@ -204,11 +231,24 @@ export const api = {
       list: (params = "") => request(`/payments${params ? `?${params}` : ""}`),
       create: (item) => request("/payments", json("POST", item)),
     },
+    orders: {
+      list: (params = "") => request(`/payments/orders${params ? `?${params}` : ""}`),
+      create: (item) => request("/payments/orders", json("POST", item)),
+      initiate: (id) => request(`/payments/orders/${id}/initiate`, { method: "POST" }),
+      cancel: (id) => request(`/payments/orders/${id}/cancel`, { method: "PATCH" }),
+    },
   },
   notices: {
     list: () => request("/notices"),
     create: (item) => request("/notices", json("POST", item)),
     remove: (id) => request(`/notices/${id}`, { method: "DELETE" }),
+  },
+  notifications: {
+    list: (params = "") =>
+      request(`/notifications${params ? `?${params}` : ""}`),
+    unreadCount: () => request("/notifications/unread-count"),
+    markRead: (id) => request(`/notifications/${id}/read`, json("PATCH", {})),
+    markAllRead: () => request("/notifications/read-all", json("PATCH", {})),
   },
   events: {
     list: () => request("/events"),
@@ -221,6 +261,11 @@ export const api = {
     create: (item) => request("/staff", json("POST", item)),
     update: (id, item) => request(`/staff/${id}`, json("PUT", item)),
     remove: (id) => request(`/staff/${id}`, { method: "DELETE" }),
+    attendance: {
+      list: (params = "") =>
+        request(`/staff/attendance${params ? `?${params}` : ""}`),
+      mark: (item) => request("/staff/attendance", json("POST", item)),
+    },
   },
   leaves: {
     list: () => request("/leaves"),

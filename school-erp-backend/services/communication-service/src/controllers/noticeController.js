@@ -1,8 +1,47 @@
 const Notice = require("../models/Notice");
+const Notification = require("../models/Notification");
+const { getUserModel } = require("../models/userLite");
+
+const AUDIENCE_ROLES = {
+  school_admin: ["school_admin"],
+  class_teacher: ["class_teacher"],
+  staff: ["staff"],
+  student: ["student"],
+  all: ["school_admin", "class_teacher", "staff", "student"],
+};
+
+// After a notice is published, fan out an inbox notification to the matching
+// audience. Failures are logged but never block notice creation.
+const fanOutNotice = async ({ schoolId, title, audience = [] }) => {
+  try {
+    const roles = [...new Set(audience.flatMap((a) => AUDIENCE_ROLES[a] || []))];
+    if (roles.length === 0) return;
+    const User = getUserModel();
+    const userIds = await User.find(
+      { schoolId, isActive: true, role: { $in: roles } },
+      { _id: 1 }
+    ).lean();
+    const all = userIds.map((u) => String(u._id));
+    if (all.length === 0) return;
+    await Notification.insertMany(
+      all.map((userId) => ({
+        schoolId,
+        userId,
+        title: "New Notice",
+        message: title,
+        kind: "notice",
+        link: "/notice-board",
+      }))
+    );
+  } catch (err) {
+    console.error("[notice fanout skipped]", err.message);
+  }
+};
 
 const createNotice = async (req, res) => {
   try {
     const notice = await Notice.create({ ...req.body, schoolId: req.tenantId, postedBy: req.user.name });
+    fanOutNotice({ schoolId: req.tenantId, title: notice.title, audience: notice.audience });
     res.status(201).json({ success: true, data: notice });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });

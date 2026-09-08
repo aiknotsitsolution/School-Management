@@ -1,11 +1,12 @@
 const express = require("express");
 const router = express.Router();
 const ctrl = require("../controllers/examController");
-const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStudentQuery } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStudentQuery, scopeClassTeacher } = require("../middleware/auth");
 
 router.use(verifyToken, resolveTenant, requireTenant);
 
 router.post("/", requirePermission("marks:write"), ctrl.enterMarks);
-router.get("/report-card", requirePermission("marks:read"), scopeStudentQuery, ctrl.getReportCard);
+router.get("/class-summary", requirePermission("marks:read"), scopeClassTeacher, ctrl.getClassSummary);
+router.get("/report-card", requirePermission("marks:read"), scopeStudentQuery, scopeClassTeacher, ctrl.getReportCard);
 
 module.exports = router;

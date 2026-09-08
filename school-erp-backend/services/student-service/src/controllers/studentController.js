@@ -1,5 +1,6 @@
+const mongoose = require("mongoose");
 const Student = require("../models/Student");
-const getImageKit = require("../config/imagekit");
+const imagekit = require("../config/imagekit");
 
 // Fields that must be filled before a profile is considered complete.
 // class/section/name are schema-level; these are the counsellor-fillable ones.
@@ -28,7 +29,7 @@ const uploadStudentPhoto = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "Photo file is required" });
-    const imagekit = getImageKit();
+    const imagekit = require("../config/imagekit");
     const uploaded = await imagekit.upload({
       file: req.file.buffer.toString("base64"),
       fileName: `student-${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "-")}`,
@@ -181,6 +182,10 @@ const getMyStudent = async (req, res) => {
 const counsellorStats = async (req, res) => {
   try {
     const base = { schoolId: req.tenantId };
+    if (req.teacherScope) {
+      base.class = req.teacherScope.class;
+      if (req.teacherScope.section) base.section = req.teacherScope.section;
+    }
     const [total, incomplete, complete] = await Promise.all([
       Student.countDocuments(base),
       Student.countDocuments({ ...base, profileStatus: "incomplete" }),
@@ -203,6 +208,7 @@ const getStudentById = async (req, res) => {
     const student = await Student.findOne({
       _id: req.params.id,
       schoolId: req.tenantId,
+      ...(req.teacherScope || {}),
     });
     if (!student)
       return res
@@ -310,13 +316,20 @@ const deleteStudent = async (req, res) => {
 
 const bulkStats = async (req, res) => {
   try {
-    const total = await Student.countDocuments({ schoolId: req.tenantId });
-    const byClass = await Student.aggregate([
-      { $match: { schoolId: req.tenantId } },
+    const base = { schoolId: req.tenantId };
+    if (req.teacherScope) {
+      base.class = req.teacherScope.class;
+      if (req.teacherScope.section) base.section = req.teacherScope.section;
+    }
+    const total = await Student.countDocuments(base);
+    // aggregate does not auto-cast $match values, so cast _id fields explicitly.
+    const pipeline = [
+      { $match: { ...base, schoolId: new mongoose.Types.ObjectId(base.schoolId) } },
       { $group: { _id: "$class", count: { $sum: 1 } } },
-    ]);
+    ];
+    const byClass = await Student.aggregate(pipeline);
     const active = await Student.countDocuments({
-      schoolId: req.tenantId,
+      ...base,
       status: "Active",
     });
     res.json({ success: true, data: { total, active, byClass } });

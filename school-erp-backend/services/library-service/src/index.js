@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 const dns = require("node:dns");
-dns.setServers(["8.8.8.8", "1.1.1.1"]);
+dns.setServers(["8.8.8.8", "1.1.1.1", "0.0.0.0"]);
 
 const express = require("express");
 const cors = require("cors");
@@ -22,10 +22,12 @@ app.use(express.json());
 
 mongoose
   .connect(process.env.LIBRARY_MONGODB_URI)
-  .then(() => {
+  .then(() =>
+  {
     console.log("✅ MongoDB Connected Successfully");
   })
-  .catch((err) => {
+  .catch((err) =>
+  {
     console.error("❌ MongoDB Connection Error:", err);
     process.exit(1);
   });
@@ -36,7 +38,8 @@ app.get("/health", (req, res) =>
 app.use("/api/library/books", bookRoutes);
 app.use("/api/library/issues", issueRoutes);
 
-app.use((err, req, res, next) => {
+app.use((err, req, res, next) =>
+{
   console.error(err.stack);
   res.status(500).json({ success: false, message: "Internal server error" });
 });

@@ -11,9 +11,14 @@ const createRoom = async (req, res) => {
 
 const getRooms = async (req, res) => {
   try {
-    const { studentId } = req.query;
     const filter = { schoolId: req.tenantId };
-    if (studentId) filter.occupants = studentId;
+    if (req.user.role === "student") {
+      // Students may only see rooms they are allotted in; the admission number
+      // is always taken from the token, never from a query parameter.
+      filter.occupants = req.user.refId;
+    } else if (req.query.studentId) {
+      filter.occupants = req.query.studentId;
+    }
     const data = await Hostel.find(filter);
     res.json({ success: true, count: data.length, data });
   } catch (err) {

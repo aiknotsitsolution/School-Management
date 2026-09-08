@@ -4,7 +4,6 @@ import {
   LayoutDashboard,
   CalendarCheck,
   UserPlus,
-  MessageSquare,
   Bell,
   BookOpenCheck,
   PartyPopper,
@@ -26,9 +25,13 @@ import {
   UserCog,
   Building2,
   UserRoundCog,
+  UserRound,
+  FileText,
 } from "lucide-react";
 import { selectSchool, selectUser } from "../store/selectors";
 import { canSeeNavigation } from "../lib/scope";
+import { resolvePersona, isPersonaStaff } from "../lib/persona";
+import { PERSONA_NAV } from "../lib/personaNav";
 
 const groups = [
   {
@@ -135,13 +138,97 @@ const groups = [
         to: "/teacher-dashboard",
         icon: UserCog,
         label: "Class Teacher",
-        roles: ["school_admin", "class_teacher"],
+        roles: ["class_teacher"],
       },
       {
         to: "/student-dashboard",
         icon: GraduationCap,
         label: "Student / Parent",
-        roles: ["school_admin", "student"],
+        roles: ["student"],
+      },
+    ],
+  },
+  {
+    label: "Staff Tools",
+    items: [
+      {
+        to: "/staff/my-attendance",
+        icon: CalendarCheck,
+        label: "My Attendance",
+        roles: ["staff"],
+      },
+      {
+        to: "/notifications",
+        icon: Bell,
+        label: "Notifications",
+        roles: ["staff"],
+      },
+      {
+        to: "/staff/profile",
+        icon: UserRound,
+        label: "My Profile",
+        roles: ["staff"],
+      },
+    ],
+  },
+  {
+    label: "My Teaching",
+    teacherOnly: true,
+    items: [
+      {
+        to: "/teacher-dashboard",
+        icon: LayoutDashboard,
+        label: "Dashboard",
+        end: true,
+        roles: ["class_teacher"],
+      },
+      {
+        to: "/teacher/my-class",
+        icon: Users,
+        label: "My Class",
+        roles: ["class_teacher"],
+      },
+      {
+        to: "/teacher/attendance",
+        icon: CalendarCheck,
+        label: "Attendance",
+        roles: ["class_teacher"],
+      },
+      {
+        to: "/teacher/timetable",
+        icon: CalendarDays,
+        label: "Timetable",
+        roles: ["class_teacher"],
+      },
+      {
+        to: "/teacher/homework",
+        icon: BookOpenCheck,
+        label: "Homework & Assignments",
+        roles: ["class_teacher"],
+      },
+      {
+        to: "/teacher/exams",
+        icon: ClipboardList,
+        label: "Examinations",
+        roles: ["class_teacher"],
+      },
+      {
+        to: "/teacher/performance",
+        icon: BarChart3,
+        label: "Class Performance",
+        roles: ["class_teacher"],
+      },
+      {
+        to: "/teacher/notices",
+        icon: Bell,
+        label: "Notices",
+        roles: ["class_teacher"],
+      },
+      {
+        to: "/teacher/profile",
+        icon: UserCog,
+        label: "My Profile",
+        roles: ["class_teacher"],
       },
     ],
   },
@@ -206,12 +293,6 @@ const groups = [
         icon: UserPlus,
         label: "Admission Enquiry",
         perm: "admissions:read",
-      },
-      {
-        to: "/communication",
-        icon: MessageSquare,
-        label: "Communication",
-        roles: ["school_admin", "class_teacher", "staff"],
       },
       {
         to: "/notice-board",
@@ -308,12 +389,122 @@ const groups = [
   },
 ];
 
+const STUDENT_NAV = [
+  {
+    label: "My Academics",
+    items: [
+      {
+        to: "/student-dashboard",
+        icon: LayoutDashboard,
+        label: "Dashboard",
+        end: true,
+        roles: ["student"],
+      },
+      {
+        to: "/student/profile",
+        icon: UserRound,
+        label: "My Profile",
+        roles: ["student"],
+      },
+      {
+        to: "/student/attendance",
+        icon: CalendarCheck,
+        label: "My Attendance",
+        roles: ["student"],
+      },
+      {
+        to: "/student/timetable",
+        icon: CalendarDays,
+        label: "My Timetable",
+        roles: ["student"],
+      },
+    ],
+  },
+  {
+    label: "Learning",
+    items: [
+      {
+        to: "/student/homework",
+        icon: BookOpenCheck,
+        label: "Homework & Assignments",
+        roles: ["student"],
+      },
+      {
+        to: "/student/exams",
+        icon: ClipboardList,
+        label: "Examinations",
+        roles: ["student"],
+      },
+      {
+        to: "/student/results",
+        icon: BarChart3,
+        label: "Results & Report Card",
+        roles: ["student"],
+      },
+    ],
+  },
+  {
+    label: "School Services",
+    items: [
+      {
+        to: "/student/fees",
+        icon: Wallet,
+        label: "Fees & Payments",
+        roles: ["student"],
+      },
+      {
+        to: "/student/notices",
+        icon: Bell,
+        label: "Notices",
+        roles: ["student"],
+      },
+      {
+        to: "/student/library",
+        icon: BookOpen,
+        label: "My Library",
+        roles: ["student"],
+      },
+      {
+        to: "/student/transport",
+        icon: Bus,
+        label: "My Transport",
+        roles: ["student"],
+      },
+      {
+        to: "/student/documents",
+        icon: FileText,
+        label: "My Documents",
+        roles: ["student"],
+      },
+      {
+        to: "/student/hostel",
+        icon: BedDouble,
+        label: "My Hostel",
+        roles: ["student"],
+      },
+      {
+        to: "/student/events",
+        icon: PartyPopper,
+        label: "Events",
+        roles: ["student"],
+      },
+    ],
+  },
+];
+
 export default function Sidebar({ open, onClose }) {
   const school = useSelector(selectSchool);
   const user = useSelector(selectUser);
   const role = user?.role || "school_admin";
 
   const canSee = (item) => canSeeNavigation(item, user, role);
+
+  const persona = isPersonaStaff(user) ? resolvePersona(user) : null;
+  const navGroups = persona
+    ? PERSONA_NAV[persona.key] || []
+    : role === "student"
+      ? STUDENT_NAV
+      : groups;
 
   const brandName = school?.shortName || "School ERP";
   const brandSession = school?.session
@@ -356,8 +547,10 @@ export default function Sidebar({ open, onClose }) {
         </div>
 
         <nav className="flex-1 overflow-y-auto scrollbar-thin py-4 px-3">
-          {groups.map((group) => {
-            const items = group.items.filter(canSee);
+          {navGroups.map((group) => {
+            if (!persona && role === "class_teacher" && !group.teacherOnly)
+              return null;
+            const items = persona ? group.items : group.items.filter(canSee);
             if (items.length === 0) return null;
             return (
               <div key={group.label} className="mb-5">

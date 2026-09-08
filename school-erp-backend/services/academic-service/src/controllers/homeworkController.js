@@ -26,7 +26,7 @@ const getHomework = async (req, res) => {
 const updateHomework = async (req, res) => {
   try {
     const hw = await Homework.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+      { _id: req.params.id, schoolId: req.tenantId, ...(req.teacherScope || {}) },
       req.body,
       { new: true },
     );
@@ -39,7 +39,7 @@ const updateHomework = async (req, res) => {
 
 const deleteHomework = async (req, res) => {
   try {
-    const hw = await Homework.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const hw = await Homework.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId, ...(req.teacherScope || {}) });
     if (!hw) return res.status(404).json({ success: false, message: "Homework not found" });
     res.json({ success: true, message: "Homework deleted" });
   } catch (err) {

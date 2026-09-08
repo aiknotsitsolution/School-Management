@@ -9,7 +9,9 @@ import {
   Save,
   ChevronRight,
   Timer,
+  ArrowRight,
 } from "lucide-react";
+import { Link } from "react-router-dom";
 import {
   StatCard,
   Card,
@@ -19,28 +21,19 @@ import {
   toast,
 } from "../components/UI";
 import { api } from "../lib/api";
-import { selectUser } from "../store/selectors";
+import { selectUser, selectSchool } from "../store/selectors";
 import { useSelector } from "react-redux";
+import { todayISO, fmtDate } from "./teacher/useTeacherContext";
 
 const WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const STATUSES = ["Present", "Absent", "Leave"];
+const STATUSES = ["Present", "Absent", "Leave", "Half Day"];
 const STATUS_STYLE = {
   Present: "bg-success/12 text-success",
   Absent: "bg-alert/12 text-alert",
   Leave: "bg-info/12 text-info",
   "Half Day": "bg-amber/15 text-amber-dark",
 };
-
-function fmtShort(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-IN", { day: "numeric", month: "short" });
-}
-
-function todayStr() {
-  const t = new Date();
-  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(t.getDate()).padStart(2, "0")}`;
-}
 
 function greeting() {
   const h = new Date().getHours();
@@ -51,8 +44,10 @@ function greeting() {
 
 export default function ClassTeacherDashboard() {
   const user = useSelector(selectUser);
-  const [classes, setClasses] = useState([]);
-  const [activeClass, setActiveClass] = useState(null);
+  const school = useSelector(selectSchool);
+  const cls = user?.class || null;
+  const section = user?.section || null;
+
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState([]);
   const [markMap, setMarkMap] = useState({});
@@ -60,104 +55,115 @@ export default function ClassTeacherDashboard() {
   const [exams, setExams] = useState([]);
   const [timetable, setTimetable] = useState([]);
   const [notices, setNotices] = useState([]);
+  const [staff, setStaff] = useState(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    Promise.allSettled([api.staff.list(), api.notices.list()]).then((res) => {
-      const staff = Array.isArray(res[0].value?.data)
-        ? res[0].value.data[0] || null
-        : res[0].value?.data || null;
-      setNotices(Array.isArray(res[1].value?.data) ? res[1].value.data : []);
-      const assigned = staff?.classesAssigned || [];
-      if (!assigned.length) {
-        setLoading(false);
-        return;
-      }
-      setClasses(assigned);
-      setActiveClass(assigned[0]);
-    });
-  }, []);
-
-  const activeKey = activeClass
-    ? `${activeClass.class}-${activeClass.section}`
-    : null;
+  const q = useMemo(
+    () =>
+      cls
+        ? `class=${encodeURIComponent(cls)}${section ? `&section=${encodeURIComponent(section)}` : ""}`
+        : "",
+    [cls, section],
+  );
 
   useEffect(() => {
-    if (!activeKey) return;
-    const [targetClass, targetSection] = activeKey.split("-");
-    setLoading(true);
-    const q = `class=${encodeURIComponent(targetClass)}&section=${encodeURIComponent(targetSection)}`;
     Promise.allSettled([
-      api.students.list(q),
-      api.attendance.list(q),
-      api.homework.list(q),
-      api.exams.list(q),
-      api.timetable.list(q),
-    ]).then((results) => {
-      const value = (i) => (results[i].status === "fulfilled" ? results[i].value.data : null);
-      setStudents(value(0) || []);
-      setAttendance(value(1) || []);
-      setHomework(value(2) || []);
-      setExams(value(3) || []);
-      setTimetable(value(4) || []);
+      api.staff.list(),
+      api.notices.list(),
+      cls ? api.students.list(`${q}&limit=500`) : Promise.resolve({ data: [] }),
+      cls ? api.attendance.list(q) : Promise.resolve({ data: [] }),
+      cls ? api.homework.list(q) : Promise.resolve({ data: [] }),
+      cls ? api.exams.list(q) : Promise.resolve({ data: [] }),
+      cls ? api.timetable.list(q) : Promise.resolve({ data: [] }),
+    ]).then((res) => {
+      const val = (i, key = "data") =>
+        res[i].status === "fulfilled" ? res[i].value?.[key] : null;
+      const staffList = Array.isArray(val(0)) ? val(0) : [];
+      setStaff(staffList[0] || null);
+      setNotices(Array.isArray(val(1)) ? val(1) : []);
+      setStudents(Array.isArray(val(2)) ? val(2) : []);
+      setAttendance(Array.isArray(val(3)) ? val(3) : []);
+      setHomework(Array.isArray(val(4)) ? val(4) : []);
+      setExams(Array.isArray(val(5)) ? val(5) : []);
+      setTimetable(Array.isArray(val(6)) ? val(6) : []);
       setLoading(false);
     });
-  }, [activeKey]);
-
-  const studentsArr = useMemo(() => Array.isArray(students) ? students : [], [students]);
+  }, [cls, q]);
 
   const todayAttendance = useMemo(() => {
     const byStudent = {};
     attendance.forEach((a) => {
       const d = new Date(a.date);
-      const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-      if (dStr === todayStr()) byStudent[a.studentId] = a.status;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      if (key === todayISO()) byStudent[a.studentId] = a.status;
     });
     return byStudent;
   }, [attendance]);
 
   useEffect(() => {
-    if (todayAttendance) {
-      const map = {};
-      studentsArr.forEach((s) => { map[s._id] = todayAttendance[s.admissionNo] || "Present"; });
-      setMarkMap(map);
-    }
-  }, [todayAttendance, studentsArr]);
+    const map = {};
+    students.forEach((s) => {
+      if (todayAttendance[s.admissionNo]) map[s._id] = todayAttendance[s.admissionNo];
+    });
+    setMarkMap(map);
+  }, [todayAttendance, students]);
 
-  if (!loading && !activeClass) {
+  if (!loading && !cls) {
     return (
       <div className="rounded-2xl bg-paper p-10 text-center">
-        <p className="font-display text-xl font-bold text-ink mb-1">No class assigned yet</p>
-        <p className="text-[13px] text-slate-text">Contact the school admin to link your class.</p>
+        <p className="font-display text-xl font-bold text-ink mb-1">
+          No class assigned yet
+        </p>
+        <p className="text-[13px] text-slate-text">
+          Contact the school admin to link your class and section.
+        </p>
       </div>
     );
   }
 
-  const presentCount = Object.values(markMap).filter((s) => s === "Present").length;
-  const absentCount = studentsArr.length - presentCount;
+  const marked = Object.values(markMap).filter(Boolean);
+  const presentCount = marked.filter((s) => s === "Present").length;
+  const absentCount = marked.filter((s) => s === "Absent").length;
+  const leaveCount = marked.filter((s) => s === "Leave" || s === "Half Day").length;
+  const unmarkedCount = students.length - marked.length;
+
   const todayPeriods = (timetable.find((t) => t.day === WEEK[new Date().getDay()])?.periods || []).filter((p) => p.subject !== "Break");
   const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
   const upcomingExams = exams.filter((e) => new Date(e.date) >= new Date()).sort((a, b) => new Date(a.date) - new Date(b.date));
-  const overdueHomework = homework.filter((h) => new Date(h.dueDate) < new Date());
   const openHomework = homework.filter((h) => new Date(h.dueDate) >= new Date());
+  const overdueHomework = homework.filter((h) => new Date(h.dueDate) < new Date());
+  const attendanceRate = attendance.length
+    ? Math.round((attendance.filter((r) => r.status === "Present").length / attendance.length) * 100)
+    : null;
 
-  const setStatus = (studentId, status) => setMarkMap((m) => ({ ...m, [studentId]: status }));
+  const setStatus = (id, status) =>
+    setMarkMap((m) =>
+      m[id] === status ? { ...m, [id]: undefined } : { ...m, [id]: status },
+    );
 
   const saveAttendance = async () => {
-    const records = studentsArr.map((s) => ({
-      studentId: s.admissionNo,
-      class: activeClass.class,
-      section: activeClass.section,
-      date: todayStr(),
-      status: markMap[s._id] || "Present",
-    }));
+    const records = students
+      .filter((s) => markMap[s._id])
+      .map((s) => ({
+        studentId: s.admissionNo,
+        class: cls,
+        section,
+        date: todayISO(),
+        status: markMap[s._id],
+      }));
+    if (!records.length) {
+      toast("Select at least one status before saving", "amber");
+      return;
+    }
     setSaving(true);
     try {
       await api.attendance.mark(records);
-      toast.success(`Attendance saved for ${records.length} student(s)`);
+      toast(`Attendance saved for ${records.length} student(s)`);
+      const { data: fresh } = await api.attendance.list(q);
+      setAttendance(Array.isArray(fresh) ? fresh : []);
     } catch (e) {
-      toast.error(e.message);
+      toast(e.message, "error");
     } finally {
       setSaving(false);
     }
@@ -165,36 +171,22 @@ export default function ClassTeacherDashboard() {
 
   return (
     <div className="space-y-6">
-      {/* Class switcher */}
-      {classes.length > 1 && (
-        <div className="flex flex-wrap gap-2">
-          {classes.map((c) => (
-            <Button
-              key={`${c.class}-${c.section}`}
-              variant={activeClass?.class === c.class && activeClass?.section === c.section ? "primary" : "outline"}
-              onClick={() => setActiveClass(c)}
-            >
-              Class {c.class}-{c.section}
-            </Button>
-          ))}
-        </div>
-      )}
-
-      {/* Hero */}
       <div className="relative rounded-2xl overflow-hidden bg-ink">
         <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink-light to-ink opacity-90" />
         <div className="relative z-10 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Avatar name={user?.name || "Teacher"} size={54} />
+            <Avatar src={staff?.photoUrl} name={user?.name || "Teacher"} size={54} />
             <div>
               <p className="text-amber font-semibold text-[12.5px]">
                 {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
               </p>
               <h2 className="font-display text-2xl sm:text-[26px] font-bold text-white mt-0.5">
-                {greeting()}, {(user?.name || "Teacher").split(" ")[0]} 👋
+                {greeting()}, {(user?.name || "Teacher").split(" ")[0]}
               </h2>
               <p className="text-white/60 text-[13.5px] mt-1">
-                Class Teacher · Class {activeClass?.class}-{activeClass?.section} · {studentsArr.length} students
+                Class Teacher · Class {cls}
+                {section ? `-${section}` : ""} · {students.length} students
+                {staff?.designation ? ` · ${staff.designation}` : ""}
               </p>
             </div>
           </div>
@@ -211,82 +203,107 @@ export default function ClassTeacherDashboard() {
         </div>
       </div>
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Users} label="Students" value={String(studentsArr.length)} sub={`Class ${activeClass?.class}-${activeClass?.section}`} accent="info" />
-        <StatCard icon={CalendarCheck} label="Present" value={String(presentCount)} sub={`${absentCount} absent`} accent="success" />
-        <StatCard icon={ClipboardList} label="Upcoming Exams" value={String(upcomingExams.length)} sub={upcomingExams.map((e) => e.subject).slice(0, 2).join(" · ") || "No exams"} accent="alert" />
-        <StatCard icon={BookOpenCheck} label="Homework Done" value={String(homework.length - overdueHomework.length)} sub={`${overdueHomework.length} overdue`} accent="amber" />
+        <StatCard
+          icon={Users}
+          label="Students"
+          value={String(students.length)}
+          sub={`Class ${cls}${section ? `-${section}` : ""}`}
+          accent="info"
+        />
+        <StatCard
+          icon={CalendarCheck}
+          label="Present Today"
+          value={String(presentCount)}
+          sub={`${absentCount} absent · ${unmarkedCount} unmarked`}
+          accent="success"
+        />
+        <StatCard
+          icon={ClipboardList}
+          label="Upcoming Exams"
+          value={String(upcomingExams.length)}
+          sub={upcomingExams.map((e) => e.subject).slice(0, 2).join(" · ") || "No exams"}
+          accent="alert"
+        />
+        <StatCard
+          icon={BookOpenCheck}
+          label="Open Homework"
+          value={String(openHomework.length)}
+          sub={`${overdueHomework.length} overdue`}
+          accent="amber"
+        />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
-        {/* Mark attendance */}
         <Card
           title="Mark Attendance · Today"
           className="lg:col-span-2"
           action={
-            <span className="text-[11px] font-semibold text-slate-text/60">{todayStr()}</span>
+            <span className="text-[11px] font-semibold text-slate-text/60">{todayISO()}</span>
           }
         >
-          <div className="overflow-x-auto -mx-5">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="text-left text-[11px] text-slate-text/50 uppercase tracking-wide">
-                  <th className="px-5 py-2 font-semibold">Student</th>
-                  {STATUSES.map((s) => (
-                    <th key={s} className="px-3 py-2 font-semibold text-center">{s}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {studentsArr.map((s) => (
-                  <tr key={s._id} className="border-t border-black/[0.06]">
-                    <td className="px-5 py-2.5">
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <Avatar name={s.name} size={30} />
-                        <div className="min-w-0">
-                          <p className="font-semibold text-ink truncate">{s.name}</p>
-                          <p className="text-[11px] text-slate-text/60">{s.admissionNo}</p>
-                        </div>
-                      </div>
-                    </td>
-                    {STATUSES.map((st) => (
-                      <td key={st} className="px-3 py-2.5 text-center">
-                        <button
-                          type="button"
-                          onClick={() => setStatus(s._id, st)}
-                          className={`text-[11.5px] font-semibold rounded-full px-2.5 py-1 min-w-[64px] transition-colors ${markMap[s._id] === st ? STATUS_STYLE[st] : "text-slate-400 hover:text-slate-500"}`}
-                        >
-                          {st}
-                        </button>
-                      </td>
+          {loading ? (
+            <p className="text-[13px] text-slate-text py-8 text-center">Loading students…</p>
+          ) : students.length === 0 ? (
+            <p className="text-[13px] text-slate-text py-8 text-center">No students found in this class.</p>
+          ) : (
+            <>
+              <div className="overflow-x-auto -mx-5 max-h-80">
+                <table className="w-full text-[13px]">
+                  <thead className="sticky top-0 bg-white">
+                    <tr className="text-left text-[11px] text-slate-text/50 uppercase tracking-wide">
+                      <th className="px-5 py-2 font-semibold">Student</th>
+                      {STATUSES.map((s) => (
+                        <th key={s} className="px-3 py-2 font-semibold text-center">{s}</th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {students.map((s) => (
+                      <tr key={s._id} className="border-t border-black/[0.06]">
+                        <td className="px-5 py-2.5">
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <Avatar src={s.photoUrl} name={s.name} size={30} />
+                            <div className="min-w-0">
+                              <p className="font-semibold text-ink truncate">{s.name}</p>
+                              <p className="text-[11px] text-slate-text/60">{s.admissionNo}</p>
+                            </div>
+                          </div>
+                        </td>
+                        {STATUSES.map((st) => (
+                          <td key={st} className="px-3 py-2.5 text-center">
+                            <button
+                              type="button"
+                              onClick={() => setStatus(s._id, st)}
+                              className={`text-[11.5px] font-semibold rounded-full px-2.5 py-1 min-w-[64px] transition-colors ${markMap[s._id] === st ? STATUS_STYLE[st] : "text-slate-400 hover:text-slate-500"}`}
+                            >
+                              {st}
+                            </button>
+                          </td>
+                        ))}
+                      </tr>
                     ))}
-                  </tr>
-                ))}
-                {studentsArr.length === 0 && (
-                  <tr>
-                    <td colSpan={4} className="px-5 py-8 text-center text-slate-text">
-                      No students found in this class.
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          {studentsArr.length > 0 && (
-            <div className="flex items-center justify-end gap-3 mt-4 pt-4 border-t border-black/[0.06]">
-              <span className="text-[12px] text-slate-text/60">Defaults to Present if unchecked</span>
-              <Button onClick={saveAttendance} disabled={saving}>
-                <Save size={15} /> {saving ? "Saving…" : "Save Attendance"}
-              </Button>
-            </div>
+                  </tbody>
+                </table>
+              </div>
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-black/[0.06]">
+                <span className="text-[12px] text-slate-text/60">
+                  Tap a status to set it, tap again to clear. {unmarkedCount} unmarked.
+                </span>
+                <Button onClick={saveAttendance} disabled={saving}>
+                  <Save size={15} /> {saving ? "Saving…" : "Save Attendance"}
+                </Button>
+              </div>
+            </>
           )}
         </Card>
 
-        {/* Timetable today */}
-        <Card title="Today's Timetable" action={<CalendarDays size={16} className="text-slate-text/50" />}>
+        <Card
+          title="Today's Timetable"
+          action={<CalendarDays size={16} className="text-slate-text/50" />}
+        >
           {isWeekend ? (
-            <p className="text-[13px] text-slate-text py-8 text-center">Weekend — no classes. 🎉</p>
+            <p className="text-[13px] text-slate-text py-8 text-center">Weekend — no classes.</p>
           ) : todayPeriods.length ? (
             <div className="space-y-2">
               {todayPeriods.map((p, i) => (
@@ -300,6 +317,12 @@ export default function ClassTeacherDashboard() {
                   </div>
                 </div>
               ))}
+              <Link
+                to="/teacher/timetable"
+                className="flex items-center gap-1 text-[12px] font-semibold text-info pt-1"
+              >
+                Full timetable <ArrowRight size={13} />
+              </Link>
             </div>
           ) : (
             <p className="text-[13px] text-slate-text py-8 text-center">No timetable published yet.</p>
@@ -308,9 +331,18 @@ export default function ClassTeacherDashboard() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
-        {/* Homework */}
-        <Card title="Homework" className="lg:col-span-2" action={<a href="/homework" className="text-[12px] font-semibold text-info flex items-center gap-1">Manage <ChevronRight size={13} /></a>}>
-          {homework.length === 0 ? (
+        <Card
+          title="Homework & Assignments"
+          className="lg:col-span-2"
+          action={
+            <Link to="/teacher/homework" className="text-[12px] font-semibold text-info flex items-center gap-1">
+              Manage <ChevronRight size={13} />
+            </Link>
+          }
+        >
+          {loading ? (
+            <p className="text-[13px] text-slate-text py-8 text-center">Loading…</p>
+          ) : homework.length === 0 ? (
             <p className="text-[13px] text-slate-text py-8 text-center">Nothing assigned yet.</p>
           ) : (
             <div className="space-y-2.5">
@@ -318,7 +350,7 @@ export default function ClassTeacherDashboard() {
                 <div key={hw._id} className="flex items-center justify-between gap-3 pb-2.5 border-b border-black/[0.06] last:border-0 last:pb-0">
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-ink truncate">{hw.title}</p>
-                    <p className="text-[11.5px] text-slate-text/60">Need by {fmtShort(hw.dueDate)}</p>
+                    <p className="text-[11.5px] text-slate-text/60">Due {fmtDate(hw.dueDate)}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Pill tone="amber">{hw.subject}</Pill>
@@ -330,7 +362,14 @@ export default function ClassTeacherDashboard() {
           )}
         </Card>
 
-        <Card title="Upcoming Exams" action={<ClipboardList size={16} className="text-slate-text/50" />}>
+        <Card
+          title="Upcoming Exams"
+          action={
+            <Link to="/teacher/exams" className="text-[12px] font-semibold text-info flex items-center gap-1">
+              View all <ChevronRight size={13} />
+            </Link>
+          }
+        >
           {upcomingExams.length === 0 ? (
             <p className="text-[13px] text-slate-text py-8 text-center">No exams scheduled.</p>
           ) : (
@@ -341,7 +380,7 @@ export default function ClassTeacherDashboard() {
                     <p className="text-[13px] font-semibold text-ink">{ex.subject}</p>
                     <p className="text-[11.5px] text-slate-text/60">{ex.examName}</p>
                   </div>
-                  <Pill tone="alert">{fmtShort(ex.date)}</Pill>
+                  <Pill tone="alert">{fmtDate(ex.date)}</Pill>
                 </div>
               ))}
             </div>
@@ -350,7 +389,15 @@ export default function ClassTeacherDashboard() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
-        <Card title="Notices to Class" className="lg:col-span-2" action={<Bell size={16} className="text-slate-text/50" />}>
+        <Card
+          title="Notices"
+          className="lg:col-span-2"
+          action={
+            <Link to="/teacher/notices" className="text-[12px] font-semibold text-info flex items-center gap-1">
+              View all <ChevronRight size={13} />
+            </Link>
+          }
+        >
           {notices.length === 0 ? (
             <p className="text-[13px] text-slate-text py-6 text-center">No notices yet.</p>
           ) : (
@@ -360,7 +407,7 @@ export default function ClassTeacherDashboard() {
                   <div className="w-1.5 h-1.5 rounded-full mt-2 shrink-0 bg-amber" />
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-ink leading-snug">{n.title}</p>
-                    <p className="text-[11.5px] text-slate-text/60 mt-0.5">{n.body || n.message || ""}</p>
+                    <p className="text-[11.5px] text-slate-text/60 mt-0.5 line-clamp-2">{n.description || n.body || ""}</p>
                   </div>
                 </div>
               ))}
@@ -368,28 +415,38 @@ export default function ClassTeacherDashboard() {
           )}
         </Card>
 
-        <Card title="Class Insights">
-          {studentsArr.length === 0 ? (
-            <p className="text-[13px] text-slate-text py-6 text-center">No data to summarize.</p>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <span className="text-[12.5px] text-slate-text">Present today</span>
-                <span className="text-[14px] font-bold text-success">{presentCount}/{studentsArr.length}</span>
-              </div>
-              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
-                <div className="h-full bg-success rounded-full transition-all" style={{ width: `${studentsArr.length ? Math.round((presentCount / studentsArr.length) * 100) : 0}%` }} />
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t border-black/[0.06]">
-                <span className="text-[12.5px] text-slate-text">Absent / Leave</span>
-                <span className="text-[14px] font-bold text-alert">{absentCount}</span>
-              </div>
-              <div className="flex items-center justify-between pt-2 border-t border-black/[0.06]">
-                <span className="text-[12.5px] text-slate-text">Open homework items</span>
-                <span className="text-[14px] font-bold text-ink">{openHomework.length}</span>
-              </div>
+        <Card
+          title="Class Insights"
+          action={
+            <Link to="/teacher/performance" className="text-[12px] font-semibold text-info flex items-center gap-1">
+              Full report <ChevronRight size={13} />
+            </Link>
+          }
+        >
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <span className="text-[12.5px] text-slate-text">Attendance rate</span>
+              <span className="text-[14px] font-bold text-success">{attendanceRate ?? "—"}%</span>
             </div>
-          )}
+            <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden">
+              <div className="h-full bg-success rounded-full transition-all" style={{ width: `${attendanceRate ?? 0}%` }} />
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-black/[0.06]">
+              <span className="text-[12.5px] text-slate-text">Absent today</span>
+              <span className="text-[14px] font-bold text-alert">{absentCount}</span>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-black/[0.06]">
+              <span className="text-[12.5px] text-slate-text">Leave / Half day</span>
+              <span className="text-[14px] font-bold text-info">{leaveCount}</span>
+            </div>
+            <div className="flex items-center justify-between pt-2 border-t border-black/[0.06]">
+              <span className="text-[12.5px] text-slate-text">Open homework</span>
+              <span className="text-[14px] font-bold text-ink">{openHomework.length}</span>
+            </div>
+            <p className="text-[11.5px] text-slate-text/50 pt-1">
+              {school?.name || "School"} · Session {school?.session || "—"}
+            </p>
+          </div>
         </Card>
       </div>
     </div>

@@ -8,6 +8,8 @@ const generateAccessToken = (user) =>
   jwt.sign(
     {
       id: user._id,
+      name: user.name || null,
+      email: user.email || null,
       role: user.role,
       schoolId: user.schoolId || null,
       refId: user.refId || null,

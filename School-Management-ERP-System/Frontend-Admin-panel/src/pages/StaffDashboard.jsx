@@ -21,6 +21,7 @@ import {
 } from "../components/UI";
 import { selectUser } from "../store/selectors";
 import { useSelector } from "react-redux";
+import { isPersonaStaff, resolvePersona } from "../lib/persona";
 
 function cap(value) {
   if (!value) return "—";
@@ -48,7 +49,10 @@ export default function StaffDashboard() {
   const [data, setData] = useState({ staff: null, leaves: [], payroll: [] });
   const [loading, setLoading] = useState(true);
 
+  const persona = isPersonaStaff(user) ? resolvePersona(user) : null;
+
   useEffect(() => {
+    if (persona) return;
     Promise.allSettled([
       api.staff.list(),
       api.leaves.list(),
@@ -63,15 +67,32 @@ export default function StaffDashboard() {
       });
       setLoading(false);
     });
-  }, []);
+  }, [persona]);
 
   const { staff, leaves, payroll } = data;
 
   const leaveCounts = useMemo(() => {
     const byStatus = { Pending: 0, Approved: 0, Rejected: 0 };
-    leaves.forEach((l) => { if (byStatus[l.status] !== undefined) byStatus[l.status] += 1; });
+    (leaves || []).forEach((l) => { if (byStatus[l.status] !== undefined) byStatus[l.status] += 1; });
     return byStatus;
   }, [leaves]);
+
+  if (persona) {
+    return (
+      <Card>
+        <div className="py-14 text-center">
+          <BriefcaseBusiness size={44} className="mx-auto text-amber mb-4" />
+          <p className="font-display text-xl font-bold text-ink">{persona.label} Workspace</p>
+          <p className="text-[13px] text-slate-text/70 mt-1 mb-6">
+            Your role has a dedicated workspace. Opening it now…
+          </p>
+          <Button variant="amber" onClick={() => (window.location.href = persona.landing)}>
+            Open {persona.label} Workspace <ChevronRight size={15} />
+          </Button>
+        </div>
+      </Card>
+    );
+  }
 
   const latestPay = payroll[0] || null;
   const firstName = (user?.name || staff?.name || "Staff Member").split(" ")[0];
