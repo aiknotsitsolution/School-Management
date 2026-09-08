@@ -288,7 +288,7 @@ export default function Dashboard() {
         />
         <StatCard
           icon={Wallet}
-          label="Fees Collected (Term 2)"
+          label="Fees Collected"
           value={`₹${(feesCollected / 100000).toFixed(1)}L`}
           sub={`of ₹${(feesExpected / 100000).toFixed(1)}L invoiced`}
           accent="info"
@@ -324,7 +324,7 @@ export default function Dashboard() {
                 tickLine={false}
               />
               <YAxis
-                domain={[80, 100]}
+                domain={["dataMin - 5", 100]}
                 tick={{ fontSize: 12, fill: "#475467" }}
                 axisLine={false}
                 tickLine={false}

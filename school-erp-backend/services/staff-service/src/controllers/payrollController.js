@@ -1,4 +1,6 @@
 const Payroll = require("../models/Payroll");
+const Staff = require("../models/Staff");
+const { pushNotifications } = require("../utils/notify");
 
 const generatePayroll = async (req, res) => {
   try {
@@ -34,9 +36,22 @@ const markPaid = async (req, res) => {
       { new: true },
     );
     if (!payroll) return res.status(404).json({ success: false, message: "Payroll record not found" });
-    res.json({ success: true, data: payroll });
+
+    const staff = await Staff.findById(payroll.staffId).select("userId employeeId name").lean();
+    if (staff?.userId) {
+      pushNotifications({
+        token: req.token,
+        schoolId: req.tenantId,
+        userIds: [staff.userId],
+        title: "Salary Released",
+        message: `Salary for ${payroll.month} ${payroll.year} (${staff.employeeId || "—"}) has been paid.`,
+        kind: "payroll",
+        link: "/staff/payroll",
+      });
+    }
+    return res.json({ success: true, data: payroll });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
+    return res.status(400).json({ success: false, message: err.message });
   }
 };
 

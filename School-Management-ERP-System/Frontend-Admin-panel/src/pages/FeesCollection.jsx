@@ -1,7 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import useLocalStorage from "../hooks/useLocalStorage";
 import { api } from "../lib/api";
-import { PermissionGate } from "../lib/permissions";
 import {
   Plus,
   Wallet,
@@ -11,8 +9,6 @@ import {
   X,
   Save,
   Search,
-  Pencil,
-  Trash2,
 } from "lucide-react";
 import {
   PageIntro,
@@ -21,157 +17,205 @@ import {
   Input,
   Select,
   Pill,
-  statusTone,
   StatCard,
+  toast,
 } from "../components/UI";
-const feeStructure = [];
-const initialTransactions = [];
 
-const MODES = [
-  "Online — UPI",
-  "Online — Card",
-  "Online — Net Banking",
-  "Cash",
-  "Cheque",
-  "Bank Transfer",
-];
-const STATUSES = ["All", "Success", "Pending Clearance", "Overdue"];
-const TERMS = ["Term 1", "Term 2"];
-const CLASSES = [
-  "Class 1",
-  "Class 2",
-  "Class 3",
-  "Class 4",
-  "Class 5",
-  "Class 6",
-  "Class 7",
-  "Class 8",
-  "Class 9",
-  "Class 10",
-  "Class 11",
-  "Class 12",
-];
+const MODES = ["Cash", "Card", "UPI", "Net Banking", "Cheque", "Online Gateway"];
 
-function todayISO() {
-  return new Date().toISOString().slice(0, 10);
-}
-
-function todayForReceipt() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}${String(d.getDate()).padStart(2, "0")}`;
+function formatDate(value) {
+  return value
+    ? new Date(value).toLocaleDateString("en-IN", {
+        day: "numeric",
+        month: "short",
+        year: "numeric",
+      })
+    : "—";
 }
 
 function emptyForm() {
   return {
-    student: "",
-    class: "Class 6",
-    term: "Term 2",
-    amount: feeStructure.reduce((a, f) => a + f.termAmount, 0),
-    mode: "Online — UPI",
-    date: todayISO(),
-    status: "Success",
+    studentId: "",
+    invoiceId: "",
+    amount: 0,
+    mode: "Cash",
+    transactionId: "",
   };
 }
 
 export default function FeesCollection() {
-  const [transactions, setTransactions] = useState(initialTransactions);
-  useEffect(() => {
-    api.fees.payments
-      .list()
-      .then(({ data }) => setTransactions(data || []))
-      .catch(() => {});
-  }, []);
+  const [students, setStudents] = useState([]);
+  const [structures, setStructures] = useState([]);
+  const [invoices, setInvoices] = useState([]);
+  const [payments, setPayments] = useState([]);
   const [query, setQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
-  const [editId, setEditId] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [loadError, setLoadError] = useState("");
 
-  const totalTerm = useMemo(
-    () => feeStructure.reduce((a, f) => a + f.termAmount, 0),
-    [],
+  const reload = () => {
+    Promise.all([
+      api.students.list("limit=1000"),
+      api.fees.structures.list().catch(() => ({ data: [] })),
+      api.fees.invoices.list().catch(() => ({ data: [] })),
+      api.fees.payments.list().catch(() => ({ data: [] })),
+    ])
+      .then(([studentResponse, structureResponse, invoiceResponse, paymentResponse]) => {
+        setStudents((studentResponse.data || []).map((item) => ({
+          ...item,
+          id: item._id,
+        })));
+        setStructures(structureResponse.data || []);
+        setInvoices(invoiceResponse.data || []);
+        setPayments(paymentResponse.data || []);
+        setLoadError("");
+      })
+      .catch((err) => setLoadError(err.message));
+  };
+
+  useEffect(() => {
+    reload();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const studentMap = useMemo(
+    () => new Map(students.map((s) => [String(s.id), s])),
+    [students],
   );
 
-  const filtered = useMemo(() => {
-    const q = query.toLowerCase();
-    return transactions.filter((t) => {
-      const matchStatus = statusFilter === "All" || t.status === statusFilter;
-      const matchQuery =
-        !q ||
-        t.student.toLowerCase().includes(q) ||
-        (t.receipt || "").toLowerCase().includes(q) ||
-        (t.id || "").toLowerCase().includes(q) ||
-        t.class.toLowerCase().includes(q);
-      return matchStatus && matchQuery;
+  const invoiceMap = useMemo(
+    () => new Map(invoices.map((i) => [String(i._id), i])),
+    [invoices],
+  );
+
+  const enrichedPayments = useMemo(() => {
+    return payments.map((payment) => {
+      const id = payment._id || payment.id;
+      const student = studentMap.get(String(payment.studentId));
+      const invoice = invoiceMap.get(String(payment.invoiceId));
+      return {
+        id,
+        receiptNo: payment.receiptNo || "—",
+        studentId: payment.studentId,
+        studentName:
+          student?.name || invoice?.studentId || payment.studentId || "—",
+        className:
+          student?.class ||
+          invoice?.class ||
+          (student ? `Class ${student.class}` : "—"),
+        feeType: invoice?.feeType || "Fee",
+        amount: Number(payment.amount || 0),
+        mode: payment.mode || "—",
+        paidOn: payment.paidOn,
+        collectedBy: payment.collectedBy || "—",
+      };
     });
-  }, [transactions, query, statusFilter]);
+  }, [payments, studentMap, invoiceMap]);
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return enrichedPayments;
+    return enrichedPayments.filter(
+      (p) =>
+        (p.studentName || "").toLowerCase().includes(q) ||
+        (p.receiptNo || "").toLowerCase().includes(q) ||
+        (p.feeType || "").toLowerCase().includes(q),
+    );
+  }, [enrichedPayments, query]);
 
   const stats = useMemo(() => {
-    const successful = transactions.filter(
-      (t) => t.status === "Success" && t.amount > 0,
+    const collected = payments.reduce(
+      (sum, payment) => sum + Number(payment.amount || 0),
+      0,
     );
-    const collected = successful.reduce((a, t) => a + t.amount, 0);
-    const overdue = transactions.filter((t) => t.status === "Overdue").length;
-    const pendingClearance = transactions.filter(
-      (t) => t.status === "Pending Clearance",
-    ).length;
-    return {
-      collected,
-      count: successful.length,
-      overdue,
-      pendingClearance,
-      total: transactions.length,
-    };
-  }, [transactions]);
+    const outstanding = invoices.reduce(
+      (sum, invoice) =>
+        sum +
+        Math.max(0, Number(invoice.amount) - Number(invoice.paidAmount || 0)),
+      0,
+    );
+    const overdue = invoices.filter((invoice) => invoice.status === "Overdue")
+      .length;
+    return { collected, count: payments.length, outstanding, overdue };
+  }, [payments, invoices]);
 
-  const openAdd = () => {
-    setEditId(null);
-    setForm(emptyForm());
-    setShowModal(true);
-  };
-
-  const openEdit = (t) => {
-    setEditId(t.id);
-    setForm({
-      student: t.student,
-      class: t.class,
-      term: t.term,
-      amount: t.amount || 0,
-      mode: t.mode,
-      date: t.date !== "—" ? t.date : todayISO(),
-      status: t.status,
-    });
-    setShowModal(true);
-  };
-
-  const updateForm = (field, value) => {
-    setForm((f) => ({ ...f, [field]: value }));
-  };
-
-  const handleSave = () => {
-    if (!form.student.trim()) return;
-
-    if (editId) {
-      setTransactions((prev) =>
-        prev.map((t) => (t.id === editId ? { ...t, ...form } : t)),
+  const outstandingForStudent = (studentId) => {
+    return invoices
+      .filter((invoice) => String(invoice.studentId) === String(studentId))
+      .reduce(
+        (sum, invoice) =>
+          sum +
+          Math.max(0, Number(invoice.amount) - Number(invoice.paidAmount || 0)),
+        0,
       );
-    } else {
-      const newTxn = {
-        id: `TXN${9000 + transactions.length + 1}`,
-        receipt: `RCPT-${todayForReceipt()}-${String(900 + transactions.length + 1).padStart(3, "0")}`,
-        ...form,
-        student: form.student.trim(),
-      };
-      setTransactions((prev) => [newTxn, ...prev]);
-    }
-    setShowModal(false);
-    setForm(emptyForm());
-    setEditId(null);
   };
 
-  const handleDelete = (id) => {
-    setTransactions((prev) => prev.filter((t) => t.id !== id));
+  const studentInvoices = useMemo(() => {
+    if (!form.studentId) return [];
+    return invoices
+      .filter(
+        (invoice) =>
+          String(invoice.studentId) === String(form.studentId) &&
+          Number(invoice.amount) - Number(invoice.paidAmount || 0) > 0,
+      )
+      .sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
+  }, [invoices, form.studentId]);
+
+  const handleSelectStudent = (studentId) => {
+    const firstInvoice = invoices.find(
+      (invoice) =>
+        String(invoice.studentId) === String(studentId) &&
+        Number(invoice.amount) - Number(invoice.paidAmount || 0) > 0,
+    );
+    setForm({
+      studentId,
+      invoiceId: firstInvoice ? firstInvoice._id : "",
+      amount: firstInvoice
+        ? Math.max(0, Number(firstInvoice.amount) - Number(firstInvoice.paidAmount || 0))
+        : 0,
+      mode: "Cash",
+      transactionId: "",
+    });
   };
+
+  const handleSelectInvoice = (invoiceId) => {
+    const match = studentInvoices.find(
+      (invoice) => String(invoice._id) === String(invoiceId),
+    );
+    setForm((prev) => ({
+      ...prev,
+      invoiceId,
+      amount: match
+        ? Math.max(0, Number(match.amount) - Number(match.paidAmount || 0))
+        : 0,
+    }));
+  };
+
+  const handleSave = async () => {
+    if (!form.studentId || !form.invoiceId || form.amount <= 0) return;
+    setBusy(true);
+    try {
+      const { data } = await api.fees.payments.create({
+        invoiceId: form.invoiceId,
+        amount: Number(form.amount),
+        mode: form.mode,
+        transactionId: form.transactionId.trim() || undefined,
+      });
+      toast(`Payment recorded · ${data?.payment?.receiptNo || "done"}`);
+      setShowModal(false);
+      setForm(emptyForm());
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const payableStudents = students.filter(
+    (student) => outstandingForStudent(student.id) > 0,
+  );
 
   return (
     <div className="space-y-6">
@@ -180,18 +224,22 @@ export default function FeesCollection() {
         title="Fees Collection"
         description="Track payments, dues and receipts across the school."
         right={
-          <PermissionGate permission="fees:collect">
-            <Button variant="amber" onClick={openAdd}>
-              <Plus size={15} /> Record Payment
-            </Button>
-          </PermissionGate>
+          <Button variant="amber" onClick={() => setShowModal(true)}>
+            <Plus size={15} /> Record Payment
+          </Button>
         }
       />
+
+      {loadError && (
+        <Card>
+          <p className="text-sm text-alert">{loadError}</p>
+        </Card>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={Wallet}
-          label="Collected (Term 2)"
+          label="Collected (All Time)"
           value={`₹${(stats.collected / 100000).toFixed(1)}L`}
           sub={`${stats.count} successful payments`}
           accent="success"
@@ -199,72 +247,90 @@ export default function FeesCollection() {
         <StatCard
           icon={TrendingUp}
           label="Collection Rate"
-          value={`${Math.min(100, Math.round((stats.collected / (totalTerm * 1000)) * 100))}%`}
-          sub="Estimated vs target"
+          value={`${stats.collected > 0 || stats.outstanding > 0 ? Math.min(100, Math.round((stats.collected / (stats.collected + stats.outstanding)) * 100)) : 0}%`}
+          sub="Collected vs outstanding"
           accent="amber"
         />
         <StatCard
           icon={AlertTriangle}
-          label="Overdue Accounts"
-          value={String(stats.overdue)}
-          sub="Past due date"
+          label="Outstanding Dues"
+          value={`₹${(stats.outstanding / 100000).toFixed(1)}L`}
+          sub={`${payableStudents.length} students with dues`}
           accent="alert"
         />
         <StatCard
           icon={Receipt}
           label="Receipts Issued"
           value={String(stats.count)}
-          sub={`${stats.pendingClearance} pending clearance`}
+          sub={`${stats.overdue} invoices overdue`}
           accent="info"
         />
       </div>
 
-      <Card title="Term 2 Fee Structure (per student)">
-        <div className="grid sm:grid-cols-3 lg:grid-cols-5 gap-3">
-          {feeStructure.map((f) => (
-            <div key={f.head} className="rounded-xl bg-paper p-3.5">
-              <p className="text-[11.5px] text-slate-text/70">{f.head}</p>
-              <p className="font-display font-bold text-ink text-lg mt-1">
-                ₹{f.termAmount.toLocaleString("en-IN")}
-              </p>
-            </div>
-          ))}
-          <div className="rounded-xl bg-ink p-3.5 text-white">
-            <p className="text-[11.5px] text-white/60">Total per Student</p>
-            <p className="font-display font-bold text-lg mt-1">
-              ₹{totalTerm.toLocaleString("en-IN")}
-            </p>
+      <Card title="Fee Structure">
+        {structures.length === 0 ? (
+          <p className="py-10 text-center text-[13px] text-slate-text/60">
+            No fee structures configured yet
+          </p>
+        ) : (
+          <div className="overflow-x-auto -mx-5">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                  <th className="px-5 py-2.5 font-semibold">Fee Type</th>
+                  <th className="px-5 py-2.5 font-semibold">Class</th>
+                  <th className="px-5 py-2.5 font-semibold">Session</th>
+                  <th className="px-5 py-2.5 font-semibold">Amount</th>
+                  <th className="px-5 py-2.5 font-semibold">Frequency</th>
+                  <th className="px-5 py-2.5 font-semibold">Due Date</th>
+                </tr>
+              </thead>
+              <tbody>
+                {structures.slice(0, 50).map((structure) => (
+                  <tr
+                    key={structure._id}
+                    className="border-b border-black/[0.04] hover:bg-paper/60"
+                  >
+                    <td className="px-5 py-3 font-semibold text-ink">
+                      {structure.feeType}
+                    </td>
+                    <td className="px-5 py-3 text-slate-text">
+                      {structure.class}
+                    </td>
+                    <td className="px-5 py-3 text-slate-text">
+                      {structure.session}
+                    </td>
+                    <td className="px-5 py-3 text-slate-text font-medium">
+                      ₹{Number(structure.amount).toLocaleString("en-IN")}
+                    </td>
+                    <td className="px-5 py-3">
+                      <Pill>{structure.frequency}</Pill>
+                    </td>
+                    <td className="px-5 py-3 text-slate-text whitespace-nowrap">
+                      {formatDate(structure.dueDate)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        )}
       </Card>
 
       <Card
         title="Recent Transactions"
         action={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/40"
-              />
-              <Input
-                placeholder="Search student, receipt..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="pl-8 w-52"
-              />
-            </div>
-            <Select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="min-w-[140px]"
-            >
-              {STATUSES.map((s) => (
-                <option key={s} value={s}>
-                  {s === "All" ? "All Status" : s}
-                </option>
-              ))}
-            </Select>
+          <div className="relative w-52">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/40"
+            />
+            <Input
+              placeholder="Search student, receipt..."
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              className="pl-8"
+            />
           </div>
         }
       >
@@ -277,11 +343,9 @@ export default function FeesCollection() {
             <p className="text-[13px] text-slate-text/60 mt-1">
               Try changing filters or record a new payment.
             </p>
-            <PermissionGate permission="fees:collect">
-              <Button variant="amber" className="mt-4" onClick={openAdd}>
-                <Plus size={15} /> Record Payment
-              </Button>
-            </PermissionGate>
+            <Button variant="amber" className="mt-4" onClick={() => setShowModal(true)}>
+              <Plus size={15} /> Record Payment
+            </Button>
           </div>
         ) : (
           <div className="overflow-x-auto -mx-5">
@@ -291,57 +355,40 @@ export default function FeesCollection() {
                   <th className="px-5 py-2.5 font-semibold">Receipt No.</th>
                   <th className="px-5 py-2.5 font-semibold">Student</th>
                   <th className="px-5 py-2.5 font-semibold">Class</th>
-                  <th className="px-5 py-2.5 font-semibold">Term</th>
+                  <th className="px-5 py-2.5 font-semibold">Fee Type</th>
                   <th className="px-5 py-2.5 font-semibold">Amount</th>
                   <th className="px-5 py-2.5 font-semibold">Mode</th>
                   <th className="px-5 py-2.5 font-semibold">Date</th>
-                  <th className="px-5 py-2.5 font-semibold">Status</th>
-                  <th className="px-5 py-2.5 font-semibold" />
+                  <th className="px-5 py-2.5 font-semibold">Collected By</th>
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((t) => (
+                {filtered.map((payment) => (
                   <tr
-                    key={t.id}
+                    key={payment.id}
                     className="border-b border-black/[0.04] hover:bg-paper/60"
                   >
                     <td className="px-5 py-3 font-mono text-[12px] text-slate-text">
-                      {t.receipt}
+                      {payment.receiptNo}
                     </td>
                     <td className="px-5 py-3 font-semibold text-ink">
-                      {t.student}
+                      {payment.studentName}
                     </td>
-                    <td className="px-5 py-3 text-slate-text">{t.class}</td>
-                    <td className="px-5 py-3 text-slate-text">{t.term}</td>
+                    <td className="px-5 py-3 text-slate-text">
+                      {payment.className}
+                    </td>
+                    <td className="px-5 py-3">
+                      <Pill tone="info">{payment.feeType}</Pill>
+                    </td>
                     <td className="px-5 py-3 text-slate-text font-medium">
-                      {t.amount ? `₹${t.amount.toLocaleString("en-IN")}` : "—"}
+                      ₹{payment.amount.toLocaleString("en-IN")}
                     </td>
-                    <td className="px-5 py-3 text-slate-text">{t.mode}</td>
+                    <td className="px-5 py-3 text-slate-text">{payment.mode}</td>
                     <td className="px-5 py-3 text-slate-text whitespace-nowrap">
-                      {t.date}
+                      {formatDate(payment.paidOn)}
                     </td>
-                    <td className="px-5 py-3">
-                      <Pill tone={statusTone(t.status)}>{t.status}</Pill>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-1">
-                        <PermissionGate permission="fees:collect">
-                        <button
-                          onClick={() => openEdit(t)}
-                          className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-info transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          onClick={() => handleDelete(t.id)}
-                          className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-alert transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </PermissionGate>
-                      </div>
+                    <td className="px-5 py-3 text-slate-text">
+                      {payment.collectedBy}
                     </td>
                   </tr>
                 ))}
@@ -351,7 +398,6 @@ export default function FeesCollection() {
         )}
       </Card>
 
-      {/* ========== RECORD / EDIT PAYMENT MODAL ========== */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
@@ -362,10 +408,10 @@ export default function FeesCollection() {
             <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
-                  {editId ? "Edit Payment" : "Record Payment"}
+                  Record Payment
                 </h3>
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">
-                  Enter the payment details to save a transaction.
+                  Select a student and their pending invoice to record payment.
                 </p>
               </div>
               <button
@@ -379,130 +425,122 @@ export default function FeesCollection() {
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
               <div>
                 <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Student Name *
+                  Student *
                 </label>
-                <Input
-                  placeholder="Full student name"
-                  value={form.student}
-                  onChange={(e) => updateForm("student", e.target.value)}
-                />
+                <Select
+                  value={form.studentId}
+                  onChange={(event) => handleSelectStudent(event.target.value)}
+                  className="w-full"
+                >
+                  <option value="">Select a student...</option>
+                  {students.map((student) => (
+                    <option key={student.id} value={student.id}>
+                      {student.name} — Class {student.class}-{student.section}
+                      {outstandingForStudent(student.id) > 0
+                        ? ""
+                        : " (no dues)"}
+                    </option>
+                  ))}
+                </Select>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Class
-                  </label>
-                  <Select
-                    value={form.class}
-                    onChange={(e) => updateForm("class", e.target.value)}
-                  >
-                    {CLASSES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Term
-                  </label>
-                  <Select
-                    value={form.term}
-                    onChange={(e) => updateForm("term", e.target.value)}
-                  >
-                    {TERMS.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              </div>
+              {form.studentId && studentInvoices.length === 0 && (
+                <p className="text-[12.5px] text-slate-text/70 bg-paper rounded-lg px-3 py-2.5">
+                  No pending invoices for this student.
+                </p>
+              )}
 
-              <div>
-                <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Amount (₹)
-                </label>
-                <Input
-                  type="number"
-                  min={0}
-                  value={form.amount}
-                  onChange={(e) => updateForm("amount", Number(e.target.value))}
-                />
-              </div>
+              {form.studentId && studentInvoices.length > 0 && (
+                <>
+                  <div>
+                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                      Pending Invoice *
+                    </label>
+                    <Select
+                      value={form.invoiceId}
+                      onChange={(event) => handleSelectInvoice(event.target.value)}
+                      className="w-full"
+                    >
+                      {studentInvoices.map((invoice) => (
+                        <option key={invoice._id} value={invoice._id}>
+                          {invoice.feeType} · {invoice.session} · ₹
+                          {Math.max(
+                            0,
+                            Number(invoice.amount) -
+                              Number(invoice.paidAmount || 0),
+                          ).toLocaleString("en-IN")}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Mode
-                  </label>
-                  <Select
-                    value={form.mode}
-                    onChange={(e) => updateForm("mode", e.target.value)}
-                  >
-                    {MODES.map((m) => (
-                      <option key={m} value={m}>
-                        {m}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Status
-                  </label>
-                  <Select
-                    value={form.status}
-                    onChange={(e) => updateForm("status", e.target.value)}
-                  >
-                    <option value="Success">Success</option>
-                    <option value="Pending Clearance">Pending Clearance</option>
-                    <option value="Overdue">Overdue</option>
-                  </Select>
-                </div>
-              </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                        Amount (₹) *
+                      </label>
+                      <Input
+                        type="number"
+                        min={0}
+                        value={form.amount}
+                        onChange={(event) =>
+                          setForm({
+                            ...form,
+                            amount: Number(event.target.value),
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                        Mode *
+                      </label>
+                      <Select
+                        value={form.mode}
+                        onChange={(event) =>
+                          setForm({ ...form, mode: event.target.value })
+                        }
+                        className="w-full"
+                      >
+                        {MODES.map((mode) => (
+                          <option key={mode} value={mode}>
+                            {mode}
+                          </option>
+                        ))}
+                      </Select>
+                    </div>
+                  </div>
 
-              <div>
-                <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Date
-                </label>
-                <Input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => updateForm("date", e.target.value)}
-                />
-              </div>
+                  <div>
+                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                      Transaction ID
+                    </label>
+                    <Input
+                      placeholder="Optional reference / UTR number"
+                      value={form.transactionId}
+                      onChange={(event) =>
+                        setForm({
+                          ...form,
+                          transactionId: event.target.value,
+                        })
+                      }
+                    />
+                  </div>
+                </>
+              )}
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-between gap-2">
-              <div>
-                {editId && (
-                  <Button
-                    variant="outline"
-                    className="text-alert border-alert/30 hover:bg-alert/5"
-                    onClick={() => {
-                      handleDelete(editId);
-                      setShowModal(false);
-                    }}
-                  >
-                    Delete
-                  </Button>
-                )}
-              </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => setShowModal(false)}>
-                  Cancel
-                </Button>
-                <Button
-                  variant="amber"
-                  onClick={handleSave}
-                  disabled={!form.student.trim()}
-                >
-                  <Save size={15} /> {editId ? "Update" : "Record"} Payment
-                </Button>
-              </div>
+            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="amber"
+                onClick={handleSave}
+                disabled={busy || !form.studentId || !form.invoiceId || form.amount <= 0}
+              >
+                <Save size={15} /> {busy ? "Saving..." : "Record Payment"}
+              </Button>
             </div>
           </div>
         </div>

@@ -307,8 +307,8 @@ const changePassword = async (req, res) => {
 
 const listUsers = async (req, res) => {
   try {
-    const { role, schoolId, page = 1, limit = 50 } = req.query;
-    const filter = { deletedAt: null };
+    const { role, schoolId, q, page = 1, limit = 50 } = req.query;
+    const filter = {};
 
     if (req.user.role === "super_admin") {
       const sid = schoolId || req.header("X-School-Id") || null;
@@ -317,6 +317,15 @@ const listUsers = async (req, res) => {
       filter.schoolId = req.user.schoolId;
     }
     if (role) filter.role = role;
+    if (req.query.includeDeleted !== "true") filter.deletedAt = null;
+
+    if (q && String(q).trim()) {
+      const rx = new RegExp(
+        String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
+        "i",
+      );
+      filter.$or = [{ name: rx }, { email: rx }, { refId: rx }];
+    }
 
     const p = Math.max(1, parseInt(page, 10) || 1);
     const l = Math.min(200, Math.max(1, parseInt(limit, 10) || 50));

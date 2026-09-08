@@ -10,7 +10,7 @@ import Examination from "./pages/Examination";
 import ReportCard from "./pages/ReportCard";
 import Students from "./pages/Students";
 import AdmissionEnquiry from "./pages/AdmissionEnquiry";
-import Communication from "./pages/Communication";
+
 import NoticeBoard from "./pages/NoticeBoard";
 import Events from "./pages/Events";
 import FeesCollection from "./pages/FeesCollection";
@@ -24,8 +24,44 @@ import Hostel from "./pages/Hostel";
 import Payroll from "./pages/Payroll";
 import AddStudent from "./pages/AddStudent";
 import ClassTeacherDashboard from "./pages/ClassTeacherDashboard";
+import TeacherMyClass from "./pages/teacher/MyClass";
+import TeacherAttendance from "./pages/teacher/Attendance";
+import TeacherTimetable from "./pages/teacher/Timetable";
+import TeacherHomework from "./pages/teacher/Homework";
+import TeacherExams from "./pages/teacher/Exams";
+import TeacherPerformance from "./pages/teacher/Performance";
+import TeacherNotices from "./pages/teacher/Notices";
+import TeacherProfile from "./pages/teacher/Profile";
 import StudentDashboard from "./pages/StudentDashboard";
+import StudentProfile from "./pages/student/Profile";
+import StudentAttendance from "./pages/student/Attendance";
+import StudentTimetable from "./pages/student/Timetable";
+import StudentHomework from "./pages/student/Homework";
+import StudentExams from "./pages/student/Exams";
+import StudentResults from "./pages/student/Results";
+import StudentFees from "./pages/student/Fees";
+import StudentNotices from "./pages/student/Notices";
+import StudentLibrary from "./pages/student/Library";
+import StudentTransport from "./pages/student/Transport";
+import StudentDocuments from "./pages/student/Documents";
+import StudentHostel from "./pages/student/Hostel";
+import StudentEvents from "./pages/student/Events";
 import StaffDashboard from "./pages/StaffDashboard";
+import MyAttendance from "./pages/MyAttendance";
+import Notifications from "./pages/Notifications";
+import MyProfile from "./pages/staff/MyProfile";
+import AccountantDashboard from "./pages/staff/AccountantDashboard";
+import Fees from "./pages/staff/Fees";
+import LibrarianDashboard from "./pages/staff/LibrarianDashboard";
+import Books from "./pages/staff/Books";
+import Circulation from "./pages/staff/Circulation";
+import TransportDashboard from "./pages/staff/TransportDashboard";
+import BusRoutes from "./pages/staff/BusRoutes";
+import Allocations from "./pages/staff/Allocations";
+import ReceptionDashboard from "./pages/staff/ReceptionDashboard";
+import Enquiries from "./pages/staff/Enquiries";
+import StudentLookup from "./pages/staff/StudentLookup";
+import ReceptionNotices from "./pages/staff/ReceptionNotices";
 import PlatformDashboard from "./pages/platform/PlatformDashboard";
 import SchoolOnboarding from "./pages/platform/SchoolOnboarding";
 import SchoolsManagement from "./pages/platform/SchoolsManagement";
@@ -45,6 +81,7 @@ import {
   selectUser,
 } from "./store/selectors";
 import { hasPermission } from "./lib/permissions";
+import { resolvePersona } from "./lib/persona";
 
 function ProtectedLayout() {
   const isAuth = useSelector(selectIsAuthenticated);
@@ -80,6 +117,26 @@ function RequireCounsellor({ children, fallback = "/" }) {
   return children;
 }
 
+// Staff designations get persona-restricted workspaces (Accountant, Librarian,
+// Transport Coordinator, Receptionist). Designation is UI-only: the backend
+// still enforces role + permission + tenant scope on every API call.
+function RequirePersona({ designation, children, fallback = "/" }) {
+  const user = useSelector(selectUser);
+  const isPersona = user?.role === "staff" && user?.designation === designation;
+  if (!isPersona) return <Navigate to={fallback} replace />;
+  return children;
+}
+
+// Admin-style school modules are not meant for students or parents — they have
+// their own portal under /student/*. Prevent direct-URL access entirely.
+function RequireNotStudent({ children, fallback = "/student-dashboard" }) {
+  const role = useSelector(selectRole);
+  if (role === "student" || role === "parent") {
+    return <Navigate to={fallback} replace />;
+  }
+  return children;
+}
+
 function HomeRedirect() {
   const user = useSelector(selectUser);
   const role = user?.role || "admin";
@@ -89,8 +146,10 @@ function HomeRedirect() {
   if (role === "student" || role === "parent")
     return <Navigate to="/student-dashboard" replace />;
   if (role === "staff") {
-    if (user?.designation === "admission_counsellor")
-      return <Navigate to="/admission-counsellor" replace />;
+    const persona = resolvePersona(user);
+    if (persona && persona.landing !== "/staff-dashboard") {
+      return <Navigate to={persona.landing} replace />;
+    }
     return <Navigate to="/staff-dashboard" replace />;
   }
   return <Dashboard />;
@@ -197,16 +256,184 @@ export default function App() {
           <Route
             path="/teacher-dashboard"
             element={
-              <RequireRole roles={["school_admin", "class_teacher"]}>
+              <RequireRole roles={["class_teacher"]}>
                 <ClassTeacherDashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/my-class"
+            element={
+              <RequireRole roles={["class_teacher"]}>
+                <TeacherMyClass />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/attendance"
+            element={
+              <RequireRole roles={["class_teacher"]}>
+                <TeacherAttendance />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/timetable"
+            element={
+              <RequireRole roles={["class_teacher"]}>
+                <TeacherTimetable />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/homework"
+            element={
+              <RequireRole roles={["class_teacher"]}>
+                <TeacherHomework />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/exams"
+            element={
+              <RequireRole roles={["class_teacher"]}>
+                <TeacherExams />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/performance"
+            element={
+              <RequireRole roles={["class_teacher"]}>
+                <TeacherPerformance />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/notices"
+            element={
+              <RequireRole roles={["class_teacher"]}>
+                <TeacherNotices />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/teacher/profile"
+            element={
+              <RequireRole roles={["class_teacher"]}>
+                <TeacherProfile />
               </RequireRole>
             }
           />
           <Route
             path="/student-dashboard"
             element={
-              <RequireRole roles={["school_admin", "student"]}>
+              <RequireRole roles={["student"]}>
                 <StudentDashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/profile"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentProfile />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/attendance"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentAttendance />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/timetable"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentTimetable />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/homework"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentHomework />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/exams"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentExams />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/results"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentResults />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/fees"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentFees />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/notices"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentNotices />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/library"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentLibrary />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/transport"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentTransport />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/documents"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentDocuments />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/hostel"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentHostel />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/events"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentEvents />
               </RequireRole>
             }
           />
@@ -219,10 +446,125 @@ export default function App() {
             }
           />
           <Route
+            path="/staff/my-attendance"
+            element={
+              <RequireRole roles={["staff"]}>
+                <MyAttendance />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/staff/profile"
+            element={
+              <RequireRole roles={["staff"]}>
+                <MyProfile />
+              </RequireRole>
+            }
+          />
+          <Route path="/notifications" element={<Notifications />} />
+          <Route
+            path="/accountant"
+            element={
+              <RequirePersona designation="accountant">
+                <AccountantDashboard />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/accountant/fees"
+            element={
+              <RequirePersona designation="accountant">
+                <Fees />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/librarian"
+            element={
+              <RequirePersona designation="librarian">
+                <LibrarianDashboard />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/librarian/books"
+            element={
+              <RequirePersona designation="librarian">
+                <Books />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/librarian/circulation"
+            element={
+              <RequirePersona designation="librarian">
+                <Circulation />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/transport"
+            element={
+              <RequirePersona designation="transport">
+                <TransportDashboard />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/transport/routes"
+            element={
+              <RequirePersona designation="transport">
+                <BusRoutes />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/transport/allocations"
+            element={
+              <RequirePersona designation="transport">
+                <Allocations />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/reception"
+            element={
+              <RequirePersona designation="receptionist">
+                <ReceptionDashboard />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/reception/enquiries"
+            element={
+              <RequirePersona designation="receptionist">
+                <Enquiries />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/reception/student-lookup"
+            element={
+              <RequirePersona designation="receptionist">
+                <StudentLookup />
+              </RequirePersona>
+            }
+          />
+          <Route
+            path="/reception/notices"
+            element={
+              <RequirePersona designation="receptionist">
+                <ReceptionNotices />
+              </RequirePersona>
+            }
+          />
+          <Route
             path="/attendance"
             element={
               <RequirePermission permission="attendance:read">
-                <Attendance />
+                <RequireNotStudent>
+                  <Attendance />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -230,7 +572,9 @@ export default function App() {
             path="/timetable"
             element={
               <RequirePermission permission="timetable:read">
-                <Timetable />
+                <RequireNotStudent>
+                  <Timetable />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -238,7 +582,9 @@ export default function App() {
             path="/homework"
             element={
               <RequirePermission permission="homework:read">
-                <Homework />
+                <RequireNotStudent>
+                  <Homework />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -246,7 +592,9 @@ export default function App() {
             path="/examination"
             element={
               <RequirePermission permission="exams:read">
-                <Examination />
+                <RequireNotStudent>
+                  <Examination />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -254,7 +602,9 @@ export default function App() {
             path="/report-card"
             element={
               <RequirePermission permission="marks:read">
-                <ReportCard />
+                <RequireNotStudent>
+                  <ReportCard />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -262,7 +612,9 @@ export default function App() {
             path="/students"
             element={
               <RequirePermission permission="students:read">
-                <Students />
+                <RequireNotStudent>
+                  <Students />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -274,26 +626,14 @@ export default function App() {
               </RequirePermission>
             }
           />
-          <Route
-            path="/communication"
-            element={
-              <RequireRole
-                roles={[
-                  "school_admin",
-                  "class_teacher",
-                  "staff",
-                  "super_admin",
-                ]}
-              >
-                <Communication />
-              </RequireRole>
-            }
-          />
+          
           <Route
             path="/notice-board"
             element={
               <RequirePermission permission="notices:read">
-                <NoticeBoard />
+                <RequireNotStudent>
+                  <NoticeBoard />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -301,7 +641,9 @@ export default function App() {
             path="/events"
             element={
               <RequirePermission permission="events:read">
-                <Events />
+                <RequireNotStudent>
+                  <Events />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -317,7 +659,9 @@ export default function App() {
             path="/online-payment"
             element={
               <RequirePermission permission="fees:read">
-                <OnlinePayment />
+                <RequireNotStudent>
+                  <OnlinePayment />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -333,7 +677,9 @@ export default function App() {
             path="/bus-tracking"
             element={
               <RequirePermission permission="transport:read">
-                <BusTracking />
+                <RequireNotStudent>
+                  <BusTracking />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -349,7 +695,9 @@ export default function App() {
             path="/library"
             element={
               <RequirePermission permission="library:read">
-                <Library />
+                <RequireNotStudent>
+                  <Library />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -357,7 +705,9 @@ export default function App() {
             path="/leave"
             element={
               <RequirePermission permission="leaves:apply">
-                <Leave />
+                <RequireNotStudent>
+                  <Leave />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -401,6 +751,7 @@ export default function App() {
               </RequireCounsellor>
             }
           />
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
       </Routes>
     </BrowserRouter>

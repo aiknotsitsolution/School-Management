@@ -8,28 +8,42 @@ const {
   requireTenant,
   requirePermission,
   restrictToOwnStudent,
+  scopeClassTeacher,
 } = require("../middleware/auth");
 
 router.use(verifyToken, resolveTenant, requireTenant);
+
+// Own-profile lookup is self-scoped (token refId) and only served to
+// student/parent accounts; the gate mirrors that intent instead of requiring
+// students:read.
+const gateOwnProfile = (req, res, next) => {
+  const perm = ["student", "parent"].includes(req.user.role)
+    ? "profile:read"
+    : "students:read";
+  return requirePermission(perm)(req, res, next);
+};
 
 router.post("/", requirePermission("students:write"), ctrl.createStudent);
 router.get(
   "/stats/summary",
   requirePermission("students:read"),
+  scopeClassTeacher,
   ctrl.bulkStats,
 );
 // "Current student" must be declared before the parameterized /:id route.
-router.get("/me", requirePermission("students:read"), ctrl.getMyStudent);
+router.get("/me", gateOwnProfile, ctrl.getMyStudent);
 router.get(
   "/counsellor/stats",
   requirePermission("students:read"),
+  scopeClassTeacher,
   ctrl.counsellorStats,
 );
-router.get("/", requirePermission("students:read"), ctrl.getStudents);
+router.get("/", requirePermission("students:read"), scopeClassTeacher, ctrl.getStudents);
 router.get(
   "/:id",
   requirePermission("students:read"),
   restrictToOwnStudent((req) => req.params.id),
+  scopeClassTeacher,
   ctrl.getStudentById,
 );
 router.put("/:id", requirePermission("students:write"), ctrl.updateStudent);

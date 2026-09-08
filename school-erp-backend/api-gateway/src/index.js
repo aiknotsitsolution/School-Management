@@ -51,6 +51,10 @@ const routes = [
     target: process.env.STUDENT_SERVICE_URL || "http://localhost:5002",
   },
   {
+    path: "/api/documents",
+    target: process.env.STUDENT_SERVICE_URL || "http://localhost:5002",
+  },
+  {
     path: "/api/admissions",
     target: process.env.STUDENT_SERVICE_URL || "http://localhost:5002",
   },
@@ -100,6 +104,10 @@ const routes = [
   },
   {
     path: "/api/events",
+    target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
+  },
+  {
+    path: "/api/notifications",
     target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
   },
   {

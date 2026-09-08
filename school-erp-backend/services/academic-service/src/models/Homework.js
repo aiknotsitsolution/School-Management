@@ -11,6 +11,7 @@ const homeworkSchema = new mongoose.Schema(
     assignedBy: { type: String },
     assignedDate: { type: Date, default: Date.now },
     dueDate: { type: Date, required: true },
+    maxMarks: { type: Number, default: 10 },
     attachments: [{ type: String }],
   },
   { timestamps: true }

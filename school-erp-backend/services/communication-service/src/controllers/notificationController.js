@@ -1,0 +1,123 @@
+const Notification = require("../models/Notification");
+const { getUserModel } = require("../models/userLite");
+
+// Own inbox — always the caller's own notifications, tenant-scoped.
+const getNotifications = async (req, res) => {
+  try {
+    const { limit = 100, unread } = req.query;
+    const filter = { schoolId: req.tenantId, userId: String(req.user.id) };
+    if (unread === "true") filter.read = false;
+    const data = await Notification.find(filter)
+      .sort({ createdAt: -1 })
+      .limit(Math.min(Number(limit) || 100, 500));
+    const unreadCount = await Notification.countDocuments({
+      schoolId: req.tenantId,
+      userId: String(req.user.id),
+      read: false,
+    });
+    res.json({ success: true, count: data.length, unreadCount, data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const getUnreadCount = async (req, res) => {
+  try {
+    const unreadCount = await Notification.countDocuments({
+      schoolId: req.tenantId,
+      userId: String(req.user.id),
+      read: false,
+    });
+    res.json({ success: true, unreadCount });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+const markAsRead = async (req, res) => {
+  try {
+    const record = await Notification.findOneAndUpdate(
+      { _id: req.params.id, schoolId: req.tenantId, userId: String(req.user.id) },
+      { read: true },
+      { new: true },
+    );
+    if (!record) return res.status(404).json({ success: false, message: "Notification not found" });
+    res.json({ success: true, data: record });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+const markAllRead = async (req, res) => {
+  try {
+    await Notification.updateMany(
+      { schoolId: req.tenantId, userId: String(req.user.id), read: false },
+      { read: true },
+    );
+    res.json({ success: true });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Service-to-service push. Gated behind notices:publish so only privileged
+// accounts (school_admin / super_admin) can create notifications for their
+// own school's users. Authored by an authenticated admin action in another
+// service (leave approval, payroll release, notice publish, ...).
+const pushNotifications = async (req, res) => {
+  try {
+    const { userIds = [], title, message, kind = "system", link = null } = req.body;
+    if (!title || userIds.length === 0) {
+      return res.status(400).json({ success: false, message: "title and userIds are required" });
+    }
+    const docs = [...new Set(userIds.map((u) => String(u)))]
+      .filter(Boolean)
+      .map((userId) => ({
+        schoolId: req.tenantId,
+        userId,
+        title: String(title).slice(0, 200),
+        message: message ? String(message).slice(0, 500) : null,
+        kind,
+        link,
+      }));
+    const data = await Notification.insertMany(docs);
+    res.status(201).json({ success: true, count: data.length, data });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+// [INTERNAL] Service-to-service fanout by refId (e.g. a student's admissionNo
+// or a staff id). Resolves refIds to active user ids in the shared auth DB and
+// inserts inbox notifications. Only reachable with the internal key header.
+const pushByRefIds = async (req, res) => {
+  try {
+    const { schoolId, refIds = [], title, message, kind = "system", link = null } = req.body;
+    if (!schoolId || !title || refIds.length === 0) {
+      return res.status(400).json({ success: false, message: "schoolId, title and refIds are required" });
+    }
+    const User = getUserModel();
+    const users = await User.find(
+      { schoolId, isActive: true, refId: { $in: refIds.map((r) => String(r)) } },
+      { _id: 1 }
+    ).lean();
+    const userIds = [...new Set(users.map((u) => String(u._id)))];
+    if (userIds.length === 0) {
+      return res.json({ success: true, count: 0, data: [] });
+    }
+    const docs = userIds.map((userId) => ({
+      schoolId,
+      userId,
+      title: String(title).slice(0, 200),
+      message: message ? String(message).slice(0, 500) : null,
+      kind,
+      link,
+    }));
+    const data = await Notification.insertMany(docs);
+    res.status(201).json({ success: true, count: data.length, data });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { getNotifications, getUnreadCount, markAsRead, markAllRead, pushNotifications, pushByRefIds };

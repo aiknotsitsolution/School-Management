@@ -65,4 +65,64 @@ const scopeStudentQuery = (req, res, next) => {
   next();
 };
 
-module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery };
+// Locks timetable/homework/exam GET queries to the student's own class (and
+// optionally section). A student can never read another class's schedule.
+const scopeStudentSchedule = ({ section = false } = {}) => (req, res, next) => {
+  if (req.user.role !== "student") return next();
+  const { class: cls, section: sec } = req.user || {};
+  if (!cls) {
+    return res.status(403).json({
+      success: false,
+      message: "No class assigned to this account. Contact your school admin.",
+    });
+  }
+  req.query.class = String(cls);
+  if (section && sec) req.query.section = String(sec);
+  else if (section) delete req.query.section;
+  next();
+};
+
+// Class Teacher scoping: locks GET queries to the teacher's assigned class
+// & section and rejects teachers with no class assignment.
+const scopeClassTeacher = (req, res, next) => {
+  const { role, class: cls, section } = req.user || {};
+  if (role !== "class_teacher") return next();
+  if (!cls) {
+    return res.status(403).json({
+      success: false,
+      message: "No class assigned to this account. Contact your school admin.",
+    });
+  }
+  req.teacherScope = { class: String(cls), section: section ? String(section) : null };
+  if (req.method === "GET") {
+    req.query.class = req.teacherScope.class;
+    if (req.teacherScope.section) req.query.section = req.teacherScope.section;
+    else delete req.query.section;
+  }
+  next();
+};
+
+// For class_teacher writes: validates that class/section fields carried in the
+// request body match the teacher's assignment. `arrayField` points to an array
+// of records (e.g. attendance records); otherwise the body itself is checked.
+const guardClassBody = (arrayField) => (req, res, next) => {
+  const scope = req.teacherScope;
+  if (!scope) return next();
+  const items = arrayField ? req.body[arrayField] : req.body;
+  const list = Array.isArray(items) ? items : [items];
+  const mismatch = list.some(
+    (r) =>
+      !r ||
+      String(r.class) !== scope.class ||
+      (scope.section && String(r.section) !== scope.section)
+  );
+  if (mismatch) {
+    return res.status(403).json({
+      success: false,
+      message: "Class Teacher can only manage their assigned class and section",
+    });
+  }
+  next();
+};
+
+module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery, scopeStudentSchedule, scopeClassTeacher, guardClassBody };

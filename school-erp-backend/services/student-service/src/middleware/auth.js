@@ -89,4 +89,24 @@ const restrictToOwnStudent = (getStudentIdFromReq) => (req, res, next) => {
   return res.status(403).json({ success: false, message: "You can only access your own student record" });
 };
 
-module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery, restrictToOwnStudent };
+// Class Teacher scoping: locks GET queries to the teacher's assigned class
+// & section and rejects teachers with no class assignment.
+const scopeClassTeacher = (req, res, next) => {
+  const { role, class: cls, section } = req.user || {};
+  if (role !== "class_teacher") return next();
+  if (!cls) {
+    return res.status(403).json({
+      success: false,
+      message: "No class assigned to this account. Contact your school admin.",
+    });
+  }
+  req.teacherScope = { class: String(cls), section: section ? String(section) : null };
+  if (req.method === "GET") {
+    req.query.class = req.teacherScope.class;
+    if (req.teacherScope.section) req.query.section = req.teacherScope.section;
+    else delete req.query.section;
+  }
+  next();
+};
+
+module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery, restrictToOwnStudent, scopeClassTeacher };

@@ -77,11 +77,18 @@ const enterMarks = async (req, res) => {
   }
 };
 
+const gradeOf = (obtained, max) => {
+  if (!max) return "N/A";
+  const pct = (obtained / max) * 100;
+  return pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 70 ? "B+" : pct >= 60 ? "B" : pct >= 50 ? "C" : pct >= 33 ? "D" : "F";
+};
+
 const getReportCard = async (req, res) => {
   try {
     const { studentId, examName } = req.query;
     if (!studentId) return res.status(400).json({ success: false, message: "studentId is required" });
     const filter = { schoolId: req.tenantId, studentId };
+    if (req.teacherScope) filter.class = req.teacherScope.class;
     if (examName) filter.examName = examName;
     const marks = await Marks.find(filter).sort({ subject: 1 });
 
@@ -98,4 +105,73 @@ const getReportCard = async (req, res) => {
   }
 };
 
-module.exports = { createExam, getExams, updateExam, deleteExam, enterMarks, getReportCard };
+// Aggregated academic performance for a whole class (per exam). Class Teachers
+// are scoped to their assignment by scopeClassTeacher. School admins pick any class.
+const getClassSummary = async (req, res) => {
+  try {
+    const { class: cls, section, examName } = req.query;
+    if (!cls) return res.status(400).json({ success: false, message: "class is required" });
+
+    const filter = { schoolId: req.tenantId, class: cls };
+    if (examName) filter.examName = examName;
+
+    const marks = await Marks.find(filter).lean();
+
+    const byStudent = {};
+    for (const m of marks) {
+      if (!byStudent[m.studentId]) {
+        byStudent[m.studentId] = { studentId: m.studentId, subjects: [], total: 0, maxTotal: 0 };
+      }
+      byStudent[m.studentId].subjects.push({
+        subject: m.subject,
+        marksObtained: m.marksObtained,
+        maxMarks: m.maxMarks,
+        grade: m.grade || gradeOf(m.marksObtained, m.maxMarks),
+      });
+      byStudent[m.studentId].total += m.marksObtained;
+      byStudent[m.studentId].maxTotal += m.maxMarks;
+    }
+
+    let totalObtained = 0;
+    let totalMax = 0;
+    const rows = Object.values(byStudent).map((g) => {
+      const pct = g.maxTotal ? (g.total / g.maxTotal) * 100 : 0;
+      totalObtained += g.total;
+      totalMax += g.maxTotal;
+      g.subjects.sort((a, b) => a.subject.localeCompare(b.subject));
+      return { ...g, pct: +pct.toFixed(2), grade: gradeOf(g.total, g.maxTotal) };
+    });
+
+    const classAverage = totalMax ? (totalObtained / totalMax) * 100 : 0;
+    const subjectAverages = {};
+    for (const m of marks) {
+      if (!subjectAverages[m.subject]) subjectAverages[m.subject] = { obtained: 0, max: 0, count: 0 };
+      subjectAverages[m.subject].obtained += m.marksObtained;
+      subjectAverages[m.subject].max += m.maxMarks;
+      subjectAverages[m.subject].count += 1;
+    }
+    const subjectAvgList = Object.entries(subjectAverages).map(([subject, v]) => ({
+      subject,
+      averagePct: v.max ? +(((v.obtained / v.max) * 100).toFixed(2)) : 0,
+    }));
+
+    rows.sort((a, b) => b.pct - a.pct);
+
+    res.json({
+      success: true,
+      count: rows.length,
+      data: {
+        examName: examName || null,
+        class: cls,
+        section: section || null,
+        classAveragePct: +classAverage.toFixed(2),
+        subjectAverages: subjectAvgList,
+        students: rows,
+      },
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createExam, getExams, updateExam, deleteExam, enterMarks, getReportCard, getClassSummary };
