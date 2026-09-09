@@ -66,10 +66,11 @@ const scopeStudentQuery = (req, res, next) => {
   next();
 };
 
-// Staff & class_teacher scoped to their own record; school_admin / super_admin see all.
+// Staff, teachers & class_teacher scoped to their own record; school_admin /
+// super_admin see all. "teacher" resolves via Staff.userId / email / refId.
 const restrictToOwnStaff = (getStaffIdFromReq) => (req, res, next) => {
   if (["school_admin", "super_admin"].includes(req.user.role)) return next();
-  if (["class_teacher", "staff"].includes(req.user.role)) {
+  if (["class_teacher", "teacher", "staff"].includes(req.user.role)) {
     const targetId = getStaffIdFromReq(req);
     if (req.user.refId === targetId) return next();
     return res.status(403).json({ success: false, message: "You can only access your own staff record" });

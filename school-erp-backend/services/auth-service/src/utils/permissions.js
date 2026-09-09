@@ -46,8 +46,16 @@ const ROLE_PERMISSIONS = {
   class_teacher: [
     "dashboard:view", "staff:read", "students:read", "attendance:read",
     "attendance:mark",
-    "timetable:read", "homework:read", "homework:write", "exams:read",
-    "marks:read", "notices:read", "leaves:apply", "payroll:view",
+    "timetable:read", "timetable:write", "homework:read", "homework:write",
+    "exams:read", "marks:read", "notices:read", "leaves:apply", "payroll:view",
+  ],
+  // Plain teaching role — same teaching permissions as a Class Teacher. The
+  // Class Teacher is a *responsibility* layered on top of a teacher account.
+  teacher: [
+    "dashboard:view", "staff:read", "students:read", "attendance:read",
+    "attendance:mark",
+    "timetable:read", "timetable:write", "homework:read", "homework:write",
+    "exams:read", "marks:read", "notices:read", "leaves:apply", "payroll:view",
   ],
   staff: ["staff:read", "leaves:apply", "payroll:view"],
   student: [

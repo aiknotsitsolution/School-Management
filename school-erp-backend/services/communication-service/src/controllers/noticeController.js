@@ -13,10 +13,10 @@ const pick = (obj, keys) =>
 
 const AUDIENCE_ROLES = {
   school_admin: ["school_admin"],
-  class_teacher: ["class_teacher"],
+  class_teacher: ["class_teacher", "teacher"],
   staff: ["staff"],
   student: ["student"],
-  all: ["school_admin", "class_teacher", "staff", "student"],
+  all: ["school_admin", "class_teacher", "teacher", "staff", "student"],
 };
 
 // After a notice is published, fan out an inbox notification to the matching
@@ -59,7 +59,13 @@ const createNotice = async (req, res) => {
 
 const getNotices = async (req, res) => {
   try {
-    const filter = { schoolId: req.tenantId, $or: [{ audience: req.user.role }, { audience: "all" }] };
+    // "teacher" accounts are teaching staff: they see school-wide ("all")
+    // notices as well as notices published for class_teacher audiences.
+    const effectiveAudiences =
+      req.user.role === "teacher"
+        ? ["teacher", "class_teacher", "all"]
+        : [req.user.role, "all"];
+    const filter = { schoolId: req.tenantId, audience: { $in: effectiveAudiences } };
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
       Notice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),

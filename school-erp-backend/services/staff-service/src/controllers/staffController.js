@@ -1,4 +1,5 @@
 const Staff = require("../models/Staff");
+const TeacherAssignment = require("../models/TeacherAssignment");
 const { paginate, pageInfo } = require("../utils/pagination");
 
 // Escapes regex metacharacters in user search terms to prevent regex
@@ -30,7 +31,7 @@ const getStaff = async (req, res) => {
     const { department, role, status, search } = req.query;
     const filter = { schoolId: req.tenantId };
 
-    if (["class_teacher", "staff"].includes(req.user.role)) {
+    if (["class_teacher", "teacher", "staff"].includes(req.user.role)) {
       filter._id = req.user.refId;
     }
 
@@ -74,11 +75,26 @@ const updateStaff = async (req, res) => {
   }
 };
 
+// Never hard-delete a staff record: employment records, attendance, marks,
+// homework and audit trails reference it. Deleting ends active teacher
+// assignments and marks the record inactive (Resigned), preserving history.
 const deleteStaff = async (req, res) => {
   try {
-    const staff = await Staff.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const staff = await Staff.findOneAndUpdate(
+      { _id: req.params.id, schoolId: req.tenantId },
+      { $set: { status: "Resigned" } },
+      { new: true },
+    );
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
-    res.json({ success: true, message: "Staff removed" });
+
+    if (staff.role === "teacher") {
+      await TeacherAssignment.updateMany(
+        { schoolId: req.tenantId, staffId: staff._id, status: "active" },
+        { $set: { status: "ended", endedAt: new Date() } },
+      );
+    }
+
+    res.json({ success: true, message: "Staff deactivated; employment history preserved", data: staff });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

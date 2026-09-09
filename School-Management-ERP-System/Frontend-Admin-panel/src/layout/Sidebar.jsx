@@ -138,7 +138,7 @@ const groups = [
         to: "/teacher-dashboard",
         icon: UserCog,
         label: "Class Teacher",
-        roles: ["class_teacher"],
+        roles: ["class_teacher", "teacher"],
       },
       {
         to: "/student-dashboard",
@@ -180,55 +180,55 @@ const groups = [
         icon: LayoutDashboard,
         label: "Dashboard",
         end: true,
-        roles: ["class_teacher"],
+        roles: ["class_teacher", "teacher"],
       },
       {
         to: "/teacher/my-class",
         icon: Users,
         label: "My Class",
-        roles: ["class_teacher"],
+        roles: ["class_teacher", "teacher"],
       },
       {
         to: "/teacher/attendance",
         icon: CalendarCheck,
         label: "Attendance",
-        roles: ["class_teacher"],
+        roles: ["class_teacher", "teacher"],
       },
       {
         to: "/teacher/timetable",
         icon: CalendarDays,
         label: "Timetable",
-        roles: ["class_teacher"],
+        roles: ["class_teacher", "teacher"],
       },
       {
         to: "/teacher/homework",
         icon: BookOpenCheck,
         label: "Homework & Assignments",
-        roles: ["class_teacher"],
+        roles: ["class_teacher", "teacher"],
       },
       {
         to: "/teacher/exams",
         icon: ClipboardList,
         label: "Examinations",
-        roles: ["class_teacher"],
+        roles: ["class_teacher", "teacher"],
       },
       {
         to: "/teacher/performance",
         icon: BarChart3,
         label: "Class Performance",
-        roles: ["class_teacher"],
+        roles: ["class_teacher", "teacher"],
       },
       {
         to: "/teacher/notices",
         icon: Bell,
         label: "Notices",
-        roles: ["class_teacher"],
+        roles: ["class_teacher", "teacher"],
       },
       {
         to: "/teacher/profile",
         icon: UserCog,
         label: "My Profile",
-        roles: ["class_teacher"],
+        roles: ["class_teacher", "teacher"],
       },
     ],
   },
@@ -351,6 +351,12 @@ const groups = [
   {
     label: "Human Resources",
     items: [
+      {
+        to: "/teachers",
+        icon: GraduationCap,
+        label: "Teachers",
+        perm: "staff:write",
+      },
       {
         to: "/leave",
         icon: FileBarChart2,
@@ -548,7 +554,7 @@ export default function Sidebar({ open, onClose }) {
 
         <nav className="flex-1 overflow-y-auto scrollbar-thin py-4 px-3">
           {navGroups.map((group) => {
-            if (!persona && role === "class_teacher" && !group.teacherOnly)
+            if (!persona && (role === "class_teacher" || role === "teacher") && !group.teacherOnly)
               return null;
             const items = persona ? group.items : group.items.filter(canSee);
             if (items.length === 0) return null;

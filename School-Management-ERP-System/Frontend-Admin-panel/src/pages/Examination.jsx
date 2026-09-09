@@ -20,92 +20,59 @@ import {
   Input,
   Pill,
   StatCard,
+  toast,
 } from "../components/UI";
 import { api } from "../lib/api";
+import MasterSelect from "../components/MasterSelect";
+import { invalidateMasterCache } from "../lib/masterCache";
+import { usePermission } from "../lib/permissions";
+import CustomMasterModal from "../components/CustomMasterModal";
 
-const CLASS_OPTIONS = [
-  "All",
-  "Class 5",
-  "Class 6",
-  "Class 7",
-  "Class 8",
-  "Class 9",
-  "Class 10",
-  "Class 11 (Science)",
-  "Class 11 (Commerce)",
-  "Class 12 (Science)",
-  "Class 12 (Commerce)",
+const SYSTEM_CLASSES = [
+  "Nursery",
+  "LKG",
+  "UKG",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
+  "11-Sci",
+  "11-Com",
+  "12-Sci",
+  "12-Com",
 ];
 
-const SUBJECT_OPTIONS = [
-  "Mathematics",
-  "English",
-  "Science",
-  "Hindi",
-  "Social Science",
-  "Computer Science",
-  "Physics",
-  "Chemistry",
-  "Biology",
-  "Accountancy",
-  "Business Studies",
-  "Economics",
-  "Physical Education",
-];
+const CLASS_OPTIONS = ["All", ...SYSTEM_CLASSES];
 
-const EXAM_TYPES = [
-  "Term 1 — Unit Test",
-  "Term 1 — Mid Term",
-  "Term 1 — Final",
-  "Term 2 — Unit Test",
-  "Term 2 — Mid Term",
-  "Term 2 — Final",
-  "Pre-Board",
-  "Practical",
-];
+const SECTION_OPTIONS = ["All", "A", "B", "C"];
 
-const ROOM_OPTIONS = [
-  "Room 101",
-  "Room 102",
-  "Room 201",
-  "Room 202",
-  "Room 203",
-  "Room 204",
-  "Room 301",
-  "Room 302",
-  "Lab 1",
-  "Lab 2",
-  "Auditorium",
-  "Hall A",
-];
-
-const TIME_OPTIONS = [
-  "9:00 AM – 11:00 AM",
-  "9:00 AM – 12:00 PM",
-  "10:00 AM – 12:00 PM",
-  "11:00 AM – 1:00 PM",
-  "1:00 PM – 3:00 PM",
-  "2:00 PM – 4:00 PM",
-];
-
-function formatDate(d) {
-  if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-IN", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-    weekday: "short",
-  });
+function formatClassLabel(c) {
+  if (["Nursery", "LKG", "UKG"].includes(c)) return c;
+  return `Class ${c}`;
 }
 
 function emptyForm() {
   return {
-    exam: "Term 2 — Mid Term",
-    class: "Class 8",
-    subject: "Mathematics",
+    examTypeId: "",
+    exam: "",
+    classId: "",
+    class: "",
+    sectionId: "",
+    section: "",
+    subjectId: "",
+    subject: "",
     date: "",
-    time: "9:00 AM – 11:00 AM",
-    room: "Room 204",
+    timeSlotId: "",
+    startTime: "",
+    endTime: "",
+    roomId: "",
+    room: "",
     maxMarks: 80,
   };
 }
@@ -123,13 +90,39 @@ function normalizeExam(exam) {
   };
 }
 
+function formatDate(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    weekday: "short",
+  });
+}
+
+function formatTimeSlot(item) {
+  if (!item) return "";
+  if (item.label) return item.label;
+  const fmt = (t) => {
+    if (!t) return "";
+    const [hh, mm] = t.split(":").map(Number);
+    const suffix = hh >= 12 ? "PM" : "AM";
+    const hour = hh % 12 === 0 ? 12 : hh % 12;
+    return `${hour}:${String(mm).padStart(2, "0")} ${suffix}`;
+  };
+  return [fmt(item.startTime), fmt(item.endTime)].filter(Boolean).join(" – ");
+}
+
 export default function Examination() {
   const [exams, setExams] = useState([]);
   const [cls, setCls] = useState("All");
+  const [sec, setSec] = useState("All");
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState(null);
+  const [customModal, setCustomModal] = useState(null); // { kind, label, showDescription? } | null
+  const canManageExams = usePermission("exams:write");
 
   useEffect(() => {
     api.exams
@@ -141,6 +134,7 @@ export default function Examination() {
   const filtered = useMemo(() => {
     return exams.filter((e) => {
       const matchClass = cls === "All" || e.class === cls;
+      const matchSection = sec === "All" || (e.section || "") === sec;
       const q = query.toLowerCase();
       const matchQuery =
         !q ||
@@ -148,21 +142,22 @@ export default function Examination() {
         e.exam.toLowerCase().includes(q) ||
         e.room.toLowerCase().includes(q) ||
         e.class.toLowerCase().includes(q);
-      return matchClass && matchQuery;
+      return matchClass && matchSection && matchQuery;
     });
-  }, [exams, cls, query]);
+  }, [exams, cls, sec, query]);
 
   const grouped = useMemo(() => {
     return filtered.reduce((acc, e) => {
-      const key = `${e.class}||${e.exam}`;
-      if (!acc[key]) acc[key] = { class: e.class, exam: e.exam, items: [] };
+      const key = `${e.class}||${e.section || ""}||${e.exam}`;
+      if (!acc[key])
+        acc[key] = { class: e.class, section: e.section || "", exam: e.exam, items: [] };
       acc[key].items.push(e);
       return acc;
     }, {});
   }, [filtered]);
 
   const stats = useMemo(() => {
-    const classes = new Set(exams.map((e) => e.class));
+    const classes = new Set(exams.map((e) => `${e.class}|${e.section || ""}`));
     const subjects = new Set(exams.map((e) => e.subject));
     const upcoming = exams.filter((e) => new Date(e.date) >= new Date()).length;
     return {
@@ -182,11 +177,19 @@ export default function Examination() {
   const openEdit = (item) => {
     setEditId(item.id);
     setForm({
+      examTypeId: item.examTypeId || "",
       exam: item.exam,
+      classId: item.classId || "",
       class: item.class,
+      sectionId: item.sectionId || "",
+      section: item.section || "A",
+      subjectId: item.subjectId || "",
       subject: item.subject,
       date: item.date,
-      time: item.time,
+      timeSlotId: item.timeSlotId || "",
+      startTime: item.startTime || "",
+      endTime: item.endTime || "",
+      roomId: item.roomId || "",
       room: item.room,
       maxMarks: item.maxMarks,
     });
@@ -197,18 +200,31 @@ export default function Examination() {
     setForm((f) => ({ ...f, [field]: value }));
   };
 
+  const updateFormFields = (fields) => {
+    setForm((f) => ({ ...f, ...fields }));
+  };
+
   const handleSave = async () => {
     if (!form.date || !form.subject) return;
-    const [startTime, endTime] = form.time.split(" – ");
+    const [startTime, endTime] = form.startTime || form.endTime
+      ? [form.startTime, form.endTime]
+      : [undefined, undefined];
     const payload = {
       examName: form.exam,
       class: form.class,
+      section: form.section,
       subject: form.subject,
       date: form.date,
       startTime,
       endTime,
       room: form.room,
       maxMarks: Number(form.maxMarks) || 80,
+      ...(form.examTypeId ? { examTypeId: form.examTypeId } : {}),
+      ...(form.classId ? { classId: form.classId } : {}),
+      ...(form.sectionId ? { sectionId: form.sectionId } : {}),
+      ...(form.subjectId ? { subjectId: form.subjectId } : {}),
+      ...(form.roomId ? { roomId: form.roomId } : {}),
+      ...(form.timeSlotId ? { timeSlotId: form.timeSlotId } : {}),
     };
     try {
       const response = editId
@@ -223,8 +239,9 @@ export default function Examination() {
       setShowModal(false);
       setForm(emptyForm());
       setEditId(null);
+      toast(editId ? "Exam updated" : "Exam scheduled");
     } catch (requestError) {
-      window.alert(requestError.message);
+      toast(requestError.message, "error");
     }
   };
 
@@ -244,9 +261,11 @@ export default function Examination() {
         title="Examination"
         description="Schedule and manage term examinations across all classes."
         right={
-          <Button variant="amber" onClick={openAdd}>
-            <Plus size={15} /> Schedule Exam
-          </Button>
+          canManageExams ? (
+            <Button variant="amber" onClick={openAdd}>
+              <Plus size={15} /> Schedule Exam
+            </Button>
+          ) : null
         }
       />
 
@@ -306,7 +325,18 @@ export default function Examination() {
             >
               {CLASS_OPTIONS.map((c) => (
                 <option key={c} value={c}>
-                  {c === "All" ? "All Classes" : c}
+                  {c === "All" ? "All Classes" : formatClassLabel(c)}
+                </option>
+              ))}
+            </Select>
+            <Select
+              value={sec}
+              onChange={(e) => setSec(e.target.value)}
+              className="min-w-[110px]"
+            >
+              {SECTION_OPTIONS.map((s) => (
+                <option key={s} value={s}>
+                  {s === "All" ? "All Sections" : `Section ${s}`}
                 </option>
               ))}
             </Select>
@@ -320,20 +350,23 @@ export default function Examination() {
               className="mx-auto text-slate-text/30 mb-3"
             />
             <p className="text-[14px] font-medium text-ink">No exams found</p>
-            <p className="text-[13px] text-slate-text/60 mt-1">
-              Try changing filters or schedule a new exam.
-            </p>
-            <Button variant="amber" className="mt-4" onClick={openAdd}>
-              <Plus size={15} /> Schedule Exam
-            </Button>
+<p className="text-[13px] text-slate-text/60 mt-1">
+                Try changing filters or schedule a new exam.
+              </p>
+              {canManageExams && (
+                <Button variant="amber" className="mt-4" onClick={openAdd}>
+                  <Plus size={15} /> Schedule Exam
+                </Button>
+              )}
           </div>
         ) : (
           <div className="space-y-6">
             {Object.values(grouped).map((group) => (
-              <div key={`${group.class}-${group.exam}`}>
+              <div key={`${group.class}-${group.section}-${group.exam}`}>
                 <div className="flex items-center gap-2 mb-3">
                   <h4 className="font-display font-semibold text-ink text-[14.5px]">
-                    {group.class}
+                    {formatClassLabel(group.class)}
+                    {group.section ? ` · Section ${group.section}` : ""}
                   </h4>
                   <Pill tone="info">{group.exam}</Pill>
                   <span className="text-[12px] text-slate-text/50">
@@ -398,20 +431,24 @@ export default function Examination() {
                               <Pill tone="info">{e.maxMarks} marks</Pill>
                             </td>
                             <td className="px-4 py-3 text-right">
-                              <div className="inline-flex items-center gap-2">
-                                <button
-                                  onClick={() => openEdit(e)}
-                                  className="text-[12.5px] font-medium text-info hover:underline inline-flex items-center gap-1"
-                                >
-                                  <Pencil size={12} /> Edit
-                                </button>
-                                <button
-                                  onClick={() => handleDelete(e.id)}
-                                  className="text-[12.5px] font-medium text-alert hover:underline"
-                                >
-                                  Delete
-                                </button>
-                              </div>
+                              {canManageExams ? (
+                                <div className="inline-flex items-center gap-2">
+                                  <button
+                                    onClick={() => openEdit(e)}
+                                    className="text-[12.5px] font-medium text-info hover:underline inline-flex items-center gap-1"
+                                  >
+                                    <Pencil size={12} /> Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(e.id)}
+                                    className="text-[12.5px] font-medium text-alert hover:underline"
+                                  >
+                                    Delete
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[12px] text-slate-text/40">—</span>
+                              )}
                             </td>
                           </tr>
                         ))}
@@ -456,16 +493,18 @@ export default function Examination() {
                 <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                   Exam Type
                 </label>
-                <Select
-                  value={form.exam}
-                  onChange={(e) => updateForm("exam", e.target.value)}
-                >
-                  {EXAM_TYPES.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </Select>
+                <MasterSelect
+                  kind="exam-types"
+                  label="Exam Type"
+                  placeholder="Select exam type"
+                  value={form.examTypeId}
+                  fallbackLabel={form.exam}
+                  onChange={(id, item) =>
+                    updateFormFields({ examTypeId: id, exam: item ? item.name : "" })
+                  }
+                  canAdd
+                  onAdd={() => setCustomModal({ kind: "exam-types", label: "Exam Type" })}
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -473,43 +512,73 @@ export default function Examination() {
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Class
                   </label>
-                  <Select
-                    value={form.class}
-                    onChange={(e) => updateForm("class", e.target.value)}
-                  >
-                    {CLASS_OPTIONS.filter((c) => c !== "All").map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </Select>
+                  <MasterSelect
+                    kind="classes"
+                    label="Class"
+                    placeholder="Select class"
+                    value={form.classId}
+                    fallbackLabel={form.class ? formatClassLabel(form.class) : ""}
+                    renderLabel={(item) => formatClassLabel(item.name)}
+                    onChange={(id, item) =>
+                      updateFormFields({ classId: id, class: item ? item.name : "" })
+                    }
+                    canAdd
+                    onAdd={() => setCustomModal({ kind: "classes", label: "Class" })}
+                  />
                 </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Section
+                  </label>
+                  <MasterSelect
+                    kind="sections"
+                    label="Section"
+                    placeholder="Select section"
+                    value={form.sectionId}
+                    fallbackLabel={form.section || ""}
+                    filterItems={(rows) =>
+                      Array.from(new Map(rows.map((r) => [r.name, r])).values())
+                    }
+                    onChange={(id, item) =>
+                      updateFormFields({ sectionId: id, section: item ? item.name : "" })
+                    }
+                    canAdd
+                    onAdd={() => setCustomModal({ kind: "sections", label: "Section" })}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Subject
                   </label>
-                  <Select
-                    value={form.subject}
-                    onChange={(e) => updateForm("subject", e.target.value)}
-                  >
-                    {SUBJECT_OPTIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </Select>
+                  <MasterSelect
+                    kind="subjects"
+                    label="Subject"
+                    placeholder="Select subject"
+                    searchLabel="Search subjects..."
+                    value={form.subjectId}
+                    fallbackLabel={form.subject}
+                    onChange={(id, item) =>
+                      updateFormFields({ subjectId: id, subject: item ? item.name : "" })
+                    }
+                    canAdd
+                    onAdd={() =>
+                      setCustomModal({ kind: "subjects", label: "Subject", showDescription: true })
+                    }
+                  />
                 </div>
-              </div>
-
-              <div>
-                <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Date
-                </label>
-                <Input
-                  type="date"
-                  value={form.date}
-                  onChange={(e) => updateForm("date", e.target.value)}
-                />
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Date
+                  </label>
+                  <Input
+                    type="date"
+                    value={form.date}
+                    onChange={(e) => updateForm("date", e.target.value)}
+                  />
+                </div>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -517,31 +586,44 @@ export default function Examination() {
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Time
                   </label>
-                  <Select
-                    value={form.time}
-                    onChange={(e) => updateForm("time", e.target.value)}
-                  >
-                    {TIME_OPTIONS.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </Select>
+                  <MasterSelect
+                    kind="time-slots"
+                    label="Time"
+                    placeholder="Select time slot"
+                    value={form.timeSlotId}
+                    renderLabel={formatTimeSlot}
+                    fallbackLabel={
+                      form.startTime || form.endTime
+                        ? [form.startTime, form.endTime].filter(Boolean).join(" – ")
+                        : ""
+                    }
+                    onChange={(id, item) =>
+                      updateFormFields({
+                        timeSlotId: id,
+                        startTime: item ? item.startTime : "",
+                        endTime: item ? item.endTime : "",
+                      })
+                    }
+                    canAdd
+                    onAdd={() => setCustomModal({ kind: "time-slots", label: "Time Slot" })}
+                  />
                 </div>
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Room
                   </label>
-                  <Select
-                    value={form.room}
-                    onChange={(e) => updateForm("room", e.target.value)}
-                  >
-                    {ROOM_OPTIONS.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </Select>
+                  <MasterSelect
+                    kind="rooms"
+                    label="Room"
+                    placeholder="Select room"
+                    value={form.roomId}
+                    fallbackLabel={form.room}
+                    onChange={(id, item) =>
+                      updateFormFields({ roomId: id, room: item ? item.name : "" })
+                    }
+                    canAdd
+                    onAdd={() => setCustomModal({ kind: "rooms", label: "Room" })}
+                  />
                 </div>
               </div>
 
@@ -574,6 +656,36 @@ export default function Examination() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* ========== ADD CUSTOM MASTER MODAL ========== */}
+      {customModal && (
+        <CustomMasterModal
+          kind={customModal.kind}
+          label={customModal.label}
+          showDescription={customModal.showDescription}
+          onClose={() => setCustomModal(null)}
+          onCreated={(created) => {
+            invalidateMasterCache(customModal.kind);
+            if (customModal.kind === "subjects") {
+              updateFormFields({ subjectId: created._id, subject: created.name });
+            } else if (customModal.kind === "exam-types") {
+              updateFormFields({ examTypeId: created._id, exam: created.name });
+            } else if (customModal.kind === "rooms") {
+              updateFormFields({ roomId: created._id, room: created.name });
+            } else if (customModal.kind === "classes") {
+              updateFormFields({ classId: created._id, class: created.name });
+            } else if (customModal.kind === "sections") {
+              updateFormFields({ sectionId: created._id, section: created.name });
+            } else if (customModal.kind === "time-slots") {
+              updateFormFields({
+                timeSlotId: created._id,
+                startTime: created.startTime || "",
+                endTime: created.endTime || "",
+              });
+            }
+          }}
+        />
       )}
     </div>
   );

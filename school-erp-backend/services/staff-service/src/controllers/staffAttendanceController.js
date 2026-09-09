@@ -14,7 +14,7 @@ const markAttendance = async (req, res) => {
       return res.status(400).json({ success: false, message: `status must be one of: ${VALID_STATUSES.join(", ")}` });
     }
     const targetStaffId =
-      req.user.role === "staff" || req.user.role === "class_teacher"
+      req.user.role === "staff" || req.user.role === "class_teacher" || req.user.role === "teacher"
         ? req.user.refId
         : staffId;
     if (!targetStaffId) {
@@ -54,7 +54,7 @@ const getAttendance = async (req, res) => {
   try {
     const { staffId, date, status, page = 1, limit = 50 } = req.query;
     const filter = { schoolId: req.tenantId };
-    if (req.user.role === "staff" || req.user.role === "class_teacher") {
+    if (req.user.role === "staff" || req.user.role === "class_teacher" || req.user.role === "teacher") {
       filter.staffId = req.user.refId;
     } else if (staffId) {
       filter.staffId = staffId;

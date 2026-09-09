@@ -17,6 +17,7 @@ const roleHome = {
   super_admin: "/platform",
   school_admin: "/",
   class_teacher: "/teacher-dashboard",
+  teacher: "/teacher-dashboard",
   student: "/student-dashboard",
   staff: "/staff-dashboard",
 };

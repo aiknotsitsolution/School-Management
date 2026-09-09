@@ -9,8 +9,8 @@ const { generateAccessToken, generateRefreshToken } = require("../utils/generate
 const { getJwtSecret } = require("../utils/jwtSecret");
 const { writeAudit } = require("../utils/audit");
 
-const VALID_ROLES = ["super_admin", "school_admin", "class_teacher", "staff", "student"];
-const SCHOOL_ADMIN_CREATABLE = ["class_teacher", "staff", "student"];
+const VALID_ROLES = ["super_admin", "school_admin", "class_teacher", "teacher", "staff", "student"];
+const SCHOOL_ADMIN_CREATABLE = ["class_teacher", "teacher", "staff", "student"];
 
 // Failure responses never dump raw error/debug text (stack traces, DB paths,
 // index/duplicate details) to the client. Details go to the server log only.
@@ -152,6 +152,9 @@ const createUser = async (req, res) => {
     if (role === "class_teacher" && !cls) {
       return res.status(400).json({ success: false, message: "class is required for class_teacher role" });
     }
+    // A plain "teacher" account's class/section is an optional PRIMARY teaching
+    // scope used by teaching modules (timetable, attendance, homework, marks).
+    // Full multi-class scope lives in TeacherAssignment records.
 
     const admissionId = role === "student" ? String(refId || "").trim() : null;
     if (role === "student" && !admissionId) {

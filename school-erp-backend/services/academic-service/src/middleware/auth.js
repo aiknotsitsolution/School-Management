@@ -82,11 +82,13 @@ const scopeStudentSchedule = ({ section = false } = {}) => (req, res, next) => {
   next();
 };
 
-// Class Teacher scoping: locks GET queries to the teacher's assigned class
-// & section and rejects teachers with no class assignment.
+// Teacher scoping (class_teacher — homeroom holder — or teacher with a primary
+// teaching scope): locks GET queries to the token's class & section and rejects
+// teachers with no class assignment. Full multi-class scope lives in
+// TeacherAssignment; this middleware enforces the primary scope server-side.
 const scopeClassTeacher = (req, res, next) => {
   const { role, class: cls, section } = req.user || {};
-  if (role !== "class_teacher") return next();
+  if (!["class_teacher", "teacher"].includes(role)) return next();
   if (!cls) {
     return res.status(403).json({
       success: false,

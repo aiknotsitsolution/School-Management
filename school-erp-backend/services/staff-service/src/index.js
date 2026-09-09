@@ -13,6 +13,7 @@ const staffRoutes = require("./routes/staffRoutes");
 const leaveRoutes = require("./routes/leaveRoutes");
 const payrollRoutes = require("./routes/payrollRoutes");
 const staffAttendanceRoutes = require("./routes/staffAttendanceRoutes");
+const teacherAssignmentRoutes = require("./routes/teacherAssignmentRoutes");
 
 const app = express();
 const PORT = process.env.STAFF_SERVICE_PORT || 5003;
@@ -48,6 +49,7 @@ app.use("/api/staff/attendance", staffAttendanceRoutes);
 app.use("/api/staff", staffRoutes);
 app.use("/api/leaves", leaveRoutes);
 app.use("/api/payroll", payrollRoutes);
+app.use("/api/assignments", teacherAssignmentRoutes);
 
 app.use((err, req, res, next) =>
 {

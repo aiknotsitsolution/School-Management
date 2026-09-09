@@ -15,6 +15,7 @@ const attendanceRoutes = require("./routes/attendanceRoutes");
 const homeworkRoutes = require("./routes/homeworkRoutes");
 const homeworkSubmissionRoutes = require("./routes/homeworkSubmissionRoutes");
 const examRoutes = require("./routes/examRoutes");
+const examMasterRoutes = require("./routes/examMasterRoutes");
 const marksRoutes = require("./routes/marksRoutes");
 
 const app = express();
@@ -52,6 +53,7 @@ app.use("/api/attendance", attendanceRoutes);
 app.use("/api/homework/submissions", homeworkSubmissionRoutes);
 app.use("/api/homework", homeworkRoutes);
 app.use("/api/exams", examRoutes);
+app.use("/api/exam-masters", examMasterRoutes);
 app.use("/api/marks", marksRoutes);
 
 app.use((err, req, res, next) =>

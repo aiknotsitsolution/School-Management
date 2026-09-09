@@ -53,8 +53,14 @@ const ROLE_PERMISSIONS = {
   class_teacher: [
     "dashboard:view", "staff:read", "students:read", "attendance:read",
     "attendance:mark",
-    "timetable:read", "homework:read", "homework:write", "exams:read",
-    "marks:read", "notices:read", "leaves:apply",
+    "timetable:read", "timetable:write", "homework:read", "homework:write",
+    "exams:read", "marks:read", "notices:read", "leaves:apply",
+  ],
+  teacher: [
+    "dashboard:view", "staff:read", "students:read", "attendance:read",
+    "attendance:mark",
+    "timetable:read", "timetable:write", "homework:read", "homework:write",
+    "exams:read", "marks:read", "notices:read", "leaves:apply",
   ],
   staff: {},
   student: [

@@ -15,7 +15,7 @@ import { api } from "../../lib/api";
 import { useTeacherContext, fmtDate } from "./useTeacherContext";
 
 export default function Profile() {
-  const { user, school, assignment } = useTeacherContext();
+  const { user, school, assignment, hasClassTeacher } = useTeacherContext();
   const [staff, setStaff] = useState(null);
 
   useEffect(() => {
@@ -28,7 +28,7 @@ export default function Profile() {
       .catch((e) => toast(e.message, "error"));
   }, []);
 
-  const roleLabel = "Class Teacher";
+  const roleLabel = hasClassTeacher ? "Class Teacher" : "Teacher";
 
   return (
     <div className="space-y-6">

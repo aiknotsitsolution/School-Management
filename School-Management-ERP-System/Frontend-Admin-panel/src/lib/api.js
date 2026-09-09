@@ -52,7 +52,10 @@ async function request(path, options = {}) {
   }
   const body = await response.json().catch(() => ({}));
   if (!response.ok || body.success === false) {
-    throw new Error(body.message || "Request failed");
+    const err = new Error(body.message || "Request failed");
+    err.data = body.data || null;
+    err.status = response.status;
+    throw err;
   }
   return body;
 }
@@ -232,6 +235,12 @@ export const api = {
     update: (id, item) => request(`/exams/${id}`, json("PUT", item)),
     remove: (id) => request(`/exams/${id}`, { method: "DELETE" }),
   },
+  examMasters: {
+    list: (kind) => request(`/exam-masters/${kind}`),
+    create: (kind, item) => request(`/exam-masters/${kind}`, json("POST", item)),
+    deactivate: (kind, id) =>
+      request(`/exam-masters/${kind}/${id}`, { method: "PATCH", body: JSON.stringify({ active: false }) }),
+  },
   marks: {
     enter: (item) => request("/marks", json("POST", item)),
     reportCard: (params = "") =>
@@ -279,7 +288,7 @@ export const api = {
     remove: (id) => request(`/events/${id}`, { method: "DELETE" }),
   },
   staff: {
-    list: () => request("/staff"),
+    list: (params = "") => request(`/staff${params ? `?${params}` : ""}`),
     create: (item) => request("/staff", json("POST", item)),
     update: (id, item) => request(`/staff/${id}`, json("PUT", item)),
     remove: (id) => request(`/staff/${id}`, { method: "DELETE" }),
@@ -288,6 +297,15 @@ export const api = {
         request(`/staff/attendance${params ? `?${params}` : ""}`),
       mark: (item) => request("/staff/attendance", json("POST", item)),
     },
+  },
+  assignments: {
+    me: () => request("/assignments/me"),
+    list: (params = "") =>
+      request(`/assignments${params ? `?${params}` : ""}`),
+    create: (item) => request("/assignments", json("POST", item)),
+    update: (id, item) => request(`/assignments/${id}`, json("PATCH", item)),
+    end: (id) => request(`/assignments/${id}/end`, json("POST", {})),
+    remove: (id) => request(`/assignments/${id}`, { method: "DELETE" }),
   },
   leaves: {
     list: () => request("/leaves"),

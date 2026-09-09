@@ -21,13 +21,14 @@ const ROLE_LABELS = {
   super_admin: "Platform Owner",
   school_admin: "School Admin",
   class_teacher: "Class Teacher",
+  teacher: "Teacher",
   staff: "Staff",
   student: "Student",
 };
 
 // A school admin can create accounts for every school role EXCEPT admins —
 // privilege escalation is deliberately blocked (enforced server-side too).
-const CREATABLE_ROLES = ["class_teacher", "staff", "student"];
+const CREATABLE_ROLES = ["class_teacher", "teacher", "staff", "student"];
 
 const DESIGNATION_OPTIONS = [
   "admission_counsellor",
@@ -63,6 +64,7 @@ const REF_ID_FIELDS = {
   student: { label: "Admission ID", placeholder: "Enter Admission ID", required: true },
   staff: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
   class_teacher: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
+  teacher: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
   school_admin: { label: "Ref ID", disabled: true, placeholder: "Not required for this role" },
 };
 
@@ -125,7 +127,7 @@ const toUserPayload = (form) => ({
   role: form.role,
   designation: form.role === "staff" ? form.designation || undefined : undefined,
   class:
-    form.role === "class_teacher" || form.role === "student"
+    form.role === "class_teacher" || form.role === "teacher" || form.role === "student"
       ? form.className.trim() || undefined
       : undefined,
   section: form.section.trim() || undefined,
@@ -241,18 +243,27 @@ export default function Users() {
     setBusy(true);
     try {
       let refId = form.refId.trim() || undefined;
-      if ((form.role === "staff" || form.role === "class_teacher") && form.linkStaff) {
+      if (
+        (form.role === "staff" ||
+          form.role === "class_teacher" ||
+          form.role === "teacher") &&
+        form.linkStaff
+      ) {
+        const isTeacherRole =
+          form.role === "class_teacher" || form.role === "teacher";
         const designation =
           form.role === "staff"
             ? form.designation.trim()
-            : `Teacher - Class ${form.className.trim()} ${form.section.trim()}`.trim();
+            : form.className.trim()
+              ? `Teacher - Class ${form.className.trim()} ${form.section.trim()}`.trim()
+              : "Teacher";
         const { data: staffDoc } = await api.staff.create({
           employeeId: `${form.email.trim().toLowerCase().split("@")[0]}-emp`,
           name: form.name.trim(),
           designation,
           email: form.email.trim().toLowerCase(),
-          role: form.role === "class_teacher" ? "teacher" : "admin-staff",
-          ...(form.role === "class_teacher"
+          role: isTeacherRole ? "teacher" : "admin-staff",
+          ...(isTeacherRole && form.className.trim()
             ? { classesAssigned: [{ class: form.className.trim(), section: form.section.trim() || null }] }
             : {}),
         });
@@ -365,10 +376,12 @@ export default function Users() {
                   ))}
                 </Select>
               )}
-              {(form.role === "class_teacher" || form.role === "student") && (
+              {(form.role === "class_teacher" ||
+                form.role === "teacher" ||
+                form.role === "student") && (
                 <>
                   <Input
-                    placeholder="Class"
+                    placeholder={form.role === "teacher" ? "Primary class (optional)" : "Class"}
                     autoComplete="off"
                     value={form.className}
                     onChange={(e) => setForm({ ...form, className: e.target.value })}
@@ -390,7 +403,9 @@ export default function Users() {
                 />
               )}
             </div>
-            {(form.role === "staff" || form.role === "class_teacher") && (
+            {(form.role === "staff" ||
+              form.role === "class_teacher" ||
+              form.role === "teacher") && (
               <label className="flex items-center gap-2 text-[12.5px] text-slate-text cursor-pointer">
                 <input
                   type="checkbox"
@@ -673,7 +688,7 @@ export default function Users() {
               onRemove={removeUser}
               onRestore={restoreUser}
               onReset={resetPassword}
-              onEdit={editUser}
+              onEdit={editSelected}
               busy={displayBusy(selected.id)}
             />
           </div>

@@ -24,7 +24,7 @@ app.use(morgan("dev"));
 // Global rate limiter - protects all downstream microservices
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 500,
+  max: 8000,
   standardHeaders: true,
   legacyHeaders: false,
   message: {
@@ -41,13 +41,13 @@ const rate = (key, fallback) => {
   return Number.isFinite(v) && v > 0 ? v : fallback;
 };
 const sensitiveLimiters = [
-  { path: "/api/auth/login", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_LOGIN_MAX", 20) },
-  { path: "/api/auth/refresh-token", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_REFRESH_MAX", 60) },
-  { path: "/api/auth/change-password", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_CHANGE_PASSWORD_MAX", 10) },
-  { path: "/api/auth/register", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_REGISTER_MAX", 60) },
-  { path: "/api/auth/reset-password", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_RESET_PASSWORD_MAX", 10) },
-  { path: "/api/auth/users/:id/reset-password", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_ADMIN_RESET_MAX", 20) },
-  { path: "/api/payments/orders", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_PAYMENT_CREATE_MAX", 30) },
+  { path: "/api/auth/login", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_LOGIN_MAX", 500) },
+  { path: "/api/auth/refresh-token", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_REFRESH_MAX", 500) },
+  { path: "/api/auth/change-password", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_CHANGE_PASSWORD_MAX", 100) },
+  { path: "/api/auth/register", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_REGISTER_MAX", 50) },
+  { path: "/api/auth/reset-password", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_RESET_PASSWORD_MAX", 100) },
+  { path: "/api/auth/users/:id/reset-password", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_ADMIN_RESET_MAX", 200) },
+  { path: "/api/payments/orders", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_PAYMENT_CREATE_MAX", 300) },
 ];
 sensitiveLimiters.forEach(({ path, window, max }) => {
   app.use(
@@ -122,6 +122,10 @@ const routes = [
     target: process.env.STAFF_SERVICE_URL || "http://localhost:5003",
   },
   {
+    path: "/api/assignments",
+    target: process.env.STAFF_SERVICE_URL || "http://localhost:5003",
+  },
+  {
     path: "/api/attendance",
     target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
   },
@@ -135,6 +139,10 @@ const routes = [
   },
   {
     path: "/api/exams",
+    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
+  },
+  {
+    path: "/api/exam-masters",
     target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
   },
   {

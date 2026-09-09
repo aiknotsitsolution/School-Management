@@ -22,7 +22,7 @@ import {
 import { api } from "../lib/api";
 import { selectUser, selectSchool } from "../store/selectors";
 import { useSelector } from "react-redux";
-import { todayISO, fmtDate } from "./teacher/useTeacherContext";
+import { todayISO, fmtDate, useTeacherContext } from "./teacher/useTeacherContext";
 
 const WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -44,8 +44,13 @@ function greeting() {
 export default function ClassTeacherDashboard() {
   const user = useSelector(selectUser);
   const school = useSelector(selectSchool);
-  const cls = user?.class || null;
-  const section = user?.section || null;
+  const {
+    cls,
+    section,
+    hasClassTeacher,
+    teachingAssignments,
+    loading: ctxLoading,
+  } = useTeacherContext();
 
   const [students, setStudents] = useState([]);
   const [attendance, setAttendance] = useState([]);
@@ -112,10 +117,10 @@ export default function ClassTeacherDashboard() {
     return (
       <div className="rounded-2xl bg-paper p-10 text-center">
         <p className="font-display text-xl font-bold text-ink mb-1">
-          No class assigned yet
+          {hasClassTeacher ? "No class assigned yet" : "No teaching assignment yet"}
         </p>
         <p className="text-[13px] text-slate-text">
-          Contact the school admin to link your class and section.
+          Contact the school admin to assign you a class, section and subject{school?.session ? ` for session ${school.session}` : ""}.
         </p>
       </div>
     );
@@ -183,8 +188,10 @@ export default function ClassTeacherDashboard() {
                 {greeting()}, {(user?.name || "Teacher").split(" ")[0]}
               </h2>
               <p className="text-white/60 text-[13.5px] mt-1">
-                Class Teacher · Class {cls}
-                {section ? `-${section}` : ""} · {students.length} students
+                {hasClassTeacher ? `Class Teacher · Class ${cls}` : "Teacher"} 
+                {section ? `-${section}` : ""} 
+                {hasClassTeacher && students.length ? ` · ${students.length} students` : ""}
+                {teachingAssignments.length ? ` · ${teachingAssignments.length} teaching assignment${teachingAssignments.length === 1 ? "" : "s"}` : ""}
                 {staff?.designation ? ` · ${staff.designation}` : ""}
               </p>
             </div>

@@ -21,7 +21,10 @@ const userSchema = new mongoose.Schema(
     password: { type: String, required: true, select: false },
     role: {
       type: String,
-      enum: ["super_admin", "school_admin", "class_teacher", "staff", "student"],
+      // "teacher" is the login role for teaching staff WITHOUT a homeroom. A
+      // "class_teacher" is simply a teacher who also carries an explicit Class
+      // Teacher assignment for a class/section/session (see TeacherAssignment).
+      enum: ["super_admin", "school_admin", "class_teacher", "teacher", "staff", "student"],
       required: true,
     },
     designation: {

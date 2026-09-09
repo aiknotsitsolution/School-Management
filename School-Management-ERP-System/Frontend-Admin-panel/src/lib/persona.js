@@ -68,7 +68,9 @@ export function isPersonaStaff(user) {
 
 export function resolvePersona(user) {
   if (!user) return null;
-  if (user.role === "class_teacher") return STAFF_PERSONAS.classTeacher;
+  if (user.role === "class_teacher" || user.role === "teacher") {
+    return STAFF_PERSONAS.classTeacher;
+  }
   if (user.role === "staff") {
     if (PERSONA_BY_DESIGNATION[user.designation]) {
       return PERSONA_BY_DESIGNATION[user.designation];

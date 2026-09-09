@@ -81,19 +81,19 @@ const scopeStudentQuery = (req, res, next) => {
   next();
 };
 
-// Restrict a student to only their own record(s); staff/class teachers allowed.
+// Restrict a student to only their own record(s); staff/teachers allowed.
 const restrictToOwnStudent = (getStudentIdFromReq) => (req, res, next) => {
-  if (["school_admin", "class_teacher", "staff"].includes(req.user.role)) return next();
+  if (["school_admin", "class_teacher", "teacher", "staff"].includes(req.user.role)) return next();
   const targetId = getStudentIdFromReq(req);
   if (req.user.role === "student" && req.user.refId === targetId) return next();
   return res.status(403).json({ success: false, message: "You can only access your own student record" });
 };
 
-// Class Teacher scoping: locks GET queries to the teacher's assigned class
-// & section and rejects teachers with no class assignment.
+// Teacher scoping (class_teacher or teacher): locks GET queries to the token's
+// class & section and rejects teachers with no class assignment.
 const scopeClassTeacher = (req, res, next) => {
   const { role, class: cls, section } = req.user || {};
-  if (role !== "class_teacher") return next();
+  if (!["class_teacher", "teacher"].includes(role)) return next();
   if (!cls) {
     return res.status(403).json({
       success: false,

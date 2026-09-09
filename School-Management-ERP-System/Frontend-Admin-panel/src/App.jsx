@@ -72,6 +72,7 @@ import AuditLogs from "./pages/platform/AuditLogs";
 import PlatformReports from "./pages/platform/PlatformReports";
 import PlatformSettings from "./pages/platform/PlatformSettings";
 import Users from "./pages/Users";
+import Teachers from "./pages/Teachers";
 import Plans from "./pages/Plans";
 import Subscriptions from "./pages/Subscriptions";
 import CounsellorWorkspace from "./pages/CounsellorWorkspace";
@@ -256,9 +257,17 @@ export default function App() {
             }
           />
           <Route
+            path="/teachers"
+            element={
+              <RequirePermission permission="staff:write">
+                <Teachers />
+              </RequirePermission>
+            }
+          />
+          <Route
             path="/teacher-dashboard"
             element={
-              <RequireRole roles={["class_teacher"]}>
+              <RequireRole roles={["class_teacher", "teacher"]}>
                 <ClassTeacherDashboard />
               </RequireRole>
             }
@@ -266,7 +275,7 @@ export default function App() {
           <Route
             path="/teacher/my-class"
             element={
-              <RequireRole roles={["class_teacher"]}>
+              <RequireRole roles={["class_teacher", "teacher"]}>
                 <TeacherMyClass />
               </RequireRole>
             }
@@ -274,7 +283,7 @@ export default function App() {
           <Route
             path="/teacher/attendance"
             element={
-              <RequireRole roles={["class_teacher"]}>
+              <RequireRole roles={["class_teacher", "teacher"]}>
                 <TeacherAttendance />
               </RequireRole>
             }
@@ -282,7 +291,7 @@ export default function App() {
           <Route
             path="/teacher/timetable"
             element={
-              <RequireRole roles={["class_teacher"]}>
+              <RequireRole roles={["class_teacher", "teacher"]}>
                 <TeacherTimetable />
               </RequireRole>
             }
@@ -290,7 +299,7 @@ export default function App() {
           <Route
             path="/teacher/homework"
             element={
-              <RequireRole roles={["class_teacher"]}>
+              <RequireRole roles={["class_teacher", "teacher"]}>
                 <TeacherHomework />
               </RequireRole>
             }
@@ -298,7 +307,7 @@ export default function App() {
           <Route
             path="/teacher/exams"
             element={
-              <RequireRole roles={["class_teacher"]}>
+              <RequireRole roles={["class_teacher", "teacher"]}>
                 <TeacherExams />
               </RequireRole>
             }
@@ -306,7 +315,7 @@ export default function App() {
           <Route
             path="/teacher/performance"
             element={
-              <RequireRole roles={["class_teacher"]}>
+              <RequireRole roles={["class_teacher", "teacher"]}>
                 <TeacherPerformance />
               </RequireRole>
             }
@@ -314,7 +323,7 @@ export default function App() {
           <Route
             path="/teacher/notices"
             element={
-              <RequireRole roles={["class_teacher"]}>
+              <RequireRole roles={["class_teacher", "teacher"]}>
                 <TeacherNotices />
               </RequireRole>
             }
@@ -322,7 +331,7 @@ export default function App() {
           <Route
             path="/teacher/profile"
             element={
-              <RequireRole roles={["class_teacher"]}>
+              <RequireRole roles={["class_teacher", "teacher"]}>
                 <TeacherProfile />
               </RequireRole>
             }

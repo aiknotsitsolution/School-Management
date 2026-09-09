@@ -1,28 +1,124 @@
 const Exam = require("../models/Exam");
 const Marks = require("../models/Marks");
+const ExamType = require("../models/ExamType");
+const SchoolClass = require("../models/SchoolClass");
+const SchoolSection = require("../models/SchoolSection");
+const SchoolSubject = require("../models/SchoolSubject");
+const TimeSlot = require("../models/TimeSlot");
+const Room = require("../models/Room");
+const ObjectId = require("mongoose").Types.ObjectId;
 const { paginate, pageInfo } = require("../utils/pagination");
 
 // Mass-assignment guard: only these fields may be set from the request body.
 const EXAM_FIELDS = [
-  "examName", "class", "subject", "date", "startTime", "endTime", "room", "maxMarks", "passingMarks",
+  "examName", "class", "section", "subject", "date", "startTime", "endTime", "room", "maxMarks", "passingMarks",
 ];
+// Optional reference to the master entity that produced the snapshot string.
+const EXAM_REF_FIELDS = [
+  "examTypeId", "classId", "sectionId", "subjectId", "timeSlotId", "roomId",
+];
+const TYPE_OF = {
+  examTypeId: ExamType,
+  classId: SchoolClass,
+  sectionId: SchoolSection,
+  subjectId: SchoolSubject,
+  timeSlotId: TimeSlot,
+  roomId: Room,
+};
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
+function isObjectId(value) {
+  return ObjectId.isValid(value) && String(new ObjectId(value)) === String(value);
+}
+
+// Verify every master reference resolves inside THIS tenant. Rejects a value a
+// school has no right to (cross-tenant leakage) and keeps exam records tenant-consistent.
+async function validateMasterRefs(schoolId, body) {
+  if (!body) return;
+  const toCheck = [];
+  for (const field of EXAM_REF_FIELDS) {
+    const value = body[field];
+    if (value == null || value === "") continue;
+    if (!isObjectId(value)) {
+      const wrong = new Error(`${field} must be a valid ObjectId`);
+      wrong.status = 400;
+      throw wrong;
+    }
+    toCheck.push([field, value]);
+  }
+  for (const [field, value] of toCheck) {
+    const Model = TYPE_OF[field];
+    // Subjects are dual-scope: a valid ref is either a platform global subject
+    // (schoolId null) or this school's tenant subject. Other masters are strictly
+    // per-school.
+    if (field === "subjectId") {
+      const exists = await Model.findOne({
+        _id: value,
+        $or: [{ scope: "global" }, { scope: "tenant", schoolId }],
+      }).lean();
+      if (!exists) {
+        const wrong = new Error(`Referenced ${field} does not exist for this school`);
+        wrong.status = 400;
+        throw wrong;
+      }
+      continue;
+    }
+    const exists = await Model.findOne({ _id: value, schoolId }).lean();
+    if (!exists) {
+      const wrong = new Error(`Referenced ${field} does not exist for this school`);
+      wrong.status = 400;
+      throw wrong;
+    }
+  }
+}
+
+function toTimeSlotPayload(body) {
+  const { timeSlotId, startTime, endTime } = body || {};
+  const payload = {};
+  if (timeSlotId) payload.timeSlotId = timeSlotId;
+  if (startTime || endTime) {
+    if (startTime) payload.startTime = startTime;
+    if (endTime) payload.endTime = endTime;
+  }
+  return Object.keys(payload).length ? payload : null;
+}
+
+// Persist the validated master refs (examTypeId, classId, sectionId, subjectId,
+// timeSlotId, roomId) that the snapshot strings came from.
+function toRefPayload(body) {
+  const payload = {};
+  for (const field of EXAM_REF_FIELDS) {
+    const value = body && body[field];
+    if (value != null && value !== "") payload[field] = value;
+  }
+  return payload;
+}
+
 const createExam = async (req, res) => {
   try {
-    const exam = await Exam.create({ ...pick(req.body, EXAM_FIELDS), schoolId: req.tenantId });
+    await validateMasterRefs(req.tenantId, req.body);
+    const slot = toTimeSlotPayload(req.body) || {};
+    const refs = toRefPayload(req.body);
+    const payload = pick(req.body, EXAM_FIELDS);
+    const exam = await Exam.create({
+      ...payload,
+      ...slot,
+      ...refs,
+      schoolId: req.tenantId,
+    });
     res.status(201).json({ success: true, data: exam });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(err.status || 400).json({ success: false, message: err.message });
   }
 };
 
 const getExams = async (req, res) => {
   try {
-    const { class: cls, subject } = req.query;
+    const { class: cls, section, subject } = req.query;
     const filter = { schoolId: req.tenantId };
     if (cls) filter.class = cls;
+    if (section) filter.section = section;
     if (subject) filter.subject = subject;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
@@ -37,15 +133,29 @@ const getExams = async (req, res) => {
 
 const updateExam = async (req, res) => {
   try {
+    const existing = await Exam.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    if (!existing) return res.status(404).json({ success: false, message: "Exam not found" });
+
+    await validateMasterRefs(req.tenantId, req.body);
+
+    // Merge snapshot times with the existing record so a ref-only update never
+    // blanks times, and an explicit startTime/endTime overrides them.
+    const slot = toTimeSlotPayload(req.body) || {};
+    const refs = toRefPayload(req.body);
+    const fields = {
+      ...pick(req.body, EXAM_FIELDS),
+      ...(slot.startTime || slot.endTime || slot.timeSlotId ? slot : {}),
+      ...refs,
+    };
+
     const exam = await Exam.findOneAndUpdate(
       { _id: req.params.id, schoolId: req.tenantId },
-      pick(req.body, EXAM_FIELDS),
+      fields,
       { new: true, runValidators: true },
     );
-    if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
     res.json({ success: true, data: exam });
   } catch (err) {
-    res.status(400).json({ success: false, message: err.message });
+    res.status(err.status || 400).json({ success: false, message: err.message });
   }
 };
 

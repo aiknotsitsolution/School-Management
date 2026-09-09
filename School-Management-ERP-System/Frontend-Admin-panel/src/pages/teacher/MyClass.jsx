@@ -13,7 +13,8 @@ import { api } from "../../lib/api";
 import { useTeacherContext, fmtDate } from "./useTeacherContext";
 
 export default function MyClass() {
-  const { cls, section, query } = useTeacherContext();
+  const { cls, section, query, hasClassTeacher, teachingScopes, loading: ctxLoading } =
+    useTeacherContext();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -52,6 +53,26 @@ export default function MyClass() {
   };
 
   const present = (students || []).filter((s) => s.status === "Active").length;
+
+  if (!ctxLoading && !hasClassTeacher) {
+    return (
+      <Card>
+        <div className="py-16 text-center">
+          <Users size={40} className="mx-auto text-slate-text/30 mb-3" />
+          <p className="text-[15px] font-semibold text-ink">
+            You are not a Class Teacher yet
+          </p>
+          <p className="text-[13px] text-slate-text/70 mt-1">
+            {teachingScopes.length
+              ? "This page is for your homeroom class. You are a subject teacher for " +
+                teachingScopes.map((s) => `Class ${s.class}-${s.section}`).join(", ") +
+                " — use Attendance, Timetable and Homework instead."
+              : "Your school admin will assign a Class Teacher responsibility to you."}
+          </p>
+        </div>
+      </Card>
+    );
+  }
 
   if (!cls) {
     return (
