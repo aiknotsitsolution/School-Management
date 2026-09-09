@@ -4,12 +4,23 @@ const User = require("../models/User");
 const School = require("../models/School");
 const { validatePassword } = require("../utils/password");
 const { getPermissionsFor } = require("../utils/permissions");
+const { paginate, pageInfo } = require("../utils/pagination");
 const { generateAccessToken, generateRefreshToken } = require("../utils/generateToken");
 const { getJwtSecret } = require("../utils/jwtSecret");
 const { writeAudit } = require("../utils/audit");
 
 const VALID_ROLES = ["super_admin", "school_admin", "class_teacher", "staff", "student"];
 const SCHOOL_ADMIN_CREATABLE = ["class_teacher", "staff", "student"];
+
+// Failure responses never dump raw error/debug text (stack traces, DB paths,
+// index/duplicate details) to the client. Details go to the server log only.
+const unexpectedError = (res, err) => {
+  if (err.code === 11000) {
+    return res.status(409).json({ success: false, message: "Duplicate entry violates a unique constraint" });
+  }
+  console.error("[auth] unexpected error:", err?.stack || err.message);
+  return res.status(500).json({ success: false, message: "Something went wrong" });
+};
 
 // School fields a caller may update directly. Tenant identity (code) is
 // immutable after creation; anything else is ignored → no mass assignment.
@@ -207,7 +218,7 @@ const createUser = async (req, res) => {
     });
     await writeAudit({ req, user: creator, action: "user.created", targetType: "user", targetId: user._id, message: `Created ${role} user ${user.email}` });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -250,7 +261,7 @@ const login = async (req, res) => {
       },
     });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -262,6 +273,12 @@ const refreshToken = async (req, res) => {
     const decoded = jwt.verify(refreshToken, getJwtSecret());
     const user = await User.findById(decoded.id);
     if (!user || !user.isActive || user.deletedAt) return res.status(401).json({ success: false, message: "Invalid refresh token" });
+    // Refresh tokens issued before the password was last changed/reset are
+    // invalidated so a credential change (or compromise response) kills all
+    // existing sessions.
+    if (user.passwordChangedAt && decoded.iat * 1000 <= user.passwordChangedAt.getTime()) {
+      return res.status(401).json({ success: false, message: "Session expired, please log in again" });
+    }
 
     const accessToken = generateAccessToken(user);
     const newRefresh = generateRefreshToken(user);
@@ -281,7 +298,7 @@ const getMe = async (req, res) => {
 
     res.json({ success: true, data: { user: toPublicUser(user), school } });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -298,10 +315,11 @@ const changePassword = async (req, res) => {
     if (passErr) return res.status(400).json({ success: false, message: passErr });
 
     user.password = await bcrypt.hash(newPassword, 10);
+    user.passwordChangedAt = new Date();
     await user.save();
     res.json({ success: true, message: "Password updated successfully" });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -337,7 +355,7 @@ const listUsers = async (req, res) => {
     ]);
     res.json({ success: true, count: users.length, total, page: p, limit: l, pages: Math.ceil(total / l), data: users.map(toPublicUser) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -375,7 +393,7 @@ const updateUserStatus = async (req, res) => {
     await writeAudit({ req, user: req.user, action: isActive ? "user.activated" : "user.deactivated", targetType: "user", targetId: target._id, message: `${isActive ? "Activated" : "Deactivated"} user ${target.email}` });
     res.json({ success: true, data: toPublicUser(target) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -394,7 +412,7 @@ const deleteUser = async (req, res) => {
     await writeAudit({ req, user: req.user, action: "user.soft_deleted", targetType: "user", targetId: target._id, message: `Soft-deleted user ${target.email}` });
     res.json({ success: true, message: "User removed and access revoked. History is preserved." });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -410,7 +428,7 @@ const restoreUser = async (req, res) => {
     await writeAudit({ req, user: req.user, action: "user.restored", targetType: "user", targetId: target._id, message: `Restored user ${target.email}` });
     res.json({ success: true, message: "User restored", data: toPublicUser(target) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -470,7 +488,84 @@ const updateUser = async (req, res) => {
     await writeAudit({ req, user: req.user, action: "user.updated", targetType: "user", targetId: target._id, message: `Updated user ${target.email}` });
     res.json({ success: true, data: toPublicUser(target) });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
+  }
+};
+
+// Password recovery (no email/SMS provider in the fleet — admin-initiated).
+// An authorised admin generates a short-lived, single-use reset link and hands
+// the token to the user out-of-band (in person / phone). Access tokens are
+// never issued through this flow and no reset token is ever delivered to an
+// unauthenticated caller.
+const adminResetPassword = async (req, res) => {
+  try {
+    const target = await loadManageableUser(req.user, req.params.id);
+    if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
+    if (target.deletedAt) return res.status(400).json({ success: false, message: "Restore the user before resetting the password" });
+    if (!target.isActive) return res.status(400).json({ success: false, message: "Activate the user before resetting the password" });
+
+    const token = jwt.sign(
+      { sub: String(target._id), purpose: "password-reset" },
+      getJwtSecret(),
+      { expiresIn: 15 * 60 },
+    );
+    const resetLink = `${process.env.FRONTEND_URL || "http://localhost:5173"}/reset-password?token=${encodeURIComponent(token)}`;
+
+    await writeAudit({ req, user: req.user, action: "user.password_reset_generated", targetType: "user", targetId: target._id, message: `Generated password reset link for ${target.email}` });
+    res.json({
+      success: true,
+      message: "Password reset link generated",
+      data: { resetLink, expiresInMinutes: 15, resetUserId: String(target._id) },
+    });
+  } catch (err) {
+    return unexpectedError(res, err);
+  }
+};
+
+// Public endpoint: applies a reset link. The token is the only secret; links
+// are signed, short-lived and single-use (passwordChangedAt watermark).
+const resetPassword = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ success: false, message: "token and newPassword are required" });
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, getJwtSecret());
+    } catch {
+      return res.status(400).json({ success: false, message: "Invalid or expired reset link" });
+    }
+    if (decoded.purpose !== "password-reset" || !decoded.sub) {
+      return res.status(400).json({ success: false, message: "Invalid or expired reset link" });
+    }
+
+    const passErr = validatePassword(newPassword);
+    if (passErr) return res.status(400).json({ success: false, message: passErr });
+
+    const user = await User.findById(decoded.sub).select("+password");
+    if (!user) return res.status(400).json({ success: false, message: "Invalid or expired reset link" });
+    if (!user.isActive || user.deletedAt) {
+      return res.status(403).json({ success: false, message: "This account is inactive or has been removed" });
+    }
+    if (user.schoolId) {
+      const school = await School.findById(user.schoolId).select("status").lean();
+      if (!school || school.status !== "active") {
+        return res.status(403).json({ success: false, message: "Your school account is inactive" });
+      }
+    }
+
+    const issuedAtMs = decoded.iat * 1000;
+    if (user.passwordChangedAt && issuedAtMs <= user.passwordChangedAt.getTime()) {
+      return res.status(400).json({ success: false, message: "This reset link has already been used" });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.passwordChangedAt = new Date(issuedAtMs);
+    await user.save();
+    await writeAudit({ req, user: { id: user._id, email: user.email, role: user.role }, action: "user.password_reset", targetType: "user", targetId: user._id, message: `Password reset for ${user.email}` });
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (err) {
+    return unexpectedError(res, err);
   }
 };
 
@@ -489,16 +584,24 @@ const createSchool = async (req, res) => {
     await writeAudit({ req, user: req.user, action: "school.created", targetType: "school", targetId: school._id, message: `Created school ${name} (${codeSlug})` });
     res.status(201).json({ success: true, message: "School created successfully", data: school });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
 const listSchools = async (req, res) => {
   try {
-    const schools = await School.find().sort({ createdAt: -1 });
-    res.json({ success: true, count: schools.length, data: schools });
+    const { page, limit, skip } = paginate(req.query, { fallback: 50, max: 200 });
+    const filter = {};
+    if (req.query.q && String(req.query.q).trim()) {
+      filter.name = { $regex: String(req.query.q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
+    }
+    const [schools, total] = await Promise.all([
+      School.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      School.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: schools.length, total, ...pageInfo(total, page, limit), data: schools });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -508,7 +611,7 @@ const getSchool = async (req, res) => {
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
     res.json({ success: true, data: school });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -524,7 +627,7 @@ const updateSchool = async (req, res) => {
     await writeAudit({ req, user: req.user, action: "school.updated", targetType: "school", targetId: school._id, message: `Updated school fields: ${Object.keys(patch).join(", ") || "(none)"}` });
     res.json({ success: true, message: "School updated successfully", data: school });
   } catch (err) {
-    res.status(500).json({ success: false, message: err.message });
+    return unexpectedError(res, err);
   }
 };
 
@@ -535,6 +638,7 @@ const verify = async (req, res) => {
 module.exports = {
   createUser, login, refreshToken, getMe, changePassword,
   listUsers, updateUserStatus, deleteUser, restoreUser, updateUser,
+  adminResetPassword, resetPassword,
   createSchool, listSchools, getSchool, updateSchool,
   verify,
 };

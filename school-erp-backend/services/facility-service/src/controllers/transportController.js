@@ -1,8 +1,17 @@
 const BusRoute = require("../models/BusRoute");
+const { paginate, pageInfo } = require("../utils/pagination");
+
+// Mass-assignment guard: only these fields may be set from the request body.
+const ROUTE_FIELDS = [
+  "routeNo", "driverName", "driverContact", "vehicleNo", "stops",
+  "assignedStudents", "currentLocation",
+];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
 const createRoute = async (req, res) => {
   try {
-    const route = await BusRoute.create({ ...req.body, schoolId: req.tenantId });
+    const route = await BusRoute.create({ ...pick(req.body, ROUTE_FIELDS), schoolId: req.tenantId });
     res.status(201).json({ success: true, data: route });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -14,8 +23,12 @@ const getRoutes = async (req, res) => {
     const { studentId } = req.query;
     const filter = { schoolId: req.tenantId };
     if (studentId) filter.assignedStudents = studentId;
-    const data = await BusRoute.find(filter);
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      BusRoute.find(filter).skip(skip).limit(limit),
+      BusRoute.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

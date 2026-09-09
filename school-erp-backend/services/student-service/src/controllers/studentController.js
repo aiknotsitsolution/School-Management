@@ -1,5 +1,22 @@
 const mongoose = require("mongoose");
 const Student = require("../models/Student");
+
+// Neutralizes regex metacharacters in user-supplied search terms so they cannot
+// inject regex operators ($regex pattern injection) or craft catastrophic
+// (ReDoS) patterns. Input is also length-capped to bound scan cost.
+const escapeRegex = (term) =>
+  String(term).slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Mass-assignment guard for profile/record edits: only these fields may be set
+// from the request body. Everything else (schoolId, userId, _id, timestamps,
+// profileStatus/profileCompletedAt) is derived server-side.
+const STUDENT_EDITABLE = [
+  "name", "dob", "gender", "class", "section", "rollNo", "bloodGroup",
+  "address", "photoUrl", "parentName", "parentContact", "parentEmail",
+  "motherName", "house", "admissionDate", "feeCategory", "status", "admissionNo",
+];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 const imagekit = require("../config/imagekit");
 
 // Fields that must be filled before a profile is considered complete.
@@ -30,6 +47,11 @@ const uploadStudentPhoto = async (req, res) => {
         .status(400)
         .json({ success: false, message: "Photo file is required" });
     const imagekit = require("../config/imagekit");
+    if (!imagekit) {
+      return res
+        .status(503)
+        .json({ success: false, message: "Image provider is not configured" });
+    }
     const uploaded = await imagekit.upload({
       file: req.file.buffer.toString("base64"),
       fileName: `student-${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "-")}`,
@@ -43,7 +65,7 @@ const uploadStudentPhoto = async (req, res) => {
         data: { url: uploaded.url, fileId: uploaded.fileId },
       });
   } catch (err) {
-    res.status(502).json({ success: false, message: err.message });
+    res.status(502).json({ success: false, message: err?.message || "Image upload failed" });
   }
 };
 
@@ -124,7 +146,7 @@ const getStudents = async (req, res) => {
     if (status) filter.status = status;
     if (profileStatus) filter.profileStatus = profileStatus;
     if (admissionNo) filter.admissionNo = String(admissionNo).trim();
-    const term = String(q || search || "").trim();
+    const term = escapeRegex(String(q || search || "").trim());
     if (term) {
       const rx = { $regex: term, $options: "i" };
       filter.$or = [{ name: rx }, { admissionNo: rx }];
@@ -139,6 +161,7 @@ const getStudents = async (req, res) => {
       count: students.length,
       total,
       page: Number(page),
+      pages: Math.ceil(total / Number(limit)),
       data: students,
     });
   } catch (err) {
@@ -231,7 +254,7 @@ const updateStudent = async (req, res) => {
         .status(404)
         .json({ success: false, message: "Student not found" });
 
-    const patch = { ...req.body };
+    const patch = pick(req.body, STUDENT_EDITABLE);
     delete patch.schoolId;
     if (patch.admissionNo !== undefined) {
       patch.admissionNo = String(patch.admissionNo).trim();

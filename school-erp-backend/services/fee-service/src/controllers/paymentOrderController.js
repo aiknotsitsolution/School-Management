@@ -1,7 +1,9 @@
 const { v4: uuidv4 } = require("uuid");
+const crypto = require("node:crypto");
 const FeeInvoice = require("../models/FeeInvoice");
 const Payment = require("../models/Payment");
 const PaymentOrder = require("../models/PaymentOrder");
+const { paginate, pageInfo } = require("../utils/pagination");
 
 // Whether a real payment provider is configured. Provider setup (keys, webhook
 // signing secret, callback URL) is deployment work; until then, orders can be
@@ -114,7 +116,17 @@ const confirmOrder = async (req, res) => {
 
     const signature = req.headers["x-payment-signature"];
     const expected = process.env.PAYMENT_PROVIDER_WEBHOOK_SECRET;
-    if (!signature || !expected || signature !== expected) {
+    if (!signature || !expected) {
+      return res.status(401).json({ success: false, message: "Invalid provider signature" });
+    }
+    // Constant-time comparison on hex-encoded values avoids early-exit
+    // string comparison and length-oracle leaks through timing differences.
+    const expectedHex = Buffer.from(String(expected), "utf8").toString("hex");
+    const presentedHex = Buffer.from(String(signature), "utf8").toString("hex");
+    const valid =
+      expectedHex.length === presentedHex.length &&
+      crypto.timingSafeEqual(Buffer.from(expectedHex), Buffer.from(presentedHex));
+    if (!valid) {
       return res.status(401).json({ success: false, message: "Invalid provider signature" });
     }
 
@@ -184,8 +196,12 @@ const getOrders = async (req, res) => {
     if (req.query.status) filter.status = req.query.status;
     if (req.query.invoiceId) filter.invoiceId = req.query.invoiceId;
 
-    const data = await PaymentOrder.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      PaymentOrder.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      PaymentOrder.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

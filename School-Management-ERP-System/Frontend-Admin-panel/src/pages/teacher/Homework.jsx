@@ -22,6 +22,7 @@ import {
   toast,
 } from "../../components/UI";
 import { api } from "../../lib/api";
+import AttachmentLinks from "../../components/upload/AttachmentLinks";
 import { useTeacherContext, fmtDate } from "./useTeacherContext";
 
 const SUBJECTS = ["English", "Maths", "Science", "Social Studies", "Hindi", "Computer", "General Knowledge"];
@@ -367,6 +368,7 @@ export default function Homework() {
                         {sub.content}
                       </p>
                     )}
+                    <AttachmentLinks attachments={sub.attachments} className="line-clamp-1" />
                     <p className="text-[11.5px] text-slate-text/60 mt-1.5">
                       Submitted {fmtDate(sub.createdAt)}
                       {reviewed && sub.marks != null && (
@@ -514,6 +516,15 @@ export default function Homework() {
                   <p className="mt-1.5 rounded-lg bg-paper/70 p-3 text-[13px] text-ink whitespace-pre-wrap">
                     {reviewTarget.submission.content}
                   </p>
+                  <AttachmentLinks attachments={reviewTarget.submission.attachments} />
+                </div>
+              )}
+              {!reviewTarget.submission.content && (
+                <div>
+                  <label className="text-[11px] font-semibold text-ink uppercase tracking-wide block">
+                    Student's file
+                  </label>
+                  <AttachmentLinks attachments={reviewTarget.submission.attachments} className="mt-1.5" />
                 </div>
               )}
               <div>

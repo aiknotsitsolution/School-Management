@@ -8,7 +8,10 @@ const homeworkSubmissionSchema = new mongoose.Schema(
     admissionNo: { type: String, required: true },
     studentName: { type: String },
     content: { type: String, trim: true, maxlength: 5000 },
-    attachments: [{ type: String }],
+    // Attachment entries are either a plain URL string (legacy) or an object
+    // { fileName, fileUrl, fileId, mimeType, fileSize } produced by the upload
+    // endpoint on submission.
+    attachments: { type: [mongoose.Schema.Types.Mixed], default: [] },
     status: { type: String, enum: ["Submitted", "Late", "Reviewed"], default: "Submitted" },
     teacherFeedback: { type: String, trim: true, maxlength: 3000, default: null },
     gradedAt: { type: Date, default: null },

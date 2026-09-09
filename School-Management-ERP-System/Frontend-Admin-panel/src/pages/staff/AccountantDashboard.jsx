@@ -79,7 +79,7 @@ export default function AccountantDashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={TrendingUp} label="Today's Collection" value={fmtMoney(stats.todayPaid)} sub="Payments logged today" accent="success" />
-        <StatCard icon={CircleDollarSign} label="This Month" value={fmtMoney(stats.monthPaid)} sub={`${monthPrefix.slice(5, 7)}/2026 period`} accent="amber" />
+        <StatCard icon={CircleDollarSign} label="This Month" value={fmtMoney(stats.monthPaid)} sub={`${monthPrefix.slice(5, 7)}/${monthPrefix.slice(0, 4)} period`} accent="amber" />
         <StatCard icon={Wallet} label="Lifetime Collected" value={fmtMoney(stats.totalCollected)} sub={`${payments.length} transactions`} accent="info" />
         <StatCard icon={AlertCircle} label="Outstanding" value={fmtMoney(stats.outstanding)} sub={`${stats.dueCount} unpaid invoices`} accent="alert" />
       </div>

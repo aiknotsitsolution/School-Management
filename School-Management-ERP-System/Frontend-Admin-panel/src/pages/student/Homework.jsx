@@ -1,8 +1,21 @@
 import { useEffect, useMemo, useState } from "react";
 import { BookOpenCheck, FileText, Send, CheckCircle2 } from "lucide-react";
 import { PageIntro, Card, Pill, Button, toast } from "../../components/UI";
+import FileDropzone from "../../components/upload/FileDropzone";
+import UploadProgress from "../../components/upload/UploadProgress";
+import AttachmentLinks from "../../components/upload/AttachmentLinks";
 import { api } from "../../lib/api";
 import useStudentContext, { fmtDate, dateOf } from "./useStudentContext";
+
+const HW_MAX_SIZE = 10 * 1024 * 1024;
+const HW_EXTENSIONS = [".jpg", ".jpeg", ".png", ".pdf", ".docx", ".pptx"];
+const HW_MIME_TYPES = [
+  "image/jpeg",
+  "image/png",
+  "application/pdf",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+];
 
 export default function Homework() {
   const { user } = useStudentContext();
@@ -12,6 +25,7 @@ export default function Homework() {
   const [subject, setSubject] = useState("all");
   const [active, setActive] = useState(null); // homework being submitted
   const [draft, setDraft] = useState("");
+  const [file, setFile] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -63,16 +77,18 @@ export default function Homework() {
   );
 
   const submit = async (hw) => {
-    if (!draft.trim()) {
-      toast("Please enter your response before submitting", "error");
+    const text = draft.trim();
+    if (!text && !file) {
+      toast("Add a written answer or attach a file before submitting", "error");
       return;
     }
     setSaving(true);
     try {
-      const { data } = await api.homework.submissions.submit(hw._id, { content: draft });
+      const { data } = await api.homework.submissions.submit(hw._id, { content: text, file });
       setSubmissions((prev) => [data, ...prev.filter((s) => String(s.homeworkId) !== String(hw._id))]);
       setActive(null);
       setDraft("");
+      setFile(null);
       toast("Submitted successfully", "success");
     } catch (err) {
       toast(err.message, "error");
@@ -164,6 +180,7 @@ export default function Homework() {
                         <CheckCircle2 size={13} className="text-emerald-500" /> Submitted {fmtDate(sub.createdAt)}
                       </div>
                       {sub.content && <p className="text-slate-text/80 whitespace-pre-wrap">{sub.content}</p>}
+                      <AttachmentLinks attachments={sub.attachments} />
                       {sub.teacherFeedback && (
                         <div className="mt-1.5 border-t border-black/[0.06] pt-1.5 flex items-start gap-1.5">
                           <span className="text-amber-dark font-semibold">Teacher:</span>
@@ -181,18 +198,31 @@ export default function Homework() {
                     </div>
                   )}
                   {active?._id === h._id && (
-                    <div className="mt-3 rounded-xl border border-amber/40 bg-amber/[0.04] p-3">
-                      <label className="text-[11px] font-semibold text-ink uppercase tracking-wide">Your response</label>
-                      <textarea
-                        value={draft}
-                        onChange={(e) => setDraft(e.target.value)}
-                        rows={4}
-                        placeholder="Type your answer here…"
-                        className="w-full mt-2 rounded-lg border border-black/10 bg-white p-3 text-[13px] text-ink outline-none focus:border-amber resize-y"
+                    <div className="mt-3 rounded-xl border border-amber/40 bg-amber/[0.04] p-3 space-y-3">
+                      <div>
+                        <label className="text-[11px] font-semibold text-ink uppercase tracking-wide">Your response</label>
+                        <textarea
+                          value={draft}
+                          onChange={(e) => setDraft(e.target.value)}
+                          rows={4}
+                          placeholder="Type your answer here… (optional if you attach a file)"
+                          className="w-full mt-2 rounded-lg border border-black/10 bg-white p-3 text-[13px] text-ink outline-none focus:border-amber resize-y"
+                        />
+                      </div>
+                      <FileDropzone
+                        value={file}
+                        onChange={setFile}
+                        accept={HW_EXTENSIONS}
+                        mimeTypes={HW_MIME_TYPES}
+                        maxSize={HW_MAX_SIZE}
+                        label="Attachment (optional)"
+                        disabled={saving}
+                        helperText="JPG, JPEG, PNG, PDF, DOCX, PPTX · Max 10 MB"
                       />
-                      <div className="flex items-center justify-end gap-2 mt-2">
-                        <Button variant="ghost" onClick={() => { setActive(null); setDraft(""); }} disabled={saving}>Cancel</Button>
-                        <Button onClick={() => submit(h)} disabled={saving}>
+                      {saving && <UploadProgress label="Submitting…" />}
+                      <div className="flex items-center justify-end gap-2">
+                        <Button variant="ghost" onClick={() => { setActive(null); setDraft(""); setFile(null); }} disabled={saving}>Cancel</Button>
+                        <Button onClick={() => submit(h)} disabled={saving || (!draft.trim() && !file)}>
                           {saving ? "Submitting…" : "Submit homework"}
                         </Button>
                       </div>

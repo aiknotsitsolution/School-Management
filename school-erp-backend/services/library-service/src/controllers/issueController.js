@@ -1,5 +1,6 @@
 const Book = require("../models/Book");
 const IssueRecord = require("../models/IssueRecord");
+const { paginate, pageInfo } = require("../utils/pagination");
 
 const issueBook = async (req, res) => {
   try {
@@ -50,8 +51,12 @@ const getIssues = async (req, res) => {
     const filter = { schoolId: req.tenantId };
     if (borrowerId) filter.borrowerId = borrowerId;
     if (status) filter.status = status;
-    const data = await IssueRecord.find(filter).populate("bookId").sort({ issueDate: -1 });
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      IssueRecord.find(filter).populate("bookId").sort({ issueDate: -1 }).skip(skip).limit(limit),
+      IssueRecord.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

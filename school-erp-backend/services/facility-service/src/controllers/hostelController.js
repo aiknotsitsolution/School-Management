@@ -1,8 +1,16 @@
 const Hostel = require("../models/Hostel");
+const { paginate, pageInfo } = require("../utils/pagination");
+
+// Mass-assignment guard: only these fields may be set from the request body.
+const HOSTEL_FIELDS = [
+  "roomNo", "block", "floor", "wing", "capacity", "occupants", "warden",
+];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
 const createRoom = async (req, res) => {
   try {
-    const room = await Hostel.create({ ...req.body, schoolId: req.tenantId });
+    const room = await Hostel.create({ ...pick(req.body, HOSTEL_FIELDS), schoolId: req.tenantId });
     res.status(201).json({ success: true, data: room });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -19,8 +27,12 @@ const getRooms = async (req, res) => {
     } else if (req.query.studentId) {
       filter.occupants = req.query.studentId;
     }
-    const data = await Hostel.find(filter);
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      Hostel.find(filter).skip(skip).limit(limit),
+      Hostel.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

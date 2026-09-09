@@ -180,9 +180,9 @@ export default function Login() {
                 />{" "}
                 Keep me signed in
               </label>
-              <a href="#" className="text-info font-medium">
-                Forgot password?
-              </a>
+              <span className="text-slate-text/60">
+                Forgot password? Contact your administrator
+              </span>
             </div>
             {error && (
               <p className="text-alert text-[12.5px]" role="alert">

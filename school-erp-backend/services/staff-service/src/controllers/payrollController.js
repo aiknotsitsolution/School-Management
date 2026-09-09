@@ -1,6 +1,7 @@
 const Payroll = require("../models/Payroll");
 const Staff = require("../models/Staff");
 const { pushNotifications } = require("../utils/notify");
+const { paginate, pageInfo } = require("../utils/pagination");
 
 const generatePayroll = async (req, res) => {
   try {
@@ -21,8 +22,12 @@ const getPayroll = async (req, res) => {
     }
     if (req.query.month) filter.month = req.query.month;
     if (req.query.year) filter.year = req.query.year;
-    const records = await Payroll.find(filter).sort({ year: -1, createdAt: -1 });
-    res.json({ success: true, count: records.length, data: records });
+    const { page, limit, skip } = paginate(req.query);
+    const [records, total] = await Promise.all([
+      Payroll.find(filter).sort({ year: -1, createdAt: -1 }).skip(skip).limit(limit),
+      Payroll.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: records.length, total, ...pageInfo(total, page, limit), data: records });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

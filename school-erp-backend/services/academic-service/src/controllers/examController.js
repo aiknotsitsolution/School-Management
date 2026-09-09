@@ -1,9 +1,17 @@
 const Exam = require("../models/Exam");
 const Marks = require("../models/Marks");
+const { paginate, pageInfo } = require("../utils/pagination");
+
+// Mass-assignment guard: only these fields may be set from the request body.
+const EXAM_FIELDS = [
+  "examName", "class", "subject", "date", "startTime", "endTime", "room", "maxMarks", "passingMarks",
+];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
 const createExam = async (req, res) => {
   try {
-    const exam = await Exam.create({ ...req.body, schoolId: req.tenantId });
+    const exam = await Exam.create({ ...pick(req.body, EXAM_FIELDS), schoolId: req.tenantId });
     res.status(201).json({ success: true, data: exam });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -16,8 +24,12 @@ const getExams = async (req, res) => {
     const filter = { schoolId: req.tenantId };
     if (cls) filter.class = cls;
     if (subject) filter.subject = subject;
-    const data = await Exam.find(filter).sort({ date: 1 });
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      Exam.find(filter).sort({ date: 1 }).skip(skip).limit(limit),
+      Exam.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -27,7 +39,7 @@ const updateExam = async (req, res) => {
   try {
     const exam = await Exam.findOneAndUpdate(
       { _id: req.params.id, schoolId: req.tenantId },
-      req.body,
+      pick(req.body, EXAM_FIELDS),
       { new: true, runValidators: true },
     );
     if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
@@ -109,6 +121,12 @@ const getReportCard = async (req, res) => {
 // are scoped to their assignment by scopeClassTeacher. School admins pick any class.
 const getClassSummary = async (req, res) => {
   try {
+    // Class-level aggregates expose every other student's marks. Students have
+    // their own report card endpoint and must never reach class summary data.
+    if (req.user && req.user.role === "student") {
+      return res.status(403).json({ success: false, message: "Students can only view their own report card" });
+    }
+
     const { class: cls, section, examName } = req.query;
     if (!cls) return res.status(400).json({ success: false, message: "class is required" });
 

@@ -60,6 +60,8 @@ async function request(path, options = {}) {
 export const api = {
   login: (credentials) => request("/auth/login", json("POST", credentials)),
   me: () => request("/auth/me"),
+  resetPassword: (token, newPassword) =>
+    request("/auth/reset-password", json("POST", { token, newPassword })),
   users: {
     list: (params = "") =>
       request(`/auth/users${params ? `?${params}` : ""}`),
@@ -70,6 +72,8 @@ export const api = {
     remove: (id) => request(`/auth/users/${id}`, { method: "DELETE" }),
     restore: (id) =>
       request(`/auth/users/${id}/restore`, { method: "POST" }),
+    resetPassword: (id) =>
+      request(`/auth/users/${id}/reset-password`, { method: "POST" }),
   },
   schools: {
     list: () => request("/auth/schools"),
@@ -196,8 +200,26 @@ export const api = {
     submissions: {
       myList: (params = "") =>
         request(`/homework/submissions${params ? `?${params}` : ""}`),
-      submit: (homeworkId, item) =>
-        request(`/homework/submissions/${homeworkId}`, json("POST", item)),
+      submit: (homeworkId, { content = "", file = null, attachments = [] } = {}) => {
+        const hasContent = typeof content === "string" && content.trim().length > 0;
+        const hasFile = typeof File !== "undefined" && file instanceof File;
+        if (hasFile) {
+          const formData = new FormData();
+          formData.append("file", file);
+          if (hasContent) formData.append("content", content);
+          if (attachments.length > 0) {
+            formData.append("attachments", JSON.stringify(attachments));
+          }
+          return request(`/homework/submissions/${homeworkId}`, {
+            method: "POST",
+            body: formData,
+          });
+        }
+        return request(
+          `/homework/submissions/${homeworkId}`,
+          json("POST", { content, attachments }),
+        );
+      },
       review: (id, item) =>
         request(`/homework/submissions/review/${id}`, json("PATCH", item)),
       classList: (params = "") =>

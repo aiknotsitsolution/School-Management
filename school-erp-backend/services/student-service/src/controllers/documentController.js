@@ -1,5 +1,6 @@
 const StudentDocument = require("../models/StudentDocument");
 const imagekit = require("../config/imagekit");
+const { paginate, pageInfo } = require("../utils/pagination");
 
 const sanitizeFileName = (name = "") =>
   name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100);
@@ -28,6 +29,9 @@ const uploadDocument = async (req, res) => {
     }
 
     const imagekit = require("../config/imagekit");
+    if (!imagekit) {
+      return res.status(503).json({ success: false, message: "Image provider is not configured" });
+    }
     const uploaded = await imagekit.upload({
       file: req.file.buffer.toString("base64"),
       fileName: `doc-${Date.now()}-${sanitizeFileName(req.file.originalname)}`,
@@ -76,8 +80,12 @@ const getDocuments = async (req, res) => {
     }
     if (req.query.category) filter.category = req.query.category;
 
-    const data = await StudentDocument.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      StudentDocument.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      StudentDocument.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -98,7 +106,7 @@ const deleteDocument = async (req, res) => {
     // Best-effort removal from the storage provider. Ignore failures so the DB
     // record can still be removed.
     try {
-      if (doc.fileId) await imagekit.deleteFile(doc.fileId);
+      if (doc.fileId && imagekit) await imagekit.deleteFile(doc.fileId);
     } catch (err) {
       console.error("[imagekit delete skipped]", err.message);
     }

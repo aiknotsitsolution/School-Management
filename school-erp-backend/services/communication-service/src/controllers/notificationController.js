@@ -1,21 +1,25 @@
+const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
 const { getUserModel } = require("../models/userLite");
+const { paginate, pageInfo } = require("../utils/pagination");
 
 // Own inbox — always the caller's own notifications, tenant-scoped.
 const getNotifications = async (req, res) => {
   try {
-    const { limit = 100, unread } = req.query;
+    const { unread } = req.query;
+    const { page, limit, skip } = paginate(req.query, { fallback: 100, max: 500 });
     const filter = { schoolId: req.tenantId, userId: String(req.user.id) };
     if (unread === "true") filter.read = false;
-    const data = await Notification.find(filter)
-      .sort({ createdAt: -1 })
-      .limit(Math.min(Number(limit) || 100, 500));
+    const [data, total] = await Promise.all([
+      Notification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Notification.countDocuments(filter),
+    ]);
     const unreadCount = await Notification.countDocuments({
       schoolId: req.tenantId,
       userId: String(req.user.id),
       read: false,
     });
-    res.json({ success: true, count: data.length, unreadCount, data });
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), unreadCount, data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -95,6 +99,9 @@ const pushByRefIds = async (req, res) => {
     const { schoolId, refIds = [], title, message, kind = "system", link = null } = req.body;
     if (!schoolId || !title || refIds.length === 0) {
       return res.status(400).json({ success: false, message: "schoolId, title and refIds are required" });
+    }
+    if (!mongoose.isValidObjectId(String(schoolId))) {
+      return res.status(400).json({ success: false, message: "Invalid schoolId" });
     }
     const User = getUserModel();
     const users = await User.find(

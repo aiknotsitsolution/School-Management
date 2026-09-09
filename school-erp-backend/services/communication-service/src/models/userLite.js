@@ -6,6 +6,7 @@ const { getAuthDb } = require("../db/authDb");
 const userSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, index: true },
+    refId: { type: String, index: true },
     role: { type: String, index: true },
     isActive: { type: Boolean, default: true },
   },

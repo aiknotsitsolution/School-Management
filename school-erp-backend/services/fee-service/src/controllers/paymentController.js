@@ -1,6 +1,7 @@
 const { v4: uuidv4 } = require("uuid");
 const FeeInvoice = require("../models/FeeInvoice");
 const Payment = require("../models/Payment");
+const { paginate, pageInfo } = require("../utils/pagination");
 
 const recordPayment = async (req, res) => {
   try {
@@ -36,8 +37,12 @@ const getPayments = async (req, res) => {
     const { studentId } = req.query;
     const filter = { schoolId: req.tenantId };
     if (studentId) filter.studentId = studentId;
-    const data = await Payment.find(filter).sort({ paidOn: -1 });
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      Payment.find(filter).sort({ paidOn: -1 }).skip(skip).limit(limit),
+      Payment.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

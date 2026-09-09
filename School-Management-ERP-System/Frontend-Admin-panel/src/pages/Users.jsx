@@ -12,6 +12,7 @@ import {
   Eye,
   FilterX,
   Link2,
+  KeyRound,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../components/UI";
@@ -214,6 +215,18 @@ export default function Users() {
       await api.users.restore(user.id);
       toast("User restored");
       refresh();
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  };
+
+  const resetPassword = async (user) => {
+    try {
+      const { data } = await api.users.resetPassword(user.id);
+      const link = data?.resetLink;
+      if (!link) throw new Error("No reset link returned");
+      navigator.clipboard?.writeText(link).catch(() => {});
+      toast(`Reset link copied — expires in ${data.expiresInMinutes || 15} minutes`);
     } catch (err) {
       toast(err.message, "error");
     }
@@ -533,6 +546,13 @@ export default function Users() {
                           ) : (
                             <>
                               <button
+                                onClick={() => resetPassword(user)}
+                                className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5"
+                                title="Generate one-time password reset link"
+                              >
+                                <KeyRound size={13} /> Reset password
+                              </button>
+                              <button
                                 onClick={() => toggleActive(user)}
                                 className="inline-flex items-center text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5"
                               >
@@ -645,15 +665,16 @@ export default function Users() {
             className="w-full max-w-md bg-white h-full overflow-y-auto scrollbar-thin p-5"
             onClick={(event) => event.stopPropagation()}
           >
-            <User360
+<User360
               user={selected}
               canManage={canManage(selected)}
               onClose={() => setSelected(null)}
               onToggleActive={toggleActive}
               onRemove={removeUser}
               onRestore={restoreUser}
-              onEdit={editSelected}
-              busy={busy}
+              onReset={resetPassword}
+              onEdit={editUser}
+              busy={displayBusy(selected.id)}
             />
           </div>
         </div>
@@ -662,7 +683,7 @@ export default function Users() {
   );
 }
 
-function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore, onEdit, busy }) {
+function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore, onReset, onEdit, busy }) {
   const refField = refIdFieldFor(user.role);
   const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState({
@@ -813,6 +834,9 @@ function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore
             <>
               <Button variant="outline" disabled={busy} onClick={() => onToggleActive(user)}>
                 {user.isActive ? <Ban size={15} /> : <CheckCircle2 size={15} />} {user.isActive ? "Deactivate" : "Activate"}
+              </Button>
+              <Button variant="outline" disabled={busy} onClick={() => onReset(user)}>
+                <KeyRound size={15} /> Reset password
               </Button>
               <Button variant="outline" className="text-alert hover:bg-alert/10" disabled={busy} onClick={() => onRemove(user)}>
                 <Trash2 size={15} /> Remove

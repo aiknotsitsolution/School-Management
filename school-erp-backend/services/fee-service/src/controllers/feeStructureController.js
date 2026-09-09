@@ -1,8 +1,13 @@
 const FeeStructure = require("../models/FeeStructure");
 
+// Mass-assignment guard: only these fields may be set from the request body.
+const STRUCTURE_FIELDS = ["class", "session", "feeType", "amount", "frequency", "dueDate"];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
 const createStructure = async (req, res) => {
   try {
-    const structure = await FeeStructure.create({ ...req.body, schoolId: req.tenantId });
+    const structure = await FeeStructure.create({ ...pick(req.body, STRUCTURE_FIELDS), schoolId: req.tenantId });
     res.status(201).json({ success: true, data: structure });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
