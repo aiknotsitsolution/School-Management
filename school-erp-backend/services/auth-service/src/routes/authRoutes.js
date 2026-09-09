@@ -1,16 +1,23 @@
 const express = require("express");
 const router = express.Router();
+const { validateObjectIdParam } = require("../middleware/objectId");
+router.param("id", validateObjectIdParam);
+router.param("homeworkId", validateObjectIdParam);
 const ctrl = require("../controllers/authController");
 const { verifyToken, resolveTenant, requirePermission, authorizeRoles } = require("../middleware/auth");
 
 // Public
 router.post("/login", ctrl.login);
 router.post("/refresh-token", ctrl.refreshToken);
+router.post("/reset-password", ctrl.resetPassword);
 
 // Protected - account self-service
 router.get("/me", verifyToken, resolveTenant, ctrl.getMe);
 router.post("/change-password", verifyToken, ctrl.changePassword);
 router.get("/verify", verifyToken, ctrl.verify);
+
+// Password recovery - admin initiated (no email provider in the fleet)
+router.post("/users/:id/reset-password", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.adminResetPassword);
 
 // User management - admin only (no public self-register).
 // /register kept as an alias for backwards compat but requires auth + permission.

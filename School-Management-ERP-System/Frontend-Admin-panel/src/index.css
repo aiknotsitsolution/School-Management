@@ -15,6 +15,13 @@
   --color-slate-text: #475467;
   --font-display: "Space Grotesk", sans-serif;
   --font-body: "Inter", sans-serif;
+  --animate-upload-indeterminate: upload-slide 1.3s ease-in-out infinite;
+}
+
+@keyframes upload-slide {
+  0% { transform: translateX(-12%); }
+  35% { transform: translateX(60%); }
+  100% { transform: translateX(320%); }
 }
 
 * { box-sizing: border-box; }

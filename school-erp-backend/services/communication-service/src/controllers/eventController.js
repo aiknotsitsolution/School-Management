@@ -1,8 +1,17 @@
 const Event = require("../models/Event");
+const { paginate, pageInfo } = require("../utils/pagination");
+
+// Mass-assignment guard: only these fields may be set from the request body
+// (schoolId / createdBy / timestamps stay server-owned).
+const EVENT_FIELDS = [
+  "title", "description", "category", "time", "image", "date", "venue", "audience",
+];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
 const createEvent = async (req, res) => {
   try {
-    const event = await Event.create({ ...req.body, schoolId: req.tenantId, createdBy: req.user.name });
+    const event = await Event.create({ ...pick(req.body, EVENT_FIELDS), schoolId: req.tenantId, createdBy: req.user.name });
     res.status(201).json({ success: true, data: event });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -12,8 +21,12 @@ const createEvent = async (req, res) => {
 const getEvents = async (req, res) => {
   try {
     const filter = { schoolId: req.tenantId, $or: [{ audience: req.user.role }, { audience: "all" }] };
-    const data = await Event.find(filter).sort({ date: 1 });
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      Event.find(filter).sort({ date: 1 }).skip(skip).limit(limit),
+      Event.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -23,7 +36,7 @@ const updateEvent = async (req, res) => {
   try {
     const event = await Event.findOneAndUpdate(
       { _id: req.params.id, schoolId: req.tenantId },
-      req.body,
+      pick(req.body, EVENT_FIELDS),
       { new: true, runValidators: true },
     );
     if (!event) return res.status(404).json({ success: false, message: "Event not found" });

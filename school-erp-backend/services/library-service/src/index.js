@@ -16,7 +16,14 @@ const app = express();
 const PORT = process.env.LIBRARY_SERVICE_PORT || 5007;
 
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+      : true,
+    credentials: true,
+  }),
+);
 app.use(morgan("dev"));
 app.use(express.json());
 

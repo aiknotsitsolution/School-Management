@@ -1,6 +1,16 @@
 const Homework = require("../models/Homework");
 const HomeworkSubmission = require("../models/HomeworkSubmission");
+const imagekit = require("../config/imagekit");
 const { notifyByRefIds } = require("../utils/notify");
+const { paginate, pageInfo } = require("../utils/pagination");
+
+// Neutralizes problematic characters in uploaded filenames before they reach
+// ImageKit while keeping the original name for display purposes.
+const sanitizeFileName = (name = "") =>
+  String(name)
+    .normalize("NFD")
+    .replace(/[^a-zA-Z0-9._-]/g, "-")
+    .slice(0, 100);
 
 // Student submits their own homework. Identity (studentId/admissionNo/schoolId)
 // is derived from the authenticated token, never trusted from the body.
@@ -27,6 +37,43 @@ const submitHomework = async (req, res) => {
     }
 
     const { content = "", attachments = [] } = req.body || {};
+    let parsedAttachments = [];
+    if (Array.isArray(attachments)) {
+      parsedAttachments = attachments;
+    } else if (typeof attachments === "string" && attachments) {
+      // multipart form fields come through as JSON strings
+      try {
+        const parsed = JSON.parse(attachments);
+        if (Array.isArray(parsed)) parsedAttachments = parsed;
+      } catch {
+        parsedAttachments = [];
+      }
+    }
+    const attachmentList = [...parsedAttachments];
+
+    // Optional single file attachment, uploaded securely server-side via the
+    // service's ImageKit configuration (never the browser).
+    if (req.file) {
+      if (!imagekit) {
+        return res.status(503).json({ success: false, message: "Image provider is not configured" });
+      }
+      const uploaded = await imagekit.upload({
+        file: req.file.buffer.toString("base64"),
+        fileName: `homework-${Date.now()}-${sanitizeFileName(req.file.originalname)}`,
+        folder: "/school-erp/homework",
+        useUniqueFileName: true,
+      });
+      attachmentList.push({
+        fileName: req.file.originalname,
+        fileUrl: uploaded.url,
+        fileId: uploaded.fileId,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+      });
+    } else if (!String(content || "").trim() && attachmentList.length === 0) {
+      return res.status(400).json({ success: false, message: "Add a written answer or attach a file before submitting" });
+    }
+
     const now = Date.now();
     const status =
       homework.dueDate && now > new Date(homework.dueDate).getTime()
@@ -42,8 +89,8 @@ const submitHomework = async (req, res) => {
           studentId: admissionNo,
           admissionNo,
           studentName: req.user.name,
-          content,
-          attachments: Array.isArray(attachments) ? attachments : [],
+          content: String(content || ""),
+          attachments: attachmentList,
           status,
         },
       },
@@ -71,8 +118,12 @@ const getMySubmissions = async (req, res) => {
     if (req.params.homeworkId) filter.homeworkId = req.params.homeworkId;
     // If a homeworkId is provided from the query, ensure it belongs to the student's class.
     if (req.query.homeworkId) filter.homeworkId = req.query.homeworkId;
-    const data = await HomeworkSubmission.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      HomeworkSubmission.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      HomeworkSubmission.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -158,8 +209,12 @@ const listSubmissionsForClass = async (req, res) => {
     if (!homeworks.length) return res.json({ success: true, count: 0, data: [] });
     filter.homeworkId = { $in: homeworks.map((h) => h._id) };
 
-    const data = await HomeworkSubmission.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      HomeworkSubmission.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      HomeworkSubmission.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

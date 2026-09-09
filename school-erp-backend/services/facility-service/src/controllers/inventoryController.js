@@ -1,8 +1,16 @@
 const InventoryItem = require("../models/InventoryItem");
+const { paginate, pageInfo } = require("../utils/pagination");
+
+// Mass-assignment guard: only these fields may be set from the request body.
+const ITEM_FIELDS = [
+  "itemName", "category", "quantity", "reorderLevel", "unit", "supplier", "purchaseDate",
+];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
 const addItem = async (req, res) => {
   try {
-    const item = await InventoryItem.create({ ...req.body, schoolId: req.tenantId });
+    const item = await InventoryItem.create({ ...pick(req.body, ITEM_FIELDS), schoolId: req.tenantId });
     res.status(201).json({ success: true, data: item });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -14,8 +22,12 @@ const getItems = async (req, res) => {
     const { category } = req.query;
     const filter = { schoolId: req.tenantId };
     if (category) filter.category = category;
-    const data = await InventoryItem.find(filter);
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      InventoryItem.find(filter).skip(skip).limit(limit),
+      InventoryItem.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -25,7 +37,7 @@ const updateItem = async (req, res) => {
   try {
     const item = await InventoryItem.findOneAndUpdate(
       { _id: req.params.id, schoolId: req.tenantId },
-      req.body,
+      pick(req.body, ITEM_FIELDS),
       { new: true },
     );
     if (!item) return res.status(404).json({ success: false, message: "Item not found" });

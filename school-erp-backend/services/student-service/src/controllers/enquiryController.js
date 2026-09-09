@@ -1,5 +1,13 @@
 const AdmissionEnquiry = require("../models/AdmissionEnquiry");
 
+// Mass-assignment guard: only these fields may be set from the request body.
+const ENQUIRY_FIELDS = [
+  "childName", "parentName", "classApplied", "contact", "email", "admissionNo",
+  "section", "source", "status", "followUpDate", "notes",
+];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
 // One Admission ID per admitted enquiry within a school. Existing student
 // records (e.g. a platform-created shell) with the same Admission ID are fine
 // — the enquiry links to them rather than creating duplicates.
@@ -40,7 +48,7 @@ const createEnquiry = async (req, res) => {
       return res.status(check.error.status).json({ success: false, message: check.error.message });
     }
     const enquiry = await AdmissionEnquiry.create({
-      ...req.body,
+      ...pick(req.body, ENQUIRY_FIELDS),
       schoolId: req.tenantId,
       admissionNo:
         check.admissionNo !== undefined ? check.admissionNo : req.body.admissionNo || null,
@@ -86,7 +94,7 @@ const updateEnquiry = async (req, res) => {
       return res.status(check.error.status).json({ success: false, message: check.error.message });
     }
 
-    enquiry.set({ ...req.body, admissionNo: check.admissionNo !== undefined ? check.admissionNo : admissionNo });
+    enquiry.set({ ...pick(req.body, ENQUIRY_FIELDS), admissionNo: check.admissionNo !== undefined ? check.admissionNo : admissionNo });
     await enquiry.save();
     res.json({ success: true, data: enquiry });
   } catch (err) {

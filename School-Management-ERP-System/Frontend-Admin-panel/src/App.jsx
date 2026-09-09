@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { useSelector } from "react-redux";
 import Layout from "./layout/Layout";
 import Login from "./pages/Login";
+import ResetPassword from "./pages/ResetPassword";
 import Dashboard from "./pages/Dashboard";
 import Attendance from "./pages/Attendance";
 import Timetable from "./pages/Timetable";
@@ -160,6 +161,7 @@ export default function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/reset-password" element={<ResetPassword />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<HomeRedirect />} />
           <Route

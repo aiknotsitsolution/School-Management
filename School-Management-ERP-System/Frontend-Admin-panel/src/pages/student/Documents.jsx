@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { FileText, UploadCloud, Download, Trash2 } from "lucide-react";
 import { PageIntro, Card, Pill, Button, Input, Select, toast } from "../../components/UI";
+import FileDropzone from "../../components/upload/FileDropzone";
+import UploadProgress from "../../components/upload/UploadProgress";
 import { api } from "../../lib/api";
 import { fmtDate } from "./useStudentContext";
 
@@ -12,6 +14,19 @@ const CATEGORY_TONES = {
   other: "neutral",
 };
 
+const DOC_MAX_SIZE = 10 * 1024 * 1024;
+const DOC_EXTENSIONS = [
+  ".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp", ".svg", ".avif",
+  ".heic", ".heif", ".tif", ".tiff", ".ico",
+  ".pdf", ".doc", ".docx",
+];
+const DOC_MIME_TYPES = [
+  "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp",
+  "image/svg+xml", "image/avif", "image/heic", "image/heif", "image/tiff",
+  "application/pdf", "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+];
+
 export default function Documents() {
   const [docs, setDocs] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -20,7 +35,6 @@ export default function Documents() {
   const [file, setFile] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
-  const fileRef = useRef(null);
 
   const load = () => {
     setLoading(true);
@@ -50,7 +64,6 @@ export default function Documents() {
       setTitle("");
       setCategory("other");
       setFile(null);
-      if (fileRef.current) fileRef.current.value = "";
       toast("Document uploaded", "success");
     } catch (err) {
       setError(err.message);
@@ -147,17 +160,23 @@ export default function Documents() {
             <option value="other">Other</option>
           </Select>
         </div>
-        <div className="mt-3 flex flex-col sm:flex-row sm:items-center gap-3">
-          <input
-            ref={fileRef}
-            type="file"
-            accept="image/*,.pdf,.doc,.docx"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-            className="text-[12.5px] text-slate-text file:mr-3 file:rounded-lg file:border-0 file:bg-amber/15 file:text-ink file:font-semibold file:px-3 file:py-2"
+        <div className="mt-3">
+          <FileDropzone
+            value={file}
+            onChange={setFile}
+            accept={DOC_EXTENSIONS}
+            mimeTypes={DOC_MIME_TYPES}
+            maxSize={DOC_MAX_SIZE}
+            label="File"
+            disabled={saving}
+            helperText="Images, PDF and Word documents · Max 10 MB"
           />
-          <Button onClick={upload} disabled={saving} className="sm:ml-auto">
-            <UploadCloud size={15} /> {saving ? "Uploading…" : "Upload document"}
-          </Button>
+          {saving && <UploadProgress className="mt-3" label="Uploading document…" />}
+          <div className="mt-3 flex justify-end">
+            <Button onClick={upload} disabled={saving || !file}>
+              <UploadCloud size={15} /> {saving ? "Uploading…" : "Upload document"}
+            </Button>
+          </div>
         </div>
       </Card>
     </div>

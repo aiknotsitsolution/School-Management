@@ -9,7 +9,6 @@ import {
   XCircle,
   Clock,
   UserCheck,
-  Trash2,
 } from "lucide-react";
 import {
   PageIntro,
@@ -35,7 +34,22 @@ const TYPES = [
   "Emergency Leave",
 ];
 const STATUS_FILTERS = ["All", "Approved", "Pending", "Rejected"];
-const ROLE_OPTIONS = ["Staff", "Student"];
+
+const LEAVE_TYPE_MAP = {
+  "Casual Leave": "Casual",
+  "Sick Leave": "Sick",
+  "Privilege Leave": "Earned",
+  "Medical Leave": "Other",
+  "Maternity Leave": "Maternity",
+  "Emergency Leave": "Other",
+};
+const LEAVE_TYPE_LABELS = {
+  Casual: "Casual Leave",
+  Sick: "Sick Leave",
+  Earned: "Privilege Leave",
+  Maternity: "Maternity Leave",
+  Other: "Medical / Other",
+};
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -44,9 +58,6 @@ function daysBetween(from, to) {
   const a = new Date(from),
     b = new Date(to);
   return Math.max(1, Math.round((b - a) / 86400000) + 1);
-}
-function nextId(list) {
-  return `LV-${1000 + list.length + 1}`;
 }
 
 function emptyForm() {
@@ -67,12 +78,33 @@ function inDays(n) {
 
 export default function Leave() {
   const [requests, setRequests] = useState(leaveSeed);
-  const [balance, setBalance] = useState(balanceSeed);
-  useEffect(() => {
-    api.leaves
-      .list()
-      .then(({ data }) => setRequests(data || []))
+  const [balance] = useState(balanceSeed);
+  const reload = () => {
+    Promise.all([api.leaves.list(), api.staff.list()])
+      .then(([leavesRes, staffRes]) => {
+        const map = {};
+        (staffRes?.data || []).forEach((s) => {
+          map[String(s._id || s.id)] = s;
+        });
+        setRequests(
+          (leavesRes?.data || []).map((l) => ({
+            id: l._id,
+            applicant:
+              map[String(l.staffId)]?.name || "Staff member",
+            role: "Staff",
+            type: LEAVE_TYPE_LABELS[l.leaveType] || l.leaveType || "—",
+            days: daysBetween(l.fromDate, l.toDate),
+            from: new Date(l.fromDate).toISOString().slice(0, 10),
+            to: new Date(l.toDate).toISOString().slice(0, 10),
+            reason: l.reason || "",
+            status: l.status || "Pending",
+          })),
+        );
+      })
       .catch(() => {});
+  };
+  useEffect(() => {
+    reload();
   }, []);
   const [tab, setTab] = useState("requests");
   const [query, setQuery] = useState("");
@@ -100,49 +132,35 @@ export default function Leave() {
     return { total: requests.length, pending, approved, staff, student };
   }, [requests]);
 
-  const setStatus = (id, status) => {
-    setRequests((prev) =>
-      prev.map((l) => (l.id === id ? { ...l, status } : l)),
-    );
-    toast(
-      status === "Approved" ? "Leave approved" : "Leave rejected",
-      status === "Approved" ? "success" : "error",
-    );
-    // reflect in balance when approving staff leave
-    if (status === "Approved") {
-      const lv = requests.find((l) => l.id === id);
-      if (lv && lv.role === "Staff") {
-        setBalance((prev) =>
-          prev.map((b) =>
-            b.name === lv.applicant ? { ...b, used: b.used + lv.days } : b,
-          ),
-        );
-      }
+  const setStatus = async (id, status) => {
+    try {
+      await api.leaves.updateStatus(id, status);
+      toast(
+        status === "Approved" ? "Leave approved" : "Leave rejected",
+        status === "Approved" ? "success" : "error",
+      );
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
     }
   };
 
-  const deleteLeave = (id) => {
-    setRequests((prev) => prev.filter((l) => l.id !== id));
-    toast("Leave request deleted", "error");
-  };
-
-  const apply = () => {
-    if (!form.applicant.trim() || !form.from || !form.to) return;
-    const days = daysBetween(form.from, form.to);
-    setRequests((prev) => [
-      {
-        id: nextId(prev),
-        ...form,
-        applicant: form.applicant.trim(),
-        days,
-        appliedOn: todayISO(),
-        status: "Pending",
-      },
-      ...prev,
-    ]);
-    setShowModal(false);
-    setForm(emptyForm());
-    toast("Leave request submitted");
+  const apply = async () => {
+    if (!form.from || !form.to) return;
+    try {
+      await api.leaves.create({
+        leaveType: LEAVE_TYPE_MAP[form.type] || "Other",
+        fromDate: form.from,
+        toDate: form.to,
+        reason: form.reason.trim() || "—",
+      });
+      toast("Leave request submitted");
+      setShowModal(false);
+      setForm(emptyForm());
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
+    }
   };
 
   const totalLeaveDays = balance.reduce((a, b) => a + b.used, 0);
@@ -302,13 +320,6 @@ export default function Leave() {
                           </button>
                         </div>
                       )}
-                      <button
-                        onClick={() => deleteLeave(l.id)}
-                        className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-alert transition-colors"
-                        title="Delete"
-                      >
-                        <Trash2 size={14} />
-                      </button>
                     </div>
                   </div>
                 );
@@ -366,6 +377,12 @@ export default function Leave() {
               </tbody>
             </table>
           </div>
+          {balance.length === 0 && (
+            <p className="px-5 pb-4 -mt-1 text-[12.5px] text-slate-text/60">
+              Leave balance tracking is not enabled. Balances are maintained
+              offline by the school office.
+            </p>
+          )}
         </Card>
       )}
 
@@ -388,30 +405,10 @@ export default function Leave() {
               </button>
             </div>
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-3">
-                <LeaveField label="Applicant Name *">
-                  <Input
-                    value={form.applicant}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, applicant: e.target.value }))
-                    }
-                  />
-                </LeaveField>
-                <LeaveField label="Role">
-                  <Select
-                    value={form.role}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, role: e.target.value }))
-                    }
-                  >
-                    {ROLE_OPTIONS.map((r) => (
-                      <option key={r} value={r}>
-                        {r}
-                      </option>
-                    ))}
-                  </Select>
-                </LeaveField>
-              </div>
+              <p className="rounded-lg bg-paper border border-black/[0.06] px-3.5 py-3 text-[12.5px] text-slate-text">
+                The leave is submitted under your account and will be reviewed
+                by the school administrator.
+              </p>
               <LeaveField label="Leave Type">
                 <Select
                   value={form.type}
@@ -465,7 +462,7 @@ export default function Leave() {
               <Button
                 variant="amber"
                 onClick={apply}
-                disabled={!form.applicant.trim() || !form.from || !form.to}
+                disabled={!form.from || !form.to}
               >
                 <Save size={15} /> Submit Application
               </Button>

@@ -1,5 +1,7 @@
 // Shared, small UI primitives used across module pages.
 
+import { useState } from "react";
+
 export function StatCard({ icon: Icon, label, value, sub, accent = "amber" }) {
   const accents = {
     amber: "border-amber text-amber bg-amber/10",
@@ -66,13 +68,35 @@ export function statusTone(status) {
   return map[status] || "neutral";
 }
 
-export function Avatar({ src, name, size = 32 }) {
+export function Avatar({ src, name, size = 32, className = "" }) {
+  const [broken, setBroken] = useState(false);
+  const usable = src && !broken;
+  if (!usable) {
+    const initials = String(name || "?")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0].toUpperCase())
+      .join("");
+    return (
+      <div
+        role="img"
+        aria-label={name}
+        style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
+        className={`rounded-full bg-amber/25 text-amber-dark font-display font-bold flex items-center justify-center shrink-0 ${className}`}
+      >
+        {initials}
+      </div>
+    );
+  }
   return (
     <img
       src={src}
       alt={name}
+      onError={() => setBroken(true)}
       style={{ width: size, height: size }}
-      className="rounded-full object-cover shrink-0"
+      className={`rounded-full object-cover shrink-0 ${className}`}
     />
   );
 }

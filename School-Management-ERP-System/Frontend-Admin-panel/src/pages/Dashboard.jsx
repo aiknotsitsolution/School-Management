@@ -102,7 +102,6 @@ export default function Dashboard() {
       : "Route details unavailable",
     status: route.currentLocation ? "Live" : "Not tracking",
     occupied: route.assignedStudents?.length || 0,
-    capacity: "—",
     eta: route.currentLocation ? "Live" : "—",
   }));
   const studentStats = data.studentStats;
@@ -548,7 +547,7 @@ export default function Dashboard() {
                 {b.route}
               </p>
               <p className="text-[11px] text-slate-text/60 mt-1.5">
-                {b.occupied}/{b.capacity} onboard · ETA {b.eta}
+                {b.occupied} assigned · ETA {b.eta}
               </p>
             </div>
           ))}

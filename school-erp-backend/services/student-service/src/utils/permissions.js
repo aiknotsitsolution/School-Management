@@ -49,7 +49,7 @@ const ROLE_PERMISSIONS = {
     "timetable:read", "homework:read", "homework:write", "exams:read",
     "marks:read", "notices:read", "leaves:apply", "payroll:view",
   ],
-  staff: {},
+  staff: ["staff:read", "leaves:apply", "payroll:view"],
   student: [
     "dashboard:view", "attendance:read", "homework:read", "exams:read",
     "marks:read", "fees:read", "library:read", "notices:read", "events:read",
@@ -66,7 +66,7 @@ function hasPermission(user, permission) {
 // Resolve the concrete permission list for a user token payload.
 function getPermissionsFor(user) {
   if (!user || !user.role) return [];
-  if (user.role === "staff") return STAFF_PERMISSIONS[user.designation] || [];
+  if (user.role === "staff") return STAFF_PERMISSIONS[user.designation] || ROLE_PERMISSIONS["staff"];
   return ROLE_PERMISSIONS[user.role] || [];
 }
 

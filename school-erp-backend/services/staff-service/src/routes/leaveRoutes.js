@@ -1,5 +1,8 @@
 const express = require("express");
 const router = express.Router();
+const { validateObjectIdParam } = require("../middleware/objectId");
+router.param("id", validateObjectIdParam);
+router.param("homeworkId", validateObjectIdParam);
 const ctrl = require("../controllers/leaveController");
 const { verifyToken, resolveTenant, requireTenant, authorizeRoles, requirePermission } = require("../middleware/auth");
 

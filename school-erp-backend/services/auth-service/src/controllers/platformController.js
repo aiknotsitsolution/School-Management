@@ -17,6 +17,10 @@ const { writeAudit } = require("../utils/audit");
 // --------------------------------------------------------------------------
 
 const addDays = (date, days) => new Date(date.getTime() + days * 24 * 60 * 60 * 1000);
+// Escapes regex metacharacters in user search terms to prevent regex
+// injection / ReDoS-style patterns; length-capped to bound scan cost.
+const escapeRegex = (term) =>
+  String(term).slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 const addMonths = (date, months) => {
   const d = new Date(date);
   d.setMonth(d.getMonth() + months);
@@ -258,8 +262,12 @@ const listPlans = async (req, res) => {
     const filter = {};
     if (req.query.status === "active") filter.isActive = true;
     if (req.query.status === "inactive") filter.isActive = false;
-    const plans = await Plan.find(filter).sort({ sortOrder: 1, createdAt: -1 }).lean();
-    res.json({ success: true, count: plans.length, data: plans });
+    const { page, limit, skip } = paginate(req);
+    const [plans, total] = await Promise.all([
+      Plan.find(filter).sort({ sortOrder: 1, createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Plan.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: plans.length, total, page, limit, pages: Math.ceil(total / limit), data: plans });
   } catch (err) {
     rawError(res, err);
   }
@@ -355,7 +363,7 @@ const listSubscriptions = async (req, res) => {
     }
 
     if (req.query.q) {
-      const q = req.query.q.trim();
+      const q = escapeRegex(String(req.query.q).trim());
       const schools = await School.find({
         $or: [
           { name: { $regex: q, $options: "i" } },
@@ -947,7 +955,7 @@ const listAuditLogs = async (req, res) => {
     const filter = {};
     if (req.query.action) filter.action = req.query.action;
     if (req.query.targetType) filter.targetType = req.query.targetType;
-    if (req.query.actorEmail) filter.actorEmail = { $regex: req.query.actorEmail, $options: "i" };
+    if (req.query.actorEmail) filter.actorEmail = { $regex: escapeRegex(req.query.actorEmail), $options: "i" };
     if (req.query.result) filter.result = req.query.result;
 
     const total = await AuditLog.countDocuments(filter);

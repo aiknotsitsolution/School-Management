@@ -1,17 +1,11 @@
 import { useEffect, useState } from "react";
 import {
-  UserPlus,
   Save,
   X,
-  Upload,
+  Camera,
+  Pencil,
   CheckCircle2,
   AlertCircle,
-  User,
-  Phone,
-  Mail,
-  Home,
-  Calendar,
-  GraduationCap,
 } from "lucide-react";
 import {
   PageIntro,
@@ -22,6 +16,7 @@ import {
   Avatar,
   Pill,
 } from "../components/UI";
+import AvatarEditor from "../components/upload/AvatarEditor";
 import { api } from "../lib/api";
 
 const CLASS_OPTIONS = [
@@ -80,6 +75,7 @@ export default function AddStudent() {
   const [error, setError] = useState("");
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState("");
+  const [avatarOpen, setAvatarOpen] = useState(false);
 
   useEffect(() => {
     if (!photoFile) {
@@ -196,24 +192,43 @@ export default function AddStudent() {
         <Card title="Basic Details">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="md:col-span-2 flex items-center gap-4">
-              <Avatar
-                src={photoPreview || form.photoUrl || undefined}
-                name={form.name || "New Student"}
-                size={64}
-              />
+              <div className="relative">
+                <Avatar
+                  src={photoPreview || form.photoUrl || undefined}
+                  name={form.name || "New Student"}
+                  size={72}
+                />
+                {photoPreview && (
+                  <button
+                    type="button"
+                    onClick={() => setAvatarOpen(true)}
+                    aria-label="Edit photo"
+                    className="absolute -bottom-1 -right-1 w-6 h-6 rounded-full bg-amber text-ink flex items-center justify-center shadow-md hover:bg-amber-dark transition-colors"
+                  >
+                    <Pencil size={12} />
+                  </button>
+                )}
+              </div>
               <div className="flex-1">
                 <label className="block text-[12.5px] font-medium text-slate-text/70 mb-1.5">
-                  Photo URL (optional)
+                  Photo (optional)
                 </label>
+                <div className="flex flex-wrap items-center gap-2">
+                  <Button type="button" variant="outline" onClick={() => setAvatarOpen(true)} disabled={saving}>
+                    <Camera size={15} />
+                    {photoPreview ? "Change photo" : "Add photo"}
+                  </Button>
+                  {photoPreview && (
+                    <Button type="button" variant="ghost" onClick={() => setPhotoFile(null)} disabled={saving}>
+                      Remove
+                    </Button>
+                  )}
+                </div>
                 <Input
-                  type="file"
-                  accept="image/*"
-                  onChange={(e) => setPhotoFile(e.target.files?.[0] || null)}
-                />
-                <Input
-                  placeholder="https://..."
+                  placeholder="…or paste a photo URL"
                   value={form.photoUrl}
                   onChange={(e) => update("photoUrl", e.target.value)}
+                  className="mt-2"
                 />
               </div>
             </div>
@@ -464,6 +479,19 @@ export default function AddStudent() {
         student will appear in the attendance register for their class &
         section.
       </div>
+
+      <AvatarEditor
+        open={avatarOpen}
+        title="Student photo"
+        currentSrc={form.photoUrl || undefined}
+        name={form.name || "New Student"}
+        onClose={() => setAvatarOpen(false)}
+        onSave={(file) => {
+          setPhotoFile(file);
+          setSaved(false);
+          setError("");
+        }}
+      />
     </div>
   );
 }

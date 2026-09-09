@@ -1,6 +1,15 @@
 const Notice = require("../models/Notice");
 const Notification = require("../models/Notification");
 const { getUserModel } = require("../models/userLite");
+const { paginate, pageInfo } = require("../utils/pagination");
+
+// Mass-assignment guard: only these fields may be set from the request body
+// (schoolId / postedBy / timestamps stay server-owned).
+const NOTICE_FIELDS = [
+  "title", "description", "category", "pinned", "audience", "attachments", "expiryDate",
+];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
 const AUDIENCE_ROLES = {
   school_admin: ["school_admin"],
@@ -40,7 +49,7 @@ const fanOutNotice = async ({ schoolId, title, audience = [] }) => {
 
 const createNotice = async (req, res) => {
   try {
-    const notice = await Notice.create({ ...req.body, schoolId: req.tenantId, postedBy: req.user.name });
+    const notice = await Notice.create({ ...pick(req.body, NOTICE_FIELDS), schoolId: req.tenantId, postedBy: req.user.name });
     fanOutNotice({ schoolId: req.tenantId, title: notice.title, audience: notice.audience });
     res.status(201).json({ success: true, data: notice });
   } catch (err) {
@@ -51,8 +60,12 @@ const createNotice = async (req, res) => {
 const getNotices = async (req, res) => {
   try {
     const filter = { schoolId: req.tenantId, $or: [{ audience: req.user.role }, { audience: "all" }] };
-    const data = await Notice.find(filter).sort({ createdAt: -1 });
-    res.json({ success: true, count: data.length, data });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      Notice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Notice.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

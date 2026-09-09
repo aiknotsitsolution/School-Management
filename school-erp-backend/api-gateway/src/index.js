@@ -11,7 +11,14 @@ const PORT = process.env.GATEWAY_PORT || 5000;
 const PROXY_TIMEOUT_MS = Number(process.env.PROXY_TIMEOUT_MS || 10000);
 
 app.use(helmet());
-app.use(cors());
+app.use(
+  cors({
+    origin: process.env.CORS_ORIGIN
+      ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
+      : true,
+    credentials: true,
+  }),
+);
 app.use(morgan("dev"));
 
 // Global rate limiter - protects all downstream microservices
@@ -26,6 +33,50 @@ const limiter = rateLimit({
   },
 });
 app.use(limiter);
+
+// Stricter, env-configurable limits on sensitive endpoints (brute-force /
+// resource-exhaustion surfaces). The global limiter above still applies too.
+const rate = (key, fallback) => {
+  const v = Number(process.env[key] || "");
+  return Number.isFinite(v) && v > 0 ? v : fallback;
+};
+const sensitiveLimiters = [
+  { path: "/api/auth/login", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_LOGIN_MAX", 20) },
+  { path: "/api/auth/refresh-token", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_REFRESH_MAX", 60) },
+  { path: "/api/auth/change-password", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_CHANGE_PASSWORD_MAX", 10) },
+  { path: "/api/auth/register", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_REGISTER_MAX", 60) },
+  { path: "/api/auth/reset-password", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_RESET_PASSWORD_MAX", 10) },
+  { path: "/api/auth/users/:id/reset-password", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_ADMIN_RESET_MAX", 20) },
+  { path: "/api/payments/orders", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_PAYMENT_CREATE_MAX", 30) },
+];
+sensitiveLimiters.forEach(({ path, window, max }) => {
+  app.use(
+    path,
+    rateLimit({
+      windowMs: window,
+      max,
+      standardHeaders: true,
+      legacyHeaders: false,
+      message: { success: false, message: "Too many requests, please try again later." },
+    }),
+  );
+});
+
+// Internal-only endpoints must NOT be reachable through the public gateway:
+//  - /api/notifications/internal/*  (service-to-service key, no user JWT)
+//  - /api/payments/orders/:id/confirm (provider webhook; reachable only
+//    directly on the fee service with the provider signature)
+app.use((req, res, next) => {
+  if (
+    req.path.startsWith("/api/notifications/internal") ||
+    /^\/api\/payments\/orders\/[^/]+\/confirm\/?$/.test(req.path)
+  ) {
+    return res
+      .status(404)
+      .json({ success: false, message: "Route not found on API Gateway" });
+  }
+  next();
+});
 
 app.get("/health", (req, res) => {
   res.json({

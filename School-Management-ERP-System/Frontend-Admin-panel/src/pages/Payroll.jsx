@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { useSelector } from "react-redux";
 import { PermissionGate } from "../lib/permissions";
 import {
   Plus,
@@ -23,6 +24,7 @@ import {
   toast,
 } from "../components/UI";
 import { api } from "../lib/api";
+import { selectSchool } from "../store/selectors";
 const payrollSeed = [];
 
 const MONTHS = [
@@ -39,13 +41,6 @@ const MONTHS = [
   "February",
   "March",
 ];
-const DEPARTMENTS = [
-  "Teaching",
-  "Administration",
-  "Transport",
-  "Academic",
-  "Finance",
-];
 
 function payMonth() {
   const d = new Date();
@@ -53,34 +48,19 @@ function payMonth() {
   return { month: MONTHS[idx], year: d.getFullYear() };
 }
 
-function nextEmp(list) {
-  const max = list.reduce((m, e) => {
-    const num = parseInt(String(e.id).replace(/\D/g, ""), 10);
-    return Number.isFinite(num) && num > m ? num : m;
-  }, 0);
-  return `EMP-${max + 1}`;
-}
-
 function emptyForm() {
   return {
-    name: "",
-    department: "Teaching",
-    designation: "",
+    staffId: "",
     basic: 0,
     allowances: 0,
     deductions: 0,
-    paid: false,
   };
 }
 
 export default function Payroll() {
+  const school = useSelector(selectSchool);
   const [employees, setEmployees] = useState(payrollSeed);
-  useEffect(() => {
-    api.payroll
-      .list()
-      .then(({ data }) => setEmployees(data || []))
-      .catch(() => {});
-  }, []);
+  const [staffList, setStaffList] = useState([]);
   const [{ month, year }, setPeriod] = useState(payMonth());
   const [query, setQuery] = useState("");
   const [deptFilter, setDeptFilter] = useState("All");
@@ -88,86 +68,115 @@ export default function Payroll() {
   const [form, setForm] = useState(emptyForm());
   const [payslip, setPayslip] = useState(null);
 
+  const reload = useCallback(() => {
+    Promise.all([
+      api.payroll.list().catch(() => ({ data: [] })),
+      api.staff.list().catch(() => ({ data: [] })),
+    ]).then(([payrollRes, staffRes]) => {
+      const staff = staffRes.data || [];
+      const map = {};
+      staff.forEach((s) => {
+        map[String(s._id || s.id)] = s;
+      });
+      setStaffList(staff);
+      setEmployees(
+        (payrollRes.data || []).map((p) => {
+          const s = map[String(p.staffId)];
+          return {
+            id: p._id,
+            name: s?.name || "Staff member",
+            department: s?.department || "—",
+            designation: s?.designation || "—",
+            month: p.month,
+            year: p.year,
+            basic: Number(p.basic || 0),
+            allowances: Number(p.allowances || 0),
+            deductions: Number(p.deductions || 0),
+            paid: p.status === "Paid",
+          };
+        }),
+      );
+    });
+  }, []);
+
+  useEffect(() => {
+    reload();
+  }, [reload]);
+
   const depts = useMemo(
-    () => ["All", ...new Set(employees.map((e) => e.department))],
-    [employees],
+    () =>
+      ["All", ...new Set(employees.filter((e) => e.year === year && e.month === month).map((e) => e.department))],
+    [employees, month, year],
   );
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
     return employees.filter((e) => {
+      const matchPeriod = e.year === year && e.month === month;
       const matchDept = deptFilter === "All" || e.department === deptFilter;
       const matchQuery =
         !q ||
         e.name.toLowerCase().includes(q) ||
         e.id.toLowerCase().includes(q) ||
         e.designation.toLowerCase().includes(q);
-      return matchDept && matchQuery;
+      return matchPeriod && matchDept && matchQuery;
     });
-  }, [employees, query, deptFilter]);
+  }, [employees, query, deptFilter, month, year]);
 
   const stats = useMemo(() => {
-    const totalGross = employees.reduce(
+    const periodRows = employees.filter(
+      (e) => e.year === year && e.month === month,
+    );
+    const totalGross = periodRows.reduce(
       (a, e) => a + e.basic + e.allowances,
       0,
     );
-    const totalDeductions = employees.reduce((a, e) => a + e.deductions, 0);
+    const totalDeductions = periodRows.reduce((a, e) => a + e.deductions, 0);
     const totalNet = totalGross - totalDeductions;
-    const paid = employees.filter((e) => e.paid).length;
+    const paid = periodRows.filter((e) => e.paid).length;
     return {
       totalGross,
       totalDeductions,
       totalNet,
       paid,
-      unpaid: employees.length - paid,
+      unpaid: periodRows.length - paid,
     };
-  }, [employees]);
+  }, [employees, month, year]);
 
   const totalPayable = stats.totalNet;
 
-  const togglePaid = (id) => {
-    setEmployees((prev) =>
-      prev.map((e) => (e.id === id ? { ...e, paid: !e.paid } : e)),
-    );
-    const emp = employees.find((e) => e.id === id);
-    if (emp)
-      toast(
-        emp.paid ? "Payment marked unpaid" : "Salary marked as paid",
-        "success",
-      );
+  const togglePaid = async (id) => {
+    try {
+      await api.payroll.markPaid(id);
+      toast("Salary marked as paid", "success");
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
+    }
   };
 
-  const saveEmp = () => {
-    if (!form.name.trim()) return;
-    if (form.id) {
-      setEmployees((prev) =>
-        prev.map((e) =>
-          e.id === form.id ? { ...form, name: form.name.trim() } : e,
-        ),
-      );
-      toast("Employee updated");
-    } else {
-      setEmployees((prev) => [
-        { id: nextEmp(prev), ...form, name: form.name.trim() },
-        ...prev,
-      ]);
+  const saveEmp = async () => {
+    if (!form.staffId || !Number(form.basic)) return;
+    try {
+      await api.payroll.create({
+        staffId: form.staffId,
+        month,
+        year,
+        basic: Number(form.basic),
+        allowances: Number(form.allowances),
+        deductions: Number(form.deductions),
+      });
       toast("Employee added to payroll");
+      setShowModal(false);
+      setForm(emptyForm());
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
     }
-    setShowModal(false);
-    setForm(emptyForm());
   };
 
   const openAdd = () => {
-    setForm({
-      id: "",
-      name: "",
-      department: "Teaching",
-      designation: "",
-      basic: 0,
-      allowances: 0,
-      deductions: 0,
-      paid: false,
-    });
+    setForm(emptyForm());
     setShowModal(true);
   };
 
@@ -392,12 +401,14 @@ export default function Payroll() {
                           >
                             <FileText size={14} /> Payslip
                           </button>
-                          <button
-                            onClick={() => togglePaid(e.id)}
-                            className={`text-[12px] font-semibold hover:underline ${e.paid ? "text-alert" : "text-success"}`}
-                          >
-                            {e.paid ? "Unmark" : "Pay"}
-                          </button>
+                          {!e.paid && (
+                            <button
+                              onClick={() => togglePaid(e.id)}
+                              className="text-[12px] font-semibold text-success hover:underline"
+                            >
+                              Pay
+                            </button>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -418,7 +429,7 @@ export default function Payroll() {
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
               <h3 className="font-display font-semibold text-ink text-[17px]">
-                {form.id ? "Edit Employee" : "Add Employee"}
+                Add Employee
               </h3>
               <button
                 onClick={() => setShowModal(false)}
@@ -428,38 +439,29 @@ export default function Payroll() {
               </button>
             </div>
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-3">
-                <PayField label="Name *">
-                  <Input
-                    value={form.name}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, name: e.target.value }))
-                    }
-                  />
-                </PayField>
-                <PayField label="Designation">
-                  <Input
-                    value={form.designation}
-                    onChange={(e) =>
-                      setForm((f) => ({ ...f, designation: e.target.value }))
-                    }
-                  />
-                </PayField>
-              </div>
-              <PayField label="Department">
+              <PayField label="Employee *">
                 <Select
-                  value={form.department}
+                  value={form.staffId}
                   onChange={(e) =>
-                    setForm((f) => ({ ...f, department: e.target.value }))
+                    setForm((f) => ({ ...f, staffId: e.target.value }))
                   }
                 >
-                  {DEPARTMENTS.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
+                  <option value="">Select staff…</option>
+                  {staffList.map((s) => (
+                    <option
+                      key={String(s._id || s.id)}
+                      value={String(s._id || s.id)}
+                    >
+                      {s.name}
+                      {s.employeeId ? ` (${s.employeeId})` : ""}
                     </option>
                   ))}
                 </Select>
               </PayField>
+              <p className="text-[12px] text-slate-text/60 -mt-2">
+                Creates a payroll entry for the selected staff for {month}{" "}
+                {year}.
+              </p>
               <div className="grid grid-cols-2 gap-3">
                 <PayField label="Basic Salary">
                   <Input
@@ -506,9 +508,9 @@ export default function Payroll() {
               <Button
                 variant="amber"
                 onClick={saveEmp}
-                disabled={!form.name.trim()}
+                disabled={!form.staffId || !Number(form.basic)}
               >
-                <Save size={15} /> {form.id ? "Update" : "Add Employee"}
+                <Save size={15} /> Add Employee
               </Button>
             </div>
           </div>
@@ -536,10 +538,10 @@ export default function Payroll() {
             <div className="px-5 py-5 space-y-3">
               <div className="text-center">
                 <p className="font-display font-bold text-ink text-[18px]">
-                  Brightwood International School
+                  {school?.name || "School ERP"}
                 </p>
                 <p className="text-[12px] text-slate-text/60">
-                  143, New Market, Bhopal
+                  Salary Statement — {month} {year}
                 </p>
               </div>
               <div className="h-px bg-black/[0.06]" />

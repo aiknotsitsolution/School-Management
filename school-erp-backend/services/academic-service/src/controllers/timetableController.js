@@ -1,11 +1,16 @@
 const Timetable = require("../models/Timetable");
 
+// Mass-assignment guard: only these fields may be set from the request body.
+const TIMETABLE_FIELDS = ["class", "section", "day", "periods"];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
 const upsertTimetable = async (req, res) => {
   try {
     const { class: cls, section, day } = req.body;
     const timetable = await Timetable.findOneAndUpdate(
       { schoolId: req.tenantId, class: cls, section, day },
-      { ...req.body, schoolId: req.tenantId },
+      { ...pick(req.body, TIMETABLE_FIELDS), schoolId: req.tenantId },
       { new: true, upsert: true, runValidators: true },
     );
     res.status(201).json({ success: true, data: timetable });
