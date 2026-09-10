@@ -34,21 +34,15 @@ async function findMissingMasterRefs({ schoolId, class: cls, section, subject, r
     active: true,
     $or: [{ key: normalizeKey(section) }, { name: String(section).trim() }],
   });
+  // Subjects are school-owned masters just like the other kinds; we no longer
+  // resolve a legacy platform "global" library, so checks are strictly scoped
+  // to this tenant's active rows.
   await check("subject", subject, SchoolSubject,
-    { status: "active", $or: [{ scope: "global" }, { scope: "tenant", schoolId }] },
+    { schoolId, status: "active" },
     {
+      schoolId,
       status: "active",
-      $or: [
-        {
-          scope: "global",
-          $or: [{ normalizedName: normalizeKey(subject) }, { name: String(subject).trim() }],
-        },
-        {
-          scope: "tenant",
-          schoolId,
-          $or: [{ normalizedName: normalizeKey(subject) }, { name: String(subject).trim() }],
-        },
-      ],
+      $or: [{ normalizedName: normalizeKey(subject) }, { name: String(subject).trim() }],
     },
   );
   await check("room", room, Room, { schoolId, active: true }, {
@@ -83,26 +77,14 @@ async function findMissingSubjects({ schoolId, subjects }) {
     ),
   ];
   if (!values.length) return [];
-  const activeCount = await SchoolSubject.countDocuments({
-    status: "active",
-    $or: [{ scope: "global" }, { scope: "tenant", schoolId }],
-  });
+  const activeCount = await SchoolSubject.countDocuments({ schoolId, status: "active" });
   if (activeCount === 0) return [];
   const missing = [];
   for (const value of values) {
     const found = await SchoolSubject.findOne({
+      schoolId,
       status: "active",
-      $or: [
-        {
-          scope: "global",
-          $or: [{ normalizedName: normalizeKey(value) }, { name: value }],
-        },
-        {
-          scope: "tenant",
-          schoolId,
-          $or: [{ normalizedName: normalizeKey(value) }, { name: value }],
-        },
-      ],
+      $or: [{ normalizedName: normalizeKey(value) }, { name: value }],
     }).lean();
     if (!found) missing.push({ kind: "subject", value });
   }

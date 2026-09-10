@@ -12,5 +12,7 @@ router.get("/:kind/:id", requirePermission("exams:read"), ctrl.getById);
 router.post("/validate-refs", requirePermission("exams:read"), ctrl.validateRefs);
 router.post("/:kind", requirePermission("exams:write"), ctrl.create);
 router.patch("/:kind/:id/deactivate", requirePermission("exams:write"), ctrl.deactivate);
+router.patch("/:kind/:id/restore", requirePermission("exams:write"), ctrl.restore);
+router.patch("/:kind/:id", requirePermission("exams:write"), ctrl.update);
 
 module.exports = router;

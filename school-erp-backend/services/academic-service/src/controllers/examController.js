@@ -46,6 +46,11 @@ const EXAM_STATUS_TRANSITIONS = {
   published: ["reviewed"],
 };
 
+// Subjects toggle status:"active"/"inactive"; the other masters use active:true.
+const ACTIVE_FILTERS = {
+  subjectId: { status: "active" },
+};
+
 // Verify every master reference resolves inside THIS tenant. Rejects a value a
 // school has no right to (cross-tenant leakage) and keeps exam records tenant-consistent.
 async function validateMasterRefs(schoolId, body) {
@@ -63,23 +68,8 @@ async function validateMasterRefs(schoolId, body) {
   }
   for (const [field, value] of toCheck) {
     const Model = TYPE_OF[field];
-    // Subjects are dual-scope: a valid ref is either a platform global subject
-    // (schoolId null) or this school's tenant subject. Other masters are strictly
-    // per-school.
-    if (field === "subjectId") {
-      const exists = await Model.findOne({
-        _id: value,
-        status: "active",
-        $or: [{ scope: "global" }, { scope: "tenant", schoolId }],
-      }).lean();
-      if (!exists) {
-        const wrong = new Error(`Referenced ${field} does not exist for this school or is inactive`);
-        wrong.status = 400;
-        throw wrong;
-      }
-      continue;
-    }
-    const exists = await Model.findOne({ _id: value, schoolId, active: true }).lean();
+    const active = ACTIVE_FILTERS[field] || { active: true };
+    const exists = await Model.findOne({ _id: value, schoolId, ...active }).lean();
     if (!exists) {
       const wrong = new Error(`Referenced ${field} does not exist for this school or is inactive`);
       wrong.status = 400;

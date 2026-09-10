@@ -10,10 +10,9 @@ function normalizeLabel(label) {
 /**
  * Searchable, master-backed dropdown.
  *
- * Fetches a master list from /api/exam-masters/:kind (global + tenant subjects
- * merged server-side for subjects) and renders it as a searchable popover with
- * a fixed max height and internal scroll. Supports an optional "Add Custom ..."
- * row that is always accessible.
+ * Fetches a master list from /api/exam-masters/:kind (tenant scoped server-side)
+ * and renders it as a searchable popover with a fixed max height and internal
+ * scroll. Supports an optional "Add Custom ..." row that is always accessible.
  *
  * Loads the list once and caches it across opens (per kind) to avoid repeated
  * API calls when the same form is opened repeatedly.

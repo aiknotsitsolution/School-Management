@@ -18,6 +18,7 @@ const {
   normalizeKey,
 } = require("@school-erp/shared/src/master-data");
 const { findMissingMasterRefs, missingMessage } = require("../utils/masterRefs");
+const { writeMasterAudit } = require("../utils/audit");
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
@@ -45,14 +46,9 @@ const SUBJECT_SEEDS = [
   "Business Studies", "Economics", "Physical Education",
 ];
 
-// Platform-level (global) subject library seeded once. Available to every
-// tenant; tenant customs are stored separately with scope=tenant.
-const GLOBAL_SUBJECT_SEEDS = [
-  "Mathematics", "English", "Hindi", "Science", "Social Science",
-  "Physics", "Chemistry", "Biology", "Computer Science", "Physical Education",
-  "Accountancy", "Business Studies", "Economics", "Art & Craft",
-  "Environmental Studies", "General Knowledge", "Moral Education",
-];
+// Platform-level (global) subject library removed: all business master data is
+// school-owned, so subjects are tenant rows like every other kind.
+
 const FEE_TYPE_SEEDS = [
   "Tuition", "Transport", "Hostel", "Exam", "Library", "Sports", "Lab", "Miscellaneous",
 ];
@@ -89,7 +85,6 @@ const HOSTEL_BLOCK_SEEDS = ["A", "B", "C", "D"];
 const SUBJECT_KIND = {
   label: "Subject",
   model: SchoolSubject,
-  dualScope: true,
   sort: { name: 1 },
   build(payload) {
     const name = clean(payload.name);
@@ -98,46 +93,18 @@ const SUBJECT_KIND = {
     if (payload.description != null) out.description = clean(payload.description);
     return out;
   },
-  // Cross-scope duplicate check on the logical name (className intentionally
-  // excluded so a school cannot have two "Mathematics" rows under one scope).
-  dupQuery(payload) {
-    const name = normalizeKey(payload.name);
-    return name ? { normalizedName: name } : {};
+  // Subject names are unique per school on the logical (normalized) name.
+  // className is intentionally excluded so a school cannot hold two
+  // "Mathematics" rows under one scope.
+  dupFilter(payload) {
+    const name = payload.normalizedName || normalizeKey(payload.name);
+    return name ? { normalizedName: name } : null;
   },
+  lifecycle: { field: "status", active: "active", inactive: "inactive" },
+  // scope is retained on the model for DB compatibility with pre-migration
+  // rows; every new subject is written as a plain tenant row (scope "tenant").
+  defaults: (req) => ({ scope: "tenant" }),
   seeds: () => SUBJECT_SEEDS.map((name) => ({ name, className: "" })),
-  globalSeeds: () =>
-    GLOBAL_SUBJECT_SEEDS.map((name) => ({ name, normalizedName: normalizeKey(name) })),
-  // Subjects merge the global library + this school's tenant-scoped subjects.
-  async listDualScope({ req, canWrite }) {
-    const tenantCount = await SchoolSubject.countDocuments({
-      scope: "tenant",
-      schoolId: req.tenantId,
-    });
-    if (tenantCount === 0 && canWrite) {
-      const rows = SUBJECT_SEEDS.map((name) => ({
-        scope: "tenant",
-        schoolId: req.tenantId,
-        tenantId: req.tenantId,
-        name,
-        className: "",
-      }));
-      await SchoolSubject.insertMany(rows).catch(() => {});
-    }
-    const rows = await SchoolSubject.find({
-      status: "active",
-      $or: [{ scope: "global" }, { scope: "tenant", schoolId: req.tenantId }],
-    })
-      .sort({ scope: -1, name: 1 })
-      .lean();
-    // Merge global + tenant into one clean list. Same name can exist in both
-    // scopes (tenant copied a global); prefer the tenant's copy. The user should
-    // not see duplicates or need to know where a subject came from.
-    const byName = new Map();
-    for (const row of rows) {
-      if (!byName.has(row.normalizedName)) byName.set(row.normalizedName, row);
-    }
-    return Array.from(byName.values());
-  },
 };
 
 const MASTERS = {
@@ -346,6 +313,15 @@ const controller = createMasterController({
   kinds: MASTERS,
   readPermission: "exams:read",
   writePermission: "exams:write",
+  audit: async ({ req, action, target }) => {
+    const name = target && (target.name || target.label);
+    await writeMasterAudit({
+      req,
+      action: `master.${action}`,
+      targetId: target && target._id ? String(target._id) : null,
+      message: `${req.params.kind || "master"} "${name || ""}" ${action}`.replace(/\s+/g, " "),
+    });
+  },
 });
 
 // Cross-service referential integrity endpoint. Student/staff/fee forward the
@@ -376,7 +352,9 @@ module.exports = {
   list: controller.list,
   getById: controller.getById,
   create: controller.create,
+  update: controller.update,
   deactivate: controller.deactivate,
+  restore: controller.restore,
   validateRefs,
   MASTERS,
   timeSlotLabel,

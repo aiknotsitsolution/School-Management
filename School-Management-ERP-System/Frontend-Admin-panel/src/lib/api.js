@@ -341,8 +341,12 @@ export const api = {
   examMasters: {
     list: (kind) => request(`/exam-masters/${kind}`),
     create: (kind, item) => request(`/exam-masters/${kind}`, json("POST", item)),
+    update: (kind, id, item) =>
+      request(`/exam-masters/${kind}/${id}`, json("PATCH", item)),
     deactivate: (kind, id) =>
       request(`/exam-masters/${kind}/${id}/deactivate`, { method: "PATCH", body: JSON.stringify({ active: false }) }),
+    restore: (kind, id) =>
+      request(`/exam-masters/${kind}/${id}/restore`, { method: "PATCH", body: JSON.stringify({}) }),
     validate: (item) =>
       request("/exam-masters/validate-refs", json("POST", item)),
   },

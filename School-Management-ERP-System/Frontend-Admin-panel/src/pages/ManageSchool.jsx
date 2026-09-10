@@ -4,6 +4,7 @@ import {
   Plus,
   Trash2,
   RotateCcw,
+  Pencil,
   School,
   BookOpen,
   Layers,
@@ -39,6 +40,16 @@ const TABS = [
   { key: "event-categories", label: "Event Categories", singular: "Event Category", icon: CalendarDays, kind: "event-categories" },
   { key: "hostel-blocks", label: "Hostel Blocks", singular: "Hostel Block", icon: Blocks, kind: "hostel-blocks" },
 ];
+
+// Masters switch lifecycle through either active:Boolean (classes, sections,
+// ...) or a status enum (subjects -> status:"active"/"inactive").
+const isActiveItem = (item) =>
+  item && ("status" in item ? item.status === "active" : item.active !== false);
+
+const setLifecycle = (item, active) =>
+  "status" in item
+    ? { ...item, status: active ? "active" : "inactive" }
+    : { ...item, active };
 
 function SectionRow({ item, onDeactivate, onReactivate }) {
   const isActive = item.active !== false;
@@ -78,6 +89,7 @@ function MasterList({
   filterFn,
   onDeactivate,
   onReactivate,
+  onEdit,
   renderItem,
 }) {
   const [query, setQuery] = useState("");
@@ -145,23 +157,32 @@ function MasterList({
                     </p>
                   )}
                 </div>
-                <Pill tone={item.active !== false ? "success" : "neutral"}>
-                  {item.active !== false ? "Active" : "Inactive"}
+                {onEdit && (
+                  <button
+                    onClick={() => onEdit(item)}
+                    className="p-2 rounded-lg text-slate-text hover:bg-paper transition-colors"
+                    title={`Edit ${item.name}`}
+                  >
+                    <Pencil size={15} />
+                  </button>
+                )}
+                <Pill tone={isActiveItem(item) ? "success" : "neutral"}>
+                  {isActiveItem(item) ? "Active" : "Inactive"}
                 </Pill>
                 <button
                   onClick={() =>
-                    item.active !== false
+                    isActiveItem(item)
                       ? onDeactivate(item._id)
                       : onReactivate(item._id)
                   }
                   className={`p-2 rounded-lg transition-colors ${
-                    item.active !== false
+                    isActiveItem(item)
                       ? "text-alert hover:bg-alert/10"
                       : "text-success hover:bg-success/10"
                   }`}
-                  title={item.active !== false ? "Deactivate" : "Reactivate"}
+                  title={isActiveItem(item) ? "Deactivate" : "Reactivate"}
                 >
-                  {item.active !== false ? (
+                  {isActiveItem(item) ? (
                     <Trash2 size={15} />
                   ) : (
                     <RotateCcw size={15} />
@@ -231,9 +252,7 @@ export default function ManageSchool() {
       invalidateMasterCache(kind);
       setItems((prev) => ({
         ...prev,
-        [kind]: prev[kind].map((i) =>
-          i._id === id ? { ...i, active: false } : i,
-        ),
+        [kind]: prev[kind].map((i) => (i._id === id ? setLifecycle(i, false) : i)),
       }));
       toast("Item deactivated", "info");
     } catch {
@@ -241,9 +260,14 @@ export default function ManageSchool() {
     }
   };
 
-  const handleReactivate = async (_kind, _id) => {
+  const handleRestore = async (kind, id) => {
     try {
-      await loadAll();
+      await api.examMasters.restore(kind, id);
+      invalidateMasterCache(kind);
+      setItems((prev) => ({
+        ...prev,
+        [kind]: prev[kind].map((i) => (i._id === id ? setLifecycle(i, true) : i)),
+      }));
       toast("Item reactivated");
     } catch {
       toast("Failed to reactivate", "error");
@@ -263,15 +287,23 @@ export default function ManageSchool() {
     });
   };
 
-  const classCount = items.classes.filter((i) => i.active !== false).length;
-  const sectionCount = items.sections.filter((i) => i.active !== false).length;
-  const subjectCount = items.subjects.filter((i) => i.active !== false).length;
-  const feeTypeCount = items["fee-types"].filter((i) => i.active !== false).length;
-  const attendanceStatusCount = items["attendance-statuses"].filter((i) => i.active !== false).length;
-  const noticeCategoryCount = items["notice-categories"].filter((i) => i.active !== false).length;
-  const noticeAudienceCount = items["notice-audiences"].filter((i) => i.active !== false).length;
-  const eventCategoryCount = items["event-categories"].filter((i) => i.active !== false).length;
-  const hostelBlockCount = items["hostel-blocks"].filter((i) => i.active !== false).length;
+  const handleUpdated = (kind, updatedItem) => {
+    invalidateMasterCache(kind);
+    setItems((prev) => ({
+      ...prev,
+      [kind]: prev[kind].map((i) => (i._id === updatedItem._id ? updatedItem : i)),
+    }));
+  };
+
+  const classCount = items.classes.filter((i) => isActiveItem(i)).length;
+  const sectionCount = items.sections.filter((i) => isActiveItem(i)).length;
+  const subjectCount = items.subjects.filter((i) => isActiveItem(i)).length;
+  const feeTypeCount = items["fee-types"].filter((i) => isActiveItem(i)).length;
+  const attendanceStatusCount = items["attendance-statuses"].filter((i) => isActiveItem(i)).length;
+  const noticeCategoryCount = items["notice-categories"].filter((i) => isActiveItem(i)).length;
+  const noticeAudienceCount = items["notice-audiences"].filter((i) => isActiveItem(i)).length;
+  const eventCategoryCount = items["event-categories"].filter((i) => isActiveItem(i)).length;
+  const hostelBlockCount = items["hostel-blocks"].filter((i) => isActiveItem(i)).length;
 
   const tab = TABS.find((t) => t.key === activeTab);
 
@@ -342,7 +374,10 @@ export default function ManageSchool() {
           kind={activeTab}
           label={tab?.label}
           onDeactivate={(id) => handleDeactivate(activeTab, id)}
-          onReactivate={(id) => handleReactivate(activeTab, id)}
+          onReactivate={(id) => handleRestore(activeTab, id)}
+          onEdit={(item) =>
+            setCustomModal({ kind: activeTab, label: tab.singular, initialItem: item })
+          }
           renderItem={
             activeTab === "sections"
               ? (item) => (
@@ -351,7 +386,7 @@ export default function ManageSchool() {
                     item={item}
                     classOptions={items.classes}
                     onDeactivate={(id) => handleDeactivate("sections", id)}
-                    onReactivate={(id) => handleReactivate("sections", id)}
+                    onReactivate={(id) => handleRestore("sections", id)}
                   />
                 )
               : undefined
@@ -363,9 +398,16 @@ export default function ManageSchool() {
         <CustomMasterModal
           kind={customModal.kind}
           label={customModal.label}
-          title={`Add Custom ${customModal.label}`}
+          title={
+            customModal.initialItem
+              ? `Edit ${customModal.label}`
+              : `Add Custom ${customModal.label}`
+          }
+          showDescription={customModal.kind === "subjects"}
+          initialItem={customModal.initialItem}
           onClose={() => setCustomModal(null)}
           onCreated={(newItem) => handleCreated(customModal.kind, newItem)}
+          onUpdated={(updatedItem) => handleUpdated(customModal.kind, updatedItem)}
         />
       )}
     </div>

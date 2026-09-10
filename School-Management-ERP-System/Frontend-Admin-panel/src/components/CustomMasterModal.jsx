@@ -5,9 +5,12 @@ import { api } from "../lib/api";
 import { toast } from "./UI";
 
 /**
- * Modal for creating a reusable custom master value (e.g. a tenant subject).
- * On success it persists to the tenant master and reports the created record up
- * so the caller can auto-select it.
+ * Modal for creating or editing a reusable master value (e.g. a tenant subject).
+ * On success it persists to the tenant master and reports the record up so the
+ * caller can auto-select it (create) or refresh its row (edit).
+ *
+ * Pass `initialItem` to edit an existing record (uses the update endpoint);
+ * without it the modal creates a new record.
  */
 export default function CustomMasterModal({
   kind,
@@ -15,11 +18,14 @@ export default function CustomMasterModal({
   valueName = "name",
   title,
   showDescription = false,
+  initialItem = null,
   onClose,
   onCreated,
+  onUpdated,
 }) {
-  const [name, setName] = useState("");
-  const [description, setDescription] = useState("");
+  const editing = Boolean(initialItem && initialItem._id);
+  const [name, setName] = useState(initialItem?.name || "");
+  const [description, setDescription] = useState(initialItem?.description || "");
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
@@ -29,17 +35,23 @@ export default function CustomMasterModal({
     try {
       const payload = { name: trimmed };
       if (showDescription) payload.description = description.trim();
-      const response = await api.examMasters.create(kind, payload);
-      toast(`${label} "${response.data.name}" created`);
-      onCreated(response.data);
+      if (editing) {
+        const response = await api.examMasters.update(kind, initialItem._id, payload);
+        toast(`${label} "${response.data.name}" updated`);
+        onUpdated?.(response.data);
+      } else {
+        const response = await api.examMasters.create(kind, payload);
+        toast(`${label} "${response.data.name}" created`);
+        onCreated?.(response.data);
+      }
       onClose();
     } catch (err) {
       const isDup =
         err.status === 409 ||
         (err.message && err.message.toLowerCase().includes("already exists"));
-      if (isDup && err.data && err.data.existingId) {
+      if (isDup && !editing && err.data && err.data.existingId) {
         toast(`"${trimmed}" already exists — selected for you`, "info");
-        onCreated({ _id: err.data.existingId, ...err.data });
+        onCreated?.({ _id: err.data.existingId, ...err.data });
         onClose();
       } else if (isDup) {
         toast(`"${trimmed}" already exists — you can select it from the list`, "error");
@@ -60,7 +72,7 @@ export default function CustomMasterModal({
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
           <h3 className="font-display font-semibold text-ink text-[17px]">
-            {title || `Add Custom ${label}`}
+            {title || `${editing ? "Edit" : "Add Custom"} ${label}`}
           </h3>
           <button
             onClick={onClose}
@@ -108,7 +120,7 @@ export default function CustomMasterModal({
             onClick={submit}
             disabled={saving || !name.trim()}
           >
-            {saving ? "Saving..." : `Add ${label}`}
+            {saving ? "Saving..." : `${editing ? "Save Changes" : `Add ${label}`}`}
           </Button>
         </div>
       </div>

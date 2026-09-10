@@ -18,6 +18,7 @@
     "dotenv": "^17.4.2",
     "imagekit": "^6.0.0",
     "mongoose": "^8.5.1",
+    "multer": "^2.3.0",
     "nodemailer": "^10.0.3"
   }
 }
