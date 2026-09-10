@@ -79,6 +79,8 @@ import PlatformReports from "./pages/platform/PlatformReports";
 import PlatformSettings from "./pages/platform/PlatformSettings";
 import Users from "./pages/Users";
 import ManageSchool from "./pages/ManageSchool";
+import Account from "./pages/Account";
+import SchoolSettings from "./pages/SchoolSettings";
 import Teachers from "./pages/Teachers";
 import Plans from "./pages/Plans";
 import Subscriptions from "./pages/Subscriptions";
@@ -272,6 +274,8 @@ export default function App() {
               </RequirePermission>
             }
           />
+          <Route path="/profile" element={<Account />} />
+          <Route path="/settings" element={<SchoolSettings />} />
           <Route
             path="/teachers"
             element={

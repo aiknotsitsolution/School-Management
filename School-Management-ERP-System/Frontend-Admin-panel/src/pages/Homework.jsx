@@ -242,47 +242,43 @@ export default function Homework() {
         />
       </div>
 
-      <Card
-        title="All Assigned Tasks"
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/40"
-              />
-              <Input
-                placeholder="Search title, assignee..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="pl-8 w-52"
-              />
-            </div>
-            <Select
-              value={roleFilter}
-              onChange={(e) => setRoleFilter(e.target.value)}
-              className="min-w-[130px]"
-            >
-              {ROLE_FILTER_OPTIONS.map((r) => (
-                <option key={r} value={r}>
-                  {r === "All" ? "All Roles" : r}
-                </option>
-              ))}
-            </Select>
-            <Select
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="min-w-[120px]"
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  {s === "All" ? "All Status" : s}
-                </option>
-              ))}
-            </Select>
+      <Card title="All Assigned Tasks">
+        <div className="flex flex-wrap items-center gap-3 mb-4">
+          <div className="relative flex-1 min-w-[200px] max-w-sm">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/40"
+            />
+            <Input
+              placeholder="Search title, assignee..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-8"
+            />
           </div>
-        }
-      >
+          <Select
+            value={roleFilter}
+            onChange={(e) => setRoleFilter(e.target.value)}
+            className="min-w-[130px]"
+          >
+            {ROLE_FILTER_OPTIONS.map((r) => (
+              <option key={r} value={r}>
+                {r === "All" ? "All Roles" : r}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="min-w-[120px]"
+          >
+            {STATUS_OPTIONS.map((s) => (
+              <option key={s} value={s}>
+                {s === "All" ? "All Status" : s}
+              </option>
+            ))}
+          </Select>
+        </div>
         {filtered.length === 0 ? (
           <div className="py-14 text-center">
             <Briefcase size={36} className="mx-auto text-slate-text/30 mb-3" />

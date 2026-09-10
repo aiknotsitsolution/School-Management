@@ -21,6 +21,7 @@ import {
 } from "../components/UI";
 import ImageDropzone from "../components/upload/ImageDropzone";
 import { api } from "../lib/api";
+import { invalidateMasterCache } from "../lib/masterCache";
 const initialEvents = [];
 
 const CATEGORIES = [
@@ -85,7 +86,7 @@ function normalizeEvent(event) {
 
 // Searchable dropdown with an "add custom" action. Falls back to the preset
 // list plus any custom values already picked in this session.
-function SearchableSelect({ options, value, onChange, placeholder }) {
+function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [custom, setCustom] = useState([]);
@@ -127,7 +128,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
       if (e.key === "Enter") {
         e.preventDefault();
         if (canAdd && activeIndex === matches.length) {
-          commit(q);
+          commit(q, true);
         } else if (activeIndex >= 0 && matches[activeIndex]) {
           commit(String(matches[activeIndex]));
         }
@@ -142,8 +143,15 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, query, matches, canAdd, activeIndex]);
 
-  const commit = (value) => {
+  const commit = async (value, isCustom = false) => {
     if (!value) return;
+    if (isCustom) {
+      try {
+        await onAddCustom?.(value);
+      } catch {
+        // Keep the typed value even if persistence fails (dup / no permission).
+      }
+    }
     setCustom((prev) => (prev.includes(value) ? prev : [...prev, value]));
     onChange(value);
     setOpen(false);
@@ -205,7 +213,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
               <li>
                 <button
                   type="button"
-                  onClick={() => commit(query.trim())}
+                  onClick={() => commit(query.trim(), true)}
                   className={`w-full text-left px-3.5 py-2 text-[13px] text-amber-dark font-medium hover:bg-amber/10 transition-colors ${
                     activeIndex === matches.length ? "bg-amber/10" : ""
                   }`}
@@ -253,6 +261,35 @@ export default function Events() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState(null);
+  const [masterCategories, setMasterCategories] = useState([]);
+
+  useEffect(() => {
+    api.examMasters
+      .list("event-categories")
+      .then(({ data }) => setMasterCategories(data || []))
+      .catch(() => {});
+  }, []);
+
+  const categoryOptions = useMemo(
+    () => [...new Set([...CATEGORIES, ...masterCategories.map((m) => m.name)])],
+    [masterCategories],
+  );
+
+  const addMasterCategory = async (value) => {
+    try {
+      const { data } = await api.examMasters.create("event-categories", {
+        name: value,
+      });
+      invalidateMasterCache("event-categories");
+      setMasterCategories((prev) =>
+        prev.some((m) => m.key === data.key || m.name === data.name)
+          ? prev
+          : [...prev, data],
+      );
+    } catch {
+      // Duplicate / missing permission: keep the typed value locally.
+    }
+  };
 
   const today = new Date();
   today.setHours(0, 0, 0, 0);
@@ -619,10 +656,11 @@ export default function Events() {
                   Category
                 </label>
                 <SearchableSelect
-                  options={CATEGORIES}
+                  options={categoryOptions}
                   value={form.category}
                   onChange={(v) => updateForm("category", v)}
                   placeholder="Select a category"
+                  onAddCustom={addMasterCategory}
                 />
               </div>
 

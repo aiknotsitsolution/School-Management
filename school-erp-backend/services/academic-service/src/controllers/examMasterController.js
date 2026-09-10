@@ -7,6 +7,10 @@ const SchoolSubject = require("../models/SchoolSubject");
 const TimeSlot = require("../models/TimeSlot");
 const Room = require("../models/Room");
 const AttendanceStatus = require("../models/AttendanceStatus");
+const NoticeCategory = require("../models/NoticeCategory");
+const NoticeAudience = require("../models/NoticeAudience");
+const EventCategory = require("../models/EventCategory");
+const HostelBlock = require("../models/HostelBlock");
 const {
   createMasterController,
   httpError,
@@ -69,6 +73,18 @@ const TIME_SLOT_SEEDS = [
   ["11:00", "13:00"], ["13:00", "15:00"], ["14:00", "16:00"],
 ];
 const ATTENDANCE_STATUS_SEEDS = ["Present", "Absent", "Late", "Leave"];
+const NOTICE_CATEGORY_SEEDS = [
+  "Academic", "Holiday", "Sports", "Fees", "Event", "Transport", "General",
+];
+const NOTICE_AUDIENCE_SEEDS = [
+  "All", "All Parents", "All Staff", "Classes 1–5 Parents",
+  "Classes 6–8 Parents", "Classes 9–12 Parents", "Classes 3–10",
+  "Transport Users",
+];
+const EVENT_CATEGORY_SEEDS = [
+  "Sports", "National", "Academic", "Cultural", "Holiday", "Meeting", "Other",
+];
+const HOSTEL_BLOCK_SEEDS = ["A", "B", "C", "D"];
 
 const SUBJECT_KIND = {
   label: "Subject",
@@ -263,6 +279,66 @@ const MASTERS = {
       return name ? { key: name } : null;
     },
     seeds: () => ATTENDANCE_STATUS_SEEDS.map((name) => ({ name })),
+  },
+  "notice-categories": {
+    label: "Notice category",
+    model: NoticeCategory,
+    sort: { name: 1 },
+    build(payload) {
+      const name = clean(payload.name);
+      if (!name) throw httpError(400, "Notice category name is required");
+      return { name };
+    },
+    dupFilter(payload) {
+      const name = normalizeKey(payload.name);
+      return name ? { key: name } : null;
+    },
+    seeds: () => NOTICE_CATEGORY_SEEDS.map((name) => ({ name })),
+  },
+  "notice-audiences": {
+    label: "Notice audience",
+    model: NoticeAudience,
+    sort: { name: 1 },
+    build(payload) {
+      const name = clean(payload.name);
+      if (!name) throw httpError(400, "Notice audience name is required");
+      return { name };
+    },
+    dupFilter(payload) {
+      const name = normalizeKey(payload.name);
+      return name ? { key: name } : null;
+    },
+    seeds: () => NOTICE_AUDIENCE_SEEDS.map((name) => ({ name })),
+  },
+  "event-categories": {
+    label: "Event category",
+    model: EventCategory,
+    sort: { name: 1 },
+    build(payload) {
+      const name = clean(payload.name);
+      if (!name) throw httpError(400, "Event category name is required");
+      return { name };
+    },
+    dupFilter(payload) {
+      const name = normalizeKey(payload.name);
+      return name ? { key: name } : null;
+    },
+    seeds: () => EVENT_CATEGORY_SEEDS.map((name) => ({ name })),
+  },
+  "hostel-blocks": {
+    label: "Hostel block",
+    model: HostelBlock,
+    sort: { name: 1 },
+    build(payload) {
+      const name = clean(payload.name);
+      if (!name) throw httpError(400, "Hostel block name is required");
+      return { name };
+    },
+    dupFilter(payload) {
+      const name = normalizeKey(payload.name);
+      return name ? { key: name } : null;
+    },
+    seeds: () => HOSTEL_BLOCK_SEEDS.map((name) => ({ name })),
   },
 };
 

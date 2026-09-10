@@ -4,7 +4,8 @@
   "main": "src/index.js",
   "scripts": {
     "start": "node src/index.js",
-    "dev": "nodemon src/index.js"
+    "dev": "nodemon src/index.js",
+    "test": "node --test --test-force-exit"
   },
   "dependencies": {
     "@school-erp/shared": "file:../../shared",
@@ -18,6 +19,7 @@
     "school-erp-backend": "file:../.."
   },
   "devDependencies": {
+    "@school-erp/test-support": "file:../../test-support",
     "nodemon": "^3.1.4"
   }
 }

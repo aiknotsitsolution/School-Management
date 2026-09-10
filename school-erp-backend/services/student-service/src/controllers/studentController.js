@@ -21,9 +21,13 @@ const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 const imagekit = require("@school-erp/shared/src/config/imagekit");
 
-// Fields that must be filled before a profile is considered complete.
-// class/section/name are schema-level; these are the counsellor-fillable ones.
+// Fields that must be filled before a profile is considered complete. This is
+// the ONE completion rule used everywhere (create, update, complete-profile)
+// and mirrors the frontend StudentCompleteProfile gate: class + section +
+// dob/gender/address + parent + mother fields.
 const PROFILE_REQUIRED_FIELDS = [
+  "class",
+  "section",
   "dob",
   "gender",
   "address",
@@ -170,6 +174,42 @@ const getStudents = async (req, res) => {
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
       .limit(Number(limit));
+    const total = await Student.countDocuments(filter);
+    res.json({
+      success: true,
+      count: students.length,
+      total,
+      page: Number(page),
+      pages: Math.ceil(total / Number(limit)),
+      data: students,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// ---------------------------------------------------------------------------
+// Pending student registrations: Student shells (userId null) awaiting a
+// Platform User account, produced by every confirmed admission. User-facing
+// queue for admin/super — a school admin sees only their own school; a
+// super_admin sees the school selected via X-School-Id (resolveTenant).
+// ---------------------------------------------------------------------------
+const getPendingRegistrations = async (req, res) => {
+  try {
+    const { page = 1, limit = 20 } = req.query;
+    const filter = {
+      schoolId: req.tenantId,
+      // { userId: null } matches both explicit null and absent field, exactly
+      // the union of shells (created on admission-confirm) that await a user.
+      userId: null,
+    };
+    const students = await Student.find(filter)
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(Number(limit))
+      .select(
+        "name admissionNo class section profileStatus status createdAt",
+      );
     const total = await Student.countDocuments(filter);
     res.json({
       success: true,
@@ -337,12 +377,6 @@ const completeProfile = async (req, res) => {
           .join(", ")}`,
       });
     }
-    if (!student.class || !student.section) {
-      return res.status(400).json({
-        success: false,
-        message: "Class and section are required before completing the profile",
-      });
-    }
 
     student.profileStatus = "complete";
     student.profileCompletedAt = new Date();
@@ -439,6 +473,7 @@ module.exports = {
   uploadStudentPhoto,
   createStudent,
   getStudents,
+  getPendingRegistrations,
   getStudentById,
   getMyStudent,
   counsellorStats,

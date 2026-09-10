@@ -17,8 +17,20 @@ const staffSchema = new mongoose.Schema(
     email: { type: String },
     address: { type: String },
     photoUrl: { type: String },
+    dob: { type: Date },
+    gender: { type: String, enum: ["Male", "Female", "Other"] },
     salary: { type: Number, default: 0 },
     status: { type: String, enum: ["Active", "Inactive", "Resigned"], default: "Active" },
+    // Onboarding state: derived server-side from the profile-completion rule.
+    profileStatus: {
+      type: String,
+      enum: ["incomplete", "complete"],
+      default: "incomplete",
+    },
+    profileCompletedAt: { type: Date, default: null },
+    // Physical/printable staff ID card (same pattern as the student card).
+    idCardNumber: { type: String, default: null },
+    idCardIssuedAt: { type: Date, default: null },
   },
   { timestamps: true }
 );

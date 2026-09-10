@@ -1,4 +1,6 @@
 const AdmissionEnquiry = require("../models/AdmissionEnquiry");
+const Student = require("../models/Student");
+const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
 
 // Mass-assignment guard: only these fields may be set from the request body.
 const ENQUIRY_FIELDS = [
@@ -36,6 +38,61 @@ const validateAdmission = async ({ schoolId, status, admissionNo, id }) => {
   return { admissionNo: admId };
 };
 
+// ---------------------------------------------------------------------------
+// Admission-confirmed shells. Confirming an admission ("Admission Confirmed")
+// materialises the pending Student shell that the pending-registration queue
+// and the Register-User flow anchor on. The Admission ID stays MANUAL: it is
+// whatever the counsellor typed into the enquiry — no generator, no counter.
+//
+// A repeated confirmation for the same configured Admission ID is idempotent
+// (the existing shell is reused, never duplicated) and a legacy Admitted
+// enquiry that happens to lack a shell is repaired here.
+// ---------------------------------------------------------------------------
+const ensureStudentShell = async ({
+  req,
+  admissionNo,
+  childName,
+  parentName,
+  contact,
+  email,
+  classApplied,
+  section,
+}) => {
+  const existing = await Student.findOne({
+    schoolId: req.tenantId,
+    admissionNo,
+  });
+  if (existing) return { shell: existing, created: false };
+
+  const data = {
+    schoolId: req.tenantId,
+    admissionNo,
+    userId: null,
+    name: String(childName || "").trim() || "Pending Student",
+  };
+  // Map the enquiry's academic picks onto the shell. The refs gate is a soft
+  // integrity check (fail-open when academic-service is unreachable), so a
+  // confirmation is never blocked by a typo'd class/section — non-master
+  // values simply leave those fields empty to be filled during onboarding.
+  try {
+    await assertAcademicRefs({ req, values: { class: classApplied, section } });
+    if (classApplied && String(classApplied).trim()) data.class = String(classApplied).trim();
+    if (section && String(section).trim()) data.section = String(section).trim();
+  } catch {
+    // keep the shell minimal; class/section are completed during onboarding.
+  }
+  if (parentName && String(parentName).trim()) data.parentName = String(parentName).trim();
+  if (contact && String(contact).trim()) data.parentContact = String(contact).trim();
+  if (email && String(email).trim()) data.parentEmail = String(email).trim();
+
+  const shell = await Student.create(data);
+  return { shell, created: true };
+};
+
+// Confirms an admission: validates the Admission ID, materialises the pending
+// Student shell and creates the enquiry. If anything fails after a fresh shell
+// was created, the shell is rolled back so a half-admitted state is never
+// persisted.
 const createEnquiry = async (req, res) => {
   try {
     const { schoolId, status, admissionNo, id } = {
@@ -47,12 +104,35 @@ const createEnquiry = async (req, res) => {
     if (check.error) {
       return res.status(check.error.status).json({ success: false, message: check.error.message });
     }
-    const enquiry = await AdmissionEnquiry.create({
-      ...pick(req.body, ENQUIRY_FIELDS),
-      schoolId: req.tenantId,
-      admissionNo:
-        check.admissionNo !== undefined ? check.admissionNo : req.body.admissionNo || null,
-    });
+    const finalAdmissionNo =
+      check.admissionNo !== undefined ? check.admissionNo : req.body.admissionNo || null;
+
+    let createdShellId = null;
+    if (status === "Admitted") {
+      const admitted = await ensureStudentShell({
+        req,
+        admissionNo: finalAdmissionNo,
+        childName: req.body.childName,
+        parentName: req.body.parentName,
+        contact: req.body.contact,
+        email: req.body.email,
+        classApplied: req.body.classApplied,
+        section: req.body.section,
+      });
+      if (admitted.created) createdShellId = String(admitted.shell._id);
+    }
+
+    let enquiry;
+    try {
+      enquiry = await AdmissionEnquiry.create({
+        ...pick(req.body, ENQUIRY_FIELDS),
+        schoolId: req.tenantId,
+        admissionNo: finalAdmissionNo,
+      });
+    } catch (err) {
+      if (createdShellId) await Student.deleteOne({ _id: createdShellId }).catch(() => {});
+      throw err;
+    }
     res.status(201).json({ success: true, data: enquiry });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -93,9 +173,36 @@ const updateEnquiry = async (req, res) => {
     if (check.error) {
       return res.status(check.error.status).json({ success: false, message: check.error.message });
     }
+    const finalAdmissionNo =
+      check.admissionNo !== undefined ? check.admissionNo : admissionNo;
 
-    enquiry.set({ ...pick(req.body, ENQUIRY_FIELDS), admissionNo: check.admissionNo !== undefined ? check.admissionNo : admissionNo });
-    await enquiry.save();
+    // Confirming materialises the pending Student shell (re-confirming an
+    // already-Admitted enquiry stays idempotent — the existing shell is reused).
+    let createdShellId = null;
+    if (status === "Admitted") {
+      const admitted = await ensureStudentShell({
+        req,
+        admissionNo: finalAdmissionNo,
+        childName: req.body.childName !== undefined ? req.body.childName : enquiry.childName,
+        parentName: req.body.parentName !== undefined ? req.body.parentName : enquiry.parentName,
+        contact: req.body.contact !== undefined ? req.body.contact : enquiry.contact,
+        email: req.body.email !== undefined ? req.body.email : enquiry.email,
+        classApplied: req.body.classApplied !== undefined ? req.body.classApplied : enquiry.classApplied,
+        section: req.body.section !== undefined ? req.body.section : enquiry.section,
+      });
+      if (admitted.created) createdShellId = String(admitted.shell._id);
+    }
+
+    enquiry.set({
+      ...pick(req.body, ENQUIRY_FIELDS),
+      admissionNo: finalAdmissionNo,
+    });
+    try {
+      await enquiry.save();
+    } catch (err) {
+      if (createdShellId) await Student.deleteOne({ _id: createdShellId }).catch(() => {});
+      throw err;
+    }
     res.json({ success: true, data: enquiry });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });

@@ -15,10 +15,28 @@ import {
 import { PageIntro, Card, Avatar, Pill, StatCard, toast } from "../../components/UI";
 import { api } from "../../lib/api";
 import useStaffContext, { fmtDate } from "./useStaffContext";
+import ProfilePhotoPicker from "../../components/upload/ProfilePhotoPicker";
 
 export default function MyProfile() {
   const { user, persona } = useStaffContext();
   const [staff, setStaff] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
+
+  const handlePhotoChange = async (file) => {
+    if (!file || !staff) return;
+    setPhotoSaving(true);
+    try {
+      const { data } = await api.staff.uploadPhoto(file);
+      await api.staff.update(staff._id || staff.id, { photoUrl: data.url });
+      setStaff((prev) => ({ ...prev, photoUrl: data.url }));
+      toast("Profile photo updated");
+    } catch (err) {
+      toast(err.message || "Photo upload failed", "error");
+    } finally {
+      setPhotoSaving(false);
+    }
+  };
 
   useEffect(() => {
     api.staff
@@ -49,7 +67,13 @@ export default function MyProfile() {
       <div className="grid lg:grid-cols-3 gap-5">
         <Card>
           <div className="flex flex-col items-center text-center py-4">
-            <Avatar name={user?.name || "Staff"} size={72} />
+            <ProfilePhotoPicker
+              name={user?.name || "Staff"}
+              file={photoFile}
+              initialSrc={staff?.photoUrl}
+              disabled={photoSaving}
+              onFileChange={handlePhotoChange}
+            />
             <h3 className="font-display font-bold text-ink text-[18px] mt-3">
               {user?.name || "—"}
             </h3>

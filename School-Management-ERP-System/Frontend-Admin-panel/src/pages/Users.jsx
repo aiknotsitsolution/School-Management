@@ -2,8 +2,6 @@ import { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Search,
-  ChevronLeft,
-  ChevronRight,
   X,
   Trash2,
   RotateCcw,
@@ -13,9 +11,13 @@ import {
   FilterX,
   Link2,
   KeyRound,
+  Users as UsersIcon,
+  UserRound,
+  GraduationCap,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../components/UI";
+import { SegmentedTabs, Pagination } from "../components/Pagination";
 import SearchableSelect from "../components/SearchableSelect";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 
@@ -46,6 +48,10 @@ const DESIGNATION_LABELS = {
   receptionist: "Receptionist",
   transport: "Transport Coordinator",
 };
+// Beyond the common choices, staffing is free-form: the "Other / Custom" entry
+// reveals a free-text field so any designation can be typed (the platform
+// treats designation as text, never a closed enum).
+const DESIGNATION_CUSTOM = "__custom__";
 
 const fmtDate = (value) =>
   value
@@ -60,13 +66,23 @@ const initials = (name) =>
     .join("")
     .toUpperCase();
 
+// Reports & Analytics-style segmented tabs: the account directory is the main
+// surface; the pending-student and pending-teacher queues sit behind their own
+// tabs (each with a live count badge) instead of stacked cards.
+const TABS = (counts) => [
+  { id: "accounts", label: "Accounts", icon: UsersIcon, count: counts.total },
+  { id: "students", label: "Pending Students", icon: UserRound, count: counts.pendingTotal },
+  { id: "teachers", label: "Pending Teachers", icon: GraduationCap, count: counts.pendingStaffTotal },
+];
+
 // refId maps to a role-specific identity field: Admission ID for students,
-// Staff ID for staff/teachers, and nothing for school admins.
+// Staff ID for staff/teachers (manual, must match a Teachers & Staff record
+// created earlier — never generated here), and nothing for school admins.
 const REF_ID_FIELDS = {
   student: { label: "Admission ID", placeholder: "Enter Admission ID", required: true },
-  staff: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
-  class_teacher: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
-  teacher: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
+  staff: { label: "Staff ID", placeholder: "Staff ID from Teachers & Staff", required: true },
+  class_teacher: { label: "Staff ID", placeholder: "Staff ID from Teachers & Staff", required: true },
+  teacher: { label: "Staff ID", placeholder: "Staff ID from Teachers & Staff", required: true },
   school_admin: { label: "Ref ID", disabled: true, placeholder: "Not required for this role" },
 };
 
@@ -116,10 +132,11 @@ const emptyForm = () => ({
   password: "",
   role: "class_teacher",
   designation: "",
+  customDesignation: "",
   className: "",
   section: "",
   refId: "",
-  linkStaff: false,
+  lockedRefId: false,
 });
 
 const toUserPayload = (form) => ({
@@ -127,7 +144,12 @@ const toUserPayload = (form) => ({
   email: form.email.trim().toLowerCase(),
   password: form.password,
   role: form.role,
-  designation: form.role === "staff" ? form.designation || undefined : undefined,
+  designation:
+    form.role === "staff"
+      ? (form.designation === DESIGNATION_CUSTOM
+          ? (form.customDesignation || "").trim() || undefined
+          : form.designation || undefined)
+      : undefined,
   class:
     form.role === "class_teacher" || form.role === "teacher" || form.role === "student"
       ? form.className.trim() || undefined
@@ -143,6 +165,7 @@ export default function Users() {
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(0);
   const [page, setPage] = useState(1);
+  const [tab, setTab] = useState("accounts");
   const [q, setQ] = useState("");
   const [debouncedQ, setDebouncedQ] = useState("");
   const [role, setRole] = useState("");
@@ -158,6 +181,48 @@ export default function Users() {
   }, [form.className, SECTION_OPTIONS, rawSections]);
   const [busy, setBusy] = useState(false);
   const [createdCredential, setCreatedCredential] = useState(null);
+  // Pending student registrations queue: confirmed admissions produce Student
+  // shells (userId null) that await an account via Register User.
+  const [pendingRows, setPendingRows] = useState([]);
+  const [pendingTotal, setPendingTotal] = useState(0);
+  const [pendingPages, setPendingPages] = useState(0);
+  const [pendingPage, setPendingPage] = useState(1);
+  const [pendingLoading, setPendingLoading] = useState(true);
+  const [viewingPending, setViewingPending] = useState(null);
+  // Pending teacher registrations queue: teachers/class-teacher person records
+  // created in Teachers & Staff (userId null) await a login account here.
+  const [pendingStaff, setPendingStaff] = useState([]);
+  const [pendingStaffTotal, setPendingStaffTotal] = useState(0);
+  const [pendingStaffPages, setPendingStaffPages] = useState(0);
+  const [pendingStaffPage, setPendingStaffPage] = useState(1);
+  const [pendingStaffLoading, setPendingStaffLoading] = useState(true);
+  const [viewingStaffPending, setViewingStaffPending] = useState(null);
+
+  useEffect(() => {
+    setPendingLoading(true);
+    api.students
+      .pendingRegistrations(`page=${pendingPage}&limit=10`)
+      .then((result) => {
+        setPendingRows(result.data || []);
+        setPendingTotal(result.total || 0);
+        setPendingPages(result.pages || 0);
+        setPendingLoading(false);
+      })
+      .catch(() => setPendingLoading(false));
+  }, [refreshKey, pendingPage]);
+
+  useEffect(() => {
+    setPendingStaffLoading(true);
+    api.staff
+      .pendingRegistrations(`role=teacher&page=${pendingStaffPage}&limit=10`)
+      .then((result) => {
+        setPendingStaff(result.data || []);
+        setPendingStaffTotal(result.total || 0);
+        setPendingStaffPages(result.pages || 0);
+        setPendingStaffLoading(false);
+      })
+      .catch(() => setPendingStaffLoading(false));
+  }, [refreshKey, pendingStaffPage]);
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedQ(q), 350);
@@ -186,10 +251,56 @@ export default function Users() {
   // School admins can view other admins but never manage/deactivate them —
   // privilege hierarchy is enforced server-side (loadManageableUser).
   const canManage = (user) => user.role !== "school_admin";
-  const refField = refIdFieldFor(form.role);
+  // Register User locks the Admission ID + role to the confirmed shell.
+  const refField =
+    form.lockedRefId && refIdFieldFor(form.role)
+      ? { ...refIdFieldFor(form.role), disabled: true }
+      : refIdFieldFor(form.role);
 
   const refresh = () => setRefreshKey((key) => key + 1);
   const resetForm = () => setForm(emptyForm());
+
+  // Register User: opens the create-account card pre-loaded from the confirmed
+  // admission shell. The Admission ID and role are locked — the account must
+  // link to this shell (never a new student record).
+  const registerPending = (shell) => {
+    setForm({
+      name: shell.name || "",
+      email: "",
+      password: "",
+      role: "student",
+      designation: "",
+      customDesignation: "",
+      className: shell.class || "",
+      section: shell.section || "",
+      refId: shell.admissionNo || "",
+      lockedRefId: true,
+    });
+    setCreating(true);
+  };
+
+  // Register Teacher (shared Register User form, context-aware): locks the
+  // role to teacher and the Staff ID to the record's employeeId. The account
+  // must link to this person record — never creates a new Staff record.
+  const registerPendingStaff = (teacher) => {
+    const first =
+      Array.isArray(teacher.classesAssigned) && teacher.classesAssigned.length
+        ? teacher.classesAssigned[0]
+        : {};
+    setForm({
+      name: teacher.name || "",
+      email: "",
+      password: "",
+      role: "teacher",
+      designation: "",
+      customDesignation: "",
+      className: first.class || "",
+      section: first.section || "",
+      refId: teacher.employeeId || "",
+      lockedRefId: true,
+    });
+    setCreating(true);
+  };
 
   const toggleActive = async (user) => {
     if (window.confirm(`${user.isActive ? "Deactivate" : "Activate"} ${user.name}?`)) {
@@ -249,37 +360,20 @@ export default function Users() {
       toast("Admission ID is required for student accounts", "error");
       return;
     }
+    if (
+      (form.role === "staff" ||
+        form.role === "class_teacher" ||
+        form.role === "teacher") &&
+      !form.refId.trim()
+    ) {
+      toast("Staff ID is required — enter the Staff ID created in Teachers & Staff", "error");
+      return;
+    }
     setBusy(true);
     try {
-      let refId = form.refId.trim() || undefined;
-      if (
-        (form.role === "staff" ||
-          form.role === "class_teacher" ||
-          form.role === "teacher") &&
-        form.linkStaff
-      ) {
-        const isTeacherRole =
-          form.role === "class_teacher" || form.role === "teacher";
-        const designation =
-          form.role === "staff"
-            ? form.designation.trim()
-            : form.className.trim()
-              ? `Teacher - Class ${form.className.trim()} ${form.section.trim()}`.trim()
-              : "Teacher";
-        const { data: staffDoc } = await api.staff.create({
-          employeeId: `${form.email.trim().toLowerCase().split("@")[0]}-emp`,
-          name: form.name.trim(),
-          designation,
-          email: form.email.trim().toLowerCase(),
-          role: isTeacherRole ? "teacher" : "admin-staff",
-          ...(isTeacherRole && form.className.trim()
-            ? { classesAssigned: [{ class: form.className.trim(), section: form.section.trim() || null }] }
-            : {}),
-        });
-        refId = String(staffDoc._id || staffDoc.id);
-      }
-
-      await api.users.create({ ...toUserPayload(form), refId });
+      // refId for staff-like roles is the manual Staff ID (Staff.employeeId) —
+      // the server resolves it to the existing person record and links it.
+      await api.users.create(toUserPayload(form));
       toast("User created");
       // Credentials are only shareable at creation time — the API never
       // returns the password again, so surface them in a copy dialog now.
@@ -288,6 +382,10 @@ export default function Users() {
         email: form.email.trim().toLowerCase(),
         role: form.role,
         admissionId: form.role === "student" ? form.refId.trim() : null,
+        staffId:
+          form.role === "staff" || form.role === "class_teacher" || form.role === "teacher"
+            ? form.refId.trim()
+            : null,
         password: form.password,
       });
       setCreating(false);
@@ -312,7 +410,7 @@ export default function Users() {
   };
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <PageIntro
         eyebrow="School Administration · Access & Security"
         title="Users & Access"
@@ -364,7 +462,12 @@ export default function Users() {
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
               />
-              <Select required value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
+              <Select
+                required
+                value={form.role}
+                disabled={form.lockedRefId}
+                onChange={(e) => setForm({ ...form, role: e.target.value })}
+              >
                 {CREATABLE_ROLES.map((value) => (
                   <option key={value} value={value}>
                     {ROLE_LABELS[value]}
@@ -372,18 +475,30 @@ export default function Users() {
                 ))}
               </Select>
               {form.role === "staff" && (
-                <Select
-                  placeholder="Select designation"
-                  value={form.designation}
-                  onChange={(e) => setForm({ ...form, designation: e.target.value })}
-                >
-                  <option value="">Select designation…</option>
-                  {DESIGNATION_OPTIONS.map((value) => (
-                    <option key={value} value={value}>
-                      {DESIGNATION_LABELS[value]}
-                    </option>
-                  ))}
-                </Select>
+                <>
+                  <Select
+                    placeholder="Select designation"
+                    value={form.designation}
+                    onChange={(e) => setForm({ ...form, designation: e.target.value })}
+                  >
+                    <option value="">Select designation…</option>
+                    {DESIGNATION_OPTIONS.map((value) => (
+                      <option key={value} value={value}>
+                        {DESIGNATION_LABELS[value]}
+                      </option>
+                    ))}
+                    <option value={DESIGNATION_CUSTOM}>Other / Custom</option>
+                  </Select>
+                  {form.designation === DESIGNATION_CUSTOM && (
+                    <Input
+                      required
+                      placeholder="Type custom designation"
+                      autoComplete="off"
+                      value={form.customDesignation}
+                      onChange={(e) => setForm({ ...form, customDesignation: e.target.value })}
+                    />
+                  )}
+                </>
               )}
               {(form.role === "class_teacher" ||
                 form.role === "teacher" ||
@@ -412,19 +527,28 @@ export default function Users() {
                 />
               )}
             </div>
+            {form.lockedRefId && (
+              <p className="text-[12px] text-slate-text/70 bg-paper border border-black/[0.06] rounded-lg px-3 py-2">
+                This account is locked to the pre-created person record —{" "}
+                {form.role === "student"
+                  ? `Admission ID "${form.refId}" and role`
+                  : `Staff ID "${form.refId}" and role`}{" "}
+                cannot be changed here.
+              </p>
+            )}
             {(form.role === "staff" ||
               form.role === "class_teacher" ||
-              form.role === "teacher") && (
-              <label className="flex items-center gap-2 text-[12.5px] text-slate-text cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={form.linkStaff}
-                  onChange={(event) => setForm({ ...form, linkStaff: event.target.checked })}
-                  className="accent-amber"
-                />
-                <Link2 size={13} /> Create a linked staff record (enables self-service)
-              </label>
-            )}
+              form.role === "teacher") &&
+              !form.lockedRefId && (
+                <p className="text-[12px] text-slate-text/70 bg-paper border border-black/[0.06] rounded-lg px-3 py-2">
+                  <Link2 size={12} className="inline -mt-0.5 mr-1" />
+                  Enter the Staff ID created in{" "}
+                  <span className="font-medium text-ink">Teachers &amp; Staff</span>. This
+                  links the account to that person record — no staff record is
+                  created here. If you don't have one yet, add the staff member
+                  there first.
+                </p>
+              )}
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setCreating(false)}>
                 Cancel
@@ -437,6 +561,195 @@ export default function Users() {
         </Card>
       )}
 
+      <SegmentedTabs
+        tabs={TABS({ total, pendingTotal, pendingStaffTotal })}
+        active={tab}
+        onChange={(next) => {
+          setTab(next);
+          setPage(1);
+          setPendingPage(1);
+          setPendingStaffPage(1);
+        }}
+      />
+
+      {tab === "students" && (
+      <Card
+        title="Pending student registrations"
+        className="mb-5"
+        action={
+          pendingTotal > 0 ? (
+            <Pill tone="amber">{pendingTotal} awaiting an account</Pill>
+          ) : (
+            <Pill tone="success">queue clear</Pill>
+          )
+        }
+      >
+        {pendingLoading ? (
+          <p className="text-[13px] text-slate-text/70 py-6 text-center">
+            Loading pending registrations…
+          </p>
+        ) : pendingRows.length === 0 ? (
+          <div className="py-4">
+            <p className="text-[13px] text-slate-text/70">
+              Every confirmed admission produces a student shell here. Register a
+              user to link the shell to a login account — afterwards it moves to
+              the onboarding queue on the Students page.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[13px]">
+              <thead>
+                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-black/[0.06]">
+                  <th className="py-2.5 pr-4 font-semibold">Student</th>
+                  <th className="py-2.5 pr-4 font-semibold">Admission ID</th>
+                  <th className="py-2.5 pr-4 font-semibold">Class / Section</th>
+                  <th className="py-2.5 pr-4 font-semibold">Profile</th>
+                  <th className="py-2.5 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/[0.05]">
+                {pendingRows.map((shell) => (
+                  <tr key={shell._id} className="hover:bg-paper/60">
+                    <td className="py-3 pr-4">
+                      <p className="font-semibold text-ink">{shell.name}</p>
+                    </td>
+                    <td className="py-3 pr-4">
+                      <span className="font-mono text-[12.5px] text-slate-text/80">
+                        {shell.admissionNo}
+                      </span>
+                    </td>
+                    <td className="py-3 pr-4 text-slate-text/80">
+                      {shell.class ? `${shell.class}${shell.section ? `-${shell.section}` : ""}` : "—"}
+                    </td>
+                    <td className="py-3 pr-4">
+                      <Pill tone="amber">awaiting registration</Pill>
+                    </td>
+                    <td className="py-3 text-right">
+                      <div className="inline-flex items-center gap-1.5">
+                        <button
+                          onClick={() => setViewingPending(shell)}
+                          className="inline-flex items-center gap-1 text-[12px] font-semibold text-info bg-info/10 px-2.5 py-1.5 rounded-lg hover:bg-info/20"
+                        >
+                          <Eye size={13} /> View
+                        </button>
+                        <button
+                          onClick={() => registerPending(shell)}
+                          className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5"
+                        >
+                          <Plus size={13} /> Register User
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <Pagination page={pendingPage} pages={pendingPages} onPage={setPendingPage} />
+      </Card>
+      )}
+
+      {tab === "teachers" && (
+      <Card
+        title="Pending teacher registrations"
+        className="mb-5"
+        action={
+          pendingStaffTotal > 0 ? (
+            <Pill tone="amber">{pendingStaffTotal} awaiting an account</Pill>
+          ) : (
+            <Pill tone="success">queue clear</Pill>
+          )
+        }
+      >
+        {pendingStaffLoading ? (
+          <p className="text-[13px] text-slate-text/70 py-6 text-center">
+            Loading pending teacher registrations…
+          </p>
+        ) : pendingStaff.length === 0 ? (
+          <div className="py-4">
+            <p className="text-[13px] text-slate-text/70">
+              Teachers are created in{" "}
+              <span className="font-medium text-ink">Teachers &amp; Staff</span>{" "}
+              (Staff ID is entered manually there — never generated). They
+              appear here until you register their login. Registering a user
+              links the person record to an account; afterwards the profile
+              completion and ID card flow is two-way — from this page or the
+              teacher's My Profile.
+            </p>
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-[13px]">
+              <thead>
+                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-black/[0.06]">
+                  <th className="py-2.5 pr-4 font-semibold">Teacher</th>
+                  <th className="py-2.5 pr-4 font-semibold">Staff ID</th>
+                  <th className="py-2.5 pr-4 font-semibold">Class / Section</th>
+                  <th className="py-2.5 pr-4 font-semibold">Profile</th>
+                  <th className="py-2.5 font-semibold text-right">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-black/[0.05]">
+                {pendingStaff.map((teacher) => {
+                  const first =
+                    Array.isArray(teacher.classesAssigned) && teacher.classesAssigned.length
+                      ? teacher.classesAssigned[0]
+                      : {};
+                  return (
+                    <tr key={teacher._id || teacher.id} className="hover:bg-paper/60">
+                      <td className="py-3 pr-4">
+                        <p className="font-semibold text-ink">{teacher.name}</p>
+                        {teacher.designation && (
+                          <p className="text-[11.5px] text-slate-text/55">{teacher.designation}</p>
+                        )}
+                      </td>
+                      <td className="py-3 pr-4">
+                        <span className="font-mono text-[12.5px] text-slate-text/80">
+                          {teacher.employeeId}
+                        </span>
+                      </td>
+                      <td className="py-3 pr-4 text-slate-text/80">
+                        {first.class
+                          ? `${first.class}${first.section ? `-${first.section}` : ""}`
+                          : "—"}
+                      </td>
+                      <td className="py-3 pr-4">
+                        {teacher.profileStatus === "complete" ? (
+                          <Pill tone="success">complete</Pill>
+                        ) : (
+                          <Pill tone="neutral">awaits completion</Pill>
+                        )}
+                      </td>
+                      <td className="py-3 text-right">
+                        <div className="inline-flex items-center gap-1.5">
+                          <button
+                            onClick={() => setViewingStaffPending(teacher)}
+                            className="inline-flex items-center gap-1 text-[12px] font-semibold text-info bg-info/10 px-2.5 py-1.5 rounded-lg hover:bg-info/20"
+                          >
+                            <Eye size={13} /> View
+                          </button>
+                          <button
+                            onClick={() => registerPendingStaff(teacher)}
+                            className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5"
+                          >
+                            <Plus size={13} /> Register User
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <Pagination page={pendingStaffPage} pages={pendingStaffPages} onPage={setPendingStaffPage} />
+      </Card>
+      )}
+
+      {tab === "accounts" && (
       <Card bodyClassName="p-5">
         <div className="grid grid-cols-1 sm:grid-cols-[1fr_11rem] lg:grid-cols-[1fr_11rem_auto] items-center gap-3 mb-4">
           <div className="relative">
@@ -602,22 +915,9 @@ export default function Users() {
           </div>
         )}
 
-        {pages > 1 && (
-          <div className="flex items-center justify-between pt-4 border-t border-black/[0.06] mt-4">
-            <p className="text-[12px] text-slate-text/60">
-              Page {page} of {pages}
-            </p>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
-                <ChevronLeft size={15} /> Prev
-              </Button>
-              <Button variant="outline" onClick={() => setPage((p) => p + 1)} disabled={page >= pages}>
-                Next <ChevronRight size={15} />
-              </Button>
-            </div>
-          </div>
-        )}
+        <Pagination page={page} pages={pages} onPage={setPage} />
       </Card>
+      )}
 
       {createdCredential && (
         <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
@@ -653,6 +953,23 @@ export default function Users() {
                     onClick={() => {
                       navigator.clipboard?.writeText(createdCredential.admissionId);
                       toast("Admission ID copied");
+                    }}
+                    className="text-[12px] font-semibold text-info bg-info/10 px-2.5 py-1.5 rounded-lg hover:bg-info/20 shrink-0"
+                  >
+                    Copy
+                  </button>
+                </div>
+              )}
+              {createdCredential.staffId && (
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+                  <div>
+                    <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Staff ID</p>
+                    <p className="text-ink font-medium">{createdCredential.staffId}</p>
+                  </div>
+                  <button
+                    onClick={() => {
+                      navigator.clipboard?.writeText(createdCredential.staffId);
+                      toast("Staff ID copied");
                     }}
                     className="text-[12px] font-semibold text-info bg-info/10 px-2.5 py-1.5 rounded-lg hover:bg-info/20 shrink-0"
                   >
@@ -700,8 +1017,151 @@ export default function Users() {
               onRestore={restoreUser}
               onReset={resetPassword}
               onEdit={editSelected}
-              busy={displayBusy(selected.id)}
+              busy={busy}
             />
+          </div>
+        </div>
+      )}
+
+      {viewingPending && (
+        <div
+          className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4"
+          onClick={() => setViewingPending(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-bold text-ink text-lg">
+                Pending student
+              </h3>
+              <button
+                onClick={() => setViewingPending(null)}
+                className="text-slate-text/60 hover:text-ink"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-[12.5px] text-slate-text/70 mb-4">
+              Created when this admission was confirmed. Registering a user links
+              this shell to a login account; until then it cannot sign in.
+            </p>
+            <div className="space-y-2.5 text-[13px]">
+              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Student</p>
+                <p className="text-ink font-medium">{viewingPending.name}</p>
+              </div>
+              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Admission ID</p>
+                <p className="font-mono text-ink font-medium">{viewingPending.admissionNo}</p>
+              </div>
+              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Class / Section</p>
+                <p className="text-ink font-medium">
+                  {viewingPending.class
+                    ? `${viewingPending.class}${viewingPending.section ? `-${viewingPending.section}` : ""}`
+                    : "—"}
+                </p>
+              </div>
+              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Status</p>
+                <Pill tone="amber">awaiting registration</Pill>
+              </div>
+              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Confirmed on</p>
+                <p className="text-ink font-medium">{fmtDate(viewingPending.createdAt)}</p>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setViewingPending(null)}>
+                Close
+              </Button>
+              <Button variant="amber" onClick={() => { setViewingPending(null); registerPending(viewingPending); }}>
+                Register User
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {viewingStaffPending && (
+        <div
+          className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4"
+          onClick={() => setViewingStaffPending(null)}
+        >
+          <div
+            className="w-full max-w-sm bg-white rounded-2xl shadow-xl p-5"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-bold text-ink text-lg">
+                Pending teacher
+              </h3>
+              <button
+                onClick={() => setViewingStaffPending(null)}
+                className="text-slate-text/60 hover:text-ink"
+              >
+                <X size={16} />
+              </button>
+            </div>
+            <p className="text-[12.5px] text-slate-text/70 mb-4">
+              Created on the Teachers &amp; Staff page. Registering a user links
+              this person record to a login account; until then it cannot sign in.
+            </p>
+            <div className="space-y-2.5 text-[13px]">
+              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Teacher</p>
+                <p className="text-ink font-medium">{viewingStaffPending.name}</p>
+              </div>
+              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Staff ID</p>
+                <p className="font-mono text-ink font-medium">{viewingStaffPending.employeeId}</p>
+              </div>
+              {viewingStaffPending.designation && (
+                <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                  <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Designation</p>
+                  <p className="text-ink font-medium">{viewingStaffPending.designation}</p>
+                </div>
+              )}
+              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Class / Section</p>
+                <p className="text-ink font-medium">
+                  {(() => {
+                    const c =
+                      Array.isArray(viewingStaffPending.classesAssigned) &&
+                      viewingStaffPending.classesAssigned.length
+                        ? viewingStaffPending.classesAssigned[0]
+                        : {};
+                    return c.class
+                      ? `${c.class}${c.section ? `-${c.section}` : ""}`
+                      : "—";
+                  })()}
+                </p>
+              </div>
+              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Profile</p>
+                {viewingStaffPending.profileStatus === "complete" ? (
+                  <Pill tone="success">complete</Pill>
+                ) : (
+                  <Pill tone="neutral">awaits completion</Pill>
+                )}
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setViewingStaffPending(null)}>
+                Close
+              </Button>
+              <Button
+                variant="amber"
+                onClick={() => {
+                  setViewingStaffPending(null);
+                  registerPendingStaff(viewingStaffPending);
+                }}
+              >
+                Register User
+              </Button>
+            </div>
           </div>
         </div>
       )}

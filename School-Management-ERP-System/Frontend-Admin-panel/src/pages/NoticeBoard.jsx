@@ -10,6 +10,7 @@ import {
   toast,
 } from "../components/UI";
 import { api } from "../lib/api";
+import { invalidateMasterCache } from "../lib/masterCache";
 
 const initialNotices = [];
 
@@ -95,7 +96,7 @@ const resolveAudience = (label) => audienceValues[label] || [String(label).trim(
 
 // Searchable dropdown with an "add custom" action. Falls back to a simple
 // combination of the preset list plus any custom values already picked.
-function SearchableSelect({ options, value, onChange, placeholder }) {
+function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }) {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [custom, setCustom] = useState([]);
@@ -137,7 +138,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
       if (e.key === "Enter") {
         e.preventDefault();
         if (canAdd && activeIndex === matches.length) {
-          commit(q);
+          commit(q, true);
         } else if (activeIndex >= 0 && matches[activeIndex]) {
           commit(String(matches[activeIndex]));
         }
@@ -152,8 +153,15 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, query, matches, canAdd, activeIndex]);
 
-  const commit = (value) => {
+  const commit = async (value, isCustom = false) => {
     if (!value) return;
+    if (isCustom) {
+      try {
+        await onAddCustom?.(value);
+      } catch {
+        // Keep the typed value even if persistence fails (dup / no permission).
+      }
+    }
     setCustom((prev) => (prev.includes(value) ? prev : [...prev, value]));
     onChange(value);
     setOpen(false);
@@ -215,7 +223,7 @@ function SearchableSelect({ options, value, onChange, placeholder }) {
               <li>
                 <button
                   type="button"
-                  onClick={() => commit(query.trim())}
+                  onClick={() => commit(query.trim(), true)}
                   className={`w-full text-left px-3.5 py-2 text-[13px] text-amber-dark font-medium hover:bg-amber/10 transition-colors ${
                     activeIndex === matches.length ? "bg-amber/10" : ""
                   }`}
@@ -245,6 +253,64 @@ export default function NoticeBoard() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState(null);
+  const [masterCategories, setMasterCategories] = useState([]);
+  const [masterAudiences, setMasterAudiences] = useState([]);
+
+  useEffect(() => {
+    Promise.allSettled([
+      api.examMasters.list("notice-categories"),
+      api.examMasters.list("notice-audiences"),
+    ])
+      .then(([cats, auds]) => {
+        if (cats.status === "fulfilled")
+          setMasterCategories(cats.value?.data || []);
+        if (auds.status === "fulfilled")
+          setMasterAudiences(auds.value?.data || []);
+      })
+      .catch(() => {});
+  }, []);
+
+  const categoryOptions = useMemo(
+    () => [...new Set([...CATEGORIES, ...masterCategories.map((m) => m.name)])],
+    [masterCategories],
+  );
+
+  const audienceOptions = useMemo(
+    () => [...new Set([...AUDIENCE_OPTIONS, ...masterAudiences.map((m) => m.name)])],
+    [masterAudiences],
+  );
+
+  const addMasterCategory = async (value) => {
+    try {
+      const { data } = await api.examMasters.create("notice-categories", {
+        name: value,
+      });
+      invalidateMasterCache("notice-categories");
+      setMasterCategories((prev) =>
+        prev.some((m) => m.key === data.key || m.name === data.name)
+          ? prev
+          : [...prev, data],
+      );
+    } catch {
+      // Duplicate / missing permission: keep the typed value locally.
+    }
+  };
+
+  const addMasterAudience = async (value) => {
+    try {
+      const { data } = await api.examMasters.create("notice-audiences", {
+        name: value,
+      });
+      invalidateMasterCache("notice-audiences");
+      setMasterAudiences((prev) =>
+        prev.some((m) => m.key === data.key || m.name === data.name)
+          ? prev
+          : [...prev, data],
+      );
+    } catch {
+      // Duplicate / missing permission: keep the typed value locally.
+    }
+  };
 
   useEffect(() => {
     api.notices
@@ -561,10 +627,11 @@ export default function NoticeBoard() {
                     Category
                   </label>
                   <SearchableSelect
-                    options={CATEGORIES}
+                    options={categoryOptions}
                     value={form.category}
                     onChange={(v) => updateForm("category", v)}
                     placeholder="Select category"
+                    onAddCustom={addMasterCategory}
                   />
                 </div>
                 <div>
@@ -584,10 +651,11 @@ export default function NoticeBoard() {
                   Audience
                 </label>
                 <SearchableSelect
-                  options={AUDIENCE_OPTIONS}
+                  options={audienceOptions}
                   value={form.audience}
                   onChange={(v) => updateForm("audience", v)}
                   placeholder="Select audience"
+                  onAddCustom={addMasterAudience}
                 />
               </div>
 

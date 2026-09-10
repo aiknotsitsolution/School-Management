@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useSelector, useDispatch } from "react-redux";
 import {
   GraduationCap,
   Building2,
@@ -13,11 +14,16 @@ import {
 } from "lucide-react";
 import { PageIntro, Card, Avatar, Pill, toast } from "../../components/UI";
 import { api } from "../../lib/api";
+import { setUser } from "../../store/authSlice";
 import useStudentContext, { fmtDate } from "./useStudentContext";
+import ProfilePhotoPicker from "../../components/upload/ProfilePhotoPicker";
 
 export default function Profile() {
   const { user, school } = useStudentContext();
+  const dispatch = useDispatch();
   const [profile, setProfile] = useState(null);
+  const [photoFile, setPhotoFile] = useState(null);
+  const [photoSaving, setPhotoSaving] = useState(false);
 
   useEffect(() => {
     api.students
@@ -25,6 +31,21 @@ export default function Profile() {
       .then(({ data }) => setProfile(data || null))
       .catch((e) => toast(e.message, "error"));
   }, []);
+
+  const handlePhotoChange = async (file) => {
+    if (!file) return;
+    setPhotoSaving(true);
+    try {
+      const { data } = await api.users.uploadPhoto(file);
+      const { data: updated } = await api.users.updateMe({ avatar: data.url });
+      dispatch(setUser(updated));
+      toast("Profile photo updated");
+    } catch (err) {
+      toast(err.message || "Photo upload failed", "error");
+    } finally {
+      setPhotoSaving(false);
+    }
+  };
 
   const admissionNo = profile?.admissionNo || user?.refId || "—";
 
@@ -35,7 +56,13 @@ export default function Profile() {
       <div className="grid lg:grid-cols-3 gap-5">
         <Card>
           <div className="flex flex-col items-center text-center py-4">
-            <Avatar name={profile?.name || user?.name || "Student"} size={72} />
+            <ProfilePhotoPicker
+              name={profile?.name || user?.name || "Student"}
+              file={photoFile}
+              initialSrc={user?.avatar}
+              disabled={photoSaving}
+              onFileChange={handlePhotoChange}
+            />
             <h3 className="font-display font-bold text-ink text-[18px] mt-3">
               {profile?.name || user?.name || "—"}
             </h3>
@@ -85,8 +112,9 @@ export default function Profile() {
       <Card>
         <p className="text-[13px] text-slate-text leading-relaxed">
           <strong className="text-ink">School:</strong> {school?.name || "—"} ·{" "}
-          {school?.code || "—"} · Session {school?.session || "—"}. Your profile is
-          read-only — to update personal details, contact the school office.
+          {school?.code || "—"} · Session {school?.session || "—"}. Click the
+          photo above to upload your profile picture. To update personal details,
+          contact the school office.
         </p>
       </Card>
     </div>

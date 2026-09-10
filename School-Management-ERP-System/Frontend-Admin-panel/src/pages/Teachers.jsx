@@ -20,6 +20,12 @@ import {
   Calendar,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  CreditCard,
+  Printer,
+  UserCheck,
+  AlertCircle,
 } from "lucide-react";
 import { selectSchool } from "../store/selectors";
 import {
@@ -34,9 +40,11 @@ import {
   toast,
 } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
+import { SegmentedTabs, Pagination } from "../components/Pagination";
 import { api } from "../lib/api";
 import { PermissionGate } from "../lib/permissions";
 import { useMasterOptions } from "../hooks/useMasterOptions";
+import TeacherIdCard, { printTeacherIdCard } from "../components/idcard/TeacherIdCard";
 
 const CLASS_OPTIONS_FALLBACK = [
   "Nursery", "LKG", "UKG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11-Sci", "11-Com", "12-Sci", "12-Com",
@@ -148,6 +156,12 @@ export default function Teachers() {
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
 
+  // Shared person-flow: admin-driven Complete Profile + manual ID card ops.
+  const [completeTarget, setCompleteTarget] = useState(null);
+  const [completeForm, setCompleteForm] = useState({ dob: "", gender: "", contact: "", address: "" });
+  const [completing, setCompleting] = useState(false);
+  const [issuingId, setIssuingId] = useState(null);
+
   const filteredSections = useMemo(() => {
     if (!assignForm.class) return SECTION_OPTIONS;
     return [...new Set(rawSections.filter((s) => s.className === assignForm.class).map((s) => s.name))];
@@ -212,6 +226,19 @@ export default function Teachers() {
     return { total: list.length, teachers, activeClassTeachers: activeClassTeachers.size, adminSupport };
   }, [list, assignments]);
 
+  // Reports & Analytics-style segmented role tabs (like Users & Access), with
+  // a live count badge per role derived from the loaded staff list.
+  const roleTabs = useMemo(
+    () =>
+      ROLE_TABS.map((t) => ({
+        id: t.key,
+        label: t.label,
+        icon: t.icon,
+        count: t.key === "all" ? list.length : list.filter((s) => s.role === t.key).length,
+      })),
+    [list],
+  );
+
   const assignmentsFor = (staffId) =>
     assignments
       .filter((a) => String(a.staffId) === String(staffId))
@@ -242,6 +269,29 @@ export default function Teachers() {
 
   const updateForm = (field, value) => setForm((f) => ({ ...f, [field]: value }));
 
+  const stepOrder = form.role === "teacher"
+    ? ["personal", "professional", "teaching"]
+    : ["personal", "professional"];
+  const stepIndex = Math.max(0, stepOrder.indexOf(formSection));
+
+  const handleRoleChange = (value) => {
+    updateForm("role", value);
+    if (value !== "teacher" && formSection === "teaching") setFormSection("professional");
+  };
+
+  const handleNextStep = () => {
+    if (formSection === "personal" && (!form.name.trim() || !form.employeeId.trim())) {
+      setApiError("Full Name and Employee ID are required to continue");
+      return;
+    }
+    if (formSection === "professional" && !form.designation.trim()) {
+      setApiError("Designation is required to continue");
+      return;
+    }
+    setApiError("");
+    setFormSection(stepOrder[Math.min(stepIndex + 1, stepOrder.length - 1)]);
+  };
+
   const handleSaveStaff = async () => {
     if (!form.name.trim() || !form.employeeId.trim() || !form.designation.trim()) {
       setApiError("Name, Employee ID and Designation are required");
@@ -268,6 +318,60 @@ export default function Teachers() {
       toast("Staff deactivated; history preserved");
     } catch (error) {
       toast(error.message, "error");
+    }
+  };
+
+  const applyStaffUpdate = (updated) => {
+    const saved = normalizeStaff(updated || {});
+    setList((prev) => prev.map((s) => (s.id === saved.id ? { ...s, ...saved } : s)));
+    if (viewStaff && viewStaff.id === saved.id) setViewStaff((prev) => (prev ? { ...prev, ...saved } : prev));
+  };
+
+  const openComplete = (staff) => {
+    setCompleteTarget(staff);
+    setCompleteForm({
+      dob: staff.dob ? String(staff.dob).slice(0, 10) : "",
+      gender: staff.gender || "",
+      contact: staff.contact || "",
+      address: staff.address || "",
+    });
+  };
+
+  const handleCompleteProfile = async () => {
+    if (!completeTarget) return;
+    const missing = ["dob", "gender", "contact", "address"].filter((f) => !String(completeForm[f] || "").trim());
+    if (missing.length) {
+      toast(`Profile incomplete — missing: ${missing.join(", ")}`, "error");
+      return;
+    }
+    setCompleting(true);
+    try {
+      const { data } = await api.staff.completeProfile(completeTarget.id, {
+        dob: completeForm.dob || undefined,
+        gender: completeForm.gender || undefined,
+        contact: completeForm.contact.trim(),
+        address: completeForm.address.trim(),
+      });
+      applyStaffUpdate(data);
+      setCompleteTarget(null);
+      toast(data?.idCardNumber ? `Profile complete · ID card ${data.idCardNumber} issued` : "Profile complete");
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setCompleting(false);
+    }
+  };
+
+  const handleIssueIdCard = async (staff) => {
+    setIssuingId(staff.id);
+    try {
+      const { data } = await api.staff.issueIdCard(staff.id);
+      applyStaffUpdate(data);
+      toast(`ID card ${data.idCardNumber} issued`);
+    } catch (error) {
+      toast(error.message, "error");
+    } finally {
+      setIssuingId(null);
     }
   };
 
@@ -339,31 +443,11 @@ export default function Teachers() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-black/[0.06]">
-        {ROLE_TABS.map((tab) => {
-          const Icon = tab.icon;
-          const count = tab.key === "all" ? list.length : list.filter((s) => s.role === tab.key).length;
-          return (
-            <button
-              key={tab.key}
-              onClick={() => setActiveTab(tab.key)}
-              className={`flex items-center gap-2 px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors ${
-                activeTab === tab.key
-                  ? "border-info text-info"
-                  : "border-transparent text-slate-text/60 hover:text-ink"
-              }`}
-            >
-              <Icon size={15} />
-              {tab.label}
-              <span className="text-[11px] bg-paper rounded-full px-1.5 py-0.5">{count}</span>
-            </button>
-          );
-        })}
-      </div>
+      <SegmentedTabs tabs={roleTabs} active={activeTab} onChange={setActiveTab} />
 
       {/* Search + Status filter */}
-      <div className="flex items-center gap-3">
-        <div className="relative flex-1 max-w-sm">
+      <div className="grid grid-cols-[70fr_30fr] items-center gap-3">
+        <div className="relative">
           <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/40" />
           <Input
             placeholder="Search name, ID, designation..."
@@ -375,7 +459,7 @@ export default function Teachers() {
         <Select
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="min-w-[130px]"
+          className="w-full"
         >
           {STATUS_OPTIONS.map((s) => (
             <option key={s} value={s}>{s === "All" ? "All Statuses" : s}</option>
@@ -412,6 +496,16 @@ export default function Teachers() {
                       <h3 className="text-[15px] font-semibold text-ink">{s.name}</h3>
                       <Pill tone={statusTone(s.status)}>{s.status}</Pill>
                       <Pill tone={s.role === "teacher" ? "info" : "neutral"}>{ROLE_LABELS[s.role] || s.role}</Pill>
+                      {s.userId ? (
+                        <Pill tone="success">Account linked</Pill>
+                      ) : (
+                        <Pill tone="amber">Awaiting account</Pill>
+                      )}
+                      {s.profileStatus === "complete" ? (
+                        <Pill tone="success">Profile ✓</Pill>
+                      ) : (
+                        <Pill tone="neutral">Profile incomplete</Pill>
+                      )}
                     </div>
                     <p className="text-[13px] text-slate-text/70 mt-0.5">
                       {s.designation || "—"}
@@ -494,6 +588,15 @@ export default function Teachers() {
                           <Link2 size={16} />
                         </button>
                       )}
+                      {s.profileStatus === "complete" && s.idCardNumber && (
+                        <button
+                          onClick={() => printTeacherIdCard({ teacher: s, school })}
+                          className="p-2 rounded-lg hover:bg-paper text-slate-text/60 hover:text-info transition-colors"
+                          title="Print ID card"
+                        >
+                          <Printer size={16} />
+                        </button>
+                      )}
                     </PermissionGate>
                     <button
                       onClick={() => setExpandedCard(isExpanded ? null : s.id)}
@@ -571,35 +674,17 @@ export default function Teachers() {
             <p className="text-[12px] text-slate-text/55">
               Showing {filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length}
             </p>
-            <div className="flex items-center gap-2">
-              <select
-                value={pageSize}
-                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-                className="text-[12px] border border-black/[0.08] rounded-lg px-2 py-1.5 bg-paper text-ink"
-              >
-                {[5, 10, 20, 50].map((n) => (
-                  <option key={n} value={n}>{n} / page</option>
-                ))}
-              </select>
-              <Button
-                variant="outline"
-                className="px-3 py-1.5 text-[12px]"
-                disabled={safePage <= 1}
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
-              >
-                Prev
-              </Button>
-              <span className="text-[12px] text-ink font-medium">{safePage} / {totalPages}</span>
-              <Button
-                variant="outline"
-                className="px-3 py-1.5 text-[12px]"
-                disabled={safePage >= totalPages}
-                onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
-              >
-                Next
-              </Button>
-            </div>
+            <select
+              value={pageSize}
+              onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+              className="text-[12px] border border-black/[0.08] rounded-lg px-2 py-1.5 bg-paper text-ink"
+            >
+              {[5, 10, 20, 50].map((n) => (
+                <option key={n} value={n}>{n} / page</option>
+              ))}
+            </select>
           </div>
+          <Pagination page={safePage} pages={totalPages} onPage={setPage} info={false} />
         </>
       )}
 
@@ -621,17 +706,84 @@ export default function Teachers() {
                 <div>
                   <h4 className="text-[18px] font-semibold text-ink">{viewStaff.name}</h4>
                   <p className="text-[13px] text-slate-text/70">{viewStaff.designation || "—"}</p>
-                  <div className="flex gap-2 mt-1">
+                  <div className="flex flex-wrap gap-2 mt-1">
                     <Pill tone={statusTone(viewStaff.status)}>{viewStaff.status}</Pill>
                     <Pill tone={viewStaff.role === "teacher" ? "info" : "neutral"}>{ROLE_LABELS[viewStaff.role] || viewStaff.role}</Pill>
+                    {viewStaff.userId ? (
+                      <Pill tone="success">Account linked</Pill>
+                    ) : (
+                      <Pill tone="amber">Awaiting account</Pill>
+                    )}
+                    {viewStaff.profileStatus === "complete" ? (
+                      <Pill tone="success">Profile ✓</Pill>
+                    ) : (
+                      <Pill tone="neutral">Profile incomplete</Pill>
+                    )}
                   </div>
                 </div>
+              </div>
+
+              {/* Onboarding & ID Card */}
+              <div className="rounded-xl border border-black/[0.06] p-4 space-y-3">
+                <p className="text-[11px] font-semibold text-slate-text/50 uppercase tracking-wide">Onboarding · ID Card</p>
+                <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-slate-text/70">
+                  <span className="inline-flex items-center gap-1.5">
+                    <UserCheck size={13} className={viewStaff.userId ? "text-success" : "text-amber-dark"} />
+                    {viewStaff.userId ? "Account created — profile completion is two-way" : "No account yet — register in Users & Access"}
+                  </span>
+                </div>
+                {viewStaff.idCardNumber ? (
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-[12.5px] text-ink">
+                      ID Card <span className="font-mono font-semibold text-info">{viewStaff.idCardNumber}</span>
+                      <span className="text-slate-text/50"> · issued {fmtDate(viewStaff.idCardIssuedAt)}</span>
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-slate-text/55">
+                    {viewStaff.profileStatus === "complete"
+                      ? "Profile complete — issue the ID card when ready."
+                      : "ID card issues automatically once the profile is completed."}
+                  </p>
+                )}
+                {viewStaff.profileStatus === "complete" && (
+                  <div className="rounded-lg bg-paper/70 p-3">
+                    <TeacherIdCard teacher={viewStaff} school={school} />
+                  </div>
+                )}
+                <PermissionGate permission="staff:write">
+                  <div className="flex flex-wrap gap-2">
+                    {viewStaff.profileStatus !== "complete" ? (
+                      <Button variant="amber" onClick={() => openComplete(viewStaff)}>
+                        <AlertCircle size={15} /> Complete Profile (Admin)
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        disabled={issuingId === viewStaff.id}
+                        onClick={() => handleIssueIdCard(viewStaff)}
+                      >
+                        <CreditCard size={15} />
+                        {viewStaff.idCardNumber ? "Reissue ID Card" : "Issue ID Card"}
+                      </Button>
+                    )}
+                    <Button variant="outline" disabled={!viewStaff.idCardNumber} onClick={() => printTeacherIdCard({ teacher: viewStaff, school })}>
+                      <Printer size={15} /> Print
+                    </Button>
+                  </div>
+                </PermissionGate>
               </div>
 
               {/* Details Grid */}
               <div className="grid grid-cols-2 gap-4 text-[13px]">
                 {viewStaff.employeeId && (
                   <div><span className="text-slate-text/50 text-[12px] block">Employee ID</span><span className="text-ink font-mono">{viewStaff.employeeId}</span></div>
+                )}
+                {viewStaff.dob && (
+                  <div><span className="text-slate-text/50 text-[12px] block">Date of Birth</span><span className="text-ink">{fmtDate(viewStaff.dob)}</span></div>
+                )}
+                {viewStaff.gender && (
+                  <div><span className="text-slate-text/50 text-[12px] block">Gender</span><span className="text-ink">{viewStaff.gender}</span></div>
                 )}
                 {viewStaff.department && (
                   <div><span className="text-slate-text/50 text-[12px] block">Department</span><span className="text-ink">{viewStaff.department}</span></div>
@@ -718,7 +870,7 @@ export default function Teachers() {
       {showStaffModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setShowStaffModal(false)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06] sticky top-0 bg-white z-10">
               <h3 className="font-display font-semibold text-ink text-[17px]">
                 {editId ? "Edit Staff Record" : "Add Staff"}
@@ -728,124 +880,225 @@ export default function Teachers() {
               </button>
             </div>
 
-            {/* Form Section Tabs */}
-            <div className="flex border-b border-black/[0.06] sticky top-[65px] bg-white z-10">
-              {[
-                { key: "personal", label: "Personal", icon: Users },
-                { key: "professional", label: "Professional", icon: Briefcase },
-                ...(form.role === "teacher" ? [{ key: "teaching", label: "Teaching", icon: GraduationCap }] : []),
-              ].map((sec) => {
-                const Icon = sec.icon;
-                return (
-                  <button
-                    key={sec.key}
-                    onClick={() => setFormSection(sec.key)}
-                    className={`flex items-center gap-1.5 px-4 py-2.5 text-[13px] font-medium border-b-2 transition-colors ${
-                      formSection === sec.key
-                        ? "border-info text-info"
-                        : "border-transparent text-slate-text/50 hover:text-ink"
-                    }`}
-                  >
-                    <Icon size={14} />
-                    {sec.label}
-                  </button>
-                );
-              })}
+            {/* Form Steps */}
+            <div className="px-6 pt-4 pb-3 border-b border-black/[0.06] sticky top-[65px] bg-white z-10">
+              <SegmentedTabs
+                tabs={[
+                  { id: "personal", label: "1 · Basics", icon: Users },
+                  { id: "professional", label: "2 · Role & position", icon: Briefcase },
+                  ...(form.role === "teacher" ? [{ id: "teaching", label: "3 · Teaching scope", icon: GraduationCap }] : []),
+                ]}
+                active={formSection}
+                onChange={setFormSection}
+              />
+              <p className="text-[11px] text-slate-text/45 mt-2">
+                Step {stepIndex + 1} of {stepOrder.length} — fill in and continue.
+              </p>
             </div>
 
-            <div className="px-6 py-5 space-y-4">
+            <div className="px-6 py-5 space-y-6">
               {apiError && (
                 <p className="text-alert text-[13px] rounded-lg bg-alert/5 px-3 py-2" role="alert">{apiError}</p>
               )}
 
               {/* Personal Section */}
               {formSection === "personal" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Full Name *</label>
-                    <Input value={form.name} onChange={(e) => updateForm("name", e.target.value)} placeholder="e.g. Ananya Sharma" />
+                <section>
+                  <div className="mb-4">
+                    <h4 className="text-[12px] font-bold uppercase tracking-wide text-ink/60">Basics</h4>
+                    <p className="text-[12px] text-slate-text/55 mt-0.5">
+                      How this person appears across the school directory.
+                    </p>
                   </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Employee ID *</label>
-                    <Input value={form.employeeId} onChange={(e) => updateForm("employeeId", e.target.value)} placeholder="e.g. EMP-001" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                        Full Name <span className="text-alert">*</span>
+                      </label>
+                      <Input value={form.name} onChange={(e) => updateForm("name", e.target.value)} placeholder="e.g. Ananya Sharma" />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                        Employee ID <span className="text-alert">*</span>
+                      </label>
+                      <Input value={form.employeeId} onChange={(e) => updateForm("employeeId", e.target.value)} placeholder="e.g. EMP-001" />
+                      <p className="text-[11px] text-slate-text/50 mt-1.5">
+                        Manual Staff ID — accounts link from Users &amp; Access with this ID.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Contact</label>
+                      <Input value={form.contact} onChange={(e) => updateForm("contact", e.target.value)} placeholder="Phone number" />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Email</label>
+                      <Input type="email" value={form.email} onChange={(e) => updateForm("email", e.target.value)} placeholder="name@school.edu" />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Address</label>
+                      <Input value={form.address} onChange={(e) => updateForm("address", e.target.value)} placeholder="Residential address" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Contact</label>
-                    <Input value={form.contact} onChange={(e) => updateForm("contact", e.target.value)} placeholder="Phone number" />
-                  </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Email</label>
-                    <Input type="email" value={form.email} onChange={(e) => updateForm("email", e.target.value)} placeholder="name@school.edu" />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Address</label>
-                    <Input value={form.address} onChange={(e) => updateForm("address", e.target.value)} placeholder="Residential address" />
-                  </div>
-                </div>
+                </section>
               )}
 
               {/* Professional Section */}
               {formSection === "professional" && (
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Designation *</label>
-                    <Input list="designation-suggestions" value={form.designation} onChange={(e) => updateForm("designation", e.target.value)} placeholder="e.g. PGT Mathematics" />
-                    <datalist id="designation-suggestions">
-                      {DESIGNATION_SUGGESTIONS.map((d) => <option key={d} value={d} />)}
-                    </datalist>
+                <section>
+                  <div className="mb-4">
+                    <h4 className="text-[12px] font-bold uppercase tracking-wide text-ink/60">Role &amp; position</h4>
+                    <p className="text-[12px] text-slate-text/55 mt-0.5">
+                      Designation, department and employment details.
+                    </p>
                   </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Department</label>
-                    <Input value={form.department} onChange={(e) => updateForm("department", e.target.value)} placeholder="e.g. Science" />
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-4">
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                        Designation <span className="text-alert">*</span>
+                      </label>
+                      <Input list="designation-suggestions" value={form.designation} onChange={(e) => updateForm("designation", e.target.value)} placeholder="e.g. PGT Mathematics" />
+                      <datalist id="designation-suggestions">
+                        {DESIGNATION_SUGGESTIONS.map((d) => <option key={d} value={d} />)}
+                      </datalist>
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Department</label>
+                      <Input value={form.department} onChange={(e) => updateForm("department", e.target.value)} placeholder="e.g. Science" />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Role</label>
+                      <Select value={form.role} onChange={(e) => handleRoleChange(e.target.value)} className="w-full">
+                        {["teacher", "admin-staff", "support"].map((r) => (
+                          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                        ))}
+                      </Select>
+                      <p className="text-[11px] text-slate-text/50 mt-1.5">
+                        Choosing Teacher adds the Teaching step.
+                      </p>
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Status</label>
+                      <Select value={form.status} onChange={(e) => updateForm("status", e.target.value)} className="w-full">
+                        {["Active", "Inactive", "Resigned"].map((st) => (
+                          <option key={st} value={st}>{st}</option>
+                        ))}
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Qualification</label>
+                      <Input value={form.qualification} onChange={(e) => updateForm("qualification", e.target.value)} placeholder="e.g. M.Sc., B.Ed." />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Joining Date</label>
+                      <Input type="date" value={form.joiningDate} onChange={(e) => updateForm("joiningDate", e.target.value)} />
+                    </div>
+                    <div>
+                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Monthly Salary (₹)</label>
+                      <Input type="number" min="0" value={form.salary} onChange={(e) => updateForm("salary", e.target.value)} placeholder="0" />
+                    </div>
                   </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Role</label>
-                    <Select value={form.role} onChange={(e) => updateForm("role", e.target.value)} className="w-full">
-                      {["teacher", "admin-staff", "support"].map((r) => (
-                        <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                      ))}
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Status</label>
-                    <Select value={form.status} onChange={(e) => updateForm("status", e.target.value)} className="w-full">
-                      {["Active", "Inactive", "Resigned"].map((st) => (
-                        <option key={st} value={st}>{st}</option>
-                      ))}
-                    </Select>
-                  </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Qualification</label>
-                    <Input value={form.qualification} onChange={(e) => updateForm("qualification", e.target.value)} placeholder="e.g. M.Sc., B.Ed." />
-                  </div>
-                  <div>
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Joining Date</label>
-                    <Input type="date" value={form.joiningDate} onChange={(e) => updateForm("joiningDate", e.target.value)} />
-                  </div>
-                  <div className="col-span-2">
-                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">Monthly Salary (₹)</label>
-                    <Input type="number" min="0" value={form.salary} onChange={(e) => updateForm("salary", e.target.value)} placeholder="0" />
-                  </div>
-                </div>
+                </section>
               )}
 
               {/* Teaching Section */}
               {formSection === "teaching" && (
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Subjects (comma separated)</label>
-                  <Input list="subject-suggestions" value={form.subjects} onChange={(e) => updateForm("subjects", e.target.value)} placeholder="e.g. Mathematics, Physics" />
-                  <datalist id="subject-suggestions">
-                    {SUBJECT_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
-                  </datalist>
-                  <p className="text-[11px] text-slate-text/50 mt-1.5">Enter the subjects this teacher can teach, separated by commas.</p>
-                </div>
+                <section>
+                  <div className="mb-4">
+                    <h4 className="text-[12px] font-bold uppercase tracking-wide text-ink/60">Teaching scope</h4>
+                    <p className="text-[12px] text-slate-text/55 mt-0.5">
+                      The subjects this teacher can take.
+                    </p>
+                  </div>
+                  <div>
+                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                      Subjects <span className="text-slate-text/45">(comma separated)</span>
+                    </label>
+                    <Input list="subject-suggestions" value={form.subjects} onChange={(e) => updateForm("subjects", e.target.value)} placeholder="e.g. Mathematics, Physics" />
+                    <datalist id="subject-suggestions">
+                      {SUBJECT_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
+                    </datalist>
+                    <p className="text-[11px] text-slate-text/50 mt-1.5">Enter the subjects this teacher can teach, separated by commas.</p>
+                  </div>
+                </section>
               )}
             </div>
 
+            <div className="px-6 py-4 border-t border-black/[0.06] flex items-center justify-between gap-2 sticky bottom-0 bg-white">
+              <div className="flex items-center gap-2">
+                <Button variant="outline" onClick={() => setShowStaffModal(false)}>Cancel</Button>
+                {stepIndex > 0 && (
+                  <Button variant="outline" onClick={() => setFormSection(stepOrder[stepIndex - 1])}>
+                    <ChevronLeft size={15} /> Back
+                  </Button>
+                )}
+              </div>
+              {stepIndex < stepOrder.length - 1 ? (
+                <Button variant="amber" onClick={handleNextStep}>
+                  Next <ChevronRight size={15} />
+                </Button>
+              ) : (
+                <Button variant="amber" onClick={handleSaveStaff}>
+                  <Save size={15} /> {editId ? "Save Changes" : "Add Staff"}
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== COMPLETE PROFILE MODAL ========== */}
+      {completeTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setCompleteTarget(null)} />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06] sticky top-0 bg-white">
+              <h3 className="font-display font-semibold text-ink text-[17px]">
+                Complete Profile · {completeTarget.name}
+              </h3>
+              <button onClick={() => setCompleteTarget(null)} className="p-2 rounded-lg hover:bg-paper text-slate-text">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="px-6 py-5 space-y-4">
+              <div className="flex items-start gap-2.5 rounded-xl bg-info/10 border border-info/20 px-4 py-3 text-[13px] text-info">
+                <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                <p>
+                  Use this to finish the shared person record on the teacher's
+                  behalf. {completeTarget.idCardNumber ? "Re-issuing keeps the same card number after review." : "The ID card issues automatically on completion."}
+                </p>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Date of Birth *</label>
+                  <Input
+                    type="date"
+                    value={completeForm.dob}
+                    onChange={(e) => setCompleteForm((f) => ({ ...f, dob: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Gender *</label>
+                  <Select value={completeForm.gender} onChange={(e) => setCompleteForm((f) => ({ ...f, gender: e.target.value }))} className="w-full">
+                    <option value="">Select gender…</option>
+                    {["Male", "Female", "Other"].map((g) => (
+                      <option key={g} value={g}>{g}</option>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Contact *</label>
+                  <Input value={completeForm.contact} onChange={(e) => setCompleteForm((f) => ({ ...f, contact: e.target.value }))} placeholder="Phone number" />
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Address *</label>
+                  <Input value={completeForm.address} onChange={(e) => setCompleteForm((f) => ({ ...f, address: e.target.value }))} placeholder="Residential address" />
+                </div>
+              </div>
+            </div>
             <div className="px-6 py-4 border-t border-black/[0.06] flex justify-end gap-2 sticky bottom-0 bg-white">
-              <Button variant="outline" onClick={() => setShowStaffModal(false)}>Cancel</Button>
-              <Button variant="amber" onClick={handleSaveStaff}>
-                <Save size={15} /> {editId ? "Save Changes" : "Add Staff"}
+              <Button variant="outline" onClick={() => setCompleteTarget(null)}>Cancel</Button>
+              <Button variant="amber" onClick={handleCompleteProfile} disabled={completing}>
+                <Save size={15} /> {completing ? "Completing…" : "Complete & Issue Card"}
               </Button>
             </div>
           </div>

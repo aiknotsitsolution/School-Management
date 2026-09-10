@@ -223,7 +223,7 @@ export default function Payroll() {
         title="Payroll Management"
         description="Manage staff salaries, payslips and monthly payments."
         right={
-          <>
+          <div className="flex items-center gap-2">
             <Button variant="outline" onClick={exportCsv}>
               <Download size={15} /> Export CSV
             </Button>
@@ -232,7 +232,7 @@ export default function Payroll() {
                 <Plus size={15} /> Add Employee
               </Button>
             </PermissionGate>
-          </>
+          </div>
         }
       />
 
@@ -312,7 +312,7 @@ export default function Payroll() {
       <Card
         title={`Payroll Sheet — ${month} ${year}`}
         action={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 rounded-xl border border-black/10 bg-white p-1.5 shadow-sm">
             <div className="relative">
               <Search
                 size={14}
@@ -322,13 +322,16 @@ export default function Payroll() {
                 placeholder="Search employee..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="pl-8 w-52"
+                className="!pl-8 !w-52 !border-0 !bg-transparent !py-1.5 !px-3 hover:!border-0 focus:!border-0 focus:!ring-0"
               />
             </div>
+            <span className="text-slate-text/30 text-[13px] select-none">
+              /
+            </span>
             <Select
               value={deptFilter}
               onChange={(e) => setDeptFilter(e.target.value)}
-              className="min-w-[130px]"
+              className="!w-auto !min-w-[130px] !border-0 !bg-transparent !px-3 !py-1.5 font-semibold hover:!border-0 focus:!border-0 focus:!ring-0"
             >
               {depts.map((d) => (
                 <option key={d} value={d}>

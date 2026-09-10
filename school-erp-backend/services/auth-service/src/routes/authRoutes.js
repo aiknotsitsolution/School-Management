@@ -1,10 +1,20 @@
 const express = require("express");
 const router = express.Router();
+const multer = require("multer");
 const { validateObjectIdParam } = require("@school-erp/shared/src/middleware/objectId");
 router.param("id", validateObjectIdParam);
 router.param("homeworkId", validateObjectIdParam);
 const ctrl = require("../controllers/authController");
 const { verifyToken, resolveTenant, requirePermission, authorizeRoles } = require("../middleware/auth");
+
+const photoUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, callback) => {
+    if (file.mimetype.startsWith("image/")) return callback(null, true);
+    callback(new Error("Only image files are allowed"));
+  },
+});
 
 // Public
 router.post("/login", ctrl.login);
@@ -16,6 +26,8 @@ router.post("/reset-password-otp", ctrl.resetPasswordWithOtp);
 
 // Protected - account self-service
 router.get("/me", verifyToken, resolveTenant, ctrl.getMe);
+router.patch("/me", verifyToken, ctrl.updateMe);
+router.post("/upload-photo", verifyToken, photoUpload.single("photo"), ctrl.uploadUserPhoto);
 router.post("/change-password", verifyToken, ctrl.changePassword);
 router.get("/verify", verifyToken, ctrl.verify);
 

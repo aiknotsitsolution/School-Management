@@ -155,6 +155,12 @@ export const api = {
       request(`/auth/users/${id}/reset-password`, { method: "POST" }),
     sendResetOtp: (id) =>
       request(`/auth/users/${id}/send-reset-otp`, { method: "POST" }),
+    updateMe: (patch) => request("/auth/me", json("PATCH", patch)),
+    uploadPhoto: (file) => {
+      const formData = new FormData();
+      formData.append("photo", file);
+      return request("/auth/upload-photo", { method: "POST", body: formData });
+    },
   },
   schools: {
     list: () => request("/auth/schools"),
@@ -239,6 +245,10 @@ export const api = {
     create: (student) => request("/students", json("POST", student)),
     me: () => request("/students/me"),
     counsellorStats: () => request("/students/counsellor/stats"),
+    // Student shells (userId null, produced by every confirmed admission)
+    // awaiting a Platform User account. Admin-only surface (users:manage).
+    pendingRegistrations: (params = "") =>
+      request(`/students/pending-registrations${params ? `?${params}` : ""}`),
     completeProfile: (id) =>
       request(`/students/${id}/complete-profile`, { method: "POST" }),
     uploadPhoto: (file) => {
@@ -425,6 +435,22 @@ events: {
     create: (item) => request("/staff", json("POST", item)),
     update: (id, item) => request(`/staff/${id}`, json("PUT", item)),
     remove: (id) => request(`/staff/${id}`, { method: "DELETE" }),
+    // Own person record for a Staff/Teacher/Class Teacher account (refId scoped).
+    me: () => request("/staff/me"),
+    uploadPhoto: (file) => {
+      const formData = new FormData();
+      formData.append("photo", file);
+      return request("/staff/upload-photo", { method: "POST", body: formData });
+    },
+    // Staff records (userId null) awaiting a Platform User account. Admin-only
+    // surface (users:manage). ?role= filters Teachers (default) / Staff later.
+    pendingRegistrations: (params = "") =>
+      request(`/staff/pending-registrations${params ? `?${params}` : ""}`),
+    // Shared Complete Profile / Person flow (self-service fields only).
+    completeProfile: (id, patch) =>
+      request(`/staff/${id}/complete-profile`, json("PUT", patch)),
+    issueIdCard: (id) =>
+      request(`/staff/${id}/issue-id-card`, { method: "POST" }),
     attendance: {
       list: (params = "") =>
         request(`/staff/attendance${params ? `?${params}` : ""}`),

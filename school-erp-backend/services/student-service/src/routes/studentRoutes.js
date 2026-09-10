@@ -42,6 +42,14 @@ router.get(
   ctrl.counsellorStats,
 );
 router.get("/", requirePermission("students:read"), scopeClassTeacher, ctrl.getStudents);
+// Pending registrations (student shells awaiting an account) is an admin
+// surface: gated by users:manage so a counsellor/teacher/student can never
+// enumerate un-linked student profiles. Must be declared before /:id.
+router.get(
+  "/pending-registrations",
+  requirePermission("users:manage"),
+  ctrl.getPendingRegistrations,
+);
 router.get(
   "/:id",
   requirePermission("students:read"),

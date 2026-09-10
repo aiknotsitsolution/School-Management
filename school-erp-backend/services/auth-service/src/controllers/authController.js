@@ -43,36 +43,32 @@ const SCHOOL_EDITABLE_FIELDS = [
 ];
 
 // Student-role linking: enforce `PlatformUser.refId === Student.admissionNo`
-// within the SAME school. When the student record already exists it is linked
-// (and blocked if already owned by another active account); when it does not,
-// a safe incomplete shell/draft is created for the Admission Counsellor.
-const ensureStudentLink = async ({ schoolId, admissionId, userId, name, cls, section }) => {
+// within the SAME school. The Student shell is created ONLY when an admission
+// is confirmed (student-service, admission flow) — Register User must never
+// fabricate a student record. This step attaches the freshly created user to
+// the shell it resolves to, or fails with a clear status when the shell does
+// not exist / is already owned by another active account (which rolls the
+// account back).
+const ensureStudentLink = async ({ schoolId, admissionId, userId }) => {
   try {
     const { getStudentModel } = require("../db/studentDb");
     const Student = await getStudentModel();
 
     const existing = await Student.findOne({ schoolId, admissionNo: admissionId });
-    if (existing) {
-      if (existing.userId) {
-        const linked = await User.findById(existing.userId).lean();
-        if (linked && !linked.deletedAt && String(linked._id) !== String(userId)) {
-          return { status: 409, message: "This Admission ID is already linked to another active account" };
-        }
-      }
-      await Student.updateOne({ _id: existing._id }, { $set: { userId: String(userId) } });
-      return { linked: existing._id };
+    if (!existing) {
+      return {
+        status: 400,
+        message: "No pending student profile exists for this Admission ID in this school — confirm the admission first",
+      };
     }
-
-    const created = await Student.create({
-      schoolId,
-      admissionNo: admissionId,
-      userId: String(userId),
-      name: name ? String(name).trim() : "Student",
-      class: cls || null,
-      section: section || null,
-      profileStatus: "incomplete",
-    });
-    return { linked: created._id, created: true };
+    if (existing.userId) {
+      const linked = await User.findById(existing.userId).lean();
+      if (linked && !linked.deletedAt && String(linked._id) !== String(userId)) {
+        return { status: 409, message: "This Admission ID is already linked to another active account" };
+      }
+    }
+    await Student.updateOne({ _id: existing._id }, { $set: { userId: String(userId) } });
+    return { linked: existing._id };
   } catch (err) {
     return { status: 503, message: `Cannot link student profile: ${err.message}` };
   }
@@ -95,6 +91,63 @@ const studentExistsFor = async (schoolId, admissionNo) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Staff/Teacher/Class Teacher linking — the shared "Register User" flow for
+// person records. A person record must ALREADY exist (created from the
+// Teachers & Staff page, manual Staff ID); Register User only links to it,
+// it NEVER fabricates one. The stored user.refId is the linked Staff._id
+// (keeps every staff-scoped lookup in the fleet — attendance, leaves, teacher
+// assignments, /me — consistent), while the submitted Staff ID (employeeId)
+// is the discovery key.
+// ---------------------------------------------------------------------------
+const STAFF_LINK_ROLES = ["teacher", "class_teacher", "staff"];
+const STAFF_LINK_OK = {
+  teacher: ["teacher"],
+  class_teacher: ["teacher"],
+  staff: ["admin-staff", "support"],
+};
+
+const staffLinkRequired = (role) => STAFF_LINK_ROLES.includes(role);
+
+const staffRecordFor = async (schoolId, employeeId) => {
+  try {
+    const { getStaffModel } = require("../db/staffDb");
+    const Staff = await getStaffModel();
+    return await Staff.findOne({ schoolId, employeeId }).lean();
+  } catch {
+    return null;
+  }
+};
+
+const NO_PENDING_STAFF_MSG =
+  "No pending Teacher/Staff record exists for this Staff ID in this school — create the record in Teachers & Staff first";
+
+const ensureStaffLink = async ({ schoolId, employeeId, userRole, userId }) => {
+  try {
+    const { getStaffModel } = require("../db/staffDb");
+    const Staff = await getStaffModel();
+
+    const existing = await Staff.findOne({ schoolId, employeeId });
+    if (!existing) return { status: 400, message: NO_PENDING_STAFF_MSG };
+    if (!STAFF_LINK_OK[userRole].includes(existing.role)) {
+      return {
+        status: 400,
+        message: `This Staff ID belongs to a ${existing.role} record — it cannot be linked to a ${userRole} account`,
+      };
+    }
+    if (existing.userId) {
+      const linked = await User.findById(existing.userId).lean();
+      if (linked && !linked.deletedAt && String(linked._id) !== String(userId)) {
+        return { status: 409, message: "This Staff ID is already linked to another active account" };
+      }
+    }
+    await Staff.updateOne({ _id: existing._id }, { $set: { userId: String(userId) } });
+    return { linked: existing._id };
+  } catch (err) {
+    return { status: 503, message: `Cannot link staff profile: ${err.message}` };
+  }
+};
+
 const toPublicUser = (user) => ({
   id: user._id,
   name: user.name,
@@ -105,6 +158,7 @@ const toPublicUser = (user) => ({
   class: user.class || null,
   section: user.section || null,
   phone: user.phone || null,
+  avatar: user.avatar || null,
   refId: user.refId || null,
   linkedStudentIds: user.linkedStudentIds || [],
   isActive: user.isActive !== false,
@@ -184,6 +238,54 @@ const createUser = async (req, res) => {
     const existing = await User.findOne({ email });
     if (existing) return res.status(409).json({ success: false, message: "Email already registered" });
 
+    // Register User must attach an EXISTING confirmed-admission Student shell —
+    // a random/nonexistent Admission ID is rejected up-front so no account is
+    // created (and subsequently rolled back) for an ID that cannot be linked.
+    const admissionShell = role === "student" ? await studentExistsFor(schoolId, admissionId) : null;
+    if (role === "student" && !admissionShell) {
+      return res.status(400).json({
+        success: false,
+        message: "No pending student profile exists for this Admission ID in this school — confirm the admission first",
+      });
+    }
+
+    // Staff/Teacher/Class Teacher accounts link to a person record created from
+    // the Teachers & Staff page (Staff ID is entered manually on that page —
+    // never generated). A nonexistent / already-linked / wrong-role Staff ID is
+    // rejected up-front so no account is created for a record that cannot be
+    // linked. The submitted Staff ID is the discovery key; the account's refId
+    // stores the linked Staff._id (see ensureStaffLink).
+    const staffId = staffLinkRequired(role) ? String(refId || "").trim() : null;
+    const staffRecord = staffId ? await staffRecordFor(schoolId, staffId) : null;
+    if (staffLinkRequired(role)) {
+      if (!staffId) {
+        return res.status(400).json({ success: false, message: `Staff ID (refId) is required for ${role} accounts` });
+      }
+      if (!staffRecord) {
+        return res.status(400).json({ success: false, message: NO_PENDING_STAFF_MSG });
+      }
+      if (!STAFF_LINK_OK[role].includes(staffRecord.role)) {
+        return res.status(400).json({
+          success: false,
+          message: `This Staff ID belongs to a ${staffRecord.role} record — it cannot be linked to a ${role} account`,
+        });
+      }
+      // A counsellor's Staff ID must never collide with an admitted student's
+      // Admission ID (their lookup surfaces could address the wrong person).
+      if (role === "staff" && designation === "admission_counsellor") {
+        const collides = await studentExistsFor(schoolId, staffId);
+        if (collides) {
+          return res.status(409).json({
+            success: false,
+            message: "This ID belongs to an admitted student — it cannot be used as a counsellor's Staff ID",
+          });
+        }
+      }
+      if (staffRecord.userId) {
+        return res.status(409).json({ success: false, message: "This Staff ID is already linked to another active account" });
+      }
+    }
+
     const hashed = await bcrypt.hash(password, 10);
     const user = await User.create({
       name: name.trim(),
@@ -195,21 +297,40 @@ const createUser = async (req, res) => {
       class: cls || undefined,
       section: section || undefined,
       phone,
-      refId: role === "student" ? String(refId).trim() : refId || null,
+      refId:
+        role === "student"
+          ? String(refId).trim()
+          : staffRecord
+            ? String(staffRecord._id)
+            : (refId || null),
       linkedStudentIds,
     });
 
     // Student accounts must resolve to a real student record in the SAME
     // school (PlatformUser.refId === Student.admissionNo). Failing to link
-    // (e.g. cross-school ID, duplicate ownership) rolls the account back.
+    // (e.g. a shell claimed concurrently, duplicate ownership) rolls the
+    // account back.
     if (role === "student") {
       const linkResult = await ensureStudentLink({
         schoolId,
         admissionId,
         userId: user._id,
-        name,
-        cls,
-        section,
+      });
+      if (linkResult.status) {
+        await User.deleteOne({ _id: user._id }).catch(() => {});
+        return res.status(linkResult.status).json({ success: false, message: linkResult.message });
+      }
+    }
+
+    // Staff/Teacher/Class Teacher accounts must resolve to a real person record
+    // in the SAME school (user.refId === Staff._id). A concurrent claim /
+    // duplicate ownership rolls the account back.
+    if (staffLinkRequired(role)) {
+      const linkResult = await ensureStaffLink({
+        schoolId,
+        employeeId: staffId,
+        userRole: role,
+        userId: user._id,
       });
       if (linkResult.status) {
         await User.deleteOne({ _id: user._id }).catch(() => {});
@@ -326,6 +447,44 @@ const changePassword = async (req, res) => {
     res.json({ success: true, message: "Password updated successfully" });
   } catch (err) {
     return unexpectedError(res, err);
+  }
+};
+
+const SELF_EDITABLE_FIELDS = ["name", "phone", "avatar"];
+
+const updateMe = async (req, res) => {
+  try {
+    const patch = {};
+    for (const key of SELF_EDITABLE_FIELDS) {
+      if (req.body[key] !== undefined) patch[key] = req.body[key];
+    }
+    if (Object.keys(patch).length === 0) {
+      return res.status(400).json({ success: false, message: "No valid fields to update" });
+    }
+    const user = await User.findByIdAndUpdate(req.user.id, patch, { new: true });
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
+    res.json({ success: true, data: toPublicUser(user) });
+  } catch (err) {
+    return unexpectedError(res, err);
+  }
+};
+
+const uploadUserPhoto = async (req, res) => {
+  try {
+    if (!req.file)
+      return res.status(400).json({ success: false, message: "Photo file is required" });
+    const imagekit = require("@school-erp/shared/src/config/imagekit");
+    if (!imagekit)
+      return res.status(503).json({ success: false, message: "Image provider is not configured" });
+    const uploaded = await imagekit.upload({
+      file: req.file.buffer.toString("base64"),
+      fileName: `user-${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "-")}`,
+      folder: "/school-erp/users",
+      useUniqueFileName: true,
+    });
+    res.status(201).json({ success: true, data: { url: uploaded.url, fileId: uploaded.fileId } });
+  } catch (err) {
+    res.status(502).json({ success: false, message: err?.message || "Image upload failed" });
   }
 };
 
@@ -462,15 +621,51 @@ const updateUser = async (req, res) => {
           schoolId: target.schoolId,
           admissionId: newRef,
           userId: target._id,
-          name: target.name,
-          cls: target.class,
-          section: target.section,
         });
         if (linkResult.status) {
           return res.status(linkResult.status).json({ success: false, message: linkResult.message });
         }
       }
       target.refId = newRef;
+    } else if (staffLinkRequired(target.role) && refId !== undefined) {
+      // Staff/Teacher/Class Teacher refId changes re-link to another existing
+      // person record (same school, right role, not claimed by another account).
+      const trimmed = String(refId || "").trim();
+      if (!trimmed) {
+        return res.status(400).json({ success: false, message: `Staff ID is required for ${target.role} accounts` });
+      }
+      if (trimmed !== target.refId) {
+        const staffRec = await staffRecordFor(target.schoolId, trimmed);
+        if (!staffRec) return res.status(400).json({ success: false, message: NO_PENDING_STAFF_MSG });
+        if (!STAFF_LINK_OK[target.role].includes(staffRec.role)) {
+          return res.status(400).json({
+            success: false,
+            message: `This Staff ID belongs to a ${staffRec.role} record — it cannot be linked to a ${target.role} account`,
+          });
+        }
+        if (target.role === "staff" && (target.designation || designation) === "admission_counsellor") {
+          const collides = await studentExistsFor(target.schoolId, trimmed);
+          if (collides) {
+            return res.status(409).json({
+              success: false,
+              message: "This ID belongs to an admitted student — it cannot be used as a counsellor's Staff ID",
+            });
+          }
+        }
+        if (staffRec.userId && String(staffRec.userId) !== String(target._id)) {
+          return res.status(409).json({ success: false, message: "This Staff ID is already linked to another active account" });
+        }
+        const { getStaffModel } = require("../db/staffDb");
+        const Staff = await getStaffModel();
+        if (target.refId) {
+          await Staff.updateOne(
+            { schoolId: target.schoolId, _id: target.refId },
+            { $set: { userId: null } },
+          ).catch(() => {});
+        }
+        target.refId = String(staffRec._id);
+        await Staff.updateOne({ _id: staffRec._id }, { $set: { userId: String(target._id) } }).catch(() => {});
+      }
     } else if (refId !== undefined) {
       const trimmed = String(refId || "").trim();
       if (
@@ -1037,5 +1232,5 @@ module.exports = {
   requestPasswordReset, verifyResetOtp, resetPasswordWithOtp, adminSendResetOtp,
   createSchool, listSchools, getSchool, updateSchool,
   getMySchool, updateMySchool,
-  verify,
+  verify, updateMe, uploadUserPhoto,
 };

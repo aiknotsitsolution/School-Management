@@ -10,6 +10,10 @@ import {
   Wallet,
   X,
   CheckCircle2,
+  Bell,
+  Users,
+  CalendarDays,
+  Blocks,
 } from "lucide-react";
 import { api } from "../lib/api";
 import {
@@ -25,11 +29,15 @@ import {
 import CustomMasterModal from "../components/CustomMasterModal";
 
 const TABS = [
-  { key: "classes", label: "Classes", icon: School, kind: "classes" },
-  { key: "sections", label: "Sections", icon: Layers, kind: "sections" },
-  { key: "subjects", label: "Subjects", icon: BookOpen, kind: "subjects" },
-  { key: "fee-types", label: "Fee Types", icon: Wallet, kind: "fee-types" },
-  { key: "attendance-statuses", label: "Attendance Statuses", icon: CheckCircle2, kind: "attendance-statuses" },
+  { key: "classes", label: "Classes", singular: "Class", icon: School, kind: "classes" },
+  { key: "sections", label: "Sections", singular: "Section", icon: Layers, kind: "sections" },
+  { key: "subjects", label: "Subjects", singular: "Subject", icon: BookOpen, kind: "subjects" },
+  { key: "fee-types", label: "Fee Types", singular: "Fee Type", icon: Wallet, kind: "fee-types" },
+  { key: "attendance-statuses", label: "Attendance Statuses", singular: "Attendance Status", icon: CheckCircle2, kind: "attendance-statuses" },
+  { key: "notice-categories", label: "Notice Categories", singular: "Notice Category", icon: Bell, kind: "notice-categories" },
+  { key: "notice-audiences", label: "Notice Audiences", singular: "Notice Audience", icon: Users, kind: "notice-audiences" },
+  { key: "event-categories", label: "Event Categories", singular: "Event Category", icon: CalendarDays, kind: "event-categories" },
+  { key: "hostel-blocks", label: "Hostel Blocks", singular: "Hostel Block", icon: Blocks, kind: "hostel-blocks" },
 ];
 
 function SectionRow({ item, onDeactivate, onReactivate }) {
@@ -170,7 +178,17 @@ function MasterList({
 
 export default function ManageSchool() {
   const [activeTab, setActiveTab] = useState("classes");
-  const [items, setItems] = useState({ classes: [], sections: [], subjects: [], "fee-types": [], "attendance-statuses": [] });
+  const [items, setItems] = useState({
+    classes: [],
+    sections: [],
+    subjects: [],
+    "fee-types": [],
+    "attendance-statuses": [],
+    "notice-categories": [],
+    "notice-audiences": [],
+    "event-categories": [],
+    "hostel-blocks": [],
+  });
   const [loading, setLoading] = useState(true);
   const [customModal, setCustomModal] = useState(null);
 
@@ -182,6 +200,10 @@ export default function ManageSchool() {
       api.examMasters.list("subjects"),
       api.examMasters.list("fee-types"),
       api.examMasters.list("attendance-statuses"),
+      api.examMasters.list("notice-categories"),
+      api.examMasters.list("notice-audiences"),
+      api.examMasters.list("event-categories"),
+      api.examMasters.list("hostel-blocks"),
     ]);
     const pick = (i) =>
       results[i].status === "fulfilled" ? results[i].value?.data || [] : [];
@@ -191,6 +213,10 @@ export default function ManageSchool() {
       subjects: pick(2),
       "fee-types": pick(3),
       "attendance-statuses": pick(4),
+      "notice-categories": pick(5),
+      "notice-audiences": pick(6),
+      "event-categories": pick(7),
+      "hostel-blocks": pick(8),
     });
     setLoading(false);
   }, []);
@@ -242,6 +268,10 @@ export default function ManageSchool() {
   const subjectCount = items.subjects.filter((i) => i.active !== false).length;
   const feeTypeCount = items["fee-types"].filter((i) => i.active !== false).length;
   const attendanceStatusCount = items["attendance-statuses"].filter((i) => i.active !== false).length;
+  const noticeCategoryCount = items["notice-categories"].filter((i) => i.active !== false).length;
+  const noticeAudienceCount = items["notice-audiences"].filter((i) => i.active !== false).length;
+  const eventCategoryCount = items["event-categories"].filter((i) => i.active !== false).length;
+  const hostelBlockCount = items["hostel-blocks"].filter((i) => i.active !== false).length;
 
   const tab = TABS.find((t) => t.key === activeTab);
 
@@ -253,7 +283,7 @@ export default function ManageSchool() {
         description="Configure classes, sections, subjects and other academic master data for your school."
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         {TABS.map((t) => {
           const counts = {
             classes: classCount,
@@ -261,6 +291,10 @@ export default function ManageSchool() {
             subjects: subjectCount,
             "fee-types": feeTypeCount,
             "attendance-statuses": attendanceStatusCount,
+            "notice-categories": noticeCategoryCount,
+            "notice-audiences": noticeAudienceCount,
+            "event-categories": eventCategoryCount,
+            "hostel-blocks": hostelBlockCount,
           };
           return (
             <button
@@ -294,11 +328,11 @@ export default function ManageSchool() {
           <Button
             variant="amber"
             onClick={() =>
-              setCustomModal({ kind: tab.kind, label: tab.label.replace(/s$/, "") })
+              setCustomModal({ kind: tab.kind, label: tab.singular })
             }
           >
             <Plus size={15} />
-            Add {tab.label.replace(/s$/, "")}
+            Add {tab.singular}
           </Button>
         }
       >

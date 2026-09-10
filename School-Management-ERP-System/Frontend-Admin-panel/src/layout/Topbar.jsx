@@ -9,6 +9,10 @@ import {
   ChevronDown,
   LogOut,
   Inbox,
+  UserRound,
+  Settings,
+  School,
+  ShieldCheck,
 } from "lucide-react";
 import { selectRole, selectUser } from "../store/selectors";
 import { logout } from "../store/authSlice";
@@ -47,6 +51,8 @@ export default function Topbar({ onMenuClick, title }) {
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef(null);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const profileRef = useRef(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -83,6 +89,25 @@ export default function Topbar({ onMenuClick, title }) {
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
+  // Profile menu closes on outside click and Escape while open.
+  useEffect(() => {
+    if (!profileOpen) return;
+    const onClickOutside = (e) => {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+      }
+    };
+    const onKeyDown = (e) => {
+      if (e.key === "Escape") setProfileOpen(false);
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("mousedown", onClickOutside);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [profileOpen]);
+
   const handleMarkAllRead = async () => {
     await api.notifications.markAllRead().catch(() => {});
     setItems((prev) => prev.map((n) => ({ ...n, read: true })));
@@ -112,6 +137,27 @@ export default function Topbar({ onMenuClick, title }) {
   const handleLogout = () => {
     dispatch(logout());
     navigate("/login", { replace: true });
+  };
+
+  const legacyRole = { admin: "school_admin", teacher: "class_teacher", parent: "student" }[role] || role;
+  const profileTarget = {
+    school_admin: "/profile",
+    super_admin: "/profile",
+    staff: "/staff/profile",
+    class_teacher: "/teacher/profile",
+    student: "/student/profile",
+  }[legacyRole] || "/profile";
+  const settingsTarget = legacyRole === "super_admin" ? "/platform/settings" : "/settings";
+  const manageItem =
+    legacyRole === "super_admin"
+      ? { label: "Manage Platform", icon: ShieldCheck, to: "/platform" }
+      : legacyRole === "school_admin"
+        ? { label: "Manage School", icon: School, to: "/manage-school" }
+        : null;
+
+  const goProfile = (path) => {
+    setProfileOpen(false);
+    navigate(path);
   };
 
   return (
@@ -211,26 +257,84 @@ export default function Topbar({ onMenuClick, title }) {
           )}
         </div>
 
-        <div className="flex items-center gap-2 pl-2 sm:border-l sm:border-black/[0.08]">
-          {user?.avatar ? (
-            <img
-              src={user.avatar}
-              alt={user.name}
-              className="w-9 h-9 rounded-full object-cover"
+        <div className="relative pl-2 sm:border-l sm:border-black/[0.08]" ref={profileRef}>
+          <button
+            onClick={() => setProfileOpen((p) => !p)}
+            aria-label="Account menu"
+            aria-expanded={profileOpen}
+            className="flex items-center gap-2 px-2 -mx-1.5 py-1.5 -my-1.5 rounded-xl hover:bg-paper transition-colors"
+          >
+            {user?.avatar ? (
+              <img
+                src={user.avatar}
+                alt={user.name}
+                className="w-9 h-9 rounded-full object-cover"
+              />
+            ) : (
+              <InitialsAvatar name={user?.name} />
+            )}
+            <div className="hidden sm:block leading-tight text-left">
+              <p className="text-[13px] font-semibold text-ink">{user?.name}</p>
+              <p className="text-[11px] text-slate-text/70 capitalize">
+                {roleLabel(role, user?.designation)}
+              </p>
+            </div>
+            <ChevronDown
+              size={15}
+              className={`hidden sm:block text-slate-text/50 transition-transform ${
+                profileOpen ? "rotate-180" : ""
+              }`}
             />
-          ) : (
-            <InitialsAvatar name={user?.name} />
+          </button>
+
+          {profileOpen && (
+            <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl border border-black/[0.08] shadow-lg shadow-black/5 overflow-hidden z-30">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-black/[0.06]">
+                {user?.avatar ? (
+                  <img
+                    src={user.avatar}
+                    alt={user.name}
+                    className="w-9 h-9 rounded-full object-cover"
+                  />
+                ) : (
+                  <InitialsAvatar name={user?.name} />
+                )}
+                <div className="min-w-0 leading-tight">
+                  <p className="text-[13px] font-semibold text-ink truncate">
+                    {user?.name}
+                  </p>
+                  <p className="text-[11px] text-slate-text/70 capitalize truncate">
+                    {roleLabel(role, user?.designation)}
+                  </p>
+                </div>
+              </div>
+              <div className="py-1">
+                <button
+                  onClick={() => goProfile(profileTarget)}
+                  className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-ink hover:bg-paper flex items-center gap-3 transition-colors"
+                >
+                  <UserRound size={15} className="text-slate-text/60" />
+                  My Profile
+                </button>
+                <button
+                  onClick={() => goProfile(settingsTarget)}
+                  className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-ink hover:bg-paper flex items-center gap-3 transition-colors"
+                >
+                  <Settings size={15} className="text-slate-text/60" />
+                  Settings
+                </button>
+                {manageItem && (
+                  <button
+                    onClick={() => goProfile(manageItem.to)}
+                    className="w-full text-left px-4 py-2.5 text-[13px] font-medium text-ink hover:bg-paper flex items-center gap-3 transition-colors"
+                  >
+                    <manageItem.icon size={15} className="text-slate-text/60" />
+                    {manageItem.label}
+                  </button>
+                )}
+              </div>
+            </div>
           )}
-          <div className="hidden sm:block leading-tight">
-            <p className="text-[13px] font-semibold text-ink">{user?.name}</p>
-            <p className="text-[11px] text-slate-text/70 capitalize">
-              {roleLabel(role, user?.designation)}
-            </p>
-          </div>
-          <ChevronDown
-            size={15}
-            className="hidden sm:block text-slate-text/50"
-          />
         </div>
 
         <button

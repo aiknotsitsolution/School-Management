@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   BedDouble,
@@ -9,6 +9,8 @@ import {
   Trash2,
   Users,
   DoorOpen,
+  ChevronDown,
+  Search,
 } from "lucide-react";
 import {
   PageIntro,
@@ -20,13 +22,166 @@ import {
   StatCard,
   toast,
 } from "../components/UI";
+import SearchableSelect from "../components/SearchableSelect";
 import { api } from "../lib/api";
+import { invalidateMasterCache } from "../lib/masterCache";
 
 const roomsSeed = [];
 const studentSeed = [];
 
 const WINGS = ["Boys", "Girls"];
 const BLOCKS = ["A", "B", "C", "D"];
+
+// Searchable dropdown with an inline "+ Add" action that persists custom blocks
+// to the tenant's "hostel-blocks" master (same pattern as notice/event dropdowns).
+function BlockSearchableSelect({ options, value, onChange, onAddCustom }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [custom, setCustom] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const boxRef = useRef(null);
+
+  const all = useMemo(
+    () => [...new Set([...options, ...custom])],
+    [options, custom],
+  );
+
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? all.filter((o) => String(o).toLowerCase().includes(q))
+    : all;
+  const exactMatch = all.some((o) => String(o).toLowerCase() === q);
+  const canAdd = q.length > 0 && !exactMatch;
+
+  useEffect(() => {
+    setActiveIndex(matches.length > 0 ? 0 : -1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(i + 1, matches.length - 1));
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.max(i - 1, 0));
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (canAdd && activeIndex === matches.length) {
+          commit(q, true);
+        } else if (activeIndex >= 0 && matches[activeIndex]) {
+          commit(String(matches[activeIndex]));
+        }
+      }
+    };
+    document.addEventListener("click", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, query, matches, canAdd, activeIndex]);
+
+  const commit = async (val, isCustom = false) => {
+    if (!val) return;
+    if (isCustom) {
+      try {
+        await onAddCustom?.(val);
+      } catch {
+        // Keep the typed value even if persistence fails (dup / no permission).
+      }
+    }
+    setCustom((prev) => (prev.includes(val) ? prev : [...prev, val]));
+    onChange(val);
+    setOpen(false);
+    setQuery("");
+    setActiveIndex(-1);
+  };
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15"
+      >
+        <span className={value ? "" : "text-slate-text/60"}>
+          {value || "Select block"}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`text-slate-text/50 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl border border-black/10 shadow-lg shadow-black/5 overflow-hidden">
+          <div className="relative p-2 border-b border-black/[0.06]">
+            <Search
+              size={14}
+              className="absolute left-4.5 top-1/2 -translate-y-1/2 text-slate-text/40"
+            />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search or type a new block…"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-paper border border-black/[0.06] text-[13px] outline-none focus:border-amber/50"
+            />
+          </div>
+
+          <ul className="max-h-52 overflow-y-auto py-1">
+            {matches.map((opt, i) => (
+              <li key={String(opt)}>
+                <button
+                  type="button"
+                  onClick={() => commit(opt)}
+                  className={`w-full text-left px-3.5 py-2 text-[13px] transition-colors ${
+                    i === activeIndex ? "bg-amber/10 text-ink" : "text-ink hover:bg-paper"
+                  }`}
+                >
+                  {String(opt)}
+                  {String(opt).toLowerCase() === q && (
+                    <span className="ml-1.5 text-[11px] text-amber-dark font-medium">(custom)</span>
+                  )}
+                </button>
+              </li>
+            ))}
+
+            {canAdd && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => commit(query.trim(), true)}
+                  className={`w-full text-left px-3.5 py-2 text-[13px] text-amber-dark font-medium hover:bg-amber/10 transition-colors ${
+                    activeIndex === matches.length ? "bg-amber/10" : ""
+                  }`}
+                >
+                  + Add "{query.trim()}"
+                </button>
+              </li>
+            )}
+
+            {matches.length === 0 && !canAdd && (
+              <li className="px-3.5 py-2 text-[12.5px] text-slate-text/60">
+                No matches. Type to add a custom block.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function nextRoomId(list) {
   const max = list.reduce((m, r) => {
@@ -56,9 +211,11 @@ function normalizeRoom(room, knownStudents = {}) {
   };
 }
 
-export default function Hostel() {
+export default function Hostel({ embedded = false }) {
   const [rooms, setRooms] = useState(roomsSeed);
   const [hostelStudents, setHostelStudents] = useState(studentSeed);
+  const [students, setStudents] = useState([]);
+  const [masterBlocks, setMasterBlocks] = useState([]);
   const [wingFilter, setWingFilter] = useState("All");
   const [showRoomModal, setShowRoomModal] = useState(false);
   const [roomForm, setRoomForm] = useState(emptyRoomForm("Boys"));
@@ -68,8 +225,10 @@ export default function Hostel() {
   useEffect(() => {
     Promise.all([api.hostel.list(), api.students.list("limit=1000")])
       .then(([roomResponse, studentResponse]) => {
+        const allStudents = studentResponse.data || [];
+        setStudents(allStudents);
         const knownStudents = Object.fromEntries(
-          (studentResponse.data || []).map((student) => [
+          allStudents.map((student) => [
             student._id || student.id || student.admissionNo,
             { name: student.name },
           ]),
@@ -102,8 +261,71 @@ export default function Hostel() {
   const totalCapacity = rooms.reduce((a, r) => a + r.capacity, 0);
   const availableBeds = totalCapacity - totalStudents;
 
+  useEffect(() => {
+    api.examMasters
+      .list("hostel-blocks")
+      .then(({ data }) => setMasterBlocks(data || []))
+      .catch(() => {});
+  }, []);
+
+  const blockOptions = useMemo(
+    () => [...new Set([...BLOCKS, ...masterBlocks.map((m) => m.name)])],
+    [masterBlocks],
+  );
+
+  const addMasterBlock = async (value) => {
+    try {
+      const { data } = await api.examMasters.create("hostel-blocks", {
+        name: value,
+      });
+      invalidateMasterCache("hostel-blocks");
+      setMasterBlocks((prev) =>
+        prev.some((m) => m.key === data.key || m.name === data.name)
+          ? prev
+          : [...prev, data],
+      );
+    } catch {
+      // Duplicate / missing permission: keep the typed value locally.
+    }
+  };
+
   const occupantsOf = (roomId) =>
     hostelStudents.filter((s) => s.hostelRoom === roomId);
+
+  const availableRooms = useMemo(
+    () => rooms.filter((r) => occupantsOf(r.id).length < r.capacity),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rooms, hostelStudents],
+  );
+
+  const selectedStudent = useMemo(
+    () =>
+      (allotForm.studentId &&
+        students.find((s) => (s.admissionNo || s._id) === allotForm.studentId)) ||
+      students.find((s) => s.name === allotForm.name) ||
+      null,
+    [students, allotForm.studentId, allotForm.name],
+  );
+
+  const selectedRoom =
+    availableRooms.find((r) => r.id === allotForm.moveOutRoom) || null;
+
+  const toolbar = (
+    <>
+      <Button variant="amber" onClick={() => setShowAllotModal(true)}>
+        <Plus size={15} /> Allot Room
+      </Button>
+      <Button
+        variant="outline"
+        onClick={() => {
+          setShowRoomModal(true);
+          setRoomForm(emptyRoomForm(wingFilter === "Girls" ? "Girls" : "Boys"));
+        }}
+      >
+        <Plus size={15} /> Add Room
+      </Button>
+    </>
+  );
 
   const addRoom = async () => {
     try {
@@ -195,30 +417,17 @@ export default function Hostel() {
   };
 
   return (
-    <div className="space-y-6">
-      <PageIntro
-        eyebrow="Operations"
-        title="Hostel Management"
-        description="Manage hostel rooms, allotments and occupancy."
-        right={
-          <>
-            <Button variant="amber" onClick={() => setShowAllotModal(true)}>
-              <Plus size={15} /> Allot Room
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setShowRoomModal(true);
-                setRoomForm(
-                  emptyRoomForm(wingFilter === "Girls" ? "Girls" : "Boys"),
-                );
-              }}
-            >
-              <Plus size={15} /> Add Room
-            </Button>
-          </>
-        }
-      />
+    <div className={embedded ? "" : "space-y-6"}>
+      {!embedded ? (
+        <PageIntro
+          eyebrow="Operations"
+          title="Hostel Management"
+          description="Manage hostel rooms, allotments and occupancy."
+          right={toolbar}
+        />
+      ) : (
+        <div className="flex flex-wrap justify-end gap-2 mb-5">{toolbar}</div>
+      )}
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
@@ -348,18 +557,14 @@ export default function Hostel() {
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Block
                   </label>
-                  <Select
+                  <BlockSearchableSelect
+                    options={blockOptions}
                     value={roomForm.block}
-                    onChange={(e) =>
-                      setRoomForm((f) => ({ ...f, block: e.target.value }))
+                    onChange={(v) =>
+                      setRoomForm((f) => ({ ...f, block: v }))
                     }
-                  >
-                    {BLOCKS.map((b) => (
-                      <option key={b} value={b}>
-                        {b}
-                      </option>
-                    ))}
-                  </Select>
+                    onAddCustom={addMasterBlock}
+                  />
                 </div>
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
@@ -445,15 +650,24 @@ export default function Hostel() {
               </button>
             </div>
             <div className="px-5 py-4 space-y-4">
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 gap-3">
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Student Name *
                   </label>
-                  <Input
-                    value={allotForm.name}
-                    onChange={(e) =>
-                      setAllotForm((f) => ({ ...f, name: e.target.value }))
+                  <SearchableSelect
+                    options={students}
+                    value={selectedStudent}
+                    onChange={(student) =>
+                      setAllotForm((f) => ({
+                        ...f,
+                        name: student.name,
+                        studentId: student.admissionNo || student._id,
+                      }))
+                    }
+                    placeholder="Search student name…"
+                    renderLabel={(s) =>
+                      `${s.name}${s.admissionNo ? ` · ${s.admissionNo}` : ""}`
                     }
                   />
                 </div>
@@ -462,10 +676,10 @@ export default function Hostel() {
                     Student ID
                   </label>
                   <Input
+                    readOnly
                     value={allotForm.studentId}
-                    onChange={(e) =>
-                      setAllotForm((f) => ({ ...f, studentId: e.target.value }))
-                    }
+                    placeholder="Auto-filled from student"
+                    className="bg-paper/60"
                   />
                 </div>
               </div>
@@ -473,22 +687,17 @@ export default function Hostel() {
                 <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                   Select Room
                 </label>
-                <Select
-                  value={allotForm.moveOutRoom}
-                  onChange={(e) =>
-                    setAllotForm((f) => ({ ...f, moveOutRoom: e.target.value }))
+                <SearchableSelect
+                  options={availableRooms}
+                  value={selectedRoom}
+                  onChange={(room) =>
+                    setAllotForm((f) => ({ ...f, moveOutRoom: room.id }))
                   }
-                >
-                  <option value="">Choose room...</option>
-                  {rooms
-                    .filter((r) => occupantsOf(r.id).length < r.capacity)
-                    .map((r) => (
-                      <option key={r.id} value={r.id}>
-                        {r.id} · Block {r.block} · {r.wing} (
-                        {occupantsOf(r.id).length}/{r.capacity})
-                      </option>
-                    ))}
-                </Select>
+                  placeholder="Choose room…"
+                  renderLabel={(r) =>
+                    `${r.id} · Block ${r.block} · ${r.wing} (${occupantsOf(r.id).length}/${r.capacity})`
+                  }
+                />
               </div>
             </div>
             <div className="px-5 py-4 border-t border-black/6 flex justify-end gap-2">

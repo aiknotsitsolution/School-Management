@@ -14,6 +14,7 @@ const PHOTO_MAX_SIZE = 5 * 1024 * 1024;
 export default function ProfilePhotoPicker({
   name = "",
   file = null,
+  initialSrc = "",
   onFileChange,
   disabled = false,
   onError,
@@ -97,7 +98,7 @@ export default function ProfilePhotoPicker({
           disabled ? "opacity-60 cursor-not-allowed" : ""
         }`}
       >
-        <Avatar src={preview || undefined} name={name || "Student"} size={128} />
+        <Avatar src={preview || initialSrc || undefined} name={name || "Student"} size={128} />
         <div className="absolute inset-0 bg-ink/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-0.5 text-white">
           <Camera size={22} />
           <span className="text-[11px] font-semibold">

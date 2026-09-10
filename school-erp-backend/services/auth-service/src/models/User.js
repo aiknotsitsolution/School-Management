@@ -35,6 +35,7 @@ const userSchema = new mongoose.Schema(
     class: { type: String, default: null },
     section: { type: String, default: null },
     phone: { type: String },
+    avatar: { type: String, default: null },
     refId: { type: String, default: null },
     linkedStudentIds: [{ type: String }],
     isActive: { type: Boolean, default: true },
