@@ -1,7 +1,7 @@
 const express = require("express");
 const multer = require("multer");
 const router = express.Router();
-const { validateObjectIdParam } = require("../middleware/objectId");
+const { validateObjectIdParam } = require("@school-erp/shared/src/middleware/objectId");
 router.param("id", validateObjectIdParam);
 router.param("homeworkId", validateObjectIdParam);
 const ctrl = require("../controllers/studentController");
@@ -49,13 +49,34 @@ router.get(
   scopeClassTeacher,
   ctrl.getStudentById,
 );
-router.put("/:id", requirePermission("students:write"), ctrl.updateStudent);
+router.put(
+  "/:id",
+  requirePermission("students:write"),
+  restrictToOwnStudent((req) => req.params.id),
+  scopeClassTeacher,
+  ctrl.updateStudent,
+);
 router.post(
   "/:id/complete-profile",
   requirePermission("students:write"),
+  restrictToOwnStudent((req) => req.params.id),
+  scopeClassTeacher,
   ctrl.completeProfile,
 );
-router.delete("/:id", requirePermission("students:write"), ctrl.deleteStudent);
+router.delete(
+  "/:id",
+  requirePermission("students:write"),
+  restrictToOwnStudent((req) => req.params.id),
+  scopeClassTeacher,
+  ctrl.deleteStudent,
+);
+router.post(
+  "/:id/issue-id-card",
+  requirePermission("students:write"),
+  restrictToOwnStudent((req) => req.params.id),
+  scopeClassTeacher,
+  ctrl.issueIdCard,
+);
 
 const upload = multer({
   storage: multer.memoryStorage(),

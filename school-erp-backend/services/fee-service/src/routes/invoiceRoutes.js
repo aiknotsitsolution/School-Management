@@ -5,6 +5,9 @@ const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStude
 
 router.use(verifyToken, resolveTenant, requireTenant);
 
+router.post("/generate/preview", requirePermission("fees:collect"), ctrl.generatePreview);
+router.post("/generate/confirm", requirePermission("fees:collect"), ctrl.confirmGenerate);
+
 router.post("/", requirePermission("fees:collect"), ctrl.createInvoice);
 router.get("/", requirePermission("fees:read"), scopeStudentQuery, ctrl.getInvoices);
 

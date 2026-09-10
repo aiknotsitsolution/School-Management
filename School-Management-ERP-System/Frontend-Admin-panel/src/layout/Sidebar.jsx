@@ -27,6 +27,11 @@ import {
   UserRoundCog,
   UserRound,
   FileText,
+  ClipboardCheck,
+  ArrowRightLeft,
+  RefreshCcw,
+  School,
+  Briefcase,
 } from "lucide-react";
 import { selectSchool, selectUser } from "../store/selectors";
 import { canSeeNavigation } from "../lib/scope";
@@ -248,16 +253,16 @@ const groups = [
         perm: "timetable:read",
       },
       {
-        to: "/homework",
-        icon: BookOpenCheck,
-        label: "Homework",
-        perm: "homework:read",
-      },
-      {
         to: "/examination",
         icon: ClipboardList,
         label: "Examination",
         perm: "exams:read",
+      },
+      {
+        to: "/marks-entry",
+        icon: ClipboardCheck,
+        label: "Marks Entry",
+        perm: "marks:write",
       },
       {
         to: "/report-card",
@@ -266,15 +271,9 @@ const groups = [
         perm: "marks:read",
       },
       {
-        to: "/library",
-        icon: BookOpen,
-        label: "Library Management",
-        perm: "library:read",
-      },
-      {
         to: "/addstudent",
         icon: UserPlus,
-        label: "Add Student",
+        label: "Onboard Student",
         perm: "students:write",
       },
       {
@@ -282,6 +281,36 @@ const groups = [
         icon: Users,
         label: "Student Database",
         perm: "students:read",
+      },
+      {
+        to: "/library",
+        icon: BookOpen,
+        label: "Library Management",
+        perm: "library:read",
+      },
+      {
+        to: "/promotions",
+        icon: GraduationCap,
+        label: "Promotions",
+        perm: "promotion:read",
+      },
+      {
+        to: "/transfers",
+        icon: ArrowRightLeft,
+        label: "Transfers",
+        perm: "transfer:read",
+      },
+      {
+        to: "/academic-sessions",
+        icon: CalendarDays,
+        label: "Academic Sessions",
+        perm: "sessions:read",
+      },
+      {
+        to: "/rollover",
+        icon: RefreshCcw,
+        label: "Academic Rollover",
+        perm: "rollover:read",
       },
     ],
   },
@@ -358,6 +387,12 @@ const groups = [
         perm: "staff:write",
       },
       {
+        to: "/homework",
+        icon: Briefcase,
+        label: "Assign Work",
+        perm: "homework:read",
+      },
+      {
         to: "/leave",
         icon: FileBarChart2,
         label: "Leave Management",
@@ -389,6 +424,12 @@ const groups = [
         to: "/users",
         icon: UserRoundCog,
         label: "Users & Access",
+        perm: "users:manage",
+      },
+      {
+        to: "/manage-school",
+        icon: School,
+        label: "Manage School",
         perm: "users:manage",
       },
     ],
@@ -590,7 +631,7 @@ export default function Sidebar({ open, onClose }) {
 
         <div className="p-4 border-t border-white/10 shrink-0">
           {school && (
-            <div className="rounded-xl bg-white/5 p-3.5 mb-3">
+            <div className="rounded-xl bg-white/5 p-3.5">
               <p className="text-[12px] font-semibold text-white/90">
                 {school.name}
               </p>
@@ -599,14 +640,6 @@ export default function Sidebar({ open, onClose }) {
               </p>
             </div>
           )}
-          <div className="rounded-xl bg-white/5 p-3.5">
-            <p className="text-[12.5px] font-semibold text-white/90">
-              Need help?
-            </p>
-            <p className="text-[11.5px] text-white/50 mt-0.5 leading-relaxed">
-              Visit the admin support desk or call the IT helpdesk at ext. 204.
-            </p>
-          </div>
         </div>
       </aside>
     </>

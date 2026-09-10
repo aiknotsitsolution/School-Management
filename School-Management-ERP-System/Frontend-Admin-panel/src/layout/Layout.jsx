@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import { useSelector } from "react-redux";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
+import SupportChatbot from "../components/SupportChatbot";
 import { selectSchool } from "../store/selectors";
 
 const titles = {
@@ -97,6 +98,7 @@ export default function Layout() {
           <Outlet />
         </main>
       </div>
+      <SupportChatbot />
     </div>
   );
 }

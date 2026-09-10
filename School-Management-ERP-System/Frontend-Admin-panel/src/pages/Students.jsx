@@ -1,15 +1,16 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   Search,
-  Plus,
   X,
   Phone,
   Mail,
   MapPin,
   Droplet,
-  Calendar,
   Save,
   Pencil,
+  Eye,
+  CreditCard,
+  Printer,
   Users,
   UserCheck,
   Wallet,
@@ -25,11 +26,16 @@ import {
   Avatar,
   StatCard,
 } from "../components/UI";
+import SearchableSelect from "../components/SearchableSelect";
 const initialStudents = [];
 import { api } from "../lib/api";
 import { PermissionGate } from "../lib/permissions";
+import { useMasterOptions } from "../hooks/useMasterOptions";
+import { useSelector } from "react-redux";
+import { selectSchool } from "../store/selectors";
+import StudentIdCard, { printIdCard } from "../components/idcard/StudentIdCard";
 
-const CLASS_OPTIONS = [
+const CLASS_OPTIONS_FALLBACK = [
   "All",
   "Nursery",
   "LKG",
@@ -50,7 +56,7 @@ const CLASS_OPTIONS = [
   "12-Com",
 ];
 
-const SECTION_OPTIONS = ["A", "B", "C"];
+const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
 const HOUSE_OPTIONS = ["Aravali", "Nilgiri", "Shivalik", "Vindhya"];
 const GENDER_OPTIONS = ["Male", "Female"];
 const BLOOD_OPTIONS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
@@ -89,12 +95,17 @@ function makeAvatar(name) {
   return `https://ui-avatars.com/api/?name=${encoded}&background=16213E&color=fff&bold=true`;
 }
 
+function toRollText(value) {
+  if (value === null || value === undefined) return "";
+  return String(value).trim();
+}
+
 function normalizeStudent(student) {
   return {
     ...student,
     id: student.id || student._id || student.admissionNo,
     admissionNo: student.admissionNo || "",
-    roll: Number(student.roll ?? student.rollNo ?? 0),
+    roll: toRollText(student.roll ?? student.rollNo),
     contact: student.contact || student.parentContact || "",
     email: student.email || student.parentEmail || "",
     fatherName: student.fatherName || student.parentName || "",
@@ -113,7 +124,7 @@ function toApiStudent(form, admissionNo) {
     gender: form.gender,
     class: form.class,
     section: form.section,
-    rollNo: String(form.roll),
+    rollNo: String(form.roll || "").trim(),
     dob: form.dob || undefined,
     bloodGroup: form.bloodGroup,
     address: form.address,
@@ -125,6 +136,11 @@ function toApiStudent(form, admissionNo) {
 }
 
 export default function Students() {
+  const school = useSelector(selectSchool);
+  const { options: masterClasses } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
+  const { options: masterSections, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
+  const CLASS_OPTIONS = ["All", ...masterClasses.filter((c) => c !== "All")];
+  const SECTION_OPTIONS = ["All", ...masterSections.filter((s) => s !== "All")];
   const [list, setList] = useState(initialStudents);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
@@ -132,9 +148,18 @@ export default function Students() {
   const [cls, setCls] = useState("All");
   const [section, setSection] = useState("All");
   const [selected, setSelected] = useState(null);
+  const [cardStudent, setCardStudent] = useState(null);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState(null);
+  const filteredSections = useMemo(() => {
+    if (cls === "All") return SECTION_OPTIONS;
+    return ["All", ...[...new Set(rawSections.filter((s) => s.className === cls).map((s) => s.name))]];
+  }, [cls, SECTION_OPTIONS, rawSections]);
+  const filteredModalSections = useMemo(() => {
+    if (!form.class) return SECTION_OPTIONS.filter((s) => s !== "All");
+    return [...new Set(rawSections.filter((s) => s.className === form.class).map((s) => s.name))];
+  }, [form.class, SECTION_OPTIONS, rawSections]);
 
   useEffect(() => {
     let active = true;
@@ -169,7 +194,11 @@ export default function Students() {
           (s.contact || "").includes(q);
         return matchClass && matchSection && matchQuery;
       })
-      .sort((a, b) => a.roll - b.roll);
+      .sort((a, b) =>
+        String(a.roll).localeCompare(String(b.roll), undefined, {
+          numeric: true,
+        }),
+      );
   }, [list, query, cls, section]);
 
   const stats = useMemo(() => {
@@ -182,12 +211,6 @@ export default function Students() {
     return { total, paid, avgAtt, pending: total - paid };
   }, [list]);
 
-  const openAdd = () => {
-    setEditId(null);
-    setForm(emptyForm());
-    setShowModal(true);
-  };
-
   const openEdit = (student) => {
     setEditId(student.id);
     setForm({
@@ -195,7 +218,7 @@ export default function Students() {
       gender: student.gender,
       class: student.class,
       section: student.section,
-      roll: String(student.roll),
+      roll: student.roll != null ? String(student.roll) : "",
       dob: student.dob,
       bloodGroup: student.bloodGroup,
       fatherName: student.fatherName || "",
@@ -217,7 +240,7 @@ export default function Students() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !form.roll) return;
+    if (!form.name.trim() || !String(form.roll || "").trim()) return;
     if (!editId && !form.admissionNo.trim()) {
       setApiError("Admission ID is required when adding a student");
       return;
@@ -252,13 +275,6 @@ export default function Students() {
           loading
             ? "Loading students..."
             : `${list.length} students enrolled across Nursery to Class 12.`
-        }
-        right={
-          <PermissionGate permission="students:write">
-            <Button variant="amber" onClick={openAdd}>
-              <Plus size={15} /> Add Student
-            </Button>
-          </PermissionGate>
         }
       />
       {apiError && (
@@ -316,29 +332,22 @@ export default function Students() {
                 className="pl-8 w-56"
               />
             </div>
-            <Select
+            <SearchableSelect
+              options={CLASS_OPTIONS}
               value={cls}
-              onChange={(e) => setCls(e.target.value)}
-              className="min-w-[120px]"
-            >
-              {CLASS_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c === "All" ? "All Classes" : formatClass(c)}
-                </option>
-              ))}
-            </Select>
-            <Select
+              onChange={(v) => { setCls(v); setSection("All"); }}
+              renderLabel={(c) => (c === "All" ? "All Classes" : formatClass(c))}
+              placeholder="All Classes"
+              className="min-w-[140px]"
+            />
+            <SearchableSelect
+              options={filteredSections}
               value={section}
-              onChange={(e) => setSection(e.target.value)}
-              className="min-w-[100px]"
-            >
-              <option value="All">All Sections</option>
-              {SECTION_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  Section {s}
-                </option>
-              ))}
-            </Select>
+              onChange={setSection}
+              renderLabel={(s) => (s === "All" ? "All Sections" : `Section ${s}`)}
+              placeholder="All Sections"
+              className="min-w-[120px]"
+            />
           </div>
         }
       >
@@ -349,13 +358,8 @@ export default function Students() {
               No students found
             </p>
             <p className="text-[13px] text-slate-text/60 mt-1">
-              Try different filters or add a new student.
+              Try different filters.
             </p>
-            <PermissionGate permission="students:write">
-              <Button variant="amber" className="mt-4" onClick={openAdd}>
-                <Plus size={15} /> Add Student
-              </Button>
-            </PermissionGate>
           </div>
         ) : (
           <div className="overflow-x-auto -mx-5">
@@ -387,7 +391,7 @@ export default function Students() {
                         <div>
                           <p className="font-semibold text-ink">{s.name}</p>
                           <p className="text-[11.5px] text-slate-text/55">
-                            Roll {s.roll}
+                            Roll {s.roll || "—"}
                           </p>
                         </div>
                       </div>
@@ -400,7 +404,9 @@ export default function Students() {
                     <td className="px-5 py-3 text-slate-text">
                       {formatClass(s.class)}-{s.section}
                     </td>
-                    <td className="px-5 py-3 font-medium text-ink">{s.roll}</td>
+                    <td className="px-5 py-3 font-medium text-ink">
+                      {s.roll || "—"}
+                    </td>
                     <td className="px-5 py-3">
                       <span
                         className={`font-semibold ${
@@ -424,14 +430,34 @@ export default function Students() {
                       className="px-5 py-3 text-right"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <PermissionGate permission="students:write">
-                        <button
-                          onClick={() => openEdit(s)}
-                          className="text-[12.5px] font-medium text-info hover:underline inline-flex items-center gap-1"
+                      <div className="flex items-center justify-end gap-2">
+                        <Button
+                          variant="outline"
+                          className="!px-3 !py-1.5"
+                          onClick={() => setSelected(s)}
+                          title="View student profile"
                         >
-                          <Pencil size={12} /> Edit
-                        </button>
-                      </PermissionGate>
+                          <Eye size={13} /> View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          className="!px-3 !py-1.5"
+                          onClick={() => setCardStudent(s)}
+                          title="View student ID card"
+                        >
+                          <CreditCard size={13} /> ID Card
+                        </Button>
+                        <PermissionGate permission="students:write">
+                          <Button
+                            variant="amber"
+                            className="!px-3 !py-1.5"
+                            onClick={() => openEdit(s)}
+                            title="Edit student"
+                          >
+                            <Pencil size={13} /> Edit
+                          </Button>
+                        </PermissionGate>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -441,74 +467,86 @@ export default function Students() {
         )}
       </Card>
 
-      {/* ========== DETAIL DRAWER ========== */}
+      {/* ========== STUDENT DETAILS MODAL ========== */}
       {selected && (
-        <div className="fixed inset-0 z-40 flex justify-end">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
-            className="absolute inset-0 bg-ink/40 backdrop-blur-sm"
+            className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
             onClick={() => setSelected(null)}
           />
-          <div className="relative w-full max-w-md bg-white h-full shadow-2xl overflow-y-auto animate-in slide-in-from-right">
-            <div className="sticky top-0 bg-white border-b border-black/[0.06] px-5 py-4 flex items-center justify-between z-10">
-              <h3 className="font-display font-semibold text-ink text-[16px]">
-                Student Profile
-              </h3>
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div className="relative overflow-hidden bg-ink px-6 pt-6 pb-6 text-white">
+              <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-amber/25 blur-2xl" />
+              <div className="absolute -bottom-16 -left-8 w-44 h-44 rounded-full bg-info/25 blur-2xl" />
               <button
                 onClick={() => setSelected(null)}
-                className="p-1.5 rounded-lg hover:bg-paper"
+                className="absolute top-4 right-4 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
               >
                 <X size={18} />
               </button>
+              <div className="relative flex items-center gap-4">
+                <Avatar
+                  src={selected.avatar}
+                  name={selected.name}
+                  size={64}
+                  className="rounded-2xl border-2 border-white/20"
+                />
+                <div className="min-w-0">
+                  <h3 className="font-display font-bold text-lg truncate">
+                    {selected.name}
+                  </h3>
+                  <p className="text-[12.5px] text-white/70">
+                    {selected.id} · {formatClass(selected.class)}-
+{selected.section} · Roll {selected.roll || "—"}
+                  </p>
+                  <div className="flex flex-wrap gap-2 mt-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide bg-white/10 border border-white/15 rounded-full px-2.5 py-1">
+                      {selected.feeStatus}
+                    </span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide bg-white/10 border border-white/15 rounded-full px-2.5 py-1">
+                      {selected.house} House
+                    </span>
+                    <span className="text-[11px] font-semibold uppercase tracking-wide bg-white/10 border border-white/15 rounded-full px-2.5 py-1">
+                      {selected.attendance}% attendance
+                    </span>
+                  </div>
+                </div>
+              </div>
             </div>
 
-            <div className="p-5">
-              <div className="text-center mb-5">
-                <img
-                  src={selected.avatar}
-                  alt={selected.name}
-                  className="w-20 h-20 rounded-2xl object-cover mx-auto border border-black/10"
-                />
-                <h3 className="font-display font-bold text-ink text-lg mt-3">
-                  {selected.name}
-                </h3>
-                <p className="text-[12.5px] text-slate-text/70">
-                  {selected.id} · {formatClass(selected.class)}-
-                  {selected.section} · Roll {selected.roll}
-                </p>
-                <div className="flex justify-center gap-2 mt-3">
-                  <Pill tone={statusTone(selected.feeStatus)}>
-                    {selected.feeStatus}
-                  </Pill>
-                  <Pill tone="info">{selected.house} House</Pill>
-                </div>
+            <div className="flex-1 overflow-y-auto p-6">
+              <div className="grid grid-cols-2 gap-x-5 gap-y-4">
+                {[
+                  ["Admission ID", selected.id],
+                  [
+                    "Class & Section",
+                    `${formatClass(selected.class)} - Section ${selected.section}`,
+                  ],
+                  ["Roll Number", selected.roll ? String(selected.roll) : "—"],
+                  ["Gender", selected.gender || "—"],
+                  ["Date of Birth", selected.dob],
+                  ["Blood Group", selected.bloodGroup || "—"],
+                ].map(([label, value]) => (
+                  <div key={label}>
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/55">
+                      {label}
+                    </p>
+                    <p className="text-[13.5px] font-medium text-ink mt-0.5">
+                      {value}
+                    </p>
+                  </div>
+                ))}
               </div>
 
-              <div className="grid grid-cols-2 gap-3 mb-5">
-                <div className="bg-paper rounded-xl p-3 text-center">
-                  <p className="font-display text-xl font-bold text-ink">
-                    {selected.attendance}%
-                  </p>
-                  <p className="text-[11px] text-slate-text/60">Attendance</p>
-                </div>
-                <div className="bg-paper rounded-xl p-3 text-center">
-                  <p className="font-display text-xl font-bold text-ink">
-                    {selected.bloodGroup}
-                  </p>
-                  <p className="text-[11px] text-slate-text/60">Blood Group</p>
-                </div>
-              </div>
+              <div className="border-t border-black/[0.06] my-5" />
 
-              <div className="space-y-2.5 text-[13px] mb-5">
+              <div className="space-y-2.5 text-[13px]">
                 <p className="flex items-center gap-2 text-slate-text">
-                  <Calendar size={14} className="text-slate-text/50" /> DOB:{" "}
-                  {selected.dob}
-                </p>
-                <p className="flex items-center gap-2 text-slate-text">
-                  <Phone size={14} className="text-slate-text/50" />{" "}
+                  <Phone size={14} className="text-slate-text/50 shrink-0" />{" "}
                   {selected.contact}
                 </p>
                 <p className="flex items-center gap-2 text-slate-text">
-                  <Mail size={14} className="text-slate-text/50" />{" "}
+                  <Mail size={14} className="text-slate-text/50 shrink-0" />{" "}
                   {selected.email}
                 </p>
                 <p className="flex items-start gap-2 text-slate-text">
@@ -520,19 +558,26 @@ export default function Students() {
                 </p>
               </div>
 
-              <div className="border-t border-black/[0.06] pt-4 mb-5">
-                <p className="text-[12px] font-semibold text-slate-text/60 uppercase mb-2">
-                  Parent / Guardian
-                </p>
-                <p className="text-[13px] text-ink font-medium">
-                  Father: {selected.fatherName}
-                </p>
-                <p className="text-[13px] text-ink font-medium mt-1">
-                  Mother: {selected.motherName}
-                </p>
+              <div className="mt-5 grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div className="bg-paper rounded-xl p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/55">
+                    Father's Name
+                  </p>
+                  <p className="text-[13.5px] font-medium text-ink mt-1">
+                    {selected.fatherName}
+                  </p>
+                </div>
+                <div className="bg-paper rounded-xl p-3">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/55">
+                    Mother's Name
+                  </p>
+                  <p className="text-[13.5px] font-medium text-ink mt-1">
+                    {selected.motherName}
+                  </p>
+                </div>
               </div>
 
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-6">
                 <PermissionGate permission="students:write">
                   <Button
                     variant="outline"
@@ -547,9 +592,59 @@ export default function Students() {
                   className="flex-1 justify-center"
                   onClick={() => setSelected(null)}
                 >
-                  Close
+                  Done
                 </Button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========== ID CARD MODAL ========== */}
+      {cardStudent && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
+            onClick={() => setCardStudent(null)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+              <div>
+                <h3 className="font-display font-semibold text-ink text-[17px] flex items-center gap-2">
+                  <CreditCard size={18} className="text-amber-dark" /> Student
+                  ID Card
+                </h3>
+                <p className="text-[12.5px] text-slate-text/70 mt-0.5">
+                  {cardStudent.name} · {cardStudent.admissionNo || "—"}
+                </p>
+              </div>
+              <button
+                onClick={() => setCardStudent(null)}
+                className="p-2 rounded-lg hover:bg-paper text-slate-text"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              <StudentIdCard student={cardStudent} school={school} />
+            </div>
+
+            <div className="flex gap-2 px-5 py-4 border-t border-black/[0.06]">
+              <Button
+                variant="outline"
+                className="flex-1 justify-center"
+                onClick={() => printIdCard({ student: cardStudent, school })}
+              >
+                <Printer size={14} /> Print ID Card
+              </Button>
+              <Button
+                variant="amber"
+                className="flex-1 justify-center"
+                onClick={() => setCardStudent(null)}
+              >
+                Done
+              </Button>
             </div>
           </div>
         </div>
@@ -643,32 +738,26 @@ export default function Students() {
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Class
                   </label>
-                  <Select
+                  <SearchableSelect
+                    options={CLASS_OPTIONS.filter((c) => c !== "All")}
                     value={form.class}
-                    onChange={(e) => updateForm("class", e.target.value)}
-                  >
-                    {CLASS_OPTIONS.filter((c) => c !== "All").map((c) => (
-                      <option key={c} value={c}>
-                        {formatClass(c)}
-                      </option>
-                    ))}
-                  </Select>
+                    onChange={(v) => { updateForm("class", v); updateForm("section", ""); }}
+                    renderLabel={(c) => formatClass(c)}
+                    placeholder="Select class"
+                  />
                 </div>
 
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Section
                   </label>
-                  <Select
+                  <SearchableSelect
+                    options={filteredModalSections}
                     value={form.section}
-                    onChange={(e) => updateForm("section", e.target.value)}
-                  >
-                    {SECTION_OPTIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </Select>
+                    onChange={(v) => updateForm("section", v)}
+                    renderLabel={(s) => `Section ${s}`}
+                    placeholder="Select section"
+                  />
                 </div>
 
                 <div>
@@ -676,8 +765,8 @@ export default function Students() {
                     Roll No. *
                   </label>
                   <Input
-                    type="number"
-                    placeholder="e.g. 101"
+                    type="text"
+                    placeholder="e.g. 15, 15A, R-12"
                     value={form.roll}
                     onChange={(e) => updateForm("roll", e.target.value)}
                   />
@@ -703,16 +792,17 @@ export default function Students() {
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     House
                   </label>
-                  <Select
+                  <Input
+                    list="house-options"
+                    placeholder="e.g. Aravali, or a custom house"
                     value={form.house}
                     onChange={(e) => updateForm("house", e.target.value)}
-                  >
+                  />
+                  <datalist id="house-options">
                     {HOUSE_OPTIONS.map((h) => (
-                      <option key={h} value={h}>
-                        {h}
-                      </option>
+                      <option key={h} value={h} />
                     ))}
-                  </Select>
+                  </datalist>
                 </div>
 
                 <div>

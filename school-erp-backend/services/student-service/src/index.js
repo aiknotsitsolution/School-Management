@@ -13,6 +13,7 @@ const morgan = require("morgan");
 const studentRoutes = require("./routes/studentRoutes");
 const enquiryRoutes = require("./routes/enquiryRoutes");
 const documentRoutes = require("./routes/documentRoutes");
+const internalRoutes = require("./routes/internalRoutes");
 
 const app = express();
 const PORT = process.env.STUDENT_SERVICE_PORT || 5002;
@@ -22,12 +23,12 @@ app.use(
   cors({
     origin: process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
-      : true,
+      : false,
     credentials: true,
   }),
 );
 app.use(morgan("dev"));
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 
 mongoose
   .connect(process.env.STUDENT_MONGODB_URI)
@@ -44,6 +45,7 @@ mongoose
 app.get("/health", (req, res) =>
   res.json({ success: true, service: "student-service", status: "UP" }),
 );
+app.use("/api/students/internal", internalRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/admissions", enquiryRoutes);
 app.use("/api/documents", documentRoutes);

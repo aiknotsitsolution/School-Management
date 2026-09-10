@@ -11,8 +11,9 @@ import {
   Select,
   toast,
 } from "../components/UI";
+import { useMasterOptions } from "../hooks/useMasterOptions";
 
-const CLASS_OPTIONS = [
+const CLASS_OPTIONS_FALLBACK = [
   "Nursery",
   "LKG",
   "UKG",
@@ -31,7 +32,7 @@ const CLASS_OPTIONS = [
   "12-Sci",
   "12-Com",
 ];
-const SECTION_OPTIONS = ["A", "B", "C"];
+const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 const HOUSE_OPTIONS = ["Aravali", "Nilgiri", "Shivalik", "Vindhya"];
 const BLOOD_OPTIONS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
@@ -75,6 +76,8 @@ const empty = (student) => ({
 });
 
 export default function StudentCompleteProfile() {
+  const { options: CLASS_OPTIONS } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
+  const { options: SECTION_OPTIONS } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
   const { id } = useParams();
   const navigate = useNavigate();
   const [student, setStudent] = useState(null);

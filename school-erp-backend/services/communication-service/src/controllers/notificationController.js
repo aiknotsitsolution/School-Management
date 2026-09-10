@@ -1,7 +1,40 @@
 const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
 const { getUserModel } = require("../models/userLite");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
+const { publish, subscribe } = require("../realtime/hub");
+
+// Server-Sent Events stream for the caller's inbox. Heartbeats keep the
+// connection alive through the gateway proxy, which has a short inactivity
+// timeout (PROXY_TIMEOUT_MS). The client re-connects on `retry`.
+const streamNotifications = (req, res) => {
+  res.status(200);
+  res.set({
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    Connection: "keep-alive",
+    "X-Accel-Buffering": "no",
+  });
+  res.flushHeaders();
+  res.write(`retry: 3000\n\n`);
+
+  const schoolId = req.tenantId;
+  const userId = String(req.user.id);
+  const unsubscribe = subscribe(schoolId, userId, (notification) => {
+    res.write(`data: ${JSON.stringify(notification)}\n\n`);
+  });
+
+  // Gateway proxy timeout is 10s by default; a comment every 5s is pure idle
+  // filler that keeps the socket alive without reaching the SSE parser.
+  const heartbeat = setInterval(() => res.write(": hb\n\n"), 5000);
+
+  const cleanup = () => {
+    clearInterval(heartbeat);
+    unsubscribe();
+  };
+  req.on("close", cleanup);
+  res.on("close", cleanup);
+};
 
 // Own inbox — always the caller's own notifications, tenant-scoped.
 const getNotifications = async (req, res) => {
@@ -85,6 +118,7 @@ const pushNotifications = async (req, res) => {
         link,
       }));
     const data = await Notification.insertMany(docs);
+    data.forEach((n) => publish(req.tenantId, n.userId, n));
     res.status(201).json({ success: true, count: data.length, data });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -121,10 +155,11 @@ const pushByRefIds = async (req, res) => {
       link,
     }));
     const data = await Notification.insertMany(docs);
+    data.forEach((n) => publish(schoolId, n.userId, n));
     res.status(201).json({ success: true, count: data.length, data });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }
 };
 
-module.exports = { getNotifications, getUnreadCount, markAsRead, markAllRead, pushNotifications, pushByRefIds };
+module.exports = { getNotifications, getUnreadCount, markAsRead, markAllRead, pushNotifications, pushByRefIds, streamNotifications };

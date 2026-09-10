@@ -25,6 +25,10 @@ import {
   CartesianGrid,
 } from "recharts";
 import { StatCard, Card, Pill, statusTone, Avatar } from "../components/UI";
+import {
+  DashboardPagination,
+  usePaged,
+} from "../components/DashboardPagination";
 
 const PIE_COLORS = ["#16213E", "#E8A33D", "#3F8F5F", "#3B6FA0", "#D65A4A"];
 
@@ -105,21 +109,37 @@ export default function Dashboard() {
     eta: route.currentLocation ? "Live" : "—",
   }));
   const studentStats = data.studentStats;
-  const recentAdmissions = admissionEnquiries.slice(0, 4).map((item) => ({
+  const admissionList = admissionEnquiries.map((item) => ({
     ...item,
     id: item._id,
     date: formatDate(item.createdAt),
   }));
-  const pinnedNotices = notices.slice(0, 3).map((item) => ({
+  const noticesList = notices.map((item) => ({
     ...item,
     id: item._id,
     category: Array.isArray(item.audience) ? item.audience[0] || "All" : "All",
     date: formatDate(item.createdAt),
   }));
-  const classStrength = (studentStats.byClass || []).map((item) => ({
-    name: item._id || "Unknown",
-    value: item.count,
-  }));
+  // Breakdown is derived from the real student list (the same source that
+  // drives the rest of the dashboard) so slice counts always reflect reality.
+  const classStrength = useMemo(() => {
+    const buckets = new Map();
+    students.forEach((student) => {
+      const cls = String(student.class || "").trim() || "Unassigned";
+      const section = String(student.section || "").trim();
+      const key = `${cls}|${section}`;
+      const label = section ? `Class ${cls}-${section}` : `Class ${cls}`;
+      buckets.set(key, {
+        name: label,
+        value: (buckets.get(key)?.value || 0) + 1,
+      });
+    });
+    return [...buckets.values()].sort((a, b) => {
+      const numA = Number.parseInt(a.name.match(/\d+/)?.[0] || "99999", 10);
+      const numB = Number.parseInt(b.name.match(/\d+/)?.[0] || "99999", 10);
+      return numA - numB || a.name.localeCompare(b.name);
+    });
+  }, [students]);
   const attendanceByStudent = students.map((student) => {
     const records = attendance.filter(
       (item) => String(item.studentId) === String(student._id),
@@ -134,10 +154,9 @@ export default function Dashboard() {
       avatar: student.photoUrl,
     };
   });
-  const lowAttendance = attendanceByStudent
+  const lowAttendanceAll = attendanceByStudent
     .filter((student) => student.attendance > 0)
-    .sort((a, b) => a.attendance - b.attendance)
-    .slice(0, 5);
+    .sort((a, b) => a.attendance - b.attendance);
   const attendanceTrend = useMemo(() => {
     const grouped = new Map();
     attendance.forEach((record) => {
@@ -186,6 +205,27 @@ export default function Dashboard() {
     }
     return trend;
   }, [data.payments, data.invoices]);
+  // Pagination state for the paged widgets (one independent pager per widget).
+  const feePaged = usePaged(feeCollectionTrend.length, 5);
+  const noticesPaged = usePaged(noticesList.length, 5);
+  const admissionsPaged = usePaged(admissionList.length, 5);
+  const watchlistPaged = usePaged(lowAttendanceAll.length, 5);
+  const busPaged = usePaged(busRoutes.length, 5);
+  const pagedFeeTrend = feeCollectionTrend.slice(feePaged.start, feePaged.end);
+  const pagedNotices = noticesList.slice(noticesPaged.start, noticesPaged.end);
+  const pagedAdmissions = admissionList.slice(
+    admissionsPaged.start,
+    admissionsPaged.end,
+  );
+  const pagedWatchlist = lowAttendanceAll.slice(
+    watchlistPaged.start,
+    watchlistPaged.end,
+  );
+  const pagedBuses = busRoutes.slice(busPaged.start, busPaged.end);
+  const classStrengthTotal = classStrength.reduce(
+    (sum, bucket) => sum + bucket.value,
+    0,
+  );
   const today = new Date().toISOString().slice(0, 10);
   const todayAttendance = attendance.filter(
     (record) => new Date(record.date).toISOString().slice(0, 10) === today,
@@ -347,117 +387,151 @@ export default function Dashboard() {
         </Card>
 
         <Card title="Students by Section">
-          <ResponsiveContainer width="100%" height={230}>
-            <PieChart>
-              <Pie
-                data={classStrength}
-                dataKey="value"
-                nameKey="name"
-                innerRadius={55}
-                outerRadius={85}
-                paddingAngle={2}
-              >
-                {classStrength.map((_, i) => (
-                  <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                ))}
-              </Pie>
-              <Tooltip
-                contentStyle={{
-                  borderRadius: 10,
-                  border: "1px solid #eee",
-                  fontSize: 12.5,
-                }}
-              />
-            </PieChart>
-          </ResponsiveContainer>
-          <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 mt-2">
-            {classStrength.map((c, i) => (
-              <div
-                key={c.name}
-                className="flex items-center gap-1.5 text-[11px] text-slate-text"
-              >
-                <span
-                  className="w-2 h-2 rounded-full shrink-0"
-                  style={{ background: PIE_COLORS[i] }}
-                />
-                {c.name}
+          {classStrength.length === 0 ? (
+            <div className="flex items-center justify-center h-[230px] text-[13px] text-slate-text/60">
+              No students enrolled yet
+            </div>
+          ) : (
+            <>
+              <div className="relative">
+                <ResponsiveContainer width="100%" height={230}>
+                  <PieChart>
+                    <Pie
+                      data={classStrength}
+                      dataKey="value"
+                      nameKey="name"
+                      innerRadius={55}
+                      outerRadius={85}
+                      paddingAngle={2}
+                    >
+                      {classStrength.map((_, i) => (
+                        <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      formatter={(value) => [`${value} students`, ""]}
+                      contentStyle={{
+                        borderRadius: 10,
+                        border: "1px solid #eee",
+                        fontSize: 12.5,
+                      }}
+                    />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="font-display text-[26px] font-bold text-ink leading-none">
+                    {classStrengthTotal}
+                  </span>
+                  <span className="text-[10.5px] text-slate-text/60 mt-1">
+                    students
+                  </span>
+                </div>
               </div>
-            ))}
-          </div>
+              <div className="grid grid-cols-2 gap-x-2 gap-y-1.5 mt-2">
+                {classStrength.map((c, i) => (
+                  <div
+                    key={c.name}
+                    className="flex items-center gap-1.5 text-[11px] text-slate-text"
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ background: PIE_COLORS[i] }}
+                    />
+                    {c.name}
+                    <span className="font-semibold text-ink">{c.value}</span>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
         </Card>
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
         <Card title="Fee Collection vs Pending" className="lg:col-span-2">
-          <ResponsiveContainer width="100%" height={220}>
-            <BarChart
-              data={feeCollectionTrend}
-              margin={{ left: -10, top: 5 }}
-              barGap={4}
-            >
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                stroke="#EEEAE0"
-              />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 12, fill: "#475467" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                tickFormatter={(v) => `₹${v / 100000}L`}
-                tick={{ fontSize: 11, fill: "#475467" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip
-                formatter={(v) => `₹${v.toLocaleString("en-IN")}`}
-                contentStyle={{
-                  borderRadius: 10,
-                  border: "1px solid #eee",
-                  fontSize: 12.5,
-                }}
-              />
-              <Bar
-                dataKey="collected"
-                fill="#3F8F5F"
-                radius={[6, 6, 0, 0]}
-                name="Collected"
-              />
-              <Bar
-                dataKey="pending"
-                fill="#D65A4A"
-                radius={[6, 6, 0, 0]}
-                name="Pending"
-              />
-            </BarChart>
-          </ResponsiveContainer>
+          {pagedFeeTrend.length === 0 ? (
+            <div className="flex items-center justify-center h-[220px] text-[13px] text-slate-text/60">
+              No fee records yet
+            </div>
+          ) : (
+            <ResponsiveContainer width="100%" height={220}>
+              <BarChart
+                data={pagedFeeTrend}
+                margin={{ left: -10, top: 5 }}
+                barGap={4}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  vertical={false}
+                  stroke="#EEEAE0"
+                />
+                <XAxis
+                  dataKey="month"
+                  tick={{ fontSize: 12, fill: "#475467" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  tickFormatter={(v) => `₹${v / 100000}L`}
+                  tick={{ fontSize: 11, fill: "#475467" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip
+                  formatter={(v) => `₹${v.toLocaleString("en-IN")}`}
+                  contentStyle={{
+                    borderRadius: 10,
+                    border: "1px solid #eee",
+                    fontSize: 12.5,
+                  }}
+                />
+                <Bar
+                  dataKey="collected"
+                  fill="#3F8F5F"
+                  radius={[6, 6, 0, 0]}
+                  name="Collected"
+                />
+                <Bar
+                  dataKey="pending"
+                  fill="#D65A4A"
+                  radius={[6, 6, 0, 0]}
+                  name="Pending"
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+          <DashboardPagination {...feePaged} unit="periods" />
         </Card>
 
         <Card
           title="Pinned Notices"
           action={<Bell size={16} className="text-slate-text/50" />}
         >
-          <div className="space-y-3.5">
-            {pinnedNotices.map((n) => (
-              <div
-                key={n.id}
-                className="pb-3.5 border-b border-black/[0.06] last:border-0 last:pb-0"
-              >
-                <div className="flex items-center gap-2 mb-1">
-                  <Pill tone="amber">{n.category}</Pill>
-                  <span className="text-[11px] text-slate-text/50">
-                    {n.date}
-                  </span>
+          {pagedNotices.length === 0 ? (
+            <div className="flex items-center justify-center h-24 text-[13px] text-slate-text/60">
+              No pinned notices
+            </div>
+          ) : (
+            <div className="space-y-3.5">
+              {pagedNotices.map((n) => (
+                <div
+                  key={n.id}
+                  className="pb-3.5 border-b border-black/[0.06] last:border-0 last:pb-0"
+                >
+                  <div className="flex items-center gap-2 mb-1">
+                    <Pill tone="amber">{n.category}</Pill>
+                    <span className="text-[11px] text-slate-text/50">
+                      {n.date}
+                    </span>
+                  </div>
+                  <p className="text-[13px] font-semibold text-ink leading-snug">
+                    {n.title}
+                  </p>
                 </div>
-                <p className="text-[13px] font-semibold text-ink leading-snug">
-                  {n.title}
-                </p>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
+          <DashboardPagination {...noticesPaged} />
         </Card>
       </div>
 
@@ -474,48 +548,62 @@ export default function Dashboard() {
             </a>
           }
         >
-          <div className="space-y-3">
-            {recentAdmissions.map((a) => (
-              <div
-                key={a.id}
-                className="flex items-center justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-ink truncate">
-                    {a.childName}
-                  </p>
-                  <p className="text-[11.5px] text-slate-text/70">
-                    {a.classApplied} · {a.date}
-                  </p>
+          {pagedAdmissions.length === 0 ? (
+            <div className="flex items-center justify-center h-24 text-[13px] text-slate-text/60">
+              No admission enquiries yet
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pagedAdmissions.map((a) => (
+                <div
+                  key={a.id}
+                  className="flex items-center justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-ink truncate">
+                      {a.childName}
+                    </p>
+                    <p className="text-[11.5px] text-slate-text/70">
+                      {a.classApplied} · {a.date}
+                    </p>
+                  </div>
+                  <Pill tone={statusTone(a.status)}>{a.status}</Pill>
                 </div>
-                <Pill tone={statusTone(a.status)}>{a.status}</Pill>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
+          <DashboardPagination {...admissionsPaged} unit="enquiries" />
         </Card>
 
         <Card
           title="Attendance Watchlist"
           action={<ClipboardList size={16} className="text-slate-text/50" />}
         >
-          <div className="space-y-3">
-            {lowAttendance.map((s) => (
-              <div key={s.id} className="flex items-center gap-2.5">
-                <Avatar src={s.avatar} name={s.name} size={30} />
-                <div className="min-w-0 flex-1">
-                  <p className="text-[12.5px] font-semibold text-ink truncate">
-                    {s.name}
-                  </p>
-                  <p className="text-[11px] text-slate-text/60">
-                    Class {s.class}-{s.section}
-                  </p>
+          {pagedWatchlist.length === 0 ? (
+            <div className="flex items-center justify-center h-24 text-[13px] text-slate-text/60">
+              No attendance concerns right now
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {pagedWatchlist.map((s) => (
+                <div key={s.id} className="flex items-center gap-2.5">
+                  <Avatar src={s.avatar} name={s.name} size={30} />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[12.5px] font-semibold text-ink truncate">
+                      {s.name}
+                    </p>
+                    <p className="text-[11px] text-slate-text/60">
+                      Class {s.class}-{s.section}
+                    </p>
+                  </div>
+                  <span className="text-[12.5px] font-bold text-alert">
+                    {s.attendance}%
+                  </span>
                 </div>
-                <span className="text-[12.5px] font-bold text-alert">
-                  {s.attendance}%
-                </span>
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
+          <DashboardPagination {...watchlistPaged} unit="students" />
         </Card>
       </div>
 
@@ -530,28 +618,35 @@ export default function Dashboard() {
           </a>
         }
       >
-        <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
-          {busRoutes.map((b) => (
-            <div
-              key={b.id}
-              className="rounded-xl border border-black/[0.06] p-3.5"
-            >
-              <div className="flex items-center justify-between mb-2">
-                <div className="w-8 h-8 rounded-lg bg-info/10 text-info flex items-center justify-center">
-                  <Bus size={15} />
+        {pagedBuses.length === 0 ? (
+          <div className="flex items-center justify-center h-24 text-[13px] text-slate-text/60">
+            No buses configured yet
+          </div>
+        ) : (
+          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3">
+            {pagedBuses.map((b) => (
+              <div
+                key={b.id}
+                className="rounded-xl border border-black/[0.06] p-3.5"
+              >
+                <div className="flex items-center justify-between mb-2">
+                  <div className="w-8 h-8 rounded-lg bg-info/10 text-info flex items-center justify-center">
+                    <Bus size={15} />
+                  </div>
+                  <Pill tone={statusTone(b.status)}>{b.status}</Pill>
                 </div>
-                <Pill tone={statusTone(b.status)}>{b.status}</Pill>
+                <p className="text-[12.5px] font-bold text-ink">{b.id}</p>
+                <p className="text-[11px] text-slate-text/60 mt-0.5 line-clamp-1">
+                  {b.route}
+                </p>
+                <p className="text-[11px] text-slate-text/60 mt-1.5">
+                  {b.occupied} assigned · ETA {b.eta}
+                </p>
               </div>
-              <p className="text-[12.5px] font-bold text-ink">{b.id}</p>
-              <p className="text-[11px] text-slate-text/60 mt-0.5 line-clamp-1">
-                {b.route}
-              </p>
-              <p className="text-[11px] text-slate-text/60 mt-1.5">
-                {b.occupied} assigned · ETA {b.eta}
-              </p>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
+        <DashboardPagination {...busPaged} unit="buses" />
       </Card>
     </div>
   );

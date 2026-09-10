@@ -39,6 +39,12 @@ body {
 
 .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 
+/* Print: hide app chrome and keep only the report card */
+@media print {
+  .no-print { display: none !important; }
+  body { background: #fff; }
+}
+
 /* Keep Leaflet controls below the app's modals (z-50) */
 .leaflet-container { z-index: 0; font: inherit; }
 .leaflet-pane { z-index: 1 !important; }

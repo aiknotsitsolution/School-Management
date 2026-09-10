@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { validateObjectIdParam } = require("../middleware/objectId");
+const { validateObjectIdParam } = require("@school-erp/shared/src/middleware/objectId");
 router.param("id", validateObjectIdParam);
 router.param("homeworkId", validateObjectIdParam);
 const ctrl = require("../controllers/notificationController");
@@ -10,6 +10,7 @@ router.use(verifyToken, resolveTenant, requireTenant);
 
 router.post("/push", requirePermission("notices:publish"), ctrl.pushNotifications);
 router.get("/", ctrl.getNotifications);
+router.get("/stream", ctrl.streamNotifications);
 router.get("/unread-count", ctrl.getUnreadCount);
 router.patch("/read-all", ctrl.markAllRead);
 router.patch("/:id/read", ctrl.markAsRead);

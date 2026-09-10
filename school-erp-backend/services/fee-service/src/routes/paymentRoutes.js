@@ -6,6 +6,8 @@ const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStude
 router.use(verifyToken, resolveTenant, requireTenant);
 
 router.post("/", requirePermission("fees:collect"), ctrl.recordPayment);
+router.get("/receipt/:receiptNo", requirePermission("fees:read"), ctrl.getReceipt);
+router.get("/reports", requirePermission("fees:reports"), ctrl.getFeeReports);
 router.get("/", requirePermission("fees:read"), scopeStudentQuery, ctrl.getPayments);
 
 module.exports = router;

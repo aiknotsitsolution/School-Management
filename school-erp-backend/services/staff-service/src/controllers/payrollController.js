@@ -1,7 +1,7 @@
 const Payroll = require("../models/Payroll");
 const Staff = require("../models/Staff");
 const { pushNotifications } = require("../utils/notify");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
 const generatePayroll = async (req, res) => {
   try {

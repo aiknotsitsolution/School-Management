@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { validateObjectIdParam } = require("../middleware/objectId");
+const { validateObjectIdParam } = require("@school-erp/shared/src/middleware/objectId");
 router.param("id", validateObjectIdParam);
 const ctrl = require("../controllers/teacherAssignmentController");
 const { verifyToken, resolveTenant, requireTenant, requirePermission } = require("../middleware/auth");

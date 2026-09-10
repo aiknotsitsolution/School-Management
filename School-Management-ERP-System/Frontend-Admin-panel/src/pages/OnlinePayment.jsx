@@ -9,8 +9,9 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { PageIntro, Card, Button, Input, Pill, Select } from "../components/UI";
+import { useMasterOptions } from "../hooks/useMasterOptions";
 
-const CLASS_OPTIONS = [
+const CLASS_OPTIONS_FALLBACK = [
   "All",
   "Nursery",
   "LKG",
@@ -49,6 +50,8 @@ const fmtDate = (iso) =>
     : "—";
 
 export default function OnlinePayment() {
+  const { options: masterClasses } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
+  const CLASS_OPTIONS = ["All", ...masterClasses.filter((c) => c !== "All")];
   const [students, setStudents] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [orders, setOrders] = useState([]);

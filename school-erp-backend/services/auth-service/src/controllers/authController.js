@@ -1,12 +1,15 @@
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
+const crypto = require("crypto");
 const User = require("../models/User");
 const School = require("../models/School");
+const OtpToken = require("../models/OtpToken");
 const { validatePassword } = require("../utils/password");
-const { getPermissionsFor } = require("../utils/permissions");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { sendEmail } = require("../utils/email");
+const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 const { generateAccessToken, generateRefreshToken } = require("../utils/generateToken");
-const { getJwtSecret } = require("../utils/jwtSecret");
+const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const { writeAudit } = require("../utils/audit");
 
 const VALID_ROLES = ["super_admin", "school_admin", "class_teacher", "teacher", "staff", "student"];
@@ -572,6 +575,259 @@ const resetPassword = async (req, res) => {
   }
 };
 
+// ── OTP-based Password Reset ────────────────────────────────────────────────
+
+const generateOtp = () => String(Math.floor(100000 + Math.random() * 900000));
+
+const maskEmail = (email) => {
+  const [local, domain] = email.split("@");
+  if (!domain) return email;
+  if (local.length <= 2) return `${local[0]}***@${domain}`;
+  return `${local[0]}${"*".repeat(Math.min(local.length - 2, 4))}${local.slice(-1)}@${domain}`;
+};
+
+const otpEmailHtml = (otp, name) => `
+<div style="font-family:Arial,sans-serif;max-width:480px;margin:0 auto;padding:32px">
+  <div style="background:#1C2331;border-radius:12px;padding:24px;margin-bottom:24px">
+    <p style="color:#E8A33D;font-weight:bold;font-size:18px;margin:0">School ERP</p>
+  </div>
+  <h2 style="color:#1C2331;font-size:20px;margin-bottom:8px">Password Reset OTP</h2>
+  <p style="color:#555;font-size:14px;line-height:1.6">Hi ${name || "there"},</p>
+  <p style="color:#555;font-size:14px;line-height:1.6">Your one-time password for resetting your password is:</p>
+  <div style="background:#F5F5F5;border-radius:8px;padding:16px;text-align:center;margin:20px 0">
+    <span style="font-size:32px;font-weight:bold;letter-spacing:8px;color:#1C2331">${otp}</span>
+  </div>
+  <p style="color:#555;font-size:14px;line-height:1.6">This OTP is valid for <strong>10 minutes</strong>. If you did not request this, please ignore this email.</p>
+  <hr style="border:none;border-top:1px solid #eee;margin:24px 0" />
+  <p style="color:#999;font-size:12px">School Management ERP &copy; ${new Date().getFullYear()}</p>
+</div>`;
+
+const MAX_OTP_REQUESTS = 3;
+const OTP_WINDOW_MS = 15 * 60 * 1000;
+
+const requestPasswordReset = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email || typeof email !== "string") {
+      return res.status(400).json({ success: false, message: "email is required" });
+    }
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await User.findOne({ email: normalizedEmail });
+    const genericMsg = "If an account with that email exists, an OTP has been sent";
+
+    if (!user) return res.json({ success: true, message: genericMsg });
+    if (!user.isActive || user.deletedAt) return res.json({ success: true, message: genericMsg });
+    if (user.role === "super_admin") {
+      return res.json({ success: true, message: genericMsg });
+    }
+
+    const cutoff = new Date(Date.now() - OTP_WINDOW_MS);
+    const recentCount = await OtpToken.countDocuments({
+      userId: user._id,
+      purpose: "password-reset",
+      createdAt: { $gte: cutoff },
+    });
+    if (recentCount >= MAX_OTP_REQUESTS) {
+      return res.status(429).json({ success: false, message: "Too many requests. Please try again after 15 minutes." });
+    }
+
+    await OtpToken.updateMany(
+      { userId: user._id, purpose: "password-reset", used: false },
+      { $set: { used: true } },
+    );
+
+    const plainOtp = generateOtp();
+    const hashedOtp = await bcrypt.hash(plainOtp, 10);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await OtpToken.create({
+      userId: user._id,
+      email: normalizedEmail,
+      otp: hashedOtp,
+      purpose: "password-reset",
+      expiresAt,
+    });
+
+    await sendEmail({
+      to: normalizedEmail,
+      subject: "Your Password Reset OTP — School ERP",
+      html: otpEmailHtml(plainOtp, user.name),
+    });
+
+    await writeAudit({
+      req,
+      user: { id: user._id, email: user.email, role: user.role },
+      action: "user.password_reset_otp_sent",
+      targetType: "user",
+      targetId: user._id,
+      message: `OTP sent to ${user.email}`,
+    });
+
+    res.json({ success: true, message: genericMsg, data: { maskedEmail: maskEmail(normalizedEmail) } });
+  } catch (err) {
+    return unexpectedError(res, err);
+  }
+};
+
+const MAX_OTP_ATTEMPTS = 5;
+
+const verifyResetOtp = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+    if (!email || !otp) return res.status(400).json({ success: false, message: "email and otp are required" });
+
+    const normalizedEmail = email.trim().toLowerCase();
+    const otpDoc = await OtpToken.findOne({
+      email: normalizedEmail,
+      purpose: "password-reset",
+      used: false,
+      expiresAt: { $gt: new Date() },
+    }).sort({ createdAt: -1 });
+
+    if (!otpDoc) {
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    if (otpDoc.attempts >= MAX_OTP_ATTEMPTS) {
+      return res.status(429).json({ success: false, message: "Too many failed attempts. Please request a new OTP." });
+    }
+
+    const valid = await bcrypt.compare(String(otp).trim(), otpDoc.otp);
+    if (!valid) {
+      otpDoc.attempts += 1;
+      await otpDoc.save();
+      const remaining = MAX_OTP_ATTEMPTS - otpDoc.attempts;
+      if (remaining <= 0) {
+        return res.status(429).json({ success: false, message: "Too many failed attempts. Please request a new OTP." });
+      }
+      return res.status(400).json({ success: false, message: `Invalid OTP. ${remaining} attempt(s) remaining.` });
+    }
+
+    const resetToken = jwt.sign(
+      { sub: String(otpDoc.userId), purpose: "otp-verified-reset", otpId: String(otpDoc._id) },
+      getJwtSecret(),
+      { expiresIn: 10 * 60 },
+    );
+
+    res.json({
+      success: true,
+      message: "OTP verified successfully",
+      data: { resetToken, expiresInMinutes: 10 },
+    });
+  } catch (err) {
+    return unexpectedError(res, err);
+  }
+};
+
+const resetPasswordWithOtp = async (req, res) => {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) return res.status(400).json({ success: false, message: "token and newPassword are required" });
+
+    let decoded;
+    try {
+      decoded = jwt.verify(token, getJwtSecret());
+    } catch {
+      return res.status(400).json({ success: false, message: "Invalid or expired reset token" });
+    }
+    if (decoded.purpose !== "otp-verified-reset" || !decoded.sub || !decoded.otpId) {
+      return res.status(400).json({ success: false, message: "Invalid or expired reset token" });
+    }
+
+    const passErr = validatePassword(newPassword);
+    if (passErr) return res.status(400).json({ success: false, message: passErr });
+
+    const user = await User.findById(decoded.sub).select("+password");
+    if (!user) return res.status(400).json({ success: false, message: "Invalid or expired reset token" });
+    if (!user.isActive || user.deletedAt) {
+      return res.status(403).json({ success: false, message: "This account is inactive or has been removed" });
+    }
+    if (user.schoolId) {
+      const school = await School.findById(user.schoolId).select("status").lean();
+      if (!school || school.status !== "active") {
+        return res.status(403).json({ success: false, message: "Your school account is inactive" });
+      }
+    }
+
+    const otpDoc = await OtpToken.findById(decoded.otpId);
+    if (!otpDoc || otpDoc.used) {
+      return res.status(400).json({ success: false, message: "This reset token has already been used" });
+    }
+
+    user.password = await bcrypt.hash(newPassword, 10);
+    user.passwordChangedAt = new Date();
+    await user.save();
+
+    otpDoc.used = true;
+    await otpDoc.save();
+
+    await writeAudit({
+      req,
+      user: { id: user._id, email: user.email, role: user.role },
+      action: "user.password_reset_otp",
+      targetType: "user",
+      targetId: user._id,
+      message: `Password reset via OTP for ${user.email}`,
+    });
+
+    res.json({ success: true, message: "Password updated successfully" });
+  } catch (err) {
+    return unexpectedError(res, err);
+  }
+};
+
+const adminSendResetOtp = async (req, res) => {
+  try {
+    const target = await loadManageableUser(req.user, req.params.id);
+    if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
+    if (target.deletedAt) return res.status(400).json({ success: false, message: "Restore the user before sending OTP" });
+    if (!target.isActive) return res.status(400).json({ success: false, message: "Activate the user before sending OTP" });
+
+    const normalizedEmail = target.email.toLowerCase();
+
+    await OtpToken.updateMany(
+      { userId: target._id, purpose: "password-reset", used: false },
+      { $set: { used: true } },
+    );
+
+    const plainOtp = generateOtp();
+    const hashedOtp = await bcrypt.hash(plainOtp, 10);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000);
+
+    await OtpToken.create({
+      userId: target._id,
+      email: normalizedEmail,
+      otp: hashedOtp,
+      purpose: "password-reset",
+      expiresAt,
+    });
+
+    await sendEmail({
+      to: normalizedEmail,
+      subject: "Your Password Reset OTP — School ERP",
+      html: otpEmailHtml(plainOtp, target.name),
+    });
+
+    await writeAudit({
+      req,
+      user: req.user,
+      action: "user.password_reset_otp_sent_admin",
+      targetType: "user",
+      targetId: target._id,
+      message: `Admin sent OTP to ${target.email}`,
+    });
+
+    res.json({
+      success: true,
+      message: `OTP sent to ${maskEmail(normalizedEmail)}`,
+      data: { maskedEmail: maskEmail(normalizedEmail) },
+    });
+  } catch (err) {
+    return unexpectedError(res, err);
+  }
+};
+
 // School / tenant management (platform layer) -------------------------------
 
 const createSchool = async (req, res) => {
@@ -638,10 +894,148 @@ const verify = async (req, res) => {
   res.json({ success: true, data: req.user });
 };
 
+// ------------------------------------------------- self-service school branding
+// Report-card customization lives on the school record: top-level logo/address
+// plus settings.reportCard (affiliation, tagline, footerNote, accent). Only a
+// whitelist is editable so a school admin can never touch platform settings.
+const REPORT_CARD_SETTINGS_FIELDS = ["affiliation", "tagline", "footerNote", "accent"];
+const ID_CARD_SETTINGS_FIELDS = [
+  "accent",
+  "headerTitle",
+  "footerNote",
+  "showParentContact",
+  "showBloodGroup",
+  "showDob",
+  "showRollNo",
+  "showHouse",
+];
+const ACCENT_RE = /^#[0-9a-fA-F]{6}$/;
+const BOOL_RE = /^(true|false)$/i;
+
+// Logo may be an http(s) URL or an uploaded base64 data URI (capped size).
+// Returns null when invalid, "" when explicitly cleared.
+const sanitizeLogo = (logo) => {
+  if (logo == null) return "";
+  if (typeof logo !== "string") return null;
+  const str = logo.trim();
+  if (str === "") return "";
+  if (str.length > 2_000_000) return null;
+  if (/^https?:\/\//i.test(str)) return str;
+  if (/^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,/.test(str)) return str;
+  return null;
+};
+
+// Shape exposed to the client for self-service school endpoints. Mirrors the
+// login `school` payload while adding address + settings for the admin UI.
+const publicSchool = (s) =>
+  s && {
+    id: s._id,
+    name: s.name,
+    code: s.code,
+    shortName: s.shortName || "",
+    address: s.address || "",
+    logo: s.logo || "",
+    session: s.session || "",
+    plan: s.plan || "trial",
+    status: s.status || "active",
+    settings: s.settings || {},
+  };
+
+const getMySchool = async (req, res) => {
+  try {
+    if (!req.tenantId) {
+      return res.status(400).json({ success: false, message: "No school context" });
+    }
+    const school = await School.findById(req.tenantId).lean();
+    if (!school) return res.status(404).json({ success: false, message: "School not found" });
+    res.json({ success: true, data: publicSchool(school) });
+  } catch (err) {
+    return unexpectedError(res, err);
+  }
+};
+
+const updateMySchool = async (req, res) => {
+  try {
+    if (!req.tenantId) {
+      return res.status(400).json({ success: false, message: "No school context" });
+    }
+    const school = await School.findById(req.tenantId);
+    if (!school) return res.status(404).json({ success: false, message: "School not found" });
+
+    const set = {};
+    if (req.body.shortName !== undefined) set.shortName = String(req.body.shortName).trim();
+    if (req.body.address !== undefined) set.address = String(req.body.address).trim();
+    if (req.body.logo !== undefined) {
+      const logo = sanitizeLogo(req.body.logo);
+      if (logo === null) {
+        return res.status(400).json({
+          success: false,
+          message: "Logo must be an image URL or an uploaded image (max 2MB)",
+        });
+      }
+      set.logo = logo;
+    }
+
+    const rc = req.body.reportCard;
+    if (rc && typeof rc === "object") {
+      for (const key of REPORT_CARD_SETTINGS_FIELDS) {
+        if (rc[key] === undefined) continue;
+        if (key === "accent") {
+          const value = String(rc[key] || "").trim();
+          if (!ACCENT_RE.test(value)) {
+            return res.status(400).json({ success: false, message: "Accent must be a hex color like #E8A33D" });
+          }
+          set[`settings.reportCard.${key}`] = value;
+        } else {
+          set[`settings.reportCard.${key}`] = String(rc[key] ?? "").trim();
+        }
+      }
+    }
+
+    const idc = req.body.idCard;
+    if (idc && typeof idc === "object") {
+      for (const key of ID_CARD_SETTINGS_FIELDS) {
+        if (idc[key] === undefined) continue;
+        const path = `settings.idCard.${key}`;
+        if (key === "accent") {
+          const value = String(idc[key] || "").trim();
+          if (!ACCENT_RE.test(value)) {
+            return res.status(400).json({ success: false, message: "ID card accent must be a hex color like #1E2A44" });
+          }
+          set[path] = value;
+        } else if (key.startsWith("show") && typeof idc[key] === "boolean") {
+          set[path] = idc[key];
+        } else {
+          set[path] = String(idc[key] ?? "").trim();
+        }
+      }
+    }
+
+    if (Object.keys(set).length) {
+      await School.updateOne({ _id: school._id }, { $set: set });
+    }
+
+    const fresh = await School.findById(school._id).lean();
+    await writeAudit({
+      req,
+      user: req.user,
+      action: "school.settings_updated",
+      targetType: "school",
+      targetId: school._id,
+      message: "School updated branding (report card / ID card)",
+    });
+    res.json({ success: true, message: "School branding updated", data: publicSchool(fresh) });
+  } catch (err) {
+    return unexpectedError(res, err);
+  }
+};
+
 module.exports = {
   createUser, login, refreshToken, getMe, changePassword,
   listUsers, updateUserStatus, deleteUser, restoreUser, updateUser,
   adminResetPassword, resetPassword,
+  requestPasswordReset, verifyResetOtp, resetPasswordWithOtp, adminSendResetOtp,
   createSchool, listSchools, getSchool, updateSchool,
+  getMySchool, updateMySchool,
   verify,
 };

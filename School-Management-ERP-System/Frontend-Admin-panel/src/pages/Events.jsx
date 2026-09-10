@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Plus,
   MapPin,
@@ -9,16 +9,17 @@ import {
   CalendarDays,
   Search,
   PartyPopper,
+  ChevronDown,
 } from "lucide-react";
 import {
   PageIntro,
   Card,
   Button,
   Input,
-  Select,
   Pill,
   StatCard,
 } from "../components/UI";
+import ImageDropzone from "../components/upload/ImageDropzone";
 import { api } from "../lib/api";
 const initialEvents = [];
 
@@ -82,6 +83,150 @@ function normalizeEvent(event) {
   };
 }
 
+// Searchable dropdown with an "add custom" action. Falls back to the preset
+// list plus any custom values already picked in this session.
+function SearchableSelect({ options, value, onChange, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [custom, setCustom] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const boxRef = useRef(null);
+
+  const all = useMemo(
+    () => [...new Set([...options, ...custom])],
+    [options, custom],
+  );
+
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? all.filter((o) => String(o).toLowerCase().includes(q))
+    : all;
+  const exactMatch = all.some((o) => String(o).toLowerCase() === q);
+  const canAdd = q.length > 0 && !exactMatch;
+
+  useEffect(() => {
+    setActiveIndex(matches.length > 0 ? 0 : -1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(i + 1, matches.length - 1));
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.max(i - 1, 0));
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (canAdd && activeIndex === matches.length) {
+          commit(q);
+        } else if (activeIndex >= 0 && matches[activeIndex]) {
+          commit(String(matches[activeIndex]));
+        }
+      }
+    };
+    document.addEventListener("click", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, query, matches, canAdd, activeIndex]);
+
+  const commit = (value) => {
+    if (!value) return;
+    setCustom((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    onChange(value);
+    setOpen(false);
+    setQuery("");
+    setActiveIndex(-1);
+  };
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15"
+      >
+        <span className={value ? "" : "text-slate-text/60"}>
+          {value || placeholder || "Select an option"}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`text-slate-text/50 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl border border-black/10 shadow-lg shadow-black/5 overflow-hidden">
+          <div className="relative p-2 border-b border-black/[0.06]">
+            <Search
+              size={14}
+              className="absolute left-4.5 top-1/2 -translate-y-1/2 text-slate-text/40"
+            />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search or type a new value…"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-paper border border-black/[0.06] text-[13px] outline-none focus:border-amber/50"
+            />
+          </div>
+
+          <ul className="max-h-52 overflow-y-auto py-1">
+            {matches.map((opt, i) => (
+              <li key={String(opt)}>
+                <button
+                  type="button"
+                  onClick={() => commit(opt)}
+                  className={`w-full text-left px-3.5 py-2 text-[13px] transition-colors ${
+                    i === activeIndex ? "bg-amber/10 text-ink" : "text-ink hover:bg-paper"
+                  }`}
+                >
+                  {String(opt)}
+                  {String(opt).toLowerCase() === q && (
+                    <span className="ml-1.5 text-[11px] text-amber-dark font-medium">(custom)</span>
+                  )}
+                </button>
+              </li>
+            ))}
+
+            {canAdd && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => commit(query.trim())}
+                  className={`w-full text-left px-3.5 py-2 text-[13px] text-amber-dark font-medium hover:bg-amber/10 transition-colors ${
+                    activeIndex === matches.length ? "bg-amber/10" : ""
+                  }`}
+                >
+                  + Add "{query.trim()}"
+                </button>
+              </li>
+            )}
+
+            {matches.length === 0 && !canAdd && (
+              <li className="px-3.5 py-2 text-[12.5px] text-slate-text/60">
+                No matches. Type to add a custom value.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 function emptyForm() {
   return {
     title: "",
@@ -90,6 +235,7 @@ function emptyForm() {
     venue: "",
     category: "Academic",
     image: "",
+    imageFile: null,
   };
 }
 
@@ -173,6 +319,7 @@ export default function Events() {
       venue: e.venue,
       category: e.category,
       image: e.image || "",
+      imageFile: null,
     });
     setShowModal(true);
   };
@@ -184,10 +331,14 @@ export default function Events() {
   const handleSave = async () => {
     if (!form.title.trim() || !form.date) return;
 
-    const image =
+    let image =
       form.image || CATEGORY_IMAGES[form.category] || CATEGORY_IMAGES.Other;
 
     try {
+      if (form.imageFile) {
+        const uploadResponse = await api.events.uploadImage(form.imageFile);
+        image = uploadResponse.data.url;
+      }
       const payload = {
         title: form.title.trim(),
         description: form.category,
@@ -467,27 +618,45 @@ export default function Events() {
                 <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                   Category
                 </label>
-                <Select
+                <SearchableSelect
+                  options={CATEGORIES}
                   value={form.category}
-                  onChange={(e) => updateForm("category", e.target.value)}
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(v) => updateForm("category", v)}
+                  placeholder="Select a category"
+                />
               </div>
 
               <div>
                 <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Image URL (optional)
+                  Image (optional)
                 </label>
-                <Input
-                  placeholder="Leave blank for default category image"
-                  value={form.image}
-                  onChange={(e) => updateForm("image", e.target.value)}
-                />
+                {form.imageFile || !form.image ? (
+                  <ImageDropzone
+                    value={form.imageFile}
+                    onChange={(file) => updateForm("imageFile", file)}
+                    helperText="JPG, JPEG, PNG, GIF, WEBP · Max 5 MB · Leave empty for a default category image"
+                  />
+                ) : (
+                  <div className="rounded-xl border border-black/10 overflow-hidden">
+                    <img
+                      src={form.image}
+                      alt=""
+                      className="w-full h-36 object-cover"
+                    />
+                    <div className="flex items-center justify-between gap-2 px-3 py-2 bg-paper">
+                      <span className="text-[11.5px] text-slate-text/70 truncate">
+                        Current image
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => updateForm("image", "")}
+                        className="shrink-0 text-[12px] font-semibold text-amber-dark hover:underline"
+                      >
+                        Upload a new image
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 

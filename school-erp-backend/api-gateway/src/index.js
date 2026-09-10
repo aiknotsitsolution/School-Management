@@ -15,7 +15,7 @@ app.use(
   cors({
     origin: process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
-      : true,
+      : false,
     credentials: true,
   }),
 );
@@ -41,7 +41,7 @@ const rate = (key, fallback) => {
   return Number.isFinite(v) && v > 0 ? v : fallback;
 };
 const sensitiveLimiters = [
-  { path: "/api/auth/login", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_LOGIN_MAX", 500) },
+  { path: "/api/auth/login", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_LOGIN_MAX", 10) },
   { path: "/api/auth/refresh-token", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_REFRESH_MAX", 500) },
   { path: "/api/auth/change-password", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_CHANGE_PASSWORD_MAX", 100) },
   { path: "/api/auth/register", window: 15 * 60 * 1000, max: rate("RATE_LIMIT_REGISTER_MAX", 50) },
@@ -64,11 +64,13 @@ sensitiveLimiters.forEach(({ path, window, max }) => {
 
 // Internal-only endpoints must NOT be reachable through the public gateway:
 //  - /api/notifications/internal/*  (service-to-service key, no user JWT)
+//  - /api/students/internal/*       (service-to-service roster resolution)
 //  - /api/payments/orders/:id/confirm (provider webhook; reachable only
 //    directly on the fee service with the provider signature)
 app.use((req, res, next) => {
   if (
     req.path.startsWith("/api/notifications/internal") ||
+    req.path.startsWith("/api/students/internal") ||
     /^\/api\/payments\/orders\/[^/]+\/confirm\/?$/.test(req.path)
   ) {
     return res

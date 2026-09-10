@@ -7,6 +7,12 @@ import {
   Wallet,
   Megaphone,
   Inbox,
+  UserRound,
+  Briefcase,
+  BookOpen,
+  GraduationCap,
+  BadgeCheck,
+  CalendarDays,
 } from "lucide-react";
 import { PageIntro, Card, Button, Pill, toast } from "../components/UI";
 import { api } from "../lib/api";
@@ -15,6 +21,12 @@ const KIND_META = {
   notice: { icon: Megaphone, tone: "info", label: "Notice" },
   leave: { icon: FileClock, tone: "amber", label: "Leave" },
   payroll: { icon: Wallet, tone: "success", label: "Payroll" },
+  student: { icon: UserRound, tone: "info", label: "Student" },
+  staff: { icon: Briefcase, tone: "amber", label: "Staff" },
+  homework: { icon: BookOpen, tone: "info", label: "Homework" },
+  exam: { icon: GraduationCap, tone: "amber", label: "Exam" },
+  profile: { icon: BadgeCheck, tone: "success", label: "Profile" },
+  event: { icon: CalendarDays, tone: "info", label: "Event" },
   system: { icon: Bell, tone: "neutral", label: "System" },
 };
 
@@ -43,7 +55,11 @@ export default function Notifications() {
       .finally(() => setLoading(false));
   };
 
-  useEffect(refresh, []);
+  useEffect(() => {
+    refresh();
+    const unsubscribe = api.notifications.subscribe({ onData: () => refresh() });
+    return unsubscribe;
+  }, []);
 
   const unreadCount = useMemo(() => records.filter((n) => !n.read).length, [records]);
   const visible = useMemo(

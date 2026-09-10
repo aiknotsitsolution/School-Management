@@ -85,7 +85,7 @@ const schoolDays = (start, end) => {
 const rng = (i, mod) => (i * 17 + 5) % mod;
 
 const COLLECTIONS = {
-  auth: ["schools", "users", "plans", "subscriptions", "billinginvoices"],
+  auth: ["schools", "users", "plans", "subscriptions", "billinginvoices", "academicsessions"],
   student: ["students", "admissionenquiries"],
   staff: ["staffs", "leaves", "payrolls"],
   academic: ["attendances", "exams", "homeworks", "marks", "timetables"],
@@ -256,6 +256,18 @@ async function seedSchool(school, m) {
   );
   const schoolId = schoolDoc._id;
   counts.schools = 1;
+
+  // -- Academic session (kept in sync with School.session string) -------------
+  await m.auth.models.academicsessions.findOneAndUpdate(
+    { schoolId, name: school.session, status: "active" },
+    { $set: {
+        schoolId, name: school.session,
+        startDate: new Date("2026-07-01"), endDate: new Date("2027-06-30"),
+        status: "active", isCurrent: true,
+      } },
+    { upsert: true, new: true, setDefaultsOnInsert: true },
+  );
+  counts.sessions = 1;
 
   // -- School admin (principal) ----------------------------------------------
   const adminPass = await hash(school.principal.pass);

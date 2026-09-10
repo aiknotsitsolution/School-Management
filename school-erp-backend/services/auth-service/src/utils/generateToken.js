@@ -1,5 +1,5 @@
 const jwt = require("jsonwebtoken");
-const { getJwtSecret } = require("./jwtSecret");
+const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 
 // JWT v2 payload carries tenant + role data so every downstream service can
 // enforce scoping without a DB round trip. Access tokens are short-lived on

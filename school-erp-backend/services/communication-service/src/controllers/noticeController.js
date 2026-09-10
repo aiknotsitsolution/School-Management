@@ -1,7 +1,8 @@
 const Notice = require("../models/Notice");
 const Notification = require("../models/Notification");
 const { getUserModel } = require("../models/userLite");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
+const { publish } = require("../realtime/hub");
 
 // Mass-assignment guard: only these fields may be set from the request body
 // (schoolId / postedBy / timestamps stay server-owned).
@@ -32,7 +33,7 @@ const fanOutNotice = async ({ schoolId, title, audience = [] }) => {
     ).lean();
     const all = userIds.map((u) => String(u._id));
     if (all.length === 0) return;
-    await Notification.insertMany(
+    const inserted = await Notification.insertMany(
       all.map((userId) => ({
         schoolId,
         userId,
@@ -42,6 +43,7 @@ const fanOutNotice = async ({ schoolId, title, audience = [] }) => {
         link: "/notice-board",
       }))
     );
+    inserted.forEach((n) => publish(schoolId, n.userId, n));
   } catch (err) {
     console.error("[notice fanout skipped]", err.message);
   }

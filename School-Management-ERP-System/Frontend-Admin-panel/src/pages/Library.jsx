@@ -10,7 +10,11 @@ import {
   Trash2,
   BookPlus,
   RotateCcw,
+  Bell,
+  Info,
 } from "lucide-react";
+import { useSelector } from "react-redux";
+import { selectUser } from "../store/selectors";
 import {
   PageIntro,
   Card,
@@ -21,20 +25,15 @@ import {
   StatCard,
   toast,
 } from "../components/UI";
+import MasterSelect from "../components/MasterSelect";
+import CustomMasterModal from "../components/CustomMasterModal";
+import { invalidateMasterCache } from "../lib/masterCache";
 import { api } from "../lib/api";
+import { hasPermission } from "../lib/permissions";
+import { useMasterOptions } from "../hooks/useMasterOptions";
+import SearchableSelect from "../components/SearchableSelect";
 const seed = [];
 const seedIssues = [];
-
-const CATEGORIES = [
-  "Textbook",
-  "Fiction",
-  "Finance",
-  "Biography",
-  "History",
-  "Self-Help",
-  "Science",
-  "Reference",
-];
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -43,6 +42,19 @@ function inDays(n) {
   const d = new Date();
   d.setDate(d.getDate() + n);
   return d.toISOString().slice(0, 10);
+}
+function fmtDate(iso) {
+  if (!iso) return "—";
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return "—";
+  return d.toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+function isMongoId(value) {
+  return /^[0-9a-fA-F]{24}$/.test(String(value || "").trim());
 }
 function nextId(list, prefix) {
   const max = list.reduce((m, it) => {
@@ -58,6 +70,7 @@ function emptyBookForm() {
     author: "",
     isbn: "",
     category: "Fiction",
+    categoryId: "",
     copies: 1,
     addedOn: todayISO(),
   };
@@ -75,6 +88,10 @@ function normalizeBook(book) {
 function normalizeIssue(issue) {
   const book =
     issue.bookId && typeof issue.bookId === "object" ? issue.bookId : {};
+  const dueOn = issue.dueDate || issue.dueOn;
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const status = issue.status || "Issued";
   return {
     ...issue,
     id: issue._id || issue.id,
@@ -82,19 +99,41 @@ function normalizeIssue(issue) {
     title: book.title || issue.title || "Unknown book",
     borrower: issue.borrower || issue.borrowerId || "Unknown borrower",
     borrowerId: issue.borrowerId || "—",
-    dueOn: issue.dueDate || issue.dueOn,
+    dueOn,
     issuedOn: issue.issueDate || issue.issuedOn,
+    status,
+    displayStatus:
+      dueOn && status === "Issued" && new Date(dueOn) < todayStart
+        ? "Overdue"
+        : status,
   };
 }
 
 export default function Library() {
+  const user = useSelector(selectUser);
+  const { options: CLASS_OPTIONS } = useMasterOptions("classes", []);
   const [books, setBooks] = useState(seed);
   const [issues, setIssues] = useState(seedIssues);
+  const [students, setStudents] = useState([]);
+  const [notifying, setNotifying] = useState(false);
   useEffect(() => {
-    Promise.all([api.books.list(), api.issues.list()])
-      .then(([bookResponse, issueResponse]) => {
+    Promise.all([
+      api.books.list(),
+      api.issues.list(),
+      api.students.list("limit=1000"),
+    ])
+      .then(([bookResponse, issueResponse, studentResponse]) => {
         setBooks((bookResponse.data || []).map(normalizeBook));
         setIssues((issueResponse.data || []).map(normalizeIssue));
+        setStudents(
+          (studentResponse.data || []).map((s) => ({
+            _id: s._id,
+            name: s.name || "Unknown student",
+            admissionNo: s.admissionNo || "",
+            class: s.class,
+            section: s.section || "",
+          })),
+        );
       })
       .catch(() => {});
   }, []);
@@ -104,10 +143,13 @@ export default function Library() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyBookForm());
   const [editId, setEditId] = useState(null);
+  const [customModal, setCustomModal] = useState(null); // { kind, label, showDescription? } | null
   // issue book
   const [issueModal, setIssueModal] = useState(false);
   const [issueForm, setIssueForm] = useState({
     bookId: books[0]?.id || "",
+    studentKey: "",
+    studentAdm: "",
     borrower: "",
     borrowerId: "",
     studentClass: "",
@@ -147,15 +189,71 @@ export default function Library() {
     const totalTitles = books.length;
     const totalCopies = books.reduce((a, b) => a + b.copies, 0);
     const avail = books.reduce((a, b) => a + (b.available ?? 0), 0);
-    const issued = issues.filter((i) => i.status === "Issued").length;
-    const overdue = issues.filter((i) => i.status === "Overdue").length;
+    const issued = issues.filter((i) => i.displayStatus === "Issued").length;
+    const overdue = issues.filter((i) => i.displayStatus === "Overdue").length;
     return { totalTitles, totalCopies, avail, issued, overdue };
   }, [books, issues]);
+
+  const studentIdOptions = useMemo(
+    () =>
+      students
+        .map((s) => String(s.admissionNo).trim())
+        .filter(Boolean),
+    [students],
+  );
+
+  const studentByAdm = useMemo(() => {
+    const map = new Map();
+    students.forEach((s) => {
+      if (s.admissionNo) map.set(String(s.admissionNo), s);
+    });
+    return map;
+  }, [students]);
+
+  const borrowClass = (issue) => {
+    const stud = studentByAdm.get(String(issue.borrowerId || ""));
+    if (stud && stud.class)
+      return `${stud.class}${stud.section ? `-${stud.section}` : ""}`;
+    return "—";
+  };
+
+  const studentNameOptions = useMemo(
+    () => students.map((s) => String(s._id)),
+    [students],
+  );
+
+  const applyStudent = (s) => {
+    if (!s) return;
+    setIssueForm((f) => ({
+      ...f,
+      studentKey: String(s._id),
+      studentAdm: String(s.admissionNo || ""),
+      borrower: s.name,
+      borrowerId: s.admissionNo || String(s._id),
+      studentClass: s.class ? String(s.class) : f.studentClass,
+    }));
+  };
+
+  const pickStudentByName = (id) =>
+    applyStudent(students.find((s) => String(s._id) === String(id)));
+
+  const pickStudentById = (adm) =>
+    applyStudent(
+      students.find((s) => String(s.admissionNo) === String(adm)),
+    );
 
   const openAddBook = () => {
     setEditId(null);
     setForm(emptyBookForm());
     setShowModal(true);
+  };
+
+  const openIssueModal = () => {
+    setIssueForm((f) => ({
+      ...f,
+      bookId: books[0]?.id || "",
+    }));
+    setIssueModal(true);
   };
   const openEditBook = (b) => {
     setEditId(b.id);
@@ -203,7 +301,7 @@ export default function Library() {
 
   const issueBook = async () => {
     const book = books.find((b) => b.id === issueForm.bookId);
-    if (!book || !issueForm.borrower.trim()) return;
+    if (!book || !issueForm.studentKey) return;
     const currentAvail = book.available ?? book.copies;
     if (currentAvail <= 0) {
       toast("No available copies", "error");
@@ -230,6 +328,8 @@ export default function Library() {
       setIssueModal(false);
       setIssueForm({
         bookId: books[0]?.id || "",
+        studentKey: "",
+        studentAdm: "",
         borrower: "",
         borrowerId: "",
         studentClass: "",
@@ -254,12 +354,26 @@ export default function Library() {
       );
       setIssues((prev) =>
         prev.map((entry) =>
-          entry.id === id ? { ...entry, status: "Returned" } : entry,
+          entry.id === id
+            ? { ...entry, status: "Returned", displayStatus: "Returned" }
+            : entry,
         ),
       );
       toast("Book returned", "info");
     } catch (requestError) {
       toast(requestError.message, "error");
+    }
+  };
+
+  const notifyOverdue = async () => {
+    setNotifying(true);
+    try {
+      await api.issues.sendOverdueNotifications();
+      toast("Overdue notifications sent");
+    } catch (requestError) {
+      toast(requestError.message, "error");
+    } finally {
+      setNotifying(false);
     }
   };
 
@@ -269,6 +383,17 @@ export default function Library() {
         eyebrow="Academics"
         title="Library Management"
         description="Catalogue, issue and manage library books and borrowers."
+        right={
+          hasPermission(user, "library:notify") ? (
+            <Button
+              variant="outline"
+              onClick={notifyOverdue}
+              disabled={notifying}
+            >
+              <Bell size={15} /> {notifying ? "Sending..." : "Notify Overdue"}
+            </Button>
+          ) : null
+        }
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
@@ -326,7 +451,7 @@ export default function Library() {
             <Plus size={15} /> Add Book
           </Button>
         ) : (
-          <Button variant="amber" onClick={() => setIssueModal(true)}>
+          <Button variant="amber" onClick={openIssueModal}>
             <BookPlus size={15} /> Issue Book
           </Button>
         )}
@@ -401,7 +526,7 @@ export default function Library() {
                         <td className="px-5 py-3">
                           <p className="font-semibold text-ink">{b.title}</p>
                           <p className="text-[11.5px] text-slate-text/50">
-                            by {b.author} · {b.id}
+                            by {b.author}
                           </p>
                         </td>
                         <td className="px-5 py-3 font-mono text-[12px] text-slate-text">
@@ -450,7 +575,7 @@ export default function Library() {
           <EmptyState
             icon={BookPlus}
             text="No books currently issued"
-            action={() => setIssueModal(true)}
+            action={openIssueModal}
             actionLabel="Issue Book"
           />
         ) : (
@@ -478,18 +603,26 @@ export default function Library() {
                     </td>
                     <td className="px-5 py-3">
                       <p className="text-ink font-medium">{i.borrower}</p>
-                      <p className="text-[11px] text-slate-text/50 font-mono">
-                        {i.borrowerId}
-                      </p>
+                      {!isMongoId(i.borrowerId) && (
+                        <p className="text-[11px] text-slate-text/50 font-mono">
+                          {i.borrowerId}
+                        </p>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-slate-text">
-                      {i.studentClass}
+                      {borrowClass(i)}
                     </td>
-                    <td className="px-5 py-3 text-slate-text">{i.issuedOn}</td>
-                    <td className="px-5 py-3 text-slate-text">{i.dueOn}</td>
+                    <td className="px-5 py-3 text-slate-text">
+                      {fmtDate(i.issuedOn)}
+                    </td>
+                    <td className="px-5 py-3 text-slate-text">
+                      {fmtDate(i.dueOn)}
+                    </td>
                     <td className="px-5 py-3">
-                      <Pill tone={i.status === "Overdue" ? "alert" : "info"}>
-                        {i.status}
+                      <Pill
+                        tone={i.displayStatus === "Overdue" ? "alert" : "info"}
+                      >
+                        {i.displayStatus}
                       </Pill>
                     </td>
                     <td className="px-5 py-3">
@@ -513,6 +646,7 @@ export default function Library() {
       {showModal && (
         <BaseModal
           title={editId ? "Edit Book" : "Add Book"}
+          size="xl"
           onClose={() => setShowModal(false)}
           footer={
             <>
@@ -547,7 +681,26 @@ export default function Library() {
                 }
               />
             </Field>
-            <Field label="ISBN">
+            <Field
+              label={
+                <span className="inline-flex items-center gap-1.5 group">
+                  ISBN
+                  <span className="text-slate-text/50 text-[10.5px] font-normal">
+                    (optional)
+                  </span>
+                  <span className="relative">
+                    <Info
+                      size={14}
+                      className="text-slate-text/50 group-hover:text-info transition-colors cursor-help"
+                    />
+                    <span className="hidden group-hover:block absolute z-20 top-full left-1/2 -translate-x-1/2 mt-1 w-max max-w-[220px] px-3 py-1.5 rounded-lg bg-ink text-white text-[11px] font-normal leading-snug shadow-lg">
+                      International Standard Book Number — 10 or 13 digit unique
+                      identifier of the book edition.
+                    </span>
+                  </span>
+                </span>
+              }
+            >
               <Input
                 value={form.isbn}
                 onChange={(e) =>
@@ -558,18 +711,25 @@ export default function Library() {
           </div>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Category">
-              <Select
-                value={form.category}
-                onChange={(e) =>
-                  setForm((f) => ({ ...f, category: e.target.value }))
+              <MasterSelect
+                kind="book-categories"
+                label="Category"
+                placeholder="Select category"
+                searchLabel="Search categories..."
+                value={form.categoryId}
+                fallbackLabel={form.category}
+                onChange={(id, item) =>
+                  setForm((f) => ({
+                    ...f,
+                    categoryId: id,
+                    category: item ? item.name : "",
+                  }))
                 }
-              >
-                {CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {c}
-                  </option>
-                ))}
-              </Select>
+                canAdd
+                onAdd={() =>
+                  setCustomModal({ kind: "book-categories", label: "Category" })
+                }
+              />
             </Field>
             <Field label="Copies">
               <Input
@@ -598,7 +758,7 @@ export default function Library() {
               <Button
                 variant="amber"
                 onClick={issueBook}
-                disabled={!issueForm.borrower.trim()}
+                disabled={!issueForm.studentKey || !issueForm.bookId}
               >
                 <BookPlus size={15} /> Issue
               </Button>
@@ -612,40 +772,48 @@ export default function Library() {
                 setIssueForm((f) => ({ ...f, bookId: e.target.value }))
               }
             >
+              <option value="">Select a book…</option>
               {books.map((b) => (
                 <option key={b.id} value={b.id}>
-                  {b.title} ({b.id})
+                  {b.title}
                 </option>
               ))}
             </Select>
           </Field>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Borrower Name *">
-              <Input
-                value={issueForm.borrower}
-                onChange={(e) =>
-                  setIssueForm((f) => ({ ...f, borrower: e.target.value }))
-                }
-              />
-            </Field>
-            <Field label="Student ID">
-              <Input
-                value={issueForm.borrowerId}
-                onChange={(e) =>
-                  setIssueForm((f) => ({ ...f, borrowerId: e.target.value }))
-                }
-              />
-            </Field>
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Field label="Class">
-              <Input
-                value={issueForm.studentClass}
-                onChange={(e) =>
-                  setIssueForm((f) => ({ ...f, studentClass: e.target.value }))
-                }
-              />
-            </Field>
+<div className="grid grid-cols-2 gap-3">
+              <Field label="Student Name *">
+                <SearchableSelect
+                  options={studentNameOptions}
+                  value={issueForm.studentKey}
+                  onChange={pickStudentByName}
+                  renderLabel={(id) =>
+                    students.find((s) => String(s._id) === String(id))?.name ||
+                    ""
+                  }
+                  placeholder="Select student"
+                />
+              </Field>
+              <Field label="Student ID *">
+                <SearchableSelect
+                  options={studentIdOptions}
+                  value={issueForm.studentAdm}
+                  onChange={pickStudentById}
+                  renderLabel={(adm) => adm || ""}
+                  placeholder="ADM-xxx or search"
+                />
+              </Field>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+               <Field label="Class"> 
+               <SearchableSelect 
+                 options={CLASS_OPTIONS} 
+                 value={issueForm.studentClass} 
+                 onChange={(val) => 
+                   setIssueForm((f) => ({ ...f, studentClass: val })) 
+                 } 
+                 placeholder="Auto-filled" 
+               /> 
+             </Field>
             <Field label="Due Date">
               <Input
                 type="date"
@@ -657,6 +825,26 @@ export default function Library() {
             </Field>
           </div>
         </BaseModal>
+      )}
+
+      {/* ADD CUSTOM MASTER MODAL */}
+      {customModal && (
+        <CustomMasterModal
+          kind={customModal.kind}
+          label={customModal.label}
+          title="Add Custom Category"
+          onClose={() => setCustomModal(null)}
+          onCreated={(created) => {
+            invalidateMasterCache(customModal.kind);
+            if (customModal.kind === "book-categories") {
+              setForm((f) => ({
+                ...f,
+                categoryId: created._id,
+                category: created.name,
+              }));
+            }
+          }}
+        />
       )}
     </div>
   );
@@ -673,14 +861,15 @@ function Field({ label, children }) {
   );
 }
 
-function BaseModal({ title, onClose, footer, children }) {
+function BaseModal({ title, onClose, footer, children, size = "lg" }) {
+  const widthClass = size === "xl" ? "max-w-xl" : "max-w-lg";
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <div
         className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
         onClick={onClose}
       />
-      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+      <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${widthClass} overflow-hidden`}>
         <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
           <h3 className="font-display font-semibold text-ink text-[17px]">
             {title}

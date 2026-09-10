@@ -10,6 +10,7 @@ const morgan = require("morgan");
 const mongoose = require("mongoose");
 
 const authRoutes = require("./routes/authRoutes");
+const sessionRoutes = require("./routes/sessionRoutes");
 const platformRoutes = require("./routes/platformRoutes");
 const ensureBillingDefaults = require("./init/ensureBillingDefaults");
 
@@ -39,16 +40,17 @@ app.use(
   cors({
     origin: process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
-      : true,
+      : false,
   }),
 );
 app.use(morgan("dev"));
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 
 app.get("/health", (req, res) =>
   res.json({ success: true, service: "auth-service", status: "UP" }),
 );
 app.use("/api/auth", authRoutes);
+app.use("/api/auth/sessions", sessionRoutes);
 app.use("/api/platform", platformRoutes);
 
 app.use((err, req, res, next) =>

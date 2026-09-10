@@ -22,12 +22,12 @@ app.use(
   cors({
     origin: process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
-      : true,
+      : false,
     credentials: true,
   }),
 );
 app.use(morgan("dev"));
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 
 mongoose
   .connect(process.env.FEE_MONGODB_URI)

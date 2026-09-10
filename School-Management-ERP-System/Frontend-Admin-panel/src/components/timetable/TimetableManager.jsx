@@ -11,27 +11,11 @@ import {
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { Button, Card, Input, Pill, Select, toast } from "../UI";
+import MasterSelect from "../MasterSelect";
+import CustomMasterModal from "../CustomMasterModal";
+import { invalidateMasterCache } from "../../lib/masterCache";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-const SUBJECT_SUGGESTIONS = [
-  "Maths",
-  "Science",
-  "English",
-  "Hindi",
-  "Social Science",
-  "Computer",
-  "Physics",
-  "Chemistry",
-  "Biology",
-  "Accountancy",
-  "Business Studies",
-  "Economics",
-  "Physical Education",
-  "Art",
-  "Break",
-  "Library",
-];
 
 function sortPeriods(periods) {
   return [...(periods || [])].sort((a, b) =>
@@ -56,6 +40,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
   const [saving, setSaving] = useState(false);
   const [draft, setDraft] = useState(null); // { mode, day, index, ...period }
   const [confirmDelete, setConfirmDelete] = useState(null); // { day, index }
+  const [customModal, setCustomModal] = useState(null); // { kind, label, showDescription? } | null
 
   useEffect(() => {
     api.staff
@@ -114,6 +99,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
       mode: "add",
       day,
       subject: "",
+      subjectId: "",
       teacherId: "",
       teacherName: "",
       startTime: "",
@@ -129,6 +115,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
       day,
       index,
       subject: period.subject || "",
+      subjectId: period.subjectId || "",
       teacherId: period.teacherId || "",
       teacherName: period.teacherName || "",
       startTime: period.startTime || "",
@@ -290,7 +277,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
           </div>
         ) : (
           <div className="overflow-x-auto -mx-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 px-5 pb-5 min-w-[980px]">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 px-5 pb-5">
               {DAYS.map((day) => {
                 const periods = byDay.get(day) || [];
                 return (
@@ -420,19 +407,29 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                 <label className="block text-[12.5px] font-medium text-ink mb-1.5">
                   Subject
                 </label>
-                <Input
-                  value={draft.subject}
-                  onChange={(e) =>
-                    setDraft((d) => ({ ...d, subject: e.target.value }))
+                <MasterSelect
+                  kind="subjects"
+                  label="Subject"
+                  placeholder="Select subject"
+                  searchLabel="Search subjects..."
+                  value={draft.subjectId}
+                  fallbackLabel={draft.subject}
+                  onChange={(id, item) =>
+                    setDraft((d) => ({
+                      ...d,
+                      subjectId: id,
+                      subject: item ? item.name : "",
+                    }))
                   }
-                  placeholder="e.g. Mathematics"
-                  list="tt-subject-suggestions"
+                  canAdd
+                  onAdd={() =>
+                    setCustomModal({
+                      kind: "subjects",
+                      label: "Subject",
+                      showDescription: true,
+                    })
+                  }
                 />
-                <datalist id="tt-subject-suggestions">
-                  {SUBJECT_SUGGESTIONS.map((s) => (
-                    <option key={s} value={s} />
-                  ))}
-                </datalist>
               </div>
 
               <div>
@@ -548,6 +545,26 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Add Custom master modal */}
+      {customModal && (
+        <CustomMasterModal
+          kind={customModal.kind}
+          label={customModal.label}
+          showDescription={customModal.showDescription}
+          onClose={() => setCustomModal(null)}
+          onCreated={(created) => {
+            invalidateMasterCache(customModal.kind);
+            if (customModal.kind === "subjects") {
+              setDraft((d) => ({
+                ...d,
+                subjectId: created._id,
+                subject: created.name,
+              }));
+            }
+          }}
+        />
       )}
     </div>
   );

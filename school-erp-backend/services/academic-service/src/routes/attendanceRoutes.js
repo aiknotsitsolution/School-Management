@@ -6,6 +6,7 @@ const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStude
 router.use(verifyToken, resolveTenant, requireTenant);
 
 router.post("/mark", requirePermission("attendance:mark"), scopeClassTeacher, guardClassBody("records"), ctrl.markAttendance);
+router.get("/report", requirePermission("attendance:read"), ctrl.getAttendanceReport);
 router.get("/", requirePermission("attendance:read"), scopeStudentQuery, scopeClassTeacher, ctrl.getAttendance);
 
 module.exports = router;

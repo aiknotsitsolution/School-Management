@@ -3,7 +3,7 @@ const crypto = require("node:crypto");
 const FeeInvoice = require("../models/FeeInvoice");
 const Payment = require("../models/Payment");
 const PaymentOrder = require("../models/PaymentOrder");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
 // Whether a real payment provider is configured. Provider setup (keys, webhook
 // signing secret, callback URL) is deployment work; until then, orders can be

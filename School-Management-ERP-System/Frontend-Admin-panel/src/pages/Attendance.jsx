@@ -17,12 +17,12 @@ import {
   PageIntro,
   Card,
   Button,
-  Select,
   Input,
   Avatar,
   StatCard,
   Pill,
 } from "../components/UI";
+import SearchableSelect from "../components/SearchableSelect";
 import {
   AreaChart,
   Area,
@@ -33,8 +33,9 @@ import {
   YAxis,
 } from "recharts";
 import { api } from "../lib/api";
+import { useMasterOptions } from "../hooks/useMasterOptions";
 
-const CLASS_OPTIONS = [
+const CLASS_OPTIONS_FALLBACK = [
   "Nursery",
   "LKG",
   "UKG",
@@ -54,14 +55,18 @@ const CLASS_OPTIONS = [
   "12-Com",
 ];
 
-const SECTION_OPTIONS = ["A", "B", "C"];
+const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
 
-const STATUS_CONFIG = {
-  present: { label: "P", full: "Present", tone: "success" },
-  absent: { label: "A", full: "Absent", tone: "alert" },
-  late: { label: "L", full: "Late", tone: "amber" },
-  leave: { label: "Lv", full: "Leave", tone: "info" },
+const DEFAULT_STATUSES = ["Present", "Absent", "Late", "Leave"];
+const STATUS_TONES = { present: "success", absent: "alert", late: "amber", leave: "info" };
+const STATUS_LABELS = { present: "P", absent: "A", late: "L", leave: "Lv" };
+const ACTIVE_STYLES = {
+  present: "bg-success text-white border-success",
+  absent: "bg-alert text-white border-alert",
+  late: "bg-amber text-ink border-amber",
+  leave: "bg-info text-white border-info",
 };
+const API_STATUS_MAP = { present: "Present", absent: "Absent", late: "Half Day", leave: "Leave" };
 
 function formatClassLabel(c) {
   if (["Nursery", "LKG", "UKG"].includes(c)) return c;
@@ -79,6 +84,9 @@ function todayLabel() {
 }
 
 export default function Attendance() {
+  const { options: CLASS_OPTIONS } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
+  const { options: SECTION_OPTIONS, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
+  const { options: attendanceStatusOptions } = useMasterOptions("attendance-statuses", DEFAULT_STATUSES);
   const [students, setStudents] = useState([]);
   const [attendanceTrend, setAttendanceTrend] = useState([]);
   const [cls, setCls] = useState("8");
@@ -88,6 +96,23 @@ export default function Attendance() {
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
   const [date] = useState(todayLabel());
+
+  const statusConfig = useMemo(() => {
+    const cfg = {};
+    attendanceStatusOptions.forEach((name) => {
+      const key = name.toLowerCase().replace(/\s+/g, "_");
+      cfg[key] = {
+        label: STATUS_LABELS[key] || name.charAt(0),
+        full: name,
+        tone: STATUS_TONES[key] || "neutral",
+      };
+    });
+    return cfg;
+  }, [attendanceStatusOptions]);
+  const filteredSections = useMemo(() => {
+    if (!cls || cls === "All") return SECTION_OPTIONS;
+    return [...new Set(rawSections.filter((s) => s.className === cls).map((s) => s.name))];
+  }, [cls, SECTION_OPTIONS, rawSections]);
 
   useEffect(() => {
     Promise.all([api.students.list("limit=1000"), api.attendance.list()])
@@ -158,11 +183,21 @@ export default function Attendance() {
       .sort((a, b) => a.roll - b.roll);
   }, [cls, section, query]);
 
+  const [attPage, setAttPage] = useState(1);
+  const [attPageSize, setAttPageSize] = useState(20);
+  const attTotalPages = Math.max(1, Math.ceil(list.length / attPageSize));
+  const attSafePage = Math.min(attPage, attTotalPages);
+  const paginatedList = useMemo(() => {
+    const start = (attSafePage - 1) * attPageSize;
+    return list.slice(start, start + attPageSize);
+  }, [list, attSafePage, attPageSize]);
+
   // Reset marks when class/section changes
   useEffect(() => {
     setMarks({});
     setSaved(false);
-  }, [cls, section]);
+    setAttPage(1);
+  }, [cls, section, query]);
 
   const setMark = (id, val) => {
     setMarks((m) => ({ ...m, [id]: val }));
@@ -181,13 +216,14 @@ export default function Attendance() {
   const getStatus = (id) => marks[id] || "present";
 
   const counts = useMemo(() => {
-    const c = { present: 0, absent: 0, late: 0, leave: 0 };
+    const c = {};
+    Object.keys(statusConfig).forEach((k) => { c[k] = 0; });
     list.forEach((s) => {
       const st = getStatus(s.id);
       c[st] = (c[st] || 0) + 1;
     });
     return c;
-  }, [list, marks]);
+  }, [list, marks, statusConfig]);
 
   const handleSave = async () => {
     if (list.length === 0) {
@@ -217,6 +253,49 @@ export default function Attendance() {
     }
   };
 
+  const exportRegister = () => {
+    if (list.length === 0) return;
+    const headers = [
+      "Admission No",
+      "Name",
+      "Class",
+      "Section",
+      "Roll",
+      "Status",
+    ];
+    const rows = list.map((s) => [
+      s.id,
+      s.name,
+      s.class,
+      s.section,
+      s.roll,
+      (statusConfig[getStatus(s.id)] || {}).full || "Present",
+    ]);
+    const csv = [headers, ...rows]
+      .map((row) =>
+        row
+          .map((cell) => {
+            const value = String(cell ?? "");
+            return /[",\n]/.test(value)
+              ? `"${value.replace(/"/g, '""')}"`
+              : value;
+          })
+          .join(","),
+      )
+      .join("\n");
+    const blob = new Blob([`\uFEFF${csv}`], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `attendance-${cls}-${section}-${new Date().toISOString().slice(0, 10)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       <PageIntro
@@ -225,7 +304,7 @@ export default function Attendance() {
         description="Mark and monitor daily attendance across classes and sections."
         right={
           <div className="flex gap-2">
-            <Button variant="outline">
+            <Button variant="outline" onClick={exportRegister}>
               <Download size={15} /> Export Register
             </Button>
           </div>
@@ -235,38 +314,20 @@ export default function Attendance() {
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={CalendarCheck}
-          label="School Average Today"
-          value="96.2%"
-          sub="1,024 of 1,065 present"
-          accent="success"
-        />
-        <StatCard
-          icon={UserCheck}
-          label="This Class Present"
-          value={`${counts.present}/${list.length}`}
-          sub={
-            list.length
-              ? `${Math.round((counts.present / list.length) * 100)}% present`
-              : "—"
-          }
-          accent="amber"
-        />
-        <StatCard
-          icon={Timer}
-          label="Late Arrivals"
-          value={String(counts.late)}
-          sub="Marked as late today"
-          accent="info"
-        />
-        <StatCard
-          icon={UserX}
-          label="Absent / On Leave"
-          value={String(counts.absent + counts.leave)}
-          sub={`${counts.absent} absent · ${counts.leave} leave`}
-          accent="alert"
-        />
+        {Object.entries(statusConfig).slice(0, 4).map(([key, cfg]) => (
+          <StatCard
+            key={key}
+            icon={key === "present" ? UserCheck : key === "absent" ? UserX : key === "late" ? Timer : CheckCircle2}
+            label={cfg.full}
+            value={String(counts[key] || 0)}
+            sub={
+              list.length && key === "present"
+                ? `${Math.round(((counts[key] || 0) / list.length) * 100)}% of class`
+                : `${counts[key] || 0} students`
+            }
+            accent={cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "amber" ? "amber" : "info"}
+          />
+        ))}
       </div>
 
       {/* Trend Chart */}
@@ -344,28 +405,22 @@ export default function Attendance() {
                 className="pl-8 w-44 sm:w-52"
               />
             </div>
-            <Select
+            <SearchableSelect
+              options={CLASS_OPTIONS}
               value={cls}
-              onChange={(e) => setCls(e.target.value)}
-              className="min-w-32.5"
-            >
-              {CLASS_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {formatClassLabel(c)}
-                </option>
-              ))}
-            </Select>
-            <Select
+              onChange={(v) => { setCls(v); setSection(filteredSections[0] || ""); }}
+              renderLabel={(c) => formatClassLabel(c)}
+              placeholder="Select class"
+              className="min-w-[140px]"
+            />
+            <SearchableSelect
+              options={filteredSections}
               value={section}
-              onChange={(e) => setSection(e.target.value)}
-              className="min-w-25"
-            >
-              {SECTION_OPTIONS.map((s) => (
-                <option key={s} value={s}>
-                  Section {s}
-                </option>
-              ))}
-            </Select>
+              onChange={setSection}
+              renderLabel={(s) => `Section ${s}`}
+              placeholder="Section"
+              className="min-w-[120px]"
+            />
           </div>
         }
       >
@@ -417,7 +472,7 @@ export default function Attendance() {
           </div>
         ) : (
           <div className="divide-y divide-black/5">
-            {list.map((s) => {
+            {paginatedList.map((s) => {
               const status = getStatus(s.id);
               return (
                 <div
@@ -438,14 +493,8 @@ export default function Attendance() {
                   </div>
 
                   <div className="flex gap-1.5 shrink-0">
-                    {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
+                    {Object.entries(statusConfig).map(([key, cfg]) => {
                       const isActive = status === key;
-                      const activeStyles = {
-                        present: "bg-success text-white border-success",
-                        absent: "bg-alert text-white border-alert",
-                        late: "bg-amber text-ink border-amber",
-                        leave: "bg-info text-white border-info",
-                      };
                       return (
                         <button
                           key={key}
@@ -453,7 +502,7 @@ export default function Attendance() {
                           onClick={() => setMark(s.id, key)}
                           className={`w-9 h-9 rounded-lg text-[12px] font-bold border transition-all ${
                             isActive
-                              ? activeStyles[key]
+                              ? (ACTIVE_STYLES[key] || "bg-ink text-white border-ink")
                               : "bg-white text-slate-text/55 border-black/10 hover:bg-paper hover:border-black/20"
                           }`}
                         >
@@ -468,16 +517,47 @@ export default function Attendance() {
           </div>
         )}
 
+        {/* Pagination */}
+        {list.length > attPageSize && (
+          <div className="flex items-center justify-between pt-4 mt-3 border-t border-black/[0.04]">
+            <p className="text-[12px] text-slate-text/55">
+              Showing {list.length === 0 ? 0 : (attSafePage - 1) * attPageSize + 1}–{Math.min(attSafePage * attPageSize, list.length)} of {list.length}
+            </p>
+            <div className="flex items-center gap-2">
+              <select
+                value={attPageSize}
+                onChange={(e) => { setAttPageSize(Number(e.target.value)); setAttPage(1); }}
+                className="text-[12px] border border-black/[0.08] rounded-lg px-2 py-1.5 bg-paper text-ink"
+              >
+                {[10, 20, 50].map((n) => (
+                  <option key={n} value={n}>{n} / page</option>
+                ))}
+              </select>
+              <Button variant="outline" className="px-3 py-1.5 text-[12px]" disabled={attSafePage <= 1} onClick={() => setAttPage((p) => Math.max(1, p - 1))}>
+                Prev
+              </Button>
+              <span className="text-[12px] text-ink font-medium">{attSafePage} / {attTotalPages}</span>
+              <Button variant="outline" className="px-3 py-1.5 text-[12px]" disabled={attSafePage >= attTotalPages} onClick={() => setAttPage((p) => Math.min(attTotalPages, p + 1))}>
+                Next
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Footer actions */}
         {list.length > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 pt-4 border-t border-black/6">
             <div className="text-[12.5px] text-slate-text/70">
               Showing <strong className="text-ink">{list.length}</strong>{" "}
-              students · Present{" "}
-              <strong className="text-success">{counts.present}</strong> ·
-              Absent <strong className="text-alert">{counts.absent}</strong> ·
-              Late <strong className="text-amber-dark">{counts.late}</strong> ·
-              Leave <strong className="text-info">{counts.leave}</strong>
+              students{" "}
+              {Object.entries(statusConfig).map(([key, cfg]) => (
+                <span key={key}>
+                  · {cfg.full}{" "}
+                  <strong className={`text-${cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "amber" ? "amber-dark" : "info"}`}>
+                    {counts[key] || 0}
+                  </strong>
+                </span>
+              ))}
             </div>
             <div className="flex items-center gap-3">
               {saved && (

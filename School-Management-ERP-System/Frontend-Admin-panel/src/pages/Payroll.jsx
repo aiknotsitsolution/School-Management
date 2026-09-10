@@ -238,32 +238,37 @@ export default function Payroll() {
 
       <Card className="!p-0 overflow-hidden">
         <div className="flex flex-wrap items-center gap-3 p-4 border-b border-black/[0.06]">
-          <Select
-            value={month}
-            className="min-w-[150px] font-semibold"
-            onChange={(e) =>
-              setPeriod((p) => ({ ...p, month: e.target.value }))
-            }
-          >
-            {MONTHS.map((m) => (
-              <option key={m} value={m}>
-                {m}
-              </option>
-            ))}
-          </Select>
-          <Select
-            value={year}
-            className="min-w-[110px] font-semibold"
-            onChange={(e) =>
-              setPeriod((p) => ({ ...p, year: Number(e.target.value) }))
-            }
-          >
-            {[2024, 2025, 2026, 2027, 2028].map((y) => (
-              <option key={y} value={y}>
-                {y}
-              </option>
-            ))}
-          </Select>
+          <div className="flex items-center gap-1.5 rounded-xl border border-black/10 bg-white p-1.5 shadow-sm">
+            <Select
+              value={month}
+              className="!w-auto !min-w-[135px] !border-0 !bg-transparent !px-3 !py-1.5 font-semibold hover:!border-0 focus:!border-0 focus:!ring-0"
+              onChange={(e) =>
+                setPeriod((p) => ({ ...p, month: e.target.value }))
+              }
+            >
+              {MONTHS.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </Select>
+            <span className="text-slate-text/30 text-[13px] select-none">
+              /
+            </span>
+            <Select
+              value={year}
+              className="!w-auto !min-w-[85px] !border-0 !bg-transparent !px-3 !py-1.5 font-semibold hover:!border-0 focus:!border-0 focus:!ring-0"
+              onChange={(e) =>
+                setPeriod((p) => ({ ...p, year: Number(e.target.value) }))
+              }
+            >
+              {[2024, 2025, 2026, 2027, 2028].map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </Select>
+          </div>
           <div className="ml-auto flex items-center gap-2 text-[13px] text-slate-text">
             <BadgeCheck size={15} className="text-success" /> Net payable{" "}
             <span className="font-semibold text-ink">

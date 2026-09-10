@@ -1,4 +1,5 @@
 const Timetable = require("../models/Timetable");
+const { findMissingMasterRefs, findMissingSubjects, missingMessage } = require("../utils/masterRefs");
 
 // Mass-assignment guard: only these fields may be set from the request body.
 const TIMETABLE_FIELDS = ["class", "section", "day", "periods"];
@@ -96,6 +97,19 @@ const upsertTimetable = async (req, res) => {
     const check = await validatePeriods(periods, { schoolId: req.tenantId, cls, section, day });
     if (!check.ok) {
       return res.status(400).json({ success: false, message: check.errors.join("; ") });
+    }
+
+    // Referential integrity: class/section/period-subjects must resolve to
+    // active masters when this school has configured the catalogs.
+    const missing = [
+      ...(await findMissingMasterRefs({ schoolId: req.tenantId, class: cls, section })),
+      ...(await findMissingSubjects({
+        schoolId: req.tenantId,
+        subjects: check.periods.map((p) => p.subject),
+      })),
+    ];
+    if (missing.length) {
+      return res.status(400).json({ success: false, message: missingMessage(missing) });
     }
 
     const existing = await Timetable.findOne({ schoolId: req.tenantId, class: cls, section, day }).lean();

@@ -1,8 +1,8 @@
 const Homework = require("../models/Homework");
 const HomeworkSubmission = require("../models/HomeworkSubmission");
-const imagekit = require("../config/imagekit");
+const imagekit = require("@school-erp/shared/src/config/imagekit");
 const { notifyByRefIds } = require("../utils/notify");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
 // Neutralizes problematic characters in uploaded filenames before they reach
 // ImageKit while keeping the original name for display purposes.

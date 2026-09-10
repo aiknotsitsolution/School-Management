@@ -2,12 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Award, FileBarChart } from "lucide-react";
 import { PageIntro, Card, Pill } from "../../components/UI";
 import { api } from "../../lib/api";
-
-const gradeOf = (obtained, max) => {
-  if (!max) return "N/A";
-  const pct = (obtained / max) * 100;
-  return pct >= 90 ? "A+" : pct >= 80 ? "A" : pct >= 70 ? "B+" : pct >= 60 ? "B" : pct >= 50 ? "C" : pct >= 33 ? "D" : "F";
-};
+import { computeGrade } from "../../lib/grading";
 
 export default function Results() {
   const [marks, setMarks] = useState({ subjects: [], totalObtained: 0, totalMax: 0, percentage: "0.00" });
@@ -100,7 +95,7 @@ export default function Results() {
                         <tr key={m._id || i} className="border-t border-black/[0.06]">
                           <td className="px-5 py-2.5 font-medium text-ink">{m.subject}</td>
                           <td className="px-3 py-2.5">{m.marksObtained} / {m.maxMarks}</td>
-                          <td className="px-3 py-2.5"><Pill tone={["A+", "A", "B+"].includes(m.grade || gradeOf(m.marksObtained, m.maxMarks)) ? "success" : "neutral"}>{m.grade || gradeOf(m.marksObtained, m.maxMarks)}</Pill></td>
+                          <td className="px-3 py-2.5"><Pill tone={["A+", "A", "B+"].includes(m.grade || computeGrade(m.marksObtained, m.maxMarks)) ? "success" : "neutral"}>{m.grade || computeGrade(m.marksObtained, m.maxMarks)}</Pill></td>
                           <td className="px-5 py-2.5 text-right font-semibold text-ink">{pct}%</td>
                         </tr>
                       );

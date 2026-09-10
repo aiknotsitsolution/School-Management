@@ -134,7 +134,7 @@ export function Button({ children, variant = "primary", className = "", ...props
 export function Input({ className = "", ...props }) {
   return (
     <input
-      className={`px-3.5 py-2.5 rounded-lg border border-black/10 text-[13px] outline-none focus:border-ink/40 bg-white placeholder:text-slate-text/50 ${className}`}
+      className={`w-full px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all placeholder:text-slate-text/40 hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15 ${className}`}
       {...props}
     />
   );
@@ -143,7 +143,7 @@ export function Input({ className = "", ...props }) {
 export function Select({ className = "", children, ...props }) {
   return (
     <select
-      className={`px-3.5 py-2.5 rounded-lg border border-black/10 text-[13px] outline-none focus:border-ink/40 bg-white ${className}`}
+      className={`w-full px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15 ${className}`}
       {...props}
     >
       {children}

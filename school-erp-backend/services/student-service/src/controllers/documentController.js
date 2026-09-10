@@ -1,6 +1,6 @@
 const StudentDocument = require("../models/StudentDocument");
-const imagekit = require("../config/imagekit");
-const { paginate, pageInfo } = require("../utils/pagination");
+const imagekit = require("@school-erp/shared/src/config/imagekit");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
 const sanitizeFileName = (name = "") =>
   name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100);
@@ -28,7 +28,7 @@ const uploadDocument = async (req, res) => {
       return res.status(400).json({ success: false, message: "title is required" });
     }
 
-    const imagekit = require("../config/imagekit");
+    const imagekit = require("@school-erp/shared/src/config/imagekit");
     if (!imagekit) {
       return res.status(503).json({ success: false, message: "Image provider is not configured" });
     }

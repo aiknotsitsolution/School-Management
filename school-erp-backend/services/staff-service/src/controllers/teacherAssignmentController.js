@@ -1,7 +1,8 @@
 const mongoose = require("mongoose");
 const TeacherAssignment = require("../models/TeacherAssignment");
 const Staff = require("../models/Staff");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
+const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
 
 const TYPES = ["teaching", "class_teacher"];
 const AVAILABLE_STATUSES = ["active", "ended"];
@@ -139,6 +140,11 @@ const createAssignment = async (req, res) => {
     value.staffId = staffId;
     value.schoolId = req.tenantId;
     value.staffName = staff.name || "";
+
+    await assertAcademicRefs({
+      req,
+      values: { class: value.class, section: value.section, subject: value.subject },
+    });
 
     await assertNoConflict({ schoolId: req.tenantId, staffId, ...value });
 
@@ -290,6 +296,13 @@ const updateAssignment = async (req, res) => {
 
     const id = doc._id;
     if (next.status === "active") {
+      // Validate only the fields being changed; a legacy stored value that is
+      // not part of this edit is left untouched and never re-checked.
+      const refValues = {};
+      if (changes.class !== undefined) refValues.class = next.class;
+      if (changes.section !== undefined) refValues.section = next.section;
+      if (changes.subject !== undefined) refValues.subject = next.subject;
+      await assertAcademicRefs({ req, values: refValues });
       await assertNoConflict({
         schoolId: req.tenantId,
         staffId: next.staffId,

@@ -1,5 +1,5 @@
 const Event = require("../models/Event");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
 // Mass-assignment guard: only these fields may be set from the request body
 // (schoolId / createdBy / timestamps stay server-owned).
@@ -56,4 +56,31 @@ const deleteEvent = async (req, res) => {
   }
 };
 
-module.exports = { createEvent, getEvents, updateEvent, deleteEvent };
+const uploadEventImage = async (req, res) => {
+  try {
+    if (!req.file)
+      return res.status(400).json({ success: false, message: "Image file is required" });
+    const imagekit = require("@school-erp/shared/src/config/imagekit");
+    if (!imagekit) {
+      return res
+        .status(503)
+        .json({ success: false, message: "Image provider is not configured" });
+    }
+    const uploaded = await imagekit.upload({
+      file: req.file.buffer.toString("base64"),
+      fileName: `event-${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "-")}`,
+      folder: "/school-erp/events",
+      useUniqueFileName: true,
+    });
+    res
+      .status(201)
+      .json({
+        success: true,
+        data: { url: uploaded.url, fileId: uploaded.fileId },
+      });
+  } catch (err) {
+    res.status(502).json({ success: false, message: err?.message || "Image upload failed" });
+  }
+};
+
+module.exports = { createEvent, getEvents, updateEvent, deleteEvent, uploadEventImage };

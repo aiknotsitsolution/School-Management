@@ -36,6 +36,10 @@ const studentSchema = new mongoose.Schema(
       default: "incomplete",
     },
     profileCompletedAt: { type: Date, default: null },
+    // School-issued student ID card lifecycle (issued by school admin after
+    // the student has been onboarded - profileStatus complete).
+    idCardNumber: { type: String, default: "" },
+    idCardIssuedAt: { type: Date, default: null },
   },
   { timestamps: true },
 );

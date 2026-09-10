@@ -28,12 +28,13 @@ export default function AvatarEditor({
   open,
   title = "Profile avatar",
   currentSrc,
+  initialFile,
   name = "",
   onClose,
   onSave,
   maxSize = AVATAR_MAX_SIZE,
 }) {
-  const [file, setFile] = useState(null);
+  const [file, setFile] = useState(initialFile || null);
   const [fileUrl, setFileUrl] = useState(null);
   const [natural, setNatural] = useState({ w: 0, h: 0 });
   const [zoom, setZoom] = useState(1);
@@ -61,6 +62,24 @@ export default function AvatarEditor({
     return () => img.onload = null;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, fileUrl]);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    setErrorMsg("");
+    resetAdjustments();
+    if (initialFile) {
+      const url = URL.createObjectURL(initialFile);
+      setFile(initialFile);
+      setFileUrl(url);
+      setNatural({ w: 0, h: 0 });
+    } else {
+      setFile(null);
+      setFileUrl(null);
+      setNatural({ w: 0, h: 0 });
+    }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialFile, resetAdjustments]);
 
   useEffect(() => {
     if (!open) return undefined;

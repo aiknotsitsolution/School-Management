@@ -8,7 +8,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
-const imagekit = require("./config/imagekit");
+const imagekit = require("@school-erp/shared/src/config/imagekit");
 
 const timetableRoutes = require("./routes/timetableRoutes");
 const attendanceRoutes = require("./routes/attendanceRoutes");
@@ -17,6 +17,9 @@ const homeworkSubmissionRoutes = require("./routes/homeworkSubmissionRoutes");
 const examRoutes = require("./routes/examRoutes");
 const examMasterRoutes = require("./routes/examMasterRoutes");
 const marksRoutes = require("./routes/marksRoutes");
+const promotionRoutes = require("./routes/promotionRoutes");
+const transferRoutes = require("./routes/transferRoutes");
+const rolloverRoutes = require("./routes/rolloverRoutes");
 
 const app = express();
 const PORT = process.env.ACADEMIC_SERVICE_PORT || 5004;
@@ -26,12 +29,12 @@ app.use(
   cors({
     origin: process.env.CORS_ORIGIN
       ? process.env.CORS_ORIGIN.split(",").map((o) => o.trim())
-      : true,
+      : false,
     credentials: true,
   }),
 );
 app.use(morgan("dev"));
-app.use(express.json());
+app.use(express.json({ limit: "100kb" }));
 
 mongoose
   .connect(process.env.ACADEMIC_MONGODB_URI)
@@ -55,6 +58,9 @@ app.use("/api/homework", homeworkRoutes);
 app.use("/api/exams", examRoutes);
 app.use("/api/exam-masters", examMasterRoutes);
 app.use("/api/marks", marksRoutes);
+app.use("/api/promotions", promotionRoutes);
+app.use("/api/transfers", transferRoutes);
+app.use("/api/rollover", rolloverRoutes);
 
 app.use((err, req, res, next) =>
 {

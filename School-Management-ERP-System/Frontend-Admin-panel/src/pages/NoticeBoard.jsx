@@ -1,13 +1,13 @@
-import { useEffect, useMemo, useState } from "react";
-import { Pin, Plus, X, Save, Pencil, Bell, Search, PinOff } from "lucide-react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Pin, Plus, X, Save, Pencil, Bell, Search, PinOff, ChevronDown } from "lucide-react";
 import {
   PageIntro,
   Card,
   Button,
   Input,
-  Select,
   Pill,
   StatCard,
+  toast,
 } from "../components/UI";
 import { api } from "../lib/api";
 
@@ -88,6 +88,154 @@ const audienceValues = {
   "Classes 3–10": ["all"],
   "Transport Users": ["all"],
 };
+
+// Preset audiences map to backend role tags; custom ones are stored verbatim so
+// each card keeps showing the label the admin chose.
+const resolveAudience = (label) => audienceValues[label] || [String(label).trim()];
+
+// Searchable dropdown with an "add custom" action. Falls back to a simple
+// combination of the preset list plus any custom values already picked.
+function SearchableSelect({ options, value, onChange, placeholder }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [custom, setCustom] = useState([]);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const boxRef = useRef(null);
+
+  const all = useMemo(
+    () => [...new Set([...options, ...custom])],
+    [options, custom],
+  );
+
+  const q = query.trim().toLowerCase();
+  const matches = q
+    ? all.filter((o) => String(o).toLowerCase().includes(q))
+    : all;
+  const exactMatch = all.some((o) => String(o).toLowerCase() === q);
+  const canAdd = q.length > 0 && !exactMatch;
+
+  useEffect(() => {
+    setActiveIndex(matches.length > 0 ? 0 : -1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+
+  useEffect(() => {
+    if (!open) return;
+    const onDocClick = (e) => {
+      if (boxRef.current && !boxRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.min(i + 1, matches.length - 1));
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setActiveIndex((i) => Math.max(i - 1, 0));
+      }
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (canAdd && activeIndex === matches.length) {
+          commit(q);
+        } else if (activeIndex >= 0 && matches[activeIndex]) {
+          commit(String(matches[activeIndex]));
+        }
+      }
+    };
+    document.addEventListener("click", onDocClick);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("click", onDocClick);
+      document.removeEventListener("keydown", onKey);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, query, matches, canAdd, activeIndex]);
+
+  const commit = (value) => {
+    if (!value) return;
+    setCustom((prev) => (prev.includes(value) ? prev : [...prev, value]));
+    onChange(value);
+    setOpen(false);
+    setQuery("");
+    setActiveIndex(-1);
+  };
+
+  return (
+    <div ref={boxRef} className="relative">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15"
+      >
+        <span className={value ? "" : "text-slate-text/60"}>
+          {value || placeholder || "Select an option"}
+        </span>
+        <ChevronDown
+          size={16}
+          className={`text-slate-text/50 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl border border-black/10 shadow-lg shadow-black/5 overflow-hidden">
+          <div className="relative p-2 border-b border-black/[0.06]">
+            <Search
+              size={14}
+              className="absolute left-4.5 top-1/2 -translate-y-1/2 text-slate-text/40"
+            />
+            <input
+              autoFocus
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search or type a new value…"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-paper border border-black/[0.06] text-[13px] outline-none focus:border-amber/50"
+            />
+          </div>
+
+          <ul className="max-h-52 overflow-y-auto py-1">
+            {matches.map((opt, i) => (
+              <li key={String(opt)}>
+                <button
+                  type="button"
+                  onClick={() => commit(opt)}
+                  className={`w-full text-left px-3.5 py-2 text-[13px] transition-colors ${
+                    i === activeIndex ? "bg-amber/10 text-ink" : "text-ink hover:bg-paper"
+                  }`}
+                >
+                  {String(opt)}
+                  {String(opt).toLowerCase() === q && (
+                    <span className="ml-1.5 text-[11px] text-amber-dark font-medium">(custom)</span>
+                  )}
+                </button>
+              </li>
+            ))}
+
+            {canAdd && (
+              <li>
+                <button
+                  type="button"
+                  onClick={() => commit(query.trim())}
+                  className={`w-full text-left px-3.5 py-2 text-[13px] text-amber-dark font-medium hover:bg-amber/10 transition-colors ${
+                    activeIndex === matches.length ? "bg-amber/10" : ""
+                  }`}
+                >
+                  + Add "{query.trim()}"
+                </button>
+              </li>
+            )}
+
+            {matches.length === 0 && !canAdd && (
+              <li className="px-3.5 py-2 text-[12.5px] text-slate-text/60">
+                No matches. Type to add a custom value.
+              </li>
+            )}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default function NoticeBoard() {
   const [notices, setNotices] = useState(initialNotices);
@@ -179,7 +327,7 @@ export default function NoticeBoard() {
         description: form.body.trim(),
         category: form.category,
         pinned: form.pinned,
-        audience: audienceValues[form.audience] || ["all"],
+        audience: resolveAudience(form.audience),
         expiryDate: form.date,
       });
       setNotices((prev) => [
@@ -189,6 +337,7 @@ export default function NoticeBoard() {
       setShowModal(false);
       setForm(emptyForm());
       setEditId(null);
+      toast(editId ? "Notice updated" : "Notice posted");
     } catch (e) {
       setError(e.message);
     }
@@ -204,7 +353,7 @@ export default function NoticeBoard() {
         description: notice.body,
         category: notice.category,
         pinned: !notice.pinned,
-        audience: audienceValues[notice.audience] || ["all"],
+        audience: resolveAudience(notice.audience),
         expiryDate: notice.date,
       });
       setNotices((prev) =>
@@ -212,6 +361,7 @@ export default function NoticeBoard() {
           (item._id || item.id) === id ? normalizeNotice(data) : item,
         ),
       );
+      toast(notice.pinned ? "Notice unpinned" : "Notice pinned");
     } catch (e) {
       setError(e.message);
     }
@@ -221,6 +371,7 @@ export default function NoticeBoard() {
     try {
       await api.notices.remove(id);
       setNotices((prev) => prev.filter((n) => (n._id || n.id) !== id));
+      toast("Notice deleted");
     } catch (e) {
       setError(e.message);
     }
@@ -409,16 +560,12 @@ export default function NoticeBoard() {
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Category
                   </label>
-                  <Select
+                  <SearchableSelect
+                    options={CATEGORIES}
                     value={form.category}
-                    onChange={(e) => updateForm("category", e.target.value)}
-                  >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </Select>
+                    onChange={(v) => updateForm("category", v)}
+                    placeholder="Select category"
+                  />
                 </div>
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
@@ -436,16 +583,12 @@ export default function NoticeBoard() {
                 <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                   Audience
                 </label>
-                <Select
+                <SearchableSelect
+                  options={AUDIENCE_OPTIONS}
                   value={form.audience}
-                  onChange={(e) => updateForm("audience", e.target.value)}
-                >
-                  {AUDIENCE_OPTIONS.map((a) => (
-                    <option key={a} value={a}>
-                      {a}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(v) => updateForm("audience", v)}
+                  placeholder="Select audience"
+                />
               </div>
 
               <div>

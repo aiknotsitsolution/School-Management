@@ -1,5 +1,5 @@
 const InventoryItem = require("../models/InventoryItem");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
 // Mass-assignment guard: only these fields may be set from the request body.
 const ITEM_FIELDS = [

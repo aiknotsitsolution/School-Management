@@ -1,54 +1,89 @@
 import { useEffect, useMemo, useState } from "react";
-import { api } from "../lib/api";
+import { useMasterOptions } from "../hooks/useMasterOptions";
 import { usePermission } from "../lib/permissions";
-import { PageIntro, Select } from "../components/UI";
+import { PageIntro } from "../components/UI";
+import SearchableSelect from "../components/SearchableSelect";
 import TimetableManager from "../components/timetable/TimetableManager";
 
+const CLASS_OPTIONS_FALLBACK = [
+  "Nursery",
+  "LKG",
+  "UKG",
+  "1",
+  "2",
+  "3",
+  "4",
+  "5",
+  "6",
+  "7",
+  "8",
+  "9",
+  "10",
+  "11-Sci",
+  "11-Com",
+  "12-Sci",
+  "12-Com",
+];
+const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
+
 export default function Timetable() {
-  const [students, setStudents] = useState([]);
+  const { options: masterClasses } = useMasterOptions(
+    "classes",
+    CLASS_OPTIONS_FALLBACK,
+  );
+  const { options: masterSections, rawItems: rawSections } = useMasterOptions(
+    "sections",
+    SECTION_OPTIONS_FALLBACK,
+  );
   const [cls, setCls] = useState("");
   const [section, setSection] = useState("");
   const canWrite = usePermission("timetable:write");
 
-  const classOptions = useMemo(() => {
-    const seen = new Map();
-    students.forEach((student) => {
-      if (!student.class || !student.section) return;
-      const key = `${student.class}|${student.section}`;
-      if (seen.has(key)) return;
-      seen.set(key, { class: student.class, section: student.section });
-    });
-    return [...seen.values()].sort(
-      (a, b) =>
-        String(a.class).localeCompare(String(b.class), undefined, {
-          numeric: true,
-        }) || String(a.section).localeCompare(String(b.section)),
-    );
-  }, [students]);
-
-  const sectionOptions = useMemo(
-    () => [
-      ...new Set(
-        (cls ? students.filter((s) => s.class === cls).map((s) => s.section) : students.map((s) => s.section))
-          .filter(Boolean),
-      ),
-    ].sort(),
-    [students, cls],
-  );
-
-  useEffect(() => {
-    api.students
-      .list("limit=1000")
-      .then(({ data }) => setStudents(data || []))
-      .catch(() => setStudents([]));
-  }, []);
+  const sectionOptions = useMemo(() => {
+    const forClass = cls
+      ? [...new Set(rawSections.filter((s) => s.className === cls).map((s) => s.name))]
+      : masterSections;
+    return [...new Set(forClass.filter(Boolean))].sort();
+  }, [cls, rawSections, masterSections]);
 
   const handleClassChange = (value) => {
-    setCls(value === "" ? "" : value);
+    const nextCls = value === "" ? "" : value;
+    setCls(nextCls);
     setSection("");
-    const match = classOptions.find((option) => option.class === value);
-    if (match && value) setSection(match.section);
+    if (nextCls) {
+      const sections = [
+        ...new Set(
+          rawSections
+            .filter((s) => s.className === nextCls)
+            .map((s) => s.name)
+            .filter(Boolean),
+        ),
+      ].sort();
+      if (sections.length) setSection(sections[0]);
+    }
   };
+
+  useEffect(() => {
+    if (cls || !masterClasses.length) return;
+    const defaultClass = masterClasses.includes("1")
+      ? "1"
+      : masterClasses[0];
+    setCls(defaultClass);
+  }, [cls, masterClasses]);
+
+  useEffect(() => {
+    if (cls && !section) {
+      const sections = [
+        ...new Set(
+          rawSections
+            .filter((s) => s.className === cls)
+            .map((s) => s.name)
+            .filter(Boolean),
+        ),
+      ].sort();
+      if (sections.length) setSection(sections[0]);
+    }
+  }, [cls, section, rawSections]);
 
   return (
     <div className="space-y-6">
@@ -62,31 +97,23 @@ export default function Timetable() {
         }
         right={
           <div className="flex flex-col sm:flex-row gap-3">
-            <Select
+            <SearchableSelect
+              options={masterClasses}
               value={cls}
-              onChange={(event) => handleClassChange(event.target.value)}
+              onChange={handleClassChange}
+              renderLabel={(option) => `Class ${option}`}
+              placeholder="Select class"
               className="min-w-[180px]"
-            >
-              <option value="">Select class</option>
-              {classOptions.map((option) => (
-                <option key={`${option.class}-${option.section}`} value={option.class}>
-                  Class {option.class}
-                </option>
-              ))}
-            </Select>
-            <Select
+            />
+            <SearchableSelect
+              options={sectionOptions}
               value={section}
-              onChange={(event) => setSection(event.target.value)}
-              className="min-w-[130px]"
+              onChange={setSection}
+              renderLabel={(s) => `Section ${s}`}
+              placeholder="Select section"
               disabled={!cls}
-            >
-              <option value="">Select section</option>
-              {sectionOptions.map((s) => (
-                <option key={s} value={s}>
-                  Section {s}
-                </option>
-              ))}
-            </Select>
+              className="min-w-[130px]"
+            />
           </div>
         }
       />

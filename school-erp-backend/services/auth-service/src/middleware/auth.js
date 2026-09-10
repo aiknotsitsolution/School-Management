@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
-const { getPermissionsFor } = require("../utils/permissions");
-const { getJwtSecret } = require("../utils/jwtSecret");
+const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
+const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const JWT_SECRET = getJwtSecret();
 
 // Decodes the JWT and attaches the tenant + role payload to req.user.
@@ -16,7 +16,9 @@ const verifyToken = async (req, res, next) => {
     const decoded = jwt.verify(header.split(" ")[1], JWT_SECRET);
 
     const UserModel = mongoose.models.User;
-    if (process.env.TOKEN_VALIDATION !== "off" && UserModel) {
+    // Force DB-level validation in production even if TOKEN_VALIDATION=off.
+    const tokenValidationOff = process.env.TOKEN_VALIDATION === "off" && process.env.NODE_ENV !== "production";
+    if (!tokenValidationOff && UserModel) {
       const user = await UserModel.findById(decoded.id)
         .select("isActive schoolId")
         .lean();

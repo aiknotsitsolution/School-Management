@@ -1,7 +1,7 @@
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
-const { getPermissionsFor } = require("../utils/permissions");
-const { getJwtSecret } = require("../utils/jwtSecret");
+const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
+const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const JWT_SECRET = getJwtSecret();
 
 const verifyToken = async (req, res, next) => {
@@ -12,7 +12,8 @@ const verifyToken = async (req, res, next) => {
   try {
     const decoded = jwt.verify(header.split(" ")[1], JWT_SECRET);
     const UserModel = mongoose.models.User;
-    if (process.env.TOKEN_VALIDATION !== "off" && UserModel) {
+    const tokenValidationOff = process.env.TOKEN_VALIDATION === "off" && process.env.NODE_ENV !== "production";
+    if (!tokenValidationOff && UserModel) {
       const user = await UserModel.findById(decoded.id).select("isActive schoolId").lean();
       if (!user || !user.isActive) {
         return res.status(401).json({ success: false, message: "Account is inactive" });

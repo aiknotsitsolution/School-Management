@@ -3,12 +3,18 @@ import { useSelector } from "react-redux";
 import Layout from "./layout/Layout";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
+import ForgotPassword from "./pages/ForgotPassword";
 import Dashboard from "./pages/Dashboard";
 import Attendance from "./pages/Attendance";
 import Timetable from "./pages/Timetable";
 import Homework from "./pages/Homework";
 import Examination from "./pages/Examination";
+import AcademicSessions from "./pages/AcademicSessions";
 import ReportCard from "./pages/ReportCard";
+import MarksEntry from "./pages/MarksEntry";
+import Promotions from "./pages/Promotions";
+import Transfers from "./pages/Transfers";
+import Rollover from "./pages/Rollover";
 import Students from "./pages/Students";
 import AdmissionEnquiry from "./pages/AdmissionEnquiry";
 
@@ -72,6 +78,7 @@ import AuditLogs from "./pages/platform/AuditLogs";
 import PlatformReports from "./pages/platform/PlatformReports";
 import PlatformSettings from "./pages/platform/PlatformSettings";
 import Users from "./pages/Users";
+import ManageSchool from "./pages/ManageSchool";
 import Teachers from "./pages/Teachers";
 import Plans from "./pages/Plans";
 import Subscriptions from "./pages/Subscriptions";
@@ -163,6 +170,7 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route element={<ProtectedLayout />}>
           <Route path="/" element={<HomeRedirect />} />
           <Route
@@ -253,6 +261,14 @@ export default function App() {
             element={
               <RequirePermission permission="users:manage">
                 <Users />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/manage-school"
+            element={
+              <RequirePermission permission="users:manage">
+                <ManageSchool />
               </RequirePermission>
             }
           />
@@ -605,6 +621,56 @@ export default function App() {
               <RequirePermission permission="exams:read">
                 <RequireNotStudent>
                   <Examination />
+                </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/marks-entry"
+            element={
+              <RequirePermission permission="marks:write">
+                <RequireNotStudent>
+                  <MarksEntry />
+                </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/promotions"
+            element={
+              <RequirePermission permission="promotion:read">
+                <RequireNotStudent>
+                  <Promotions />
+                </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/transfers"
+            element={
+              <RequirePermission permission="transfer:read">
+                <RequireNotStudent>
+                  <Transfers />
+                </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/rollover"
+            element={
+              <RequirePermission permission="rollover:read">
+                <RequireNotStudent>
+                  <Rollover />
+                </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/academic-sessions"
+            element={
+              <RequirePermission permission="sessions:read">
+                <RequireNotStudent>
+                  <AcademicSessions />
                 </RequireNotStudent>
               </RequirePermission>
             }

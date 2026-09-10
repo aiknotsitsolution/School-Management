@@ -22,11 +22,13 @@ import {
   StatCard,
   toast,
 } from "../components/UI";
+import SearchableSelect from "../components/SearchableSelect";
 import { api } from "../lib/api";
 import MasterSelect from "../components/MasterSelect";
 import { invalidateMasterCache } from "../lib/masterCache";
 import { usePermission } from "../lib/permissions";
 import CustomMasterModal from "../components/CustomMasterModal";
+import { useMasterOptions } from "../hooks/useMasterOptions";
 
 const SYSTEM_CLASSES = [
   "Nursery",
@@ -48,9 +50,9 @@ const SYSTEM_CLASSES = [
   "12-Com",
 ];
 
-const CLASS_OPTIONS = ["All", ...SYSTEM_CLASSES];
+const CLASS_OPTIONS_FALLBACK = ["All", ...SYSTEM_CLASSES];
 
-const SECTION_OPTIONS = ["All", "A", "B", "C"];
+const SECTION_OPTIONS_FALLBACK = ["All", "A", "B", "C"];
 
 function formatClassLabel(c) {
   if (["Nursery", "LKG", "UKG"].includes(c)) return c;
@@ -82,6 +84,7 @@ function normalizeExam(exam) {
     ...exam,
     id: exam._id || exam.id,
     exam: exam.examName || exam.exam || "Exam",
+    status: exam.status || "draft",
     time:
       exam.time ||
       [exam.startTime, exam.endTime].filter(Boolean).join(" – ") ||
@@ -89,6 +92,12 @@ function normalizeExam(exam) {
     room: exam.room || "Room to be announced",
   };
 }
+
+const STATUS_CONFIG = {
+  draft: { tone: "neutral", label: "Draft" },
+  reviewed: { tone: "amber", label: "Reviewed" },
+  published: { tone: "success", label: "Published" },
+};
 
 function formatDate(d) {
   if (!d) return "—";
@@ -114,14 +123,23 @@ function formatTimeSlot(item) {
 }
 
 export default function Examination() {
+  const { options: masterClasses } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
+  const { options: masterSections, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
+  const CLASS_OPTIONS = ["All", ...masterClasses.filter((c) => c !== "All")];
+  const SECTION_OPTIONS = ["All", ...masterSections.filter((s) => s !== "All")];
   const [exams, setExams] = useState([]);
   const [cls, setCls] = useState("All");
   const [sec, setSec] = useState("All");
+  const [statusFilter, setStatusFilter] = useState("All");
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState(null);
   const [customModal, setCustomModal] = useState(null); // { kind, label, showDescription? } | null
+  const filteredSections = useMemo(() => {
+    if (cls === "All") return SECTION_OPTIONS;
+    return ["All", ...[...new Set(rawSections.filter((s) => s.className === cls).map((s) => s.name))]];
+  }, [cls, SECTION_OPTIONS, rawSections]);
   const canManageExams = usePermission("exams:write");
 
   useEffect(() => {
@@ -135,6 +153,8 @@ export default function Examination() {
     return exams.filter((e) => {
       const matchClass = cls === "All" || e.class === cls;
       const matchSection = sec === "All" || (e.section || "") === sec;
+      const matchStatus =
+        statusFilter === "All" || e.status === statusFilter;
       const q = query.toLowerCase();
       const matchQuery =
         !q ||
@@ -142,9 +162,9 @@ export default function Examination() {
         e.exam.toLowerCase().includes(q) ||
         e.room.toLowerCase().includes(q) ||
         e.class.toLowerCase().includes(q);
-      return matchClass && matchSection && matchQuery;
+      return matchClass && matchSection && matchStatus && matchQuery;
     });
-  }, [exams, cls, sec, query]);
+  }, [exams, cls, sec, statusFilter, query]);
 
   const grouped = useMemo(() => {
     return filtered.reduce((acc, e) => {
@@ -254,6 +274,20 @@ export default function Examination() {
     }
   };
 
+  const handleStatusChange = async (exam, status) => {
+    try {
+      const { data } = await api.exams.updateStatus(exam.id, status);
+      setExams((prev) =>
+        prev.map((item) =>
+          item.id === exam.id ? normalizeExam(data) : item,
+        ),
+      );
+      toast(`Exam marked as ${STATUS_CONFIG[status]?.label || status}`);
+    } catch (requestError) {
+      toast(requestError.message, "error");
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageIntro
@@ -318,25 +352,30 @@ export default function Examination() {
                 className="pl-8 w-52"
               />
             </div>
-            <Select
+            <SearchableSelect
+              options={CLASS_OPTIONS}
               value={cls}
-              onChange={(e) => setCls(e.target.value)}
+              onChange={(v) => { setCls(v); setSec("All"); }}
+              renderLabel={(c) => (c === "All" ? "All Classes" : formatClassLabel(c))}
+              placeholder="All Classes"
               className="min-w-[140px]"
-            >
-              {CLASS_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c === "All" ? "All Classes" : formatClassLabel(c)}
-                </option>
-              ))}
-            </Select>
-            <Select
+            />
+            <SearchableSelect
+              options={filteredSections}
               value={sec}
-              onChange={(e) => setSec(e.target.value)}
+              onChange={setSec}
+              renderLabel={(s) => (s === "All" ? "All Sections" : `Section ${s}`)}
+              placeholder="All Sections"
               className="min-w-[110px]"
+            />
+            <Select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="min-w-[120px]"
             >
-              {SECTION_OPTIONS.map((s) => (
+              {["All", "draft", "reviewed", "published"].map((s) => (
                 <option key={s} value={s}>
-                  {s === "All" ? "All Sections" : `Section ${s}`}
+                  {s === "All" ? "All Statuses" : STATUS_CONFIG[s].label}
                 </option>
               ))}
             </Select>
@@ -384,6 +423,7 @@ export default function Examination() {
                         <th className="px-4 py-2.5 font-semibold">Time</th>
                         <th className="px-4 py-2.5 font-semibold">Room</th>
                         <th className="px-4 py-2.5 font-semibold">Max Marks</th>
+                        <th className="px-4 py-2.5 font-semibold">Status</th>
                         <th className="px-4 py-2.5 font-semibold text-right">
                           Actions
                         </th>
@@ -430,21 +470,68 @@ export default function Examination() {
                             <td className="px-4 py-3">
                               <Pill tone="info">{e.maxMarks} marks</Pill>
                             </td>
+                            <td className="px-4 py-3">
+                              <Pill tone={STATUS_CONFIG[e.status]?.tone}>
+                                {STATUS_CONFIG[e.status]?.label || e.status}
+                              </Pill>
+                            </td>
                             <td className="px-4 py-3 text-right">
                               {canManageExams ? (
-                                <div className="inline-flex items-center gap-2">
-                                  <button
-                                    onClick={() => openEdit(e)}
-                                    className="text-[12.5px] font-medium text-info hover:underline inline-flex items-center gap-1"
-                                  >
-                                    <Pencil size={12} /> Edit
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(e.id)}
-                                    className="text-[12.5px] font-medium text-alert hover:underline"
-                                  >
-                                    Delete
-                                  </button>
+                                <div className="inline-flex items-center justify-end gap-2 flex-wrap">
+                                  {e.status === "draft" && (
+                                    <>
+                                      <button
+                                        onClick={() =>
+                                          handleStatusChange(e, "reviewed")
+                                        }
+                                        className="text-[12.5px] font-medium text-amber-dark hover:underline"
+                                      >
+                                        Mark Reviewed
+                                      </button>
+                                      <button
+                                        onClick={() => openEdit(e)}
+                                        className="text-[12.5px] font-medium text-info hover:underline inline-flex items-center gap-1"
+                                      >
+                                        <Pencil size={12} /> Edit
+                                      </button>
+                                      <button
+                                        onClick={() => handleDelete(e.id)}
+                                        className="text-[12.5px] font-medium text-alert hover:underline"
+                                      >
+                                        Delete
+                                      </button>
+                                    </>
+                                  )}
+                                  {e.status === "reviewed" && (
+                                    <>
+                                      <button
+                                        onClick={() => handleStatusChange(e, "draft")}
+                                        className="text-[12.5px] font-medium text-slate-text hover:underline"
+                                      >
+                                        Back to Draft
+                                      </button>
+                                      <button
+                                        onClick={() => handleStatusChange(e, "published")}
+                                        className="text-[12.5px] font-semibold text-success hover:underline"
+                                      >
+                                        Publish Results
+                                      </button>
+                                      <button
+                                        onClick={() => openEdit(e)}
+                                        className="text-[12.5px] font-medium text-info hover:underline inline-flex items-center gap-1"
+                                      >
+                                        <Pencil size={12} /> Edit
+                                      </button>
+                                    </>
+                                  )}
+                                  {e.status === "published" && (
+                                    <button
+                                      onClick={() => handleStatusChange(e, "reviewed")}
+                                      className="text-[12.5px] font-medium text-amber-dark hover:underline"
+                                    >
+                                      Unpublish
+                                    </button>
+                                  )}
                                 </div>
                               ) : (
                                 <span className="text-[12px] text-slate-text/40">—</span>

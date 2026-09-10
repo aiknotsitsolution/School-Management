@@ -1,5 +1,5 @@
 const Book = require("../models/Book");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
 // Escapes regex metacharacters in user search terms to prevent regex
 // injection / ReDoS-style patterns; length-capped to bound scan cost.

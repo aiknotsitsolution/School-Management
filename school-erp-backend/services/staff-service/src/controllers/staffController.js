@@ -1,6 +1,7 @@
 const Staff = require("../models/Staff");
 const TeacherAssignment = require("../models/TeacherAssignment");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
+const { pushNotifications } = require("../utils/notify");
 
 // Escapes regex metacharacters in user search terms to prevent regex
 // injection / ReDoS-style patterns; length-capped to bound scan cost.
@@ -20,6 +21,17 @@ const pick = (obj, keys) =>
 const createStaff = async (req, res) => {
   try {
     const staff = await Staff.create({ ...pick(req.body, STAFF_FIELDS), schoolId: req.tenantId });
+    if (staff.userId) {
+      pushNotifications({
+        token: req.token,
+        schoolId: req.tenantId,
+        userIds: [staff.userId],
+        title: "Staff profile created",
+        message: `Your staff profile (${staff.employeeId || "—"}) was created by the school admin.`,
+        kind: "staff",
+        link: "/staff",
+      });
+    }
     res.status(201).json({ success: true, data: staff });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -69,6 +81,17 @@ const updateStaff = async (req, res) => {
       { new: true, runValidators: true },
     );
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
+    if (staff.userId) {
+      pushNotifications({
+        token: req.token,
+        schoolId: req.tenantId,
+        userIds: [staff.userId],
+        title: "Staff profile updated",
+        message: `Your staff profile (${staff.employeeId || "—"}) was updated by the school admin.`,
+        kind: "staff",
+        link: "/staff",
+      });
+    }
     res.json({ success: true, data: staff });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });

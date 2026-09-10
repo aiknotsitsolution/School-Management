@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { api } from "../lib/api";
 import {
   Plus,
-  BookOpenCheck,
+  Briefcase,
   Search,
   Calendar,
   User,
@@ -11,7 +11,7 @@ import {
   CheckCircle2,
   Clock,
   AlertCircle,
-  Filter,
+  ArrowUpCircle,
 } from "lucide-react";
 import {
   PageIntro,
@@ -23,53 +23,12 @@ import {
   StatCard,
   statusTone,
 } from "../components/UI";
-const initialHomework = [];
+import SearchableSelect from "../components/SearchableSelect";
 
-const CLASS_OPTIONS = [
-  "All",
-  "Class 5",
-  "Class 6",
-  "Class 7",
-  "Class 8",
-  "Class 9",
-  "Class 10",
-  "Class 11 (Science)",
-  "Class 11 (Commerce)",
-  "Class 12 (Science)",
-  "Class 12 (Commerce)",
-];
-
-const SECTION_OPTIONS = ["A", "B", "C"];
-
-const SUBJECT_OPTIONS = [
-  "Mathematics",
-  "English",
-  "Science",
-  "Hindi",
-  "Social Science",
-  "Computer Science",
-  "Physics",
-  "Chemistry",
-  "Biology",
-  "Accountancy",
-  "Business Studies",
-  "Economics",
-  "Art",
-  "Physical Education",
-];
-
-const STATUS_OPTIONS = ["All", "Pending", "Submitted", "Graded", "Overdue"];
-
-const TEACHER_OPTIONS = [
-  "Kavita Joshi",
-  "Pooja Reddy",
-  "Ritu Sharma",
-  "Ramesh Iyer",
-  "Manish Gupta",
-  "Suresh Kulkarni",
-  "Priya Nair",
-  "Anjali Verma",
-];
+const STATUS_OPTIONS = ["All", "Pending", "In Progress", "Completed", "Overdue"];
+const PRIORITY_OPTIONS = ["Low", "Medium", "High"];
+const ROLE_FILTER_OPTIONS = ["All", "Teacher", "Class Teacher", "Staff"];
+const ROLE_API_MAP = { Teacher: "teacher", "Class Teacher": "class_teacher", Staff: "staff" };
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -84,67 +43,88 @@ function formatDate(d) {
   });
 }
 
-function normalizeHomework(item) {
+function normalizeItem(item) {
   const dueDate = item.dueDate;
-  const isOverdue = dueDate && new Date(dueDate) < new Date();
+  const isOverdue = dueDate && new Date(dueDate) < new Date() && item.status !== "Completed";
   return {
     ...item,
     id: item._id || item.id,
-    teacher: item.assignedBy || item.teacher || "Assigned teacher",
+    assignedTo: item.assignedTo || "Unassigned",
+    assignedToRole: item.assignedToRole || "",
+    priority: item.priority || "Medium",
     status: item.status || (isOverdue ? "Overdue" : "Pending"),
   };
 }
 
 function emptyForm() {
   return {
-    class: "Class 8",
-    section: "A",
-    subject: "Mathematics",
     title: "",
-    teacher: "Kavita Joshi",
-    assignedDate: todayISO(),
+    description: "",
+    assignedTo: "",
+    assignedToRole: "",
+    priority: "Medium",
     dueDate: "",
     status: "Pending",
   };
 }
 
+const ROLE_LABELS = {
+  teacher: "Teacher",
+  class_teacher: "Class Teacher",
+  staff: "Staff",
+};
+
 export default function Homework() {
-  const [items, setItems] = useState(initialHomework);
-  useEffect(() => {
-    api.homework
-      .list()
-      .then(({ data }) => setItems((data || []).map(normalizeHomework)))
-      .catch(() => {});
-  }, []);
-  const [cls, setCls] = useState("All");
-  const [statusFilter, setStatusFilter] = useState("All");
+  const [items, setItems] = useState([]);
+  const [users, setUsers] = useState([]);
   const [query, setQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [roleFilter, setRoleFilter] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState(null);
 
+  useEffect(() => {
+    api.homework
+      .list("assignType=staff")
+      .then(({ data }) => setItems((data || []).map(normalizeItem)))
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    api.users
+      .list()
+      .then(({ data }) => {
+        const list = (data || []).filter(
+          (u) => ["teacher", "class_teacher", "staff"].includes(u.role) && u.isActive !== false
+        );
+        setUsers(list);
+      })
+      .catch(() => {});
+  }, []);
+
+  const userOptions = useMemo(
+    () => users.map((u) => `${u.name} (${ROLE_LABELS[u.role] || u.role})`),
+    [users]
+  );
+
   const filtered = useMemo(() => {
     return items.filter((h) => {
-      const matchClass = cls === "All" || h.class === cls;
       const matchStatus = statusFilter === "All" || h.status === statusFilter;
+      const matchRole =
+        roleFilter === "All" ||
+        (h.assignedToRole && h.assignedToRole.toLowerCase() === ROLE_API_MAP[roleFilter]);
       const q = query.toLowerCase();
       const matchQuery =
         !q ||
         h.title.toLowerCase().includes(q) ||
-        h.subject.toLowerCase().includes(q) ||
-        h.teacher.toLowerCase().includes(q);
-      return matchClass && matchStatus && matchQuery;
+        h.assignedTo.toLowerCase().includes(q);
+      return matchStatus && matchRole && matchQuery;
     });
-  }, [items, cls, statusFilter, query]);
+  }, [items, statusFilter, roleFilter, query]);
 
   const counts = useMemo(() => {
-    const c = {
-      total: items.length,
-      Pending: 0,
-      Submitted: 0,
-      Graded: 0,
-      Overdue: 0,
-    };
+    const c = { total: items.length, Pending: 0, "In Progress": 0, Completed: 0, Overdue: 0 };
     items.forEach((h) => {
       if (c[h.status] !== undefined) c[h.status]++;
     });
@@ -160,49 +140,57 @@ export default function Homework() {
   const openEdit = (item) => {
     setEditId(item.id);
     setForm({
-      class: item.class,
-      section: item.section,
-      subject: item.subject,
-      title: item.title,
-      teacher: item.teacher,
-      assignedDate: item.assignedDate,
-      dueDate: item.dueDate,
-      status: item.status,
+      title: item.title || "",
+      description: item.description || "",
+      assignedTo: item.assignedTo || "",
+      assignedToRole: item.assignedToRole || "",
+      priority: item.priority || "Medium",
+      dueDate: item.dueDate ? item.dueDate.slice(0, 10) : "",
+      status: item.status || "Pending",
     });
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    if (!form.title.trim() || !form.dueDate) return;
+    if (!form.title.trim() || !form.dueDate || !form.assignedTo.trim()) return;
+
+    const matchedUser = users.find(
+      (u) => `${u.name} (${ROLE_LABELS[u.role] || u.role})` === form.assignedTo
+    );
     const payload = {
-      class: form.class,
-      section: form.section,
-      subject: form.subject,
+      assignType: "staff",
       title: form.title.trim(),
-      assignedDate: form.assignedDate,
+      description: form.description.trim(),
+      assignedTo: form.assignedTo.trim(),
+      assignedToRole: matchedUser ? matchedUser.role : "",
+      priority: form.priority,
       dueDate: form.dueDate,
+      status: form.status,
+      class: "staff",
+      section: form.assignedTo.trim(),
+      subject: form.title.trim(),
     };
     try {
       const response = editId
         ? await api.homework.update(editId, payload)
         : await api.homework.create(payload);
-      const savedItem = normalizeHomework(response.data);
+      const savedItem = normalizeItem(response.data);
       setItems((prev) =>
         editId
           ? prev.map((item) => (item.id === editId ? savedItem : item))
-          : [savedItem, ...prev],
+          : [savedItem, ...prev]
       );
       setShowModal(false);
       setForm(emptyForm());
       setEditId(null);
-    } catch (requestError) {
-      window.alert(requestError.message);
+    } catch (err) {
+      window.alert(err.message);
     }
   };
 
   const changeStatus = (id, newStatus) => {
     setItems((prev) =>
-      prev.map((h) => (h.id === id ? { ...h, status: newStatus } : h)),
+      prev.map((h) => (h.id === id ? { ...h, status: newStatus } : h))
     );
   };
 
@@ -213,51 +201,49 @@ export default function Homework() {
   return (
     <div className="space-y-6">
       <PageIntro
-        eyebrow="Academics"
-        title="Homework"
-        description="Assign, track and manage homework across all classes."
+        eyebrow="Administration"
+        title="Assign Work"
+        description="Assign tasks and responsibilities to teachers and staff members."
         right={
           <Button variant="amber" onClick={openAdd}>
-            <Plus size={15} /> Assign Homework
+            <Plus size={15} /> Assign Task
           </Button>
         }
       />
 
-      {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
-          icon={BookOpenCheck}
-          label="Total Assignments"
+          icon={Briefcase}
+          label="Total Tasks"
           value={String(counts.total)}
-          sub="All classes"
+          sub="All assignments"
           accent="info"
         />
         <StatCard
           icon={Clock}
           label="Pending"
           value={String(counts.Pending)}
-          sub="Awaiting submission"
+          sub="Not yet started"
           accent="amber"
         />
         <StatCard
-          icon={CheckCircle2}
-          label="Submitted"
-          value={String(counts.Submitted)}
-          sub="Ready for review"
-          accent="success"
+          icon={ArrowUpCircle}
+          label="In Progress"
+          value={String(counts["In Progress"])}
+          sub="Currently active"
+          accent="info"
         />
         <StatCard
-          icon={AlertCircle}
-          label="Graded / Overdue"
-          value={String(counts.Graded + counts.Overdue)}
-          sub={`${counts.Graded} graded · ${counts.Overdue} overdue`}
-          accent="alert"
+          icon={CheckCircle2}
+          label="Completed"
+          value={String(counts.Completed + counts.Overdue)}
+          sub={`${counts.Completed} done · ${counts.Overdue} overdue`}
+          accent="success"
         />
       </div>
 
-      {/* List */}
       <Card
-        title="All Assignments"
+        title="All Assigned Tasks"
         action={
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative">
@@ -266,20 +252,20 @@ export default function Homework() {
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/40"
               />
               <Input
-                placeholder="Search title, subject, teacher..."
+                placeholder="Search title, assignee..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
                 className="pl-8 w-52"
               />
             </div>
             <Select
-              value={cls}
-              onChange={(e) => setCls(e.target.value)}
+              value={roleFilter}
+              onChange={(e) => setRoleFilter(e.target.value)}
               className="min-w-[130px]"
             >
-              {CLASS_OPTIONS.map((c) => (
-                <option key={c} value={c}>
-                  {c === "All" ? "All Classes" : c}
+              {ROLE_FILTER_OPTIONS.map((r) => (
+                <option key={r} value={r}>
+                  {r === "All" ? "All Roles" : r}
                 </option>
               ))}
             </Select>
@@ -299,18 +285,13 @@ export default function Homework() {
       >
         {filtered.length === 0 ? (
           <div className="py-14 text-center">
-            <BookOpenCheck
-              size={36}
-              className="mx-auto text-slate-text/30 mb-3"
-            />
-            <p className="text-[14px] font-medium text-ink">
-              No homework found
-            </p>
+            <Briefcase size={36} className="mx-auto text-slate-text/30 mb-3" />
+            <p className="text-[14px] font-medium text-ink">No tasks assigned yet</p>
             <p className="text-[13px] text-slate-text/60 mt-1">
-              Try changing filters or assign a new homework.
+              Assign tasks to teachers and staff to get started.
             </p>
             <Button variant="amber" className="mt-4" onClick={openAdd}>
-              <Plus size={15} /> Assign Homework
+              <Plus size={15} /> Assign Task
             </Button>
           </div>
         ) : (
@@ -320,33 +301,34 @@ export default function Homework() {
                 key={h.id}
                 className="flex flex-col sm:flex-row sm:items-start gap-3 p-4 rounded-xl border border-black/[0.06] hover:border-black/10 hover:bg-paper/40 transition-colors"
               >
-                <div className="w-11 h-11 rounded-xl bg-amber/15 text-amber-dark flex items-center justify-center shrink-0">
-                  <BookOpenCheck size={20} />
+                <div className="w-11 h-11 rounded-xl bg-info/15 text-info flex items-center justify-center shrink-0">
+                  <Briefcase size={20} />
                 </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <p className="text-[14px] font-semibold text-ink">
-                      {h.subject}
-                    </p>
-                    <span className="text-[12px] text-slate-text/55">
-                      {h.class} · Sec {h.section}
-                    </span>
+                    <p className="text-[14px] font-semibold text-ink">{h.title}</p>
                     <Pill tone={statusTone(h.status)}>{h.status}</Pill>
+                    <Pill tone={h.priority === "High" ? "alert" : h.priority === "Low" ? "success" : "info"}>
+                      {h.priority}
+                    </Pill>
                   </div>
-                  <p className="text-[13.5px] text-ink/90 mt-1 leading-snug">
-                    {h.title}
-                  </p>
+                  {h.description && (
+                    <p className="text-[13px] text-ink/70 mt-1 leading-snug line-clamp-2">
+                      {h.description}
+                    </p>
+                  )}
                   <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px] text-slate-text/65">
                     <span className="inline-flex items-center gap-1">
-                      <User size={12} /> {h.teacher}
+                      <User size={12} /> {h.assignedTo}
                     </span>
+                    {h.assignedToRole && (
+                      <span className="inline-flex items-center gap-1 text-info">
+                        {ROLE_LABELS[h.assignedToRole] || h.assignedToRole}
+                      </span>
+                    )}
                     <span className="inline-flex items-center gap-1">
-                      <Calendar size={12} /> Assigned{" "}
-                      {formatDate(h.assignedDate)}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Clock size={12} /> Due {formatDate(h.dueDate)}
+                      <Calendar size={12} /> Due {formatDate(h.dueDate)}
                     </span>
                   </div>
                 </div>
@@ -358,8 +340,8 @@ export default function Homework() {
                     className="text-[12px] py-1.5 min-w-[110px]"
                   >
                     <option value="Pending">Pending</option>
-                    <option value="Submitted">Submitted</option>
-                    <option value="Graded">Graded</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
                     <option value="Overdue">Overdue</option>
                   </Select>
                   <button
@@ -375,7 +357,6 @@ export default function Homework() {
         )}
       </Card>
 
-      {/* ========== ASSIGN / EDIT MODAL ========== */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div
@@ -383,11 +364,10 @@ export default function Homework() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
-                  {editId ? "Edit Homework" : "Assign Homework"}
+                  {editId ? "Edit Task" : "Assign Task"}
                 </h3>
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">
                   Fill the details and save.
@@ -401,63 +381,13 @@ export default function Homework() {
               </button>
             </div>
 
-            {/* Form */}
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Class
-                  </label>
-                  <Select
-                    value={form.class}
-                    onChange={(e) => updateForm("class", e.target.value)}
-                  >
-                    {CLASS_OPTIONS.filter((c) => c !== "All").map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Section
-                  </label>
-                  <Select
-                    value={form.section}
-                    onChange={(e) => updateForm("section", e.target.value)}
-                  >
-                    {SECTION_OPTIONS.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              </div>
-
               <div>
                 <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Subject
-                </label>
-                <Select
-                  value={form.subject}
-                  onChange={(e) => updateForm("subject", e.target.value)}
-                >
-                  {SUBJECT_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {s}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div>
-                <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Title / Description
+                  Title *
                 </label>
                 <Input
-                  placeholder="e.g. Chapter 5 — Linear Equations, Q1–15"
+                  placeholder="e.g. Prepare annual report, Conduct parent meeting..."
                   value={form.title}
                   onChange={(e) => updateForm("title", e.target.value)}
                 />
@@ -465,60 +395,70 @@ export default function Homework() {
 
               <div>
                 <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Teacher
+                  Description
                 </label>
-                <Select
-                  value={form.teacher}
-                  onChange={(e) => updateForm("teacher", e.target.value)}
-                >
-                  {TEACHER_OPTIONS.map((t) => (
-                    <option key={t} value={t}>
-                      {t}
-                    </option>
-                  ))}
-                </Select>
+                <textarea
+                  rows={3}
+                  placeholder="Optional details about the task..."
+                  value={form.description}
+                  onChange={(e) => updateForm("description", e.target.value)}
+                  className="w-full rounded-xl border border-black/[0.08] bg-paper px-3.5 py-2.5 text-[13.5px] text-ink placeholder:text-slate-text/40 focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info/50 resize-none"
+                />
+              </div>
+
+              <div>
+                <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                  Assign To *
+                </label>
+                <SearchableSelect
+                  options={userOptions}
+                  value={form.assignedTo}
+                  onChange={(val) => updateForm("assignedTo", val)}
+                  placeholder="Select teacher or staff"
+                />
               </div>
 
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Assigned Date
+                    Priority
                   </label>
-                  <Input
-                    type="date"
-                    value={form.assignedDate}
-                    onChange={(e) => updateForm("assignedDate", e.target.value)}
-                  />
+                  <Select
+                    value={form.priority}
+                    onChange={(e) => updateForm("priority", e.target.value)}
+                  >
+                    {PRIORITY_OPTIONS.map((p) => (
+                      <option key={p} value={p}>{p}</option>
+                    ))}
+                  </Select>
                 </div>
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Due Date
+                    Status
                   </label>
-                  <Input
-                    type="date"
-                    value={form.dueDate}
-                    onChange={(e) => updateForm("dueDate", e.target.value)}
-                  />
+                  <Select
+                    value={form.status}
+                    onChange={(e) => updateForm("status", e.target.value)}
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                  </Select>
                 </div>
               </div>
 
               <div>
                 <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Status
+                  Due Date *
                 </label>
-                <Select
-                  value={form.status}
-                  onChange={(e) => updateForm("status", e.target.value)}
-                >
-                  <option value="Pending">Pending</option>
-                  <option value="Submitted">Submitted</option>
-                  <option value="Graded">Graded</option>
-                  <option value="Overdue">Overdue</option>
-                </Select>
+                <Input
+                  type="date"
+                  value={form.dueDate}
+                  onChange={(e) => updateForm("dueDate", e.target.value)}
+                />
               </div>
             </div>
 
-            {/* Footer */}
             <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowModal(false)}>
                 Cancel
@@ -526,9 +466,9 @@ export default function Homework() {
               <Button
                 variant="amber"
                 onClick={handleSave}
-                disabled={!form.title.trim() || !form.dueDate}
+                disabled={!form.title.trim() || !form.dueDate || !form.assignedTo.trim()}
               >
-                <Save size={15} /> {editId ? "Update" : "Assign"} Homework
+                <Save size={15} /> {editId ? "Update" : "Assign"} Task
               </Button>
             </div>
           </div>
@@ -537,52 +477,3 @@ export default function Homework() {
     </div>
   );
 }
-
-// import { useState } from "react";
-// import { Plus, BookOpenCheck } from "lucide-react";
-// import { PageIntro, Card, Button, Pill, statusTone, Select } from "../components/UI";
-
-// export default function Homework() {
-//   const [cls, setCls] = useState("All");
-//   const classes = ["All", ...new Set(homework.map((h) => h.class))];
-//   const filtered = cls === "All" ? homework : homework.filter((h) => h.class === cls);
-
-//   return (
-//     <div className="space-y-6">
-//       <PageIntro
-//         eyebrow="Academics"
-//         title="Homework"
-//         description="Assignments given across classes and their submission status."
-//         right={<Button variant="amber"><Plus size={15} /> Assign Homework</Button>}
-//       />
-
-//       <Card
-//         title="All Assignments"
-//         action={
-//           <Select value={cls} onChange={(e) => setCls(e.target.value)}>
-//             {classes.map((c) => <option key={c} value={c}>{c}</option>)}
-//           </Select>
-//         }
-//       >
-//         <div className="space-y-3">
-//           {filtered.map((h) => (
-//             <div key={h.id} className="flex items-start gap-3 p-3.5 rounded-xl border border-black/[0.06]">
-//               <div className="w-10 h-10 rounded-lg bg-amber/15 text-amber-dark flex items-center justify-center shrink-0">
-//                 <BookOpenCheck size={18} />
-//               </div>
-//               <div className="flex-1 min-w-0">
-//                 <div className="flex items-center gap-2 flex-wrap">
-//                   <p className="text-[13.5px] font-semibold text-ink">{h.subject}</p>
-//                   <span className="text-[11px] text-slate-text/50">· {h.class}-{h.section}</span>
-//                 </div>
-//                 <p className="text-[13px] text-slate-text mt-0.5">{h.title}</p>
-//                 <p className="text-[11.5px] text-slate-text/60 mt-1.5">By {h.teacher} · Assigned {h.assignedDate} · Due {h.dueDate}</p>
-//               </div>
-//               <Pill tone={statusTone(h.status)}>{h.status}</Pill>
-//             </div>
-//           ))}
-//         </div>
-//       </Card>
-//     </div>
-//   );
-// }

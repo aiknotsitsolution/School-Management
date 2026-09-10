@@ -12,6 +12,7 @@ import {
   Eye,
   FilterX,
   Building2,
+  KeyRound,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../../components/UI";
@@ -218,6 +219,19 @@ export default function PlatformUsers() {
       await api.platform.users.restore(user._id);
       toast("User restored");
       refresh();
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  };
+
+  const sendOtp = async (user) => {
+    try {
+      const { data } = await api.users.sendResetOtp(user._id);
+      toast(
+        data?.maskedEmail
+          ? `OTP sent to ${data.maskedEmail} — valid for 10 minutes`
+          : "OTP sent to the user's email — valid for 10 minutes",
+      );
     } catch (err) {
       toast(err.message, "error");
     }
@@ -467,6 +481,13 @@ export default function PlatformUsers() {
                             >
                               {user.isActive ? <Ban size={13} /> : <CheckCircle2 size={13} />}
                               {user.isActive ? " Deactivate" : " Activate"}
+                            </button>
+                            <button
+                              onClick={() => sendOtp(user)}
+                              className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5"
+                              title="Send password reset OTP to the user's email"
+                            >
+                              <KeyRound size={13} /> Send OTP
                             </button>
                             <button
                               onClick={() => removeUser(user)}

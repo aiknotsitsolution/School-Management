@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { GraduationCap, ArrowRight, Lock, Mail } from "lucide-react";
 import { api } from "../lib/api";
@@ -182,7 +182,7 @@ export default function Login() {
                 Keep me signed in
               </label>
               <span className="text-slate-text/60">
-                Forgot password? Contact your administrator
+                <Link to="/forgot-password" className="text-info font-medium hover:underline">Forgot password?</Link>
               </span>
             </div>
             {error && (

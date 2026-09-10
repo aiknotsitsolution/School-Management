@@ -1,20 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { useSelector } from "react-redux";
-import { Printer, Download, Search } from "lucide-react";
-import { PageIntro, Card, Button, Select, Input } from "../components/UI";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import { Printer, Download, Search, Settings2, X, ImageUp, Trash2, Check } from "lucide-react";
+import { PageIntro, Card, Button, Select, Input, toast } from "../components/UI";
 import { api } from "../lib/api";
 import { selectSchool } from "../store/selectors";
+import { setSchool as setSchoolAction } from "../store/authSlice";
+import { computeGrade, computePercentage } from "../lib/grading";
+import { usePermission } from "../lib/permissions";
 
-function getGrade(pct) {
-  if (pct >= 91) return "A1";
-  if (pct >= 81) return "A2";
-  if (pct >= 71) return "B1";
-  if (pct >= 61) return "B2";
-  if (pct >= 51) return "C1";
-  if (pct >= 41) return "C2";
-  if (pct >= 33) return "D";
-  return "E";
-}
+const ACCENT_RE = /^#[0-9a-fA-F]{6}$/;
+const DEFAULT_ACCENT = "#E8A33D";
 
 function getRemark(pct) {
   if (pct >= 90) return "Outstanding performance. Keep up the excellent work!";
@@ -34,18 +29,41 @@ function formatClass(c) {
 }
 
 export default function ReportCard() {
+  const dispatch = useDispatch();
   const school = useSelector(selectSchool);
   const schoolName = school?.name || "School Management ERP";
   const schoolAddress = school?.address || "";
-  const schoolAffiliation = school?.affiliation || "";
   const schoolLogo = (school?.shortName || "S").slice(0, 1).toUpperCase();
   const session = school?.session || String(new Date().getFullYear());
+  const canCustomize = usePermission("school:settings");
+  const reportCardSettings = school?.settings?.reportCard || {};
+  const schoolAffiliation =
+    reportCardSettings.affiliation || school?.affiliation || "";
+  const footerNote =
+    reportCardSettings.footerNote ||
+    "This is a computer-generated report card for demonstration purposes.";
+  const accentColor = ACCENT_RE.test(reportCardSettings.accent)
+    ? reportCardSettings.accent
+    : DEFAULT_ACCENT;
   const [students, setStudents] = useState([]);
   const [selectedId, setSelectedId] = useState("");
   const [term, setTerm] = useState("Term 1");
   const [query, setQuery] = useState("");
   const [report, setReport] = useState(null);
   const [error, setError] = useState("");
+  const [includeDrafts, setIncludeDrafts] = useState(true);
+  const [customizing, setCustomizing] = useState(false);
+  const [savingCustom, setSavingCustom] = useState(false);
+  const [customDraft, setCustomDraft] = useState(null);
+  const fileRef = useRef(null);
+
+  useEffect(() => {
+    if (!canCustomize) return;
+    api.school
+      .me()
+      .then(({ data }) => dispatch(setSchoolAction(data)))
+      .catch(() => {});
+  }, [canCustomize, dispatch]);
 
   useEffect(() => {
     api.students
@@ -71,12 +89,14 @@ export default function ReportCard() {
       setReport(null);
       return;
     }
-    const query = `studentId=${encodeURIComponent(selectedId)}&examName=${encodeURIComponent(term)}`;
+    const selectedStudent = students.find((s) => s.id === selectedId);
+    const studentId = selectedStudent?.admissionNo || selectedId;
+    const query = `studentId=${encodeURIComponent(studentId)}&examName=${encodeURIComponent(term)}&includeDrafts=${includeDrafts ? "1" : "0"}`;
     api.marks
       .reportCard(query)
       .then(({ data }) => setReport(data))
       .catch((requestError) => setError(requestError.message));
-  }, [selectedId, term]);
+  }, [selectedId, term, students, includeDrafts]);
 
   const filteredStudents = useMemo(() => {
     if (!query.trim()) return students.slice(0, 40);
@@ -101,7 +121,14 @@ export default function ReportCard() {
         subject: item.subject,
         marks,
         max,
-        grade: getGrade(max ? (marks / max) * 100 : 0),
+        pct: Number(item.pct ?? (max ? (marks / max) * 100 : 0)),
+        passed:
+          item.passed != null
+            ? item.passed
+            : computePercentage(marks, max) >= Number(item.passingMarks || 33),
+        grade: item.grade || computeGrade(marks, max),
+        status: item.status || null,
+        session: item.session || null,
       };
     });
   }, [report]);
@@ -109,11 +136,65 @@ export default function ReportCard() {
   const total = results.reduce((a, r) => a + r.marks, 0);
   const maxTotal = results.reduce((a, r) => a + r.max, 0);
   const pct = maxTotal ? ((total / maxTotal) * 100).toFixed(1) : 0;
-  const overallGrade = maxTotal ? getGrade(Number(pct)) : "—";
+  const overallGrade = maxTotal ? computeGrade(total, maxTotal) : "—";
   const remark = maxTotal ? getRemark(Number(pct)) : "";
   const hasMarks = results.length > 0;
 
   const attendancePct = student?.attendance;
+
+  const openCustomize = () => {
+    setCustomDraft({
+      logo: school?.logo || "",
+      affiliation: reportCardSettings.affiliation || school?.affiliation || "",
+      footerNote: reportCardSettings.footerNote || "",
+      accent: accentColor,
+    });
+    setCustomizing(true);
+  };
+
+  const pickLogo = (file) => {
+    if (!file) return;
+    if (!file.type || !file.type.startsWith("image/")) {
+      toast("Please choose an image file", "error");
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      toast("Logo should be smaller than 1MB", "error");
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      setCustomDraft((d) => ({ ...d, logo: String(reader.result || "") }));
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const saveCustom = async () => {
+    if (!customDraft) return;
+    if (!ACCENT_RE.test(customDraft.accent)) {
+      toast("Accent must be a hex color like #E8A33D", "error");
+      return;
+    }
+    setSavingCustom(true);
+    try {
+      const { data } = await api.school.update({
+        logo: customDraft.logo,
+        reportCard: {
+          affiliation: customDraft.affiliation,
+          footerNote: customDraft.footerNote,
+          accent: customDraft.accent,
+        },
+      });
+      dispatch(setSchoolAction(data));
+      localStorage.setItem("erp_school", JSON.stringify(data));
+      toast("Report card settings saved");
+      setCustomizing(false);
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      setSavingCustom(false);
+    }
+  };
 
   if (!student) {
     return (
@@ -140,6 +221,11 @@ export default function ReportCard() {
         description="Generate and print term-wise report cards for any student."
         right={
           <div className="flex gap-2 no-print">
+            {canCustomize && (
+              <Button variant="outline" onClick={openCustomize}>
+                <Settings2 size={15} /> Customize
+              </Button>
+            )}
             <Button variant="outline">
               <Download size={15} /> Download PDF
             </Button>
@@ -185,26 +271,59 @@ export default function ReportCard() {
             <option value="Term 2">Term 2</option>
             <option value="Final">Final</option>
           </Select>
+          <label className="inline-flex items-center gap-2 shrink-0 text-[12.5px] font-medium text-slate-text cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={includeDrafts}
+              onChange={(e) => setIncludeDrafts(e.target.checked)}
+              className="accent-amber"
+            />
+            Include draft results
+          </label>
         </div>
+        {!includeDrafts && (
+          <p className="text-[12px] text-slate-text/60 mt-2">
+            Only published results are shown. Turn on “Include draft results” to
+            preview marks entered for exams that are still in draft/review.
+          </p>
+        )}
       </Card>
 
       {/* Report Card Preview */}
       <Card bodyClassName="p-0">
         <div className="p-6 sm:p-8 max-w-3xl mx-auto" id="report-card-print">
           {/* Header */}
-          <div className="text-center border-b-2 border-ink pb-5 mb-6">
-            <p className="text-4xl leading-none">{schoolLogo}</p>
+          <div
+            className="text-center border-b-2 border-ink pb-5 mb-6"
+            style={{ borderColor: accentColor }}
+          >
+            {school?.logo ? (
+              <img
+                src={school.logo}
+                alt={`${schoolName} logo`}
+                className="h-16 max-w-[180px] w-auto object-contain mx-auto"
+              />
+            ) : (
+              <p className="w-16 h-16 rounded-2xl bg-ink text-amber text-3xl font-display font-bold flex items-center justify-center mx-auto">
+                {schoolLogo}
+              </p>
+            )}
             <h2 className="font-display text-2xl font-bold text-ink mt-2 tracking-tight">
               {schoolName}
             </h2>
             <p className="text-[12.5px] text-slate-text mt-1">
               {schoolAddress}
             </p>
-            <p className="text-[11.5px] text-slate-text/70">
-              {schoolAffiliation}
-            </p>
+            {schoolAffiliation && (
+              <p className="text-[11.5px] text-slate-text/70">
+                {schoolAffiliation}
+              </p>
+            )}
             <div className="mt-3 inline-flex items-center gap-2">
-              <span className="font-display font-semibold text-amber-dark text-[14px]">
+              <span
+                className="font-display font-semibold text-[14px]"
+                style={{ color: accentColor }}
+              >
                 {term.toUpperCase()} — PROGRESS REPORT
               </span>
               <span className="text-[12.5px] text-slate-text/60">
@@ -294,6 +413,11 @@ export default function ReportCard() {
                       <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-0.5 rounded-md bg-ink/8 text-ink text-[12px] font-bold">
                         {r.grade}
                       </span>
+                      {r.status && r.status !== "published" && (
+                        <span className="block mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-dark">
+                          {r.status}
+                        </span>
+                      )}
                     </td>
                   </tr>
                 ))}
@@ -342,7 +466,11 @@ export default function ReportCard() {
                 Result
               </p>
               <p className="font-display text-lg font-bold text-success mt-1.5">
-                {hasMarks ? (Number(pct) >= 33 ? "PASS" : "FAIL") : "—"}
+                {hasMarks
+                  ? results.every((r) => r.passed)
+                    ? "PASS"
+                    : "FAIL"
+                  : "—"}
               </p>
             </div>
           </div>
@@ -382,10 +510,175 @@ export default function ReportCard() {
           </div>
 
           <p className="text-center text-[11px] text-slate-text/50 mt-6">
-            This is a computer-generated report card for demonstration purposes.
+            {footerNote}
           </p>
         </div>
       </Card>
+
+      {/* Customize report card */}
+      {customizing && customDraft && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 no-print"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
+            onClick={() => !savingCustom && setCustomizing(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+              <div>
+                <h3 className="font-display font-semibold text-ink text-[17px]">
+                  Customize Report Card
+                </h3>
+                <p className="text-[12.5px] text-slate-text/70 mt-0.5">
+                  School logo, affiliation and styling used on printed report
+                  cards.
+                </p>
+              </div>
+              <button
+                onClick={() => !savingCustom && setCustomizing(false)}
+                className="p-2 rounded-lg hover:bg-paper text-slate-text"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="block text-[12.5px] font-medium text-ink mb-1.5">
+                  School Logo
+                </label>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-xl border border-black/10 bg-paper flex items-center justify-center overflow-hidden shrink-0">
+                    {customDraft.logo ? (
+                      <img
+                        src={customDraft.logo}
+                        alt="Logo preview"
+                        className="max-h-full max-w-full object-contain"
+                      />
+                    ) : (
+                      <span className="text-2xl font-display font-bold text-slate-text/40">
+                        {schoolLogo}
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-2">
+                    <input
+                      ref={fileRef}
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => pickLogo(e.target.files?.[0])}
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={() => fileRef.current?.click()}
+                      disabled={savingCustom}
+                    >
+                      <ImageUp size={15} /> Upload logo
+                    </Button>
+                    {customDraft.logo && (
+                      <Button
+                        variant="ghost"
+                        onClick={() =>
+                          setCustomDraft((d) => ({ ...d, logo: "" }))
+                        }
+                        disabled={savingCustom}
+                      >
+                        <Trash2 size={14} /> Remove
+                      </Button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11.5px] text-slate-text/50 mt-1.5">
+                  PNG / JPG / WebP / SVG, up to 1MB. Saved with the school
+                  record — no logo shows the first letter as a badge.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[12.5px] font-medium text-ink mb-1.5">
+                  Affiliation line
+                </label>
+                <Input
+                  value={customDraft.affiliation}
+                  onChange={(e) =>
+                    setCustomDraft((d) => ({
+                      ...d,
+                      affiliation: e.target.value,
+                    }))
+                  }
+                  placeholder="Affiliated to CBSE, New Delhi"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[12.5px] font-medium text-ink mb-1.5">
+                  Footer note
+                </label>
+                <Input
+                  value={customDraft.footerNote}
+                  onChange={(e) =>
+                    setCustomDraft((d) => ({
+                      ...d,
+                      footerNote: e.target.value,
+                    }))
+                  }
+                  placeholder="This is a computer-generated report card"
+                />
+              </div>
+
+              <div>
+                <label className="block text-[12.5px] font-medium text-ink mb-1.5">
+                  Accent color
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="color"
+                    value={ACCENT_RE.test(customDraft.accent) ? customDraft.accent : DEFAULT_ACCENT}
+                    onChange={(e) =>
+                      setCustomDraft((d) => ({ ...d, accent: e.target.value }))
+                    }
+                    className="w-10 h-10 rounded-lg border border-black/10 cursor-pointer bg-transparent p-0.5"
+                  />
+                  <Input
+                    value={customDraft.accent}
+                    onChange={(e) =>
+                      setCustomDraft((d) => ({ ...d, accent: e.target.value }))
+                    }
+                    className="w-28 font-mono"
+                    placeholder="#E8A33D"
+                  />
+                </div>
+                <p className="text-[11.5px] text-slate-text/50 mt-1.5">
+                  Used for the report-card header rule and the term title.
+                </p>
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setCustomizing(false)}
+                disabled={savingCustom}
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="amber"
+                onClick={saveCustom}
+                disabled={savingCustom || !ACCENT_RE.test(customDraft.accent)}
+              >
+                <Check size={15} />
+                {savingCustom ? "Saving…" : "Save Settings"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

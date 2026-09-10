@@ -13,6 +13,15 @@ const examSchema = new mongoose.Schema(
     room: { type: String },
     maxMarks: { type: Number, required: true },
     passingMarks: { type: Number, default: 33 },
+    session: { type: String, index: true }, // academic year label e.g. "2026-27"
+    // Result publishing state machine: draft -> reviewed -> published.
+    // Students only ever see marks belonging to "published" exams.
+    status: {
+      type: String,
+      enum: ["draft", "reviewed", "published"],
+      default: "draft",
+      index: true,
+    },
     // Optional references to the master entities that produced the snapshot
     // strings above. Keeps the subject/exam-type/etc. reusable across modules.
     examTypeId: { type: mongoose.Schema.Types.ObjectId, ref: "ExamType", default: null },

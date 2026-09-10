@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   Plus,
   Search,
@@ -16,6 +16,8 @@ import {
 } from "lucide-react";
 import { api } from "../lib/api";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../components/UI";
+import SearchableSelect from "../components/SearchableSelect";
+import { useMasterOptions } from "../hooks/useMasterOptions";
 
 const ROLE_LABELS = {
   super_admin: "Platform Owner",
@@ -135,6 +137,8 @@ const toUserPayload = (form) => ({
 });
 
 export default function Users() {
+  const { options: CLASS_OPTIONS } = useMasterOptions("classes", ["Nursery","LKG","UKG","1","2","3","4","5","6","7","8","9","10","11-Sci","11-Com","12-Sci","12-Com"]);
+  const { options: SECTION_OPTIONS, rawItems: rawSections } = useMasterOptions("sections", ["A","B","C"]);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(0);
@@ -148,6 +152,10 @@ export default function Users() {
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(emptyForm());
+  const filteredSections = useMemo(() => {
+    if (!form.className) return SECTION_OPTIONS;
+    return [...new Set(rawSections.filter((s) => s.className === form.className).map((s) => s.name))];
+  }, [form.className, SECTION_OPTIONS, rawSections]);
   const [busy, setBusy] = useState(false);
   const [createdCredential, setCreatedCredential] = useState(null);
 
@@ -224,11 +232,12 @@ export default function Users() {
 
   const resetPassword = async (user) => {
     try {
-      const { data } = await api.users.resetPassword(user.id);
-      const link = data?.resetLink;
-      if (!link) throw new Error("No reset link returned");
-      navigator.clipboard?.writeText(link).catch(() => {});
-      toast(`Reset link copied — expires in ${data.expiresInMinutes || 15} minutes`);
+      const { data } = await api.users.sendResetOtp(user.id);
+      toast(
+        data?.maskedEmail
+          ? `OTP sent to ${data.maskedEmail} — valid for 10 minutes`
+          : "OTP sent to the user's email — valid for 10 minutes",
+      );
     } catch (err) {
       toast(err.message, "error");
     }
@@ -380,18 +389,18 @@ export default function Users() {
                 form.role === "teacher" ||
                 form.role === "student") && (
                 <>
-                  <Input
-                    placeholder={form.role === "teacher" ? "Primary class (optional)" : "Class"}
-                    autoComplete="off"
-                    value={form.className}
-                    onChange={(e) => setForm({ ...form, className: e.target.value })}
-                  />
-                  <Input
-                    placeholder="Section"
-                    autoComplete="off"
-                    value={form.section}
-                    onChange={(e) => setForm({ ...form, section: e.target.value })}
-                  />
+                   <SearchableSelect
+                     options={CLASS_OPTIONS}
+                     value={form.className}
+                     onChange={(val) => setForm({ ...form, className: val, section: "" })}
+                     placeholder="Select class"
+                   />
+                   <SearchableSelect
+                     options={filteredSections}
+                     value={form.section}
+                     onChange={(val) => setForm({ ...form, section: val })}
+                     placeholder="Select section"
+                   />
                 </>
               )}
               {refField && (
@@ -429,8 +438,8 @@ export default function Users() {
       )}
 
       <Card bodyClassName="p-5">
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <div className="relative flex-1 min-w-[200px]">
+        <div className="grid grid-cols-1 sm:grid-cols-[1fr_11rem] lg:grid-cols-[1fr_11rem_auto] items-center gap-3 mb-4">
+          <div className="relative">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/50" />
             <Input
               placeholder="Search name, email or ID"
@@ -442,7 +451,7 @@ export default function Users() {
               }}
             />
           </div>
-          <Select value={role} onChange={(event) => { setRole(event.target.value); setPage(1); }} className="w-44">
+          <Select value={role} onChange={(event) => { setRole(event.target.value); setPage(1); }} className="w-full">
             <option value="">All roles</option>
             {Object.entries(ROLE_LABELS)
               .filter(([value]) => value !== "super_admin")
@@ -452,31 +461,33 @@ export default function Users() {
                 </option>
               ))}
           </Select>
-          <label className="flex items-center gap-2 text-[13px] text-slate-text cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={includeDeleted}
-              onChange={(event) => {
-                setIncludeDeleted(event.target.checked);
-                setPage(1);
-              }}
-              className="accent-ink"
-            />
-            Include removed users
-          </label>
-          {(q.trim() || role || includeDeleted) && (
-            <button
-              onClick={() => {
-                setQ("");
-                setRole("");
-                setIncludeDeleted(false);
-                setPage(1);
-              }}
-              className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink bg-paper px-3 py-2 rounded-lg border border-black/[0.06] hover:bg-alert/10 hover:text-alert transition-colors"
-            >
-              <FilterX size={13} /> Reset filters
-            </button>
-          )}
+          <div className="flex items-center gap-3 justify-between sm:justify-end">
+            <label className="flex items-center gap-2 text-[13px] text-slate-text cursor-pointer select-none whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={includeDeleted}
+                onChange={(event) => {
+                  setIncludeDeleted(event.target.checked);
+                  setPage(1);
+                }}
+                className="accent-ink"
+              />
+              Include removed
+            </label>
+            {(q.trim() || role || includeDeleted) && (
+              <button
+                onClick={() => {
+                  setQ("");
+                  setRole("");
+                  setIncludeDeleted(false);
+                  setPage(1);
+                }}
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink bg-paper px-3 py-2 rounded-lg border border-black/[0.06] hover:bg-alert/10 hover:text-alert transition-colors whitespace-nowrap"
+              >
+                <FilterX size={13} /> Reset
+              </button>
+            )}
+          </div>
         </div>
 
         {!loading && (

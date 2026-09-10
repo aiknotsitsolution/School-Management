@@ -1,5 +1,7 @@
 const mongoose = require("mongoose");
 const Student = require("../models/Student");
+const { notifyByRefIds } = require("../utils/notify");
+const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
 
 // Neutralizes regex metacharacters in user-supplied search terms so they cannot
 // inject regex operators ($regex pattern injection) or craft catastrophic
@@ -17,7 +19,7 @@ const STUDENT_EDITABLE = [
 ];
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
-const imagekit = require("../config/imagekit");
+const imagekit = require("@school-erp/shared/src/config/imagekit");
 
 // Fields that must be filled before a profile is considered complete.
 // class/section/name are schema-level; these are the counsellor-fillable ones.
@@ -46,7 +48,7 @@ const uploadStudentPhoto = async (req, res) => {
       return res
         .status(400)
         .json({ success: false, message: "Photo file is required" });
-    const imagekit = require("../config/imagekit");
+    const imagekit = require("@school-erp/shared/src/config/imagekit");
     if (!imagekit) {
       return res
         .status(503)
@@ -111,7 +113,17 @@ const createStudent = async (req, res) => {
     data.profileStatus = computeProfileStatus(data);
     if (data.profileStatus === "complete") data.profileCompletedAt = new Date();
 
+    await assertAcademicRefs({ req, values: { class: data.class, section: data.section } });
+
     const student = await Student.create(data);
+    notifyByRefIds({
+      schoolId: req.tenantId,
+      refIds: [admissionId],
+      title: "Admission record created",
+      message: `Your student profile (${admissionId}) was created by the school admin.`,
+      kind: "student",
+      link: "/students",
+    });
     res.status(201).json({ success: true, data: student });
   } catch (err) {
     if (isDuplicateKey(err)) {
@@ -134,6 +146,7 @@ const getStudents = async (req, res) => {
       admissionNo,
       search,
       q,
+      linked,
       page = 1,
       limit = 20,
     } = req.query;
@@ -146,6 +159,8 @@ const getStudents = async (req, res) => {
     if (status) filter.status = status;
     if (profileStatus) filter.profileStatus = profileStatus;
     if (admissionNo) filter.admissionNo = String(admissionNo).trim();
+    if (linked === "true" || linked === "1")
+      filter.userId = { $exists: true, $ne: null };
     const term = escapeRegex(String(q || search || "").trim());
     if (term) {
       const rx = { $regex: term, $options: "i" };
@@ -269,7 +284,24 @@ const updateStudent = async (req, res) => {
     student.profileStatus = computeProfileStatus(student);
     student.profileCompletedAt =
       student.profileStatus === "complete" ? (student.profileCompletedAt || new Date()) : null;
+
+    // Validate only the fields actually being changed so legacy stored values
+    // (kept in the record untouched) are never re-checked against the masters.
+    const refValues = {};
+    if (patch.class !== undefined) refValues.class = patch.class;
+    if (patch.section !== undefined) refValues.section = patch.section;
+    await assertAcademicRefs({ req, values: refValues });
+
     await student.save();
+
+    notifyByRefIds({
+      schoolId: req.tenantId,
+      refIds: [student.admissionNo],
+      title: "Profile updated",
+      message: `Your student profile was updated by the school admin.`,
+      kind: "student",
+      link: "/students",
+    });
 
     res.json({ success: true, data: student });
   } catch (err) {
@@ -315,6 +347,48 @@ const completeProfile = async (req, res) => {
     student.profileStatus = "complete";
     student.profileCompletedAt = new Date();
     await student.save();
+    res.json({ success: true, data: student });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+// School admin issues a physical/printable ID card for an onboarded student.
+// Only allowed once the student's profile is complete; re-issuing a reprint keeps
+// the original idCardNumber but refreshes the issuedAt timestamp.
+const issueIdCard = async (req, res) => {
+  try {
+    const student = await Student.findOne({
+      _id: req.params.id,
+      schoolId: req.tenantId,
+    });
+    if (!student)
+      return res
+        .status(404)
+        .json({ success: false, message: "Student not found" });
+
+    if (student.profileStatus !== "complete") {
+      return res.status(400).json({
+        success: false,
+        message: "Student onboarding is not complete — ID card can only be issued after onboarding.",
+      });
+    }
+
+    const year = String(new Date().getFullYear());
+    if (!student.idCardNumber) {
+      const seq = String(student.admissionNo || student._id).replace(/[^a-zA-Z0-9]/g, "").toUpperCase();
+      student.idCardNumber = `${seq ? `${seq}-` : ""}${year}-${String(student._id).slice(-4).toUpperCase()}`;
+    }
+    student.idCardIssuedAt = new Date();
+    await student.save();
+    notifyByRefIds({
+      schoolId: req.tenantId,
+      refIds: [student.admissionNo],
+      title: "ID card ready",
+      message: `Your ID card (${student.idCardNumber}) has been issued.`,
+      kind: "profile",
+      link: "/students",
+    });
     res.json({ success: true, data: student });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -370,6 +444,7 @@ module.exports = {
   counsellorStats,
   updateStudent,
   completeProfile,
+  issueIdCard,
   deleteStudent,
   bulkStats,
 };

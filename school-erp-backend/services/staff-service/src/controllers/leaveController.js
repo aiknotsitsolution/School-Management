@@ -1,7 +1,7 @@
 const Leave = require("../models/Leave");
 const Staff = require("../models/Staff");
 const { pushNotifications } = require("../utils/notify");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
 // Mass-assignment guard: only these fields may be set from the request body.
 // status / staffId / approvedBy are always server-controlled.

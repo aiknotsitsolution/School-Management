@@ -24,10 +24,12 @@ import {
 import { api } from "../../lib/api";
 import AttachmentLinks from "../../components/upload/AttachmentLinks";
 import { useTeacherContext, fmtDate } from "./useTeacherContext";
+import { useMasterOptions } from "../../hooks/useMasterOptions";
 
-const SUBJECTS = ["English", "Maths", "Science", "Social Studies", "Hindi", "Computer", "General Knowledge"];
+const SUBJECTS_FALLBACK = ["English", "Maths", "Science", "Social Studies", "Hindi", "Computer", "General Knowledge"];
 
 export default function Homework() {
+  const { options: SUBJECTS } = useMasterOptions("subjects", SUBJECTS_FALLBACK);
   const { cls, section, assignment, query } = useTeacherContext();
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);

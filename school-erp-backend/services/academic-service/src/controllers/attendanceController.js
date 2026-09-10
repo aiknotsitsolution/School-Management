@@ -1,6 +1,10 @@
 const Attendance = require("../models/Attendance");
 const { getStudentModel } = require("../db/studentDb");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
+const {
+  findMissingMasterRefs,
+  missingMessage,
+} = require("../utils/masterRefs");
 
 // Resolves the set of admissionNo values enrolled in the teacher's class +
 // section for this school. Returns null when the student DB is unreachable so
@@ -44,6 +48,24 @@ const markAttendance = async (req, res) => {
           invalidStudentIds: invalid,
         });
       }
+    }
+
+    // Referential integrity: the class/section written on the records must
+    // resolve to active masters when this school has configured the catalogs.
+    const pairs = [
+      ...new Set(
+        records.map((r) => `${String(r.class || "").trim()}||${String(r.section || "").trim()}`),
+      ),
+    ];
+    const missing = [];
+    for (const pair of pairs) {
+      const [cls, section] = pair.split("||");
+      missing.push(
+        ...(await findMissingMasterRefs({ schoolId: req.tenantId, class: cls, section })),
+      );
+    }
+    if (missing.length) {
+      return res.status(400).json({ success: false, message: missingMessage(missing), missing });
     }
 
     const ops = records.map((r) => ({
@@ -91,4 +113,92 @@ const getAttendance = async (req, res) => {
 };
 
 
-module.exports = { markAttendance, getAttendance };
+const getAttendanceReport = async (req, res) => {
+  try {
+    const { from, to, class: cls, section, studentId } = req.query;
+    const match = { schoolId: req.tenantId };
+    if (cls) match.class = cls;
+    if (section) match.section = section;
+    if (studentId) match.studentId = studentId;
+    if (from || to) {
+      match.date = {};
+      if (from) match.date.$gte = new Date(from);
+      if (to) match.date.$lte = new Date(to);
+    }
+
+    const [totals] = await Attendance.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: null,
+          totalRecords: { $sum: 1 },
+          presentCount: { $sum: { $cond: [{ $eq: ["$status", "Present"] }, 1, 0] } },
+          absentCount: { $sum: { $cond: [{ $eq: ["$status", "Absent"] }, 1, 0] } },
+          leaveCount: { $sum: { $cond: [{ $eq: ["$status", "Leave"] }, 1, 0] } },
+          halfDayCount: { $sum: { $cond: [{ $eq: ["$status", "Half Day"] }, 1, 0] } },
+        },
+      },
+    ]);
+
+    const totalRecords = totals?.totalRecords || 0;
+    const presentCount = totals?.presentCount || 0;
+
+    const classWise = await Attendance.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: "$class",
+          total: { $sum: 1 },
+          present: { $sum: { $cond: [{ $eq: ["$status", "Present"] }, 1, 0] } },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          class: "$_id",
+          total: 1,
+          present: 1,
+          percentage: { $cond: [{ $eq: ["$total", 0] }, "0.00", { $round: [{ $multiply: [{ $divide: ["$present", "$total"] }, 100] }, 2] }] },
+        },
+      },
+      { $sort: { class: 1 } },
+    ]);
+
+    const dailyTrend = await Attendance.aggregate([
+      { $match: match },
+      {
+        $group: {
+          _id: { $dateToString: { format: "%Y-%m-%d", date: "$date" } },
+          total: { $sum: 1 },
+          present: { $sum: { $cond: [{ $eq: ["$status", "Present"] }, 1, 0] } },
+        },
+      },
+      {
+        $project: {
+          _id: 0,
+          date: "$_id",
+          total: 1,
+          present: 1,
+          percentage: { $cond: [{ $eq: ["$total", 0] }, "0.00", { $round: [{ $multiply: [{ $divide: ["$present", "$total"] }, 100] }, 2] }] },
+        },
+      },
+      { $sort: { date: 1 } },
+    ]);
+
+    res.json({
+      success: true,
+      totalRecords,
+      presentCount,
+      absentCount: totals?.absentCount || 0,
+      leaveCount: totals?.leaveCount || 0,
+      halfDayCount: totals?.halfDayCount || 0,
+      percentage: totalRecords ? ((presentCount / totalRecords) * 100).toFixed(2) : "0.00",
+      classWise,
+      dailyTrend,
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { markAttendance, getAttendance, getAttendanceReport };

@@ -9,8 +9,11 @@ const feeStructureSchema = new mongoose.Schema(
     amount: { type: Number, required: true },
     frequency: { type: String, enum: ["Monthly", "Quarterly", "Annually", "One-time"], default: "Quarterly" },
     dueDate: { type: Date },
+    active: { type: Boolean, default: true },
   },
   { timestamps: true }
 );
+
+feeStructureSchema.index({ schoolId: 1, session: 1, class: 1, feeType: 1 }, { unique: true });
 
 module.exports = mongoose.model("FeeStructure", feeStructureSchema);

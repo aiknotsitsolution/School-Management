@@ -6,6 +6,72 @@ const API_BASE_URL =
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
 
+// SSE subscriber built on fetch + ReadableStream so the Authorization header is
+// sent (EventSource cannot set headers). Auto-reconnects on error/timeout.
+function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
+  const controller = new AbortController();
+  let running = true;
+  let timer = null;
+
+  const connect = async () => {
+    if (controller.signal.aborted) return;
+    try {
+      const { auth } = store.getState();
+      const token = auth.accessToken || localStorage.getItem("erp_access_token");
+      const user =
+        auth.user || JSON.parse(localStorage.getItem("erp_user") || "null");
+      const passiveSchoolId =
+        auth.activeSchoolId || localStorage.getItem("erp_active_school");
+      const includeSchoolHeader = user?.role === "super_admin" && passiveSchoolId;
+      const response = await fetch(`${API_BASE_URL}${path}`, {
+        headers: {
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          ...(includeSchoolHeader ? { "X-School-Id": passiveSchoolId } : {}),
+        },
+        signal: controller.signal,
+      });
+      if (!response.ok || !response.body) throw new Error(`SSE ${response.status}`);
+      onStatus?.("connected");
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        let idx;
+        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+          const block = buffer.slice(0, idx);
+          buffer = buffer.slice(idx + 2);
+          const dataLine = block
+            .split("\n")
+            .find((l) => l.startsWith("data: "));
+          if (dataLine) {
+            try {
+              onData?.(JSON.parse(dataLine.slice(6)));
+            } catch {
+              /* ignore malformed frame */
+            }
+          }
+        }
+      }
+      onStatus?.("reconnecting");
+      if (running) timer = setTimeout(connect, delay);
+    } catch (err) {
+      if (controller.signal.aborted) return;
+      onStatus?.("reconnecting");
+      if (running) timer = setTimeout(connect, delay);
+    }
+  };
+
+  connect();
+  return () => {
+    running = false;
+    if (timer) clearTimeout(timer);
+    controller.abort();
+  };
+}
+
 async function request(path, options = {}) {
   const isFormData = options.body instanceof FormData;
   const { auth } = store.getState();
@@ -63,8 +129,18 @@ async function request(path, options = {}) {
 export const api = {
   login: (credentials) => request("/auth/login", json("POST", credentials)),
   me: () => request("/auth/me"),
+  school: {
+    me: () => request("/auth/school/me"),
+    update: (payload) => request("/auth/school/me", json("PATCH", payload)),
+  },
   resetPassword: (token, newPassword) =>
     request("/auth/reset-password", json("POST", { token, newPassword })),
+  forgotPassword: (email) =>
+    request("/auth/forgot-password", json("POST", { email })),
+  verifyResetOtp: (email, otp) =>
+    request("/auth/verify-reset-otp", json("POST", { email, otp })),
+  resetPasswordOtp: (token, newPassword) =>
+    request("/auth/reset-password-otp", json("POST", { token, newPassword })),
   users: {
     list: (params = "") =>
       request(`/auth/users${params ? `?${params}` : ""}`),
@@ -77,10 +153,22 @@ export const api = {
       request(`/auth/users/${id}/restore`, { method: "POST" }),
     resetPassword: (id) =>
       request(`/auth/users/${id}/reset-password`, { method: "POST" }),
+    sendResetOtp: (id) =>
+      request(`/auth/users/${id}/send-reset-otp`, { method: "POST" }),
   },
   schools: {
     list: () => request("/auth/schools"),
     create: (school) => request("/auth/schools", json("POST", school)),
+  },
+  sessions: {
+    list: () => request("/auth/sessions"),
+    get: (id) => request(`/auth/sessions/${id}`),
+    create: (item) => request("/auth/sessions", json("POST", item)),
+    update: (id, item) => request(`/auth/sessions/${id}`, json("PATCH", item)),
+    activate: (id) =>
+      request(`/auth/sessions/${id}/activate`, json("POST", {})),
+    end: (id) => request(`/auth/sessions/${id}/end`, json("POST", {})),
+    remove: (id) => request(`/auth/sessions/${id}`, { method: "DELETE" }),
   },
   plans: {
     list: (params = "") => request(`/platform/plans${params ? `?${params}` : ""}`),
@@ -162,6 +250,7 @@ export const api = {
       });
     },
     update: (id, student) => request(`/students/${id}`, json("PUT", student)),
+    issueIdCard: (id) => request(`/students/${id}/issue-id-card`, { method: "POST" }),
     remove: (id) => request(`/students/${id}`, { method: "DELETE" }),
     stats: () => request("/students/stats/summary"),
   },
@@ -189,6 +278,8 @@ export const api = {
   attendance: {
     list: (params = "") => request(`/attendance${params ? `?${params}` : ""}`),
     mark: (records) => request("/attendance/mark", json("POST", { records })),
+    report: (params = "") =>
+      request(`/attendance/report${params ? `?${params}` : ""}`),
   },
   timetable: {
     list: (params = "") => request(`/timetable${params ? `?${params}` : ""}`),
@@ -233,34 +324,67 @@ export const api = {
     list: (params = "") => request(`/exams${params ? `?${params}` : ""}`),
     create: (item) => request("/exams", json("POST", item)),
     update: (id, item) => request(`/exams/${id}`, json("PUT", item)),
+    updateStatus: (id, status) =>
+      request(`/exams/${id}/status`, json("PATCH", { status })),
     remove: (id) => request(`/exams/${id}`, { method: "DELETE" }),
   },
   examMasters: {
     list: (kind) => request(`/exam-masters/${kind}`),
     create: (kind, item) => request(`/exam-masters/${kind}`, json("POST", item)),
     deactivate: (kind, id) =>
-      request(`/exam-masters/${kind}/${id}`, { method: "PATCH", body: JSON.stringify({ active: false }) }),
+      request(`/exam-masters/${kind}/${id}/deactivate`, { method: "PATCH", body: JSON.stringify({ active: false }) }),
+    validate: (item) =>
+      request("/exam-masters/validate-refs", json("POST", item)),
   },
   marks: {
     enter: (item) => request("/marks", json("POST", item)),
+    list: (params = "") => request(`/marks${params ? `?${params}` : ""}`),
     reportCard: (params = "") =>
       request(`/marks/report-card${params ? `?${params}` : ""}`),
     classSummary: (params = "") =>
       request(`/marks/class-summary${params ? `?${params}` : ""}`),
   },
+  promotions: {
+    preview: (params = "") =>
+      request(`/promotions/preview${params ? `?${params}` : ""}`),
+    history: (params = "") =>
+      request(`/promotions/history${params ? `?${params}` : ""}`),
+    commit: (item) => request("/promotions", json("POST", item)),
+  },
+  transfers: {
+    create: (item) => request("/transfers", json("POST", item)),
+    history: (params = "") =>
+      request(`/transfers/history${params ? `?${params}` : ""}`),
+  },
+  rollover: {
+    prepare: (item) => request("/rollover/prepare", json("POST", item)),
+  },
   fees: {
     structures: {
-      list: () => request("/fees/structure"),
+      list: (params = "") => request(`/fees/structure${params ? `?${params}` : ""}`),
       create: (item) => request("/fees/structure", json("POST", item)),
+      update: (id, item) => request(`/fees/structure/${id}`, json("PUT", item)),
+      toggleActive: (id, active) =>
+        request(`/fees/structure/${id}`, json("PATCH", { active })),
       remove: (id) => request(`/fees/structure/${id}`, { method: "DELETE" }),
     },
     invoices: {
       list: (params = "") => request(`/fees${params ? `?${params}` : ""}`),
       create: (item) => request("/fees", json("POST", item)),
+      generatePreview: (item) =>
+        request("/fees/generate/preview", json("POST", item)),
+      generateConfirm: (item) =>
+        request("/fees/generate/confirm", json("POST", item)),
     },
     payments: {
       list: (params = "") => request(`/payments${params ? `?${params}` : ""}`),
       create: (item) => request("/payments", json("POST", item)),
+      receipt: (receiptNo) =>
+        request(`/payments/receipt/${encodeURIComponent(receiptNo)}`),
+    },
+    reports: {
+      get: (params = "") =>
+        request(`/payments/reports${params ? `?${params}` : ""}`),
     },
     orders: {
       list: (params = "") => request(`/payments/orders${params ? `?${params}` : ""}`),
@@ -280,13 +404,22 @@ export const api = {
     unreadCount: () => request("/notifications/unread-count"),
     markRead: (id) => request(`/notifications/${id}/read`, json("PATCH", {})),
     markAllRead: () => request("/notifications/read-all", json("PATCH", {})),
+    subscribe: (handlers) => sseSubscribe("/notifications/stream", handlers),
   },
-  events: {
-    list: () => request("/events"),
-    create: (item) => request("/events", json("POST", item)),
-    update: (id, item) => request(`/events/${id}`, json("PUT", item)),
-    remove: (id) => request(`/events/${id}`, { method: "DELETE" }),
-  },
+events: {
+      list: () => request("/events"),
+      create: (item) => request("/events", json("POST", item)),
+      update: (id, item) => request(`/events/${id}`, json("PUT", item)),
+      remove: (id) => request(`/events/${id}`, { method: "DELETE" }),
+      uploadImage: (file) => {
+        const formData = new FormData();
+        formData.append("image", file);
+        return request("/events/upload-image", {
+          method: "POST",
+          body: formData,
+        });
+      },
+    },
   staff: {
     list: (params = "") => request(`/staff${params ? `?${params}` : ""}`),
     create: (item) => request("/staff", json("POST", item)),
@@ -328,6 +461,8 @@ export const api = {
     list: () => request("/library/issues"),
     issue: (item) => request("/library/issues/issue", json("POST", item)),
     return: (id) => request(`/library/issues/${id}/return`, json("PATCH", {})),
+    sendOverdueNotifications: () =>
+      request("/library/issues/send-overdue-notifications", { method: "POST" }),
   },
   hostel: {
     list: () => request("/hostel"),

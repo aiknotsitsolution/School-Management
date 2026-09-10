@@ -1,6 +1,6 @@
 const Book = require("../models/Book");
 const IssueRecord = require("../models/IssueRecord");
-const { paginate, pageInfo } = require("../utils/pagination");
+const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
 const issueBook = async (req, res) => {
   try {
@@ -62,4 +62,45 @@ const getIssues = async (req, res) => {
   }
 };
 
-module.exports = { issueBook, returnBook, getIssues };
+const { notifyByRefIds } = require("../utils/notify");
+
+const sendOverdueNotifications = async (req, res) => {
+  try {
+    const tenantId = req.tenantId;
+    const overdue = await IssueRecord.find({
+      schoolId: tenantId,
+      status: { $ne: "Returned" },
+      dueDate: { $lt: new Date() },
+    }).lean();
+
+    if (overdue.length === 0) {
+      return res.json({ success: true, notifiedBorrowers: 0, totalOverdue: 0, message: "No overdue records found" });
+    }
+
+    const borrowerIds = [...new Set(overdue.map((r) => String(r.borrowerId)).filter(Boolean))];
+
+    if (!process.env.INTERNAL_NOTIFY_KEY) {
+      return res.json({
+        success: true,
+        notifiedBorrowers: 0,
+        totalOverdue: overdue.length,
+        borrowerIds,
+        note: "Notifications not configured (INTERNAL_NOTIFY_KEY not set)",
+      });
+    }
+
+    await notifyByRefIds({
+      schoolId: tenantId,
+      refIds: borrowerIds,
+      title: "Library Book Overdue",
+      message: "You have an overdue library book. Please return it to avoid fines.",
+      kind: "system",
+    });
+
+    res.json({ success: true, notifiedBorrowers: borrowerIds.length, totalOverdue: overdue.length });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { issueBook, returnBook, getIssues, sendOverdueNotifications };

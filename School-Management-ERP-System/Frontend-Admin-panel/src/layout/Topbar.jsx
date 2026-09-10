@@ -64,7 +64,13 @@ export default function Topbar({ onMenuClick, title }) {
   useEffect(() => {
     refresh();
     const timer = setInterval(refresh, 45000);
-    return () => clearInterval(timer);
+    const unsubscribe = api.notifications.subscribe({
+      onData: () => refresh(),
+    });
+    return () => {
+      clearInterval(timer);
+      unsubscribe();
+    };
   }, [refresh]);
 
   useEffect(() => {
