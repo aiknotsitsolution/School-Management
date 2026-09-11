@@ -1531,4 +1531,12 @@ module.exports = {
   updateSchoolStatus,
   updateSchoolOnboarding,
   formatMoney,
+  // shared helpers reused by tenantController (school self-service).
+  toSubscriptionJson,
+  buildSubscriptionDates,
+  closeCurrentSubscriptions,
+  createInvoiceForSubscription,
+  loadSubscription,
+  loadPlanOrThrow,
+  rawError,
 };

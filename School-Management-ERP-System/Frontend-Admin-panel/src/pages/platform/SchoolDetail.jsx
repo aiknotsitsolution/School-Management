@@ -55,7 +55,7 @@ export default function SchoolDetail() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl">
+      <div className="w-full">
         <PageIntro title="School 360°" />
         <Card>
           <p className="text-[13px] text-slate-text/70">Loading school…</p>
@@ -66,7 +66,7 @@ export default function SchoolDetail() {
 
   if (error || !data) {
     return (
-      <div className="max-w-6xl">
+      <div className="w-full">
         <PageIntro title="School 360°" />
         <Card>
           <p className="text-[13px] text-alert">{error || "School not found"}</p>
@@ -84,7 +84,7 @@ export default function SchoolDetail() {
   const admins = data.admins || [];
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <PageIntro
         eyebrow="Platform Owner · School Operations"
         title={`${school.name} — 360°`}

@@ -145,7 +145,7 @@ export default function SchoolOnboarding() {
 
   if (done) {
     return (
-      <div className="max-w-6xl">
+      <div className="w-full">
         <PageIntro
           eyebrow="Platform Owner · School Operations"
           title="School Onboarding"
@@ -174,7 +174,7 @@ export default function SchoolOnboarding() {
   }
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <PageIntro
         eyebrow="Platform Owner · School Operations"
         title="School Onboarding"

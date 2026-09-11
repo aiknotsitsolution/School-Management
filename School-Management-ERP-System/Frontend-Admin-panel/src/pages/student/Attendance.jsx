@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarCheck, CalendarDays } from "lucide-react";
-import { PageIntro, Card, Pill } from "../../components/UI";
+import { PageIntro, Card, Pill, Select } from "../../components/UI";
 import { api } from "../../lib/api";
 import { fmtDate, dateOf } from "./useStudentContext";
 
@@ -58,15 +58,14 @@ export default function Attendance() {
       <Card
         title={`Attendance History (${monthRecords.length})`}
         action={
-          <select
+          <Select
             value={month}
             onChange={(e) => setMonth(e.target.value)}
-            className="bg-paper border border-black/10 rounded-lg px-2.5 py-1.5 text-[12px] text-ink outline-none"
           >
             {(months.length ? months : [month]).map((m) => (
               <option key={m} value={m}>{m}</option>
             ))}
-          </select>
+          </Select>
         }
       >
         {loading ? (

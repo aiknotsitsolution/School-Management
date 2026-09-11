@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Users, ClipboardCheck, UserCheck, Plus, ArrowRight } from "lucide-react";
+import { Search, Users, ClipboardCheck, UserCheck, Plus, ArrowRight, PhoneCall, CalendarClock, TrendingUp } from "lucide-react";
 import { api } from "../lib/api";
 import {
   Button,
@@ -31,6 +31,13 @@ export default function CounsellorWorkspace() {
   const [term, setTerm] = useState("");
   const [debouncedTerm, setDebouncedTerm] = useState("");
   const [loading, setLoading] = useState(true);
+  const [pipeline, setPipeline] = useState({
+    totalEnquiries: 0,
+    followUpsDue: 0,
+    scheduledVisits: 0,
+    conversionRate: 0,
+    recentEnquiries: [],
+  });
 
   useEffect(() => {
     const timer = setTimeout(() => setDebouncedTerm(term), 350);
@@ -42,6 +49,35 @@ export default function CounsellorWorkspace() {
       .counsellorStats()
       .then(({ data }) => setStats(data))
       .catch((err) => toast(err.message, "error"));
+  }, []);
+
+  useEffect(() => {
+    api.admissions
+      .list()
+      .then(({ data }) => {
+        const enquiries = Array.isArray(data) ? data : [];
+        const today = new Date().toISOString().slice(0, 10);
+        const followUpsDue = enquiries.filter(
+          (e) =>
+            e.followUpDate &&
+            new Date(e.followUpDate).toISOString().slice(0, 10) <= today &&
+            !["Admitted", "Rejected"].includes(e.status),
+        ).length;
+        const scheduledVisits = enquiries.filter(
+          (e) => e.status === "Campus Visit Scheduled",
+        ).length;
+        const admitted = enquiries.filter((e) => e.status === "Admitted").length;
+        const conversionRate =
+          enquiries.length > 0 ? Math.round((admitted / enquiries.length) * 100) : 0;
+        setPipeline({
+          totalEnquiries: enquiries.length,
+          followUpsDue,
+          scheduledVisits,
+          conversionRate,
+          recentEnquiries: enquiries.slice(0, 5),
+        });
+      })
+      .catch(() => {});
   }, []);
 
   useEffect(() => {
@@ -112,6 +148,86 @@ export default function CounsellorWorkspace() {
             </div>
           </Card>
         </div>
+      )}
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 mb-5">
+        <StatCard
+          icon={TrendingUp}
+          label="Total Enquiries"
+          value={pipeline.totalEnquiries}
+          sub="in pipeline"
+          accent="info"
+        />
+        <StatCard
+          icon={PhoneCall}
+          label="Follow-ups Due"
+          value={pipeline.followUpsDue}
+          sub={pipeline.followUpsDue > 0 ? "need attention" : "none pending"}
+          accent={pipeline.followUpsDue > 0 ? "alert" : "success"}
+        />
+        <StatCard
+          icon={CalendarClock}
+          label="Campus Visits"
+          value={pipeline.scheduledVisits}
+          sub="scheduled"
+          accent="amber"
+        />
+        <StatCard
+          icon={TrendingUp}
+          label="Conversion Rate"
+          value={`${pipeline.conversionRate}%`}
+          sub="enquiry → admission"
+          accent="success"
+        />
+      </div>
+
+      {(pipeline.followUpsDue > 0 || pipeline.scheduledVisits > 0) && (
+        <Card title="Admission Pipeline" className="mb-5">
+          <div className="grid sm:grid-cols-2 gap-4">
+            {pipeline.followUpsDue > 0 && (
+              <div>
+                <p className="text-[12px] font-semibold text-slate-text/60 uppercase tracking-wide mb-2">
+                  Follow-ups Due
+                </p>
+                <div className="space-y-2">
+                  {pipeline.recentEnquiries
+                    .filter(
+                      (e) =>
+                        e.followUpDate &&
+                        new Date(e.followUpDate).toISOString().slice(0, 10) <=
+                          new Date().toISOString().slice(0, 10) &&
+                        !["Admitted", "Rejected"].includes(e.status),
+                    )
+                    .slice(0, 4)
+                    .map((e) => (
+                      <div key={e._id} className="flex items-center justify-between gap-2 text-[12.5px]">
+                        <span className="text-ink font-medium truncate">{e.childName}</span>
+                        <span className="text-slate-text/60 shrink-0">{e.classApplied}</span>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+            {pipeline.scheduledVisits > 0 && (
+              <div>
+                <p className="text-[12px] font-semibold text-slate-text/60 uppercase tracking-wide mb-2">
+                  Campus Visits Scheduled
+                </p>
+                <div className="space-y-2">
+                  {pipeline.recentEnquiries
+                    .filter((e) => e.status === "Campus Visit Scheduled")
+                    .slice(0, 4)
+                    .map((e) => (
+                      <div key={e._id} className="flex items-center justify-between gap-2 text-[12.5px]">
+                        <span className="text-ink font-medium truncate">{e.childName}</span>
+                        <Pill tone="info">Visit</Pill>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Card>
       )}
 
       <Card title="Search admitted students" bodyClassName="p-5">

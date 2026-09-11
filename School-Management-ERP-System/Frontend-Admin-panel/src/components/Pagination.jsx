@@ -28,8 +28,8 @@ export function SegmentedTabs({ tabs, active, onChange }) {
 // Numbered pagination: page-number window (with first/last + ellipsis), prev/
 // next chevrons and an optional "Page x of y" info text. Renders nothing when
 // there is a single page (or none).
-export function Pagination({ page, pages, onPage, info = true }) {
-  if (!pages || pages <= 1) return null;
+export function Pagination({ page, pages, onPage, info = true, alwaysShow = false }) {
+  if ((!pages || pages <= 1) && !alwaysShow) return null;
   const window = 5;
   let from = Math.max(1, page - Math.floor(window / 2));
   let to = Math.min(pages, from + window - 1);

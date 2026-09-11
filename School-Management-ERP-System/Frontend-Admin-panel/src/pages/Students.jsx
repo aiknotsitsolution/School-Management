@@ -27,6 +27,7 @@ import {
   StatCard,
 } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
+import { Pagination } from "../components/Pagination";
 const initialStudents = [];
 import { api } from "../lib/api";
 import { PermissionGate } from "../lib/permissions";
@@ -60,7 +61,9 @@ const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
 const HOUSE_OPTIONS = ["Aravali", "Nilgiri", "Shivalik", "Vindhya"];
 const GENDER_OPTIONS = ["Male", "Female"];
 const BLOOD_OPTIONS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
+const MEDIUM_OPTIONS = ["English", "Hindi"];
 const FEE_STATUS_OPTIONS = ["Paid", "Partially Paid", "Pending"];
+const PAGE_SIZE = 20;
 
 function formatClass(c) {
   if (["Nursery", "LKG", "UKG"].includes(c)) return c;
@@ -78,6 +81,7 @@ function emptyForm() {
     roll: "",
     dob: "",
     bloodGroup: "A+",
+    medium: "English",
     fatherName: "",
     motherName: "",
     contact: "",
@@ -110,6 +114,7 @@ function normalizeStudent(student) {
     email: student.email || student.parentEmail || "",
     fatherName: student.fatherName || student.parentName || "",
     motherName: student.motherName || "",
+    medium: student.medium || "English",
     feeStatus: student.feeStatus || "Pending",
     attendance: student.attendance ?? 0,
     house: student.house || "Aravali",
@@ -127,6 +132,7 @@ function toApiStudent(form, admissionNo) {
     rollNo: String(form.roll || "").trim(),
     dob: form.dob || undefined,
     bloodGroup: form.bloodGroup,
+    medium: form.medium,
     address: form.address,
     parentName: form.fatherName,
     parentContact: form.contact,
@@ -147,6 +153,7 @@ export default function Students() {
   const [query, setQuery] = useState("");
   const [cls, setCls] = useState("All");
   const [section, setSection] = useState("All");
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
   const [cardStudent, setCardStudent] = useState(null);
   const [showModal, setShowModal] = useState(false);
@@ -164,7 +171,7 @@ export default function Students() {
   useEffect(() => {
     let active = true;
     api.students
-      .list()
+      .list("limit=1000")
       .then(({ data }) => {
         if (active && Array.isArray(data)) setList(data.map(normalizeStudent));
       })
@@ -201,6 +208,10 @@ export default function Students() {
       );
   }, [list, query, cls, section]);
 
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
+
   const stats = useMemo(() => {
     const total = list.length;
     const paid = list.filter((s) => s.feeStatus === "Paid").length;
@@ -221,6 +232,7 @@ export default function Students() {
       roll: student.roll != null ? String(student.roll) : "",
       dob: student.dob,
       bloodGroup: student.bloodGroup,
+      medium: student.medium || "English",
       fatherName: student.fatherName || "",
       motherName: student.motherName || "",
       contact: student.contact || "",
@@ -328,14 +340,17 @@ export default function Students() {
               <Input
                 placeholder="Search name, ID, roll, phone..."
                 value={query}
-                onChange={(e) => setQuery(e.target.value)}
+                onChange={(e) => {
+                  setQuery(e.target.value);
+                  setPage(1);
+                }}
                 className="pl-8 w-56"
               />
             </div>
             <SearchableSelect
               options={CLASS_OPTIONS}
               value={cls}
-              onChange={(v) => { setCls(v); setSection("All"); }}
+              onChange={(v) => { setCls(v); setSection("All"); setPage(1); }}
               renderLabel={(c) => (c === "All" ? "All Classes" : formatClass(c))}
               placeholder="All Classes"
               className="min-w-[140px]"
@@ -343,7 +358,7 @@ export default function Students() {
             <SearchableSelect
               options={filteredSections}
               value={section}
-              onChange={setSection}
+              onChange={(v) => { setSection(v); setPage(1); }}
               renderLabel={(s) => (s === "All" ? "All Sections" : `Section ${s}`)}
               placeholder="All Sections"
               className="min-w-[120px]"
@@ -362,6 +377,7 @@ export default function Students() {
             </p>
           </div>
         ) : (
+          <>
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-[13px]">
               <thead>
@@ -369,6 +385,7 @@ export default function Students() {
                   <th className="px-5 py-2.5 font-semibold">Student</th>
                   <th className="px-5 py-2.5 font-semibold">Admission ID</th>
                   <th className="px-5 py-2.5 font-semibold">Class</th>
+                  <th className="px-5 py-2.5 font-semibold">Medium</th>
                   <th className="px-5 py-2.5 font-semibold">Roll No.</th>
                   <th className="px-5 py-2.5 font-semibold">Attendance</th>
                   <th className="px-5 py-2.5 font-semibold">Fee Status</th>
@@ -379,7 +396,7 @@ export default function Students() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((s) => (
+                {visible.map((s) => (
                   <tr
                     key={s.id}
                     className="border-b border-black/[0.04] last:border-0 hover:bg-paper/50 transition-colors cursor-pointer"
@@ -403,6 +420,9 @@ export default function Students() {
                     </td>
                     <td className="px-5 py-3 text-slate-text">
                       {formatClass(s.class)}-{s.section}
+                    </td>
+                    <td className="px-5 py-3 text-slate-text">
+                      {s.medium || "—"}
                     </td>
                     <td className="px-5 py-3 font-medium text-ink">
                       {s.roll || "—"}
@@ -464,6 +484,9 @@ export default function Students() {
               </tbody>
             </table>
           </div>
+
+          <Pagination page={safePage} pages={pageCount} onPage={setPage} />
+          </>
         )}
       </Card>
 
@@ -523,6 +546,7 @@ export default function Students() {
                     `${formatClass(selected.class)} - Section ${selected.section}`,
                   ],
                   ["Roll Number", selected.roll ? String(selected.roll) : "—"],
+                  ["Medium", selected.medium || "—"],
                   ["Gender", selected.gender || "—"],
                   ["Date of Birth", selected.dob],
                   ["Blood Group", selected.bloodGroup || "—"],
@@ -783,6 +807,22 @@ export default function Students() {
                     {BLOOD_OPTIONS.map((b) => (
                       <option key={b} value={b}>
                         {b}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Medium
+                  </label>
+                  <Select
+                    value={form.medium}
+                    onChange={(e) => updateForm("medium", e.target.value)}
+                  >
+                    {MEDIUM_OPTIONS.map((m) => (
+                      <option key={m} value={m}>
+                        {m}
                       </option>
                     ))}
                   </Select>

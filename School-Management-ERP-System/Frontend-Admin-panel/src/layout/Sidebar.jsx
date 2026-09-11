@@ -143,7 +143,7 @@ const groups = [
         to: "/teacher-dashboard",
         icon: UserCog,
         label: "Class Teacher",
-        roles: ["class_teacher", "teacher"],
+        roles: ["teacher"],
       },
       {
         to: "/student-dashboard",
@@ -185,55 +185,55 @@ const groups = [
         icon: LayoutDashboard,
         label: "Dashboard",
         end: true,
-        roles: ["class_teacher", "teacher"],
+        roles: ["teacher"],
       },
       {
         to: "/teacher/my-class",
         icon: Users,
         label: "My Class",
-        roles: ["class_teacher", "teacher"],
+        roles: ["teacher"],
       },
       {
         to: "/teacher/attendance",
         icon: CalendarCheck,
         label: "Attendance",
-        roles: ["class_teacher", "teacher"],
+        roles: ["teacher"],
       },
       {
         to: "/teacher/timetable",
         icon: CalendarDays,
         label: "Timetable",
-        roles: ["class_teacher", "teacher"],
+        roles: ["teacher"],
       },
       {
         to: "/teacher/homework",
         icon: BookOpenCheck,
         label: "Homework & Assignments",
-        roles: ["class_teacher", "teacher"],
+        roles: ["teacher"],
       },
       {
         to: "/teacher/exams",
         icon: ClipboardList,
         label: "Examinations",
-        roles: ["class_teacher", "teacher"],
+        roles: ["teacher"],
       },
       {
         to: "/teacher/performance",
         icon: BarChart3,
         label: "Class Performance",
-        roles: ["class_teacher", "teacher"],
+        roles: ["teacher"],
       },
       {
         to: "/teacher/notices",
         icon: Bell,
         label: "Notices",
-        roles: ["class_teacher", "teacher"],
+        roles: ["teacher"],
       },
       {
         to: "/teacher/profile",
         icon: UserCog,
         label: "My Profile",
-        roles: ["class_teacher", "teacher"],
+        roles: ["teacher"],
       },
     ],
   },
@@ -432,6 +432,12 @@ const groups = [
         label: "Manage School",
         perm: "users:manage",
       },
+      {
+        to: "/subscription",
+        icon: CreditCard,
+        label: "Subscription & Upgrade",
+        perm: "school:settings",
+      },
     ],
   },
 ];
@@ -593,10 +599,10 @@ export default function Sidebar({ open, onClose }) {
           </button>
         </div>
 
-        <nav className="flex-1 overflow-y-auto scrollbar-thin py-4 px-3">
+        <nav className="flex-1 overflow-y-auto scrollbar-thinner py-4 px-3">
           {navGroups.map((group) => {
-            if (!persona && (role === "class_teacher" || role === "teacher") && !group.teacherOnly)
-              return null;
+            if (!persona && role === "teacher" && !group.teacherOnly) return null;
+
             const items = persona ? group.items : group.items.filter(canSee);
             if (items.length === 0) return null;
             return (

@@ -1,21 +1,14 @@
-const { v4: uuidv4 } = require("uuid");
-const crypto = require("node:crypto");
 const FeeInvoice = require("../models/FeeInvoice");
-const Payment = require("../models/Payment");
 const PaymentOrder = require("../models/PaymentOrder");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
+const engine = require("../utils/paymentEngine");
 
-// Whether a real payment provider is configured. Provider setup (keys, webhook
-// signing secret, callback URL) is deployment work; until then, orders can be
-// created and viewed but cannot be confirmed as paid.
-const providerEnabled = () =>
-  process.env.PAYMENT_PROVIDER_ENABLED === "true" &&
-  Boolean(process.env.PAYMENT_PROVIDER_NAME);
-
-// Staff/accounts: create a payment order against an unpaid invoice for a student.
+// Creates a payment order against an unpaid invoice (fee purpose). The school's
+// active gateway decides the mode; for online modes a real provider order is
+// attempted here so checkout has a concrete providerOrderId.
 const createOrder = async (req, res) => {
   try {
-    const { invoiceId, provider } = req.body || {};
+    const { invoiceId } = req.body || {};
     if (!invoiceId) return res.status(400).json({ success: false, message: "invoiceId is required" });
 
     const invoice = await FeeInvoice.findOne({ _id: invoiceId, schoolId: req.tenantId });
@@ -29,17 +22,24 @@ const createOrder = async (req, res) => {
     const due = Number(invoice.amount) - Number(invoice.paidAmount || 0);
     if (due <= 0) return res.status(400).json({ success: false, message: "Invoice is already fully paid" });
 
+    const gateway = await engine.resolveGateway(req.tenantId);
     const order = await PaymentOrder.create({
       schoolId: req.tenantId,
       invoiceId: invoice._id,
       studentId: invoice.studentId,
       admissionNo: req.user.role === "student" ? req.user.refId : invoice.studentId,
+      purpose: "fee",
+      gatewayMode: gateway.mode,
       amount: due,
-      provider: provider || (providerEnabled() ? process.env.PAYMENT_PROVIDER_NAME : "unconfigured"),
-      providerOrderId: uuidv4(),
+      currency: invoice.currency || "INR",
+      provider: gateway.mode,
+      providerOrderId: null,
       externalRef: `PKG-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8).toUpperCase()}`,
       status: "pending",
     });
+
+    await engine.tryCreateProviderOrder(order, gateway);
+    await order.save();
 
     res.status(201).json({
       success: true,
@@ -47,13 +47,15 @@ const createOrder = async (req, res) => {
         id: order._id,
         invoiceId: order.invoiceId,
         studentId: order.studentId,
+        purpose: order.purpose,
+        gatewayMode: order.gatewayMode,
         amount: order.amount,
         currency: order.currency,
         provider: order.provider,
         providerOrderId: order.providerOrderId,
         externalRef: order.externalRef,
         status: order.status,
-        checkoutUrl: null, // populated only when a provider is configured
+        checkout: engine.buildCheckout(order, gateway),
         createdAt: order.createdAt,
       },
     });
@@ -62,8 +64,9 @@ const createOrder = async (req, res) => {
   }
 };
 
-// Prepares a provider checkout descriptor. With no provider configured this
-// returns the honest state rather than pretending a redirect happened.
+// Prepares checkout. Manual modes hand the payer display instructions and move
+// the order to awaiting_manual_confirm (staff queue confirms it). Online modes
+// need a concrete provider order; otherwise an honest 503 is returned.
 const initiateOrder = async (req, res) => {
   try {
     const order = await PaymentOrder.findOne({ _id: req.params.id, schoolId: req.tenantId });
@@ -75,7 +78,25 @@ const initiateOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: `Order is already ${order.status}` });
     }
 
-    if (!providerEnabled()) {
+    const gateway = await engine.resolveGateway(order.schoolId);
+
+    if (engine.MANUAL_MODES.includes(order.gatewayMode)) {
+      order.status = "awaiting_manual_confirm";
+      await order.save();
+      return res.json({
+        success: true,
+        data: {
+          id: order._id,
+          gatewayMode: order.gatewayMode,
+          amount: order.amount,
+          currency: order.currency,
+          status: order.status,
+          checkout: engine.buildCheckout(order, gateway),
+        },
+      });
+    }
+
+    if (!order.providerOrderId) {
       return res.status(503).json({
         success: false,
         message: "Payment provider is not configured. Please complete payment at the school office.",
@@ -90,14 +111,12 @@ const initiateOrder = async (req, res) => {
       success: true,
       data: {
         id: order._id,
-        provider: order.provider,
+        gatewayMode: order.gatewayMode,
         amount: order.amount,
         currency: order.currency,
         providerOrderId: order.providerOrderId,
-        // In production this is returned by the provider's session/checkout call.
-        checkoutUrl: process.env.PAYMENT_PROVIDER_CHECKOUT_BASE
-          ? `${process.env.PAYMENT_PROVIDER_CHECKOUT_BASE}/${order.providerOrderId}`
-          : null,
+        status: order.status,
+        checkout: engine.buildCheckout(order, gateway),
       },
     });
   } catch (err) {
@@ -105,31 +124,12 @@ const initiateOrder = async (req, res) => {
   }
 };
 
-// Internal provider-confirmation path. Only reachable when a provider is
-// configured and the caller presents the provider webhook secret. This is the
-// ONLY place a payment order can transition to completed and reconcile money.
+// Client-side confirmation fallback. Only accepts a valid provider payment
+// signature (Razorpay order_id|payment_id HMAC with the school's/platform key
+// secret) — a forged confirm is cryptographically impossible. Webhooks remain
+// the primary path.
 const confirmOrder = async (req, res) => {
   try {
-    if (!providerEnabled()) {
-      return res.status(503).json({ success: false, message: "Payment provider is not configured" });
-    }
-
-    const signature = req.headers["x-payment-signature"];
-    const expected = process.env.PAYMENT_PROVIDER_WEBHOOK_SECRET;
-    if (!signature || !expected) {
-      return res.status(401).json({ success: false, message: "Invalid provider signature" });
-    }
-    // Constant-time comparison on hex-encoded values avoids early-exit
-    // string comparison and length-oracle leaks through timing differences.
-    const expectedHex = Buffer.from(String(expected), "utf8").toString("hex");
-    const presentedHex = Buffer.from(String(signature), "utf8").toString("hex");
-    const valid =
-      expectedHex.length === presentedHex.length &&
-      crypto.timingSafeEqual(Buffer.from(expectedHex), Buffer.from(presentedHex));
-    if (!valid) {
-      return res.status(401).json({ success: false, message: "Invalid provider signature" });
-    }
-
     const order = await PaymentOrder.findOne({ _id: req.params.id, schoolId: req.tenantId });
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
     if (order.status === "completed") {
@@ -139,32 +139,23 @@ const confirmOrder = async (req, res) => {
       return res.status(400).json({ success: false, message: `Order is ${order.status}` });
     }
 
-    const invoice = await FeeInvoice.findOne({ _id: order.invoiceId, schoolId: req.tenantId });
-    if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
+    const gateway = await engine.resolveGateway(order.schoolId);
+    const driver = engine.driverFor(order.gatewayMode);
+    const config = engine.driverConfig(gateway, order.gatewayMode);
 
-    const receiptNo = `RCPT-${Date.now()}-${order.externalRef}`;
-    const payment = await Payment.create({
-      schoolId: req.tenantId,
-      invoiceId: invoice._id,
-      studentId: order.studentId,
-      amount: order.amount,
-      mode: "Online Gateway",
-      transactionId: order.providerOrderId,
-      receiptNo,
-      collectedBy: `gateway:${order.provider}`,
+    const verified = await driver.verifyPaymentSignature(config, {
+      razorpayOrderId: req.body?.razorpay_order_id || order.providerOrderId,
+      razorpayPaymentId: req.body?.razorpay_payment_id,
+      razorpaySignature: req.body?.razorpay_signature,
     });
+    if (!verified) {
+      return res.status(401).json({ success: false, message: "Invalid payment signature" });
+    }
 
-    invoice.paidAmount += Number(order.amount);
-    invoice.receiptNo = receiptNo;
-    invoice.status = invoice.paidAmount >= invoice.amount ? "Paid" : "Partial";
-    await invoice.save();
-
-    order.status = "completed";
-    order.confirmedAt = new Date();
-    order.confirmedBy = `gateway:${order.provider}`;
-    await order.save();
-
-    res.json({ success: true, data: { order, payment, invoice } });
+    const result = await engine.completeOrder(order, {
+      confirmedBy: `signature:${req.body?.razorpay_payment_id || "verified"}`,
+    });
+    res.json({ success: true, data: { order, note: result.already ? "Already confirmed" : "Confirmed" } });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }

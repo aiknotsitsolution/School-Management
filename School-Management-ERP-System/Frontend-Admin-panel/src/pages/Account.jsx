@@ -10,7 +10,7 @@ import { useState } from "react";
 const roleLabel = (role, designation) => {
   if (role === "super_admin") return "Platform Owner";
   if (role === "school_admin" || role === "admin") return "School Admin";
-  if (role === "class_teacher" || role === "teacher") return "Class Teacher";
+  if (role === "teacher") return "Teacher";
   if (role === "staff") return designation ? `Staff · ${designation}` : "Staff";
   if (role === "student" || role === "parent") return "Student / Parent";
   return "User";

@@ -2,6 +2,10 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
 const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
+const {
+  scopeClassTeacher,
+  guardClassBody,
+} = require("@school-erp/shared/src/middleware/teacherScopeAuth");
 const JWT_SECRET = getJwtSecret();
 
 const verifyToken = async (req, res, next) => {
@@ -83,49 +87,20 @@ const scopeStudentSchedule = ({ section = false } = {}) => (req, res, next) => {
   next();
 };
 
-// Teacher scoping (class_teacher — homeroom holder — or teacher with a primary
-// teaching scope): locks GET queries to the token's class & section and rejects
-// teachers with no class assignment. Full multi-class scope lives in
-// TeacherAssignment; this middleware enforces the primary scope server-side.
-const scopeClassTeacher = (req, res, next) => {
-  const { role, class: cls, section } = req.user || {};
-  if (!["class_teacher", "teacher"].includes(role)) return next();
-  if (!cls) {
-    return res.status(403).json({
-      success: false,
-      message: "No class assigned to this account. Contact your school admin.",
-    });
-  }
-  req.teacherScope = { class: String(cls), section: section ? String(section) : null };
-  if (req.method === "GET") {
-    req.query.class = req.teacherScope.class;
-    if (req.teacherScope.section) req.query.section = req.teacherScope.section;
-    else delete req.query.section;
-  }
-  next();
-};
-
-// For class_teacher writes: validates that class/section fields carried in the
-// request body match the teacher's assignment. `arrayField` points to an array
-// of records (e.g. attendance records); otherwise the body itself is checked.
-const guardClassBody = (arrayField) => (req, res, next) => {
-  const scope = req.teacherScope;
-  if (!scope) return next();
-  const items = arrayField ? req.body[arrayField] : req.body;
-  const list = Array.isArray(items) ? items : [items];
-  const mismatch = list.some(
-    (r) =>
-      !r ||
-      String(r.class) !== scope.class ||
-      (scope.section && String(r.section) !== scope.section)
-  );
-  if (mismatch) {
-    return res.status(403).json({
-      success: false,
-      message: "Class Teacher can only manage their assigned class and section",
-    });
-  }
-  next();
-};
+// Teacher scoping is ASSIGNMENT-driven: an authenticated teacher's authority
+// is resolved from active TeacherAssignment records (teaching + class_teacher)
+// for the current session and exposed on req.teacherScope. See
+// @school-erp/shared/src/middleware/teacherScopeAuth for the implementation.
+//
+//   req.teacherScope = {
+//     teaching:      [{ class, section, subject }],
+//     classTeacher:  [{ class, section }],
+//     allScopes:     [{ class, section }],   // deduped union
+//     hasClassTeacher,
+//     has(class, section),                   // scope membership check
+//     class, section                         // resolved single-class address
+//   }
+//
+// guardClassBody validates write bodies against req.teacherScope.allScopes.
 
 module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery, scopeStudentSchedule, scopeClassTeacher, guardClassBody };

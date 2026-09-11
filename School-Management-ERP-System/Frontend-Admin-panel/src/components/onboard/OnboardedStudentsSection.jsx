@@ -11,6 +11,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { Button, Card, Input, Pill, toast, Avatar } from "../UI";
+import { Pagination } from "../Pagination";
 import { api } from "../../lib/api";
 import { selectSchool } from "../../store/selectors";
 import { setSchool as setSchoolAction } from "../../store/authSlice";
@@ -43,7 +44,13 @@ const BOOLEAN_FIELDS = [
   ["showHouse", "House"],
 ];
 
-export default function OnboardedStudentsSection({ onOnboardNow, reloadToken = 0 }) {
+const PAGE_SIZE = 10;
+
+export default function OnboardedStudentsSection({
+  onOnboardNow,
+  reloadToken = 0,
+  onTotalChange,
+}) {
   const dispatch = useDispatch();
   const school = useSelector(selectSchool);
   const canCustomize = usePermission("school:settings");
@@ -51,6 +58,7 @@ export default function OnboardedStudentsSection({ onOnboardNow, reloadToken = 0
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [term, setTerm] = useState("");
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState(null);
   const [issuingId, setIssuingId] = useState(null);
   const [customizing, setCustomizing] = useState(false);
@@ -64,10 +72,11 @@ export default function OnboardedStudentsSection({ onOnboardNow, reloadToken = 0
       .then((result) => {
         setRows(result.data || []);
         setTotal(result.total || 0);
+        onTotalChange?.(result.total || 0);
       })
       .catch((err) => toast(err.message, "error"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [onTotalChange]);
 
   useEffect(() => {
     load();
@@ -90,6 +99,10 @@ export default function OnboardedStudentsSection({ onOnboardNow, reloadToken = 0
         String(s.admissionNo || "").toLowerCase().includes(q),
     );
   }, [rows, term]);
+
+  const pageCount = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount);
+  const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const handleIssue = async (student) => {
     setIssuingId(student._id);
@@ -132,32 +145,33 @@ export default function OnboardedStudentsSection({ onOnboardNow, reloadToken = 0
 
   return (
     <Card
-      className="mt-6"
       title={`Students Added via User & Access (${total})`}
       action={
-        canCustomize && (
-          <Button variant="outline" onClick={openCustomize} className="!py-2 !px-3 !text-[12.5px]">
-            <Settings2 size={14} /> Customize ID Card
-          </Button>
-        )
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="relative w-60">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/50" />
+            <Input
+              placeholder="Search by name or Admission ID…"
+              className="pl-9"
+              value={term}
+              onChange={(e) => {
+                setTerm(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          {canCustomize && (
+            <Button
+              variant="outline"
+              onClick={openCustomize}
+              className="!py-2 !px-3 !text-[12.5px] shrink-0"
+            >
+              <Settings2 size={14} /> Customize ID Card
+            </Button>
+          )}
+        </div>
       }
     >
-      <p className="text-[12.5px] text-slate-text/70 mb-4">
-        Students invited by the school / platform admin through the Users &amp;
-        Access module. Onboarding completes once their mandatory profile fields
-        are filled; an ID card can then be issued.
-      </p>
-
-      <div className="relative max-w-md mb-4">
-        <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/50" />
-        <Input
-          placeholder="Search by name or Admission ID…"
-          className="pl-9"
-          value={term}
-          onChange={(e) => setTerm(e.target.value)}
-        />
-      </div>
-
       {loading ? (
         <p className="text-[13px] text-slate-text/60 py-6 text-center">Loading…</p>
       ) : filtered.length === 0 ? (
@@ -170,8 +184,9 @@ export default function OnboardedStudentsSection({ onOnboardNow, reloadToken = 0
           </p>
         </div>
       ) : (
+        <>
         <div className="flex flex-col divide-y divide-black/[0.05]">
-          {filtered.map((student) => {
+          {visible.map((student) => {
             const complete = student.profileStatus === "complete";
             return (
               <div
@@ -222,6 +237,9 @@ export default function OnboardedStudentsSection({ onOnboardNow, reloadToken = 0
             );
           })}
         </div>
+
+        <Pagination page={safePage} pages={pageCount} onPage={setPage} alwaysShow />
+        </>
       )}
 
       {/* View / onboard / ID card modal */}

@@ -30,7 +30,7 @@ import Leave from "./pages/Leave";
 import Hostel from "./pages/Hostel";
 import Payroll from "./pages/Payroll";
 import AddStudent from "./pages/AddStudent";
-import ClassTeacherDashboard from "./pages/ClassTeacherDashboard";
+import TeacherDashboard from "./pages/TeacherDashboard";
 import TeacherMyClass from "./pages/teacher/MyClass";
 import TeacherAttendance from "./pages/teacher/Attendance";
 import TeacherTimetable from "./pages/teacher/Timetable";
@@ -79,6 +79,7 @@ import PlatformReports from "./pages/platform/PlatformReports";
 import PlatformSettings from "./pages/platform/PlatformSettings";
 import Users from "./pages/Users";
 import ManageSchool from "./pages/ManageSchool";
+import Subscription from "./pages/Subscription";
 import Account from "./pages/Account";
 import SchoolSettings from "./pages/SchoolSettings";
 import Teachers from "./pages/Teachers";
@@ -138,11 +139,11 @@ function RequirePersona({ designation, children, fallback = "/" }) {
   return children;
 }
 
-// Admin-style school modules are not meant for students or parents — they have
-// their own portal under /student/*. Prevent direct-URL access entirely.
+// Admin-style school modules are not meant for students — they have their own
+// portal under /student/*. Prevent direct-URL access entirely.
 function RequireNotStudent({ children, fallback = "/student-dashboard" }) {
   const role = useSelector(selectRole);
-  if (role === "student" || role === "parent") {
+  if (role === "student") {
     return <Navigate to={fallback} replace />;
   }
   return children;
@@ -152,10 +153,8 @@ function HomeRedirect() {
   const user = useSelector(selectUser);
   const role = user?.role || "admin";
   if (role === "super_admin") return <Navigate to="/platform" replace />;
-  if (role === "class_teacher" || role === "teacher")
-    return <Navigate to="/teacher-dashboard" replace />;
-  if (role === "student" || role === "parent")
-    return <Navigate to="/student-dashboard" replace />;
+  if (role === "teacher") return <Navigate to="/teacher-dashboard" replace />;
+  if (role === "student") return <Navigate to="/student-dashboard" replace />;
   if (role === "staff") {
     const persona = resolvePersona(user);
     if (persona && persona.landing !== "/staff-dashboard") {
@@ -274,6 +273,14 @@ export default function App() {
               </RequirePermission>
             }
           />
+          <Route
+            path="/subscription"
+            element={
+              <RequirePermission permission="school:settings">
+                <Subscription />
+              </RequirePermission>
+            }
+          />
           <Route path="/profile" element={<Account />} />
           <Route path="/settings" element={<SchoolSettings />} />
           <Route
@@ -287,15 +294,15 @@ export default function App() {
           <Route
             path="/teacher-dashboard"
             element={
-              <RequireRole roles={["class_teacher", "teacher"]}>
-                <ClassTeacherDashboard />
+              <RequireRole roles={["teacher"]}>
+                <TeacherDashboard />
               </RequireRole>
             }
           />
           <Route
             path="/teacher/my-class"
             element={
-              <RequireRole roles={["class_teacher", "teacher"]}>
+              <RequireRole roles={["teacher"]}>
                 <TeacherMyClass />
               </RequireRole>
             }
@@ -303,7 +310,7 @@ export default function App() {
           <Route
             path="/teacher/attendance"
             element={
-              <RequireRole roles={["class_teacher", "teacher"]}>
+              <RequireRole roles={["teacher"]}>
                 <TeacherAttendance />
               </RequireRole>
             }
@@ -311,7 +318,7 @@ export default function App() {
           <Route
             path="/teacher/timetable"
             element={
-              <RequireRole roles={["class_teacher", "teacher"]}>
+              <RequireRole roles={["teacher"]}>
                 <TeacherTimetable />
               </RequireRole>
             }
@@ -319,7 +326,7 @@ export default function App() {
           <Route
             path="/teacher/homework"
             element={
-              <RequireRole roles={["class_teacher", "teacher"]}>
+              <RequireRole roles={["teacher"]}>
                 <TeacherHomework />
               </RequireRole>
             }
@@ -327,7 +334,7 @@ export default function App() {
           <Route
             path="/teacher/exams"
             element={
-              <RequireRole roles={["class_teacher", "teacher"]}>
+              <RequireRole roles={["teacher"]}>
                 <TeacherExams />
               </RequireRole>
             }
@@ -335,7 +342,7 @@ export default function App() {
           <Route
             path="/teacher/performance"
             element={
-              <RequireRole roles={["class_teacher", "teacher"]}>
+              <RequireRole roles={["teacher"]}>
                 <TeacherPerformance />
               </RequireRole>
             }
@@ -343,7 +350,7 @@ export default function App() {
           <Route
             path="/teacher/notices"
             element={
-              <RequireRole roles={["class_teacher", "teacher"]}>
+              <RequireRole roles={["teacher"]}>
                 <TeacherNotices />
               </RequireRole>
             }
@@ -351,7 +358,7 @@ export default function App() {
           <Route
             path="/teacher/profile"
             element={
-              <RequireRole roles={["class_teacher", "teacher"]}>
+              <RequireRole roles={["teacher"]}>
                 <TeacherProfile />
               </RequireRole>
             }

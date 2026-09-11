@@ -72,7 +72,7 @@ export default function SchoolsManagement() {
   };
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <PageIntro
         eyebrow="Platform Owner · School Operations"
         title="Schools Management"

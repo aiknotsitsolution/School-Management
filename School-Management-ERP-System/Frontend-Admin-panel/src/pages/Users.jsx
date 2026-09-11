@@ -24,7 +24,6 @@ import { useMasterOptions } from "../hooks/useMasterOptions";
 const ROLE_LABELS = {
   super_admin: "Platform Owner",
   school_admin: "School Admin",
-  class_teacher: "Class Teacher",
   teacher: "Teacher",
   staff: "Staff",
   student: "Student",
@@ -32,7 +31,7 @@ const ROLE_LABELS = {
 
 // A school admin can create accounts for every school role EXCEPT admins —
 // privilege escalation is deliberately blocked (enforced server-side too).
-const CREATABLE_ROLES = ["class_teacher", "teacher", "staff", "student"];
+const CREATABLE_ROLES = ["teacher", "staff", "student"];
 
 const DESIGNATION_OPTIONS = [
   "admission_counsellor",
@@ -81,7 +80,6 @@ const TABS = (counts) => [
 const REF_ID_FIELDS = {
   student: { label: "Admission ID", placeholder: "Enter Admission ID", required: true },
   staff: { label: "Staff ID", placeholder: "Staff ID from Teachers & Staff", required: true },
-  class_teacher: { label: "Staff ID", placeholder: "Staff ID from Teachers & Staff", required: true },
   teacher: { label: "Staff ID", placeholder: "Staff ID from Teachers & Staff", required: true },
   school_admin: { label: "Ref ID", disabled: true, placeholder: "Not required for this role" },
 };
@@ -130,7 +128,7 @@ const emptyForm = () => ({
   name: "",
   email: "",
   password: "",
-  role: "class_teacher",
+  role: "teacher",
   designation: "",
   customDesignation: "",
   className: "",
@@ -151,7 +149,7 @@ const toUserPayload = (form) => ({
           : form.designation || undefined)
       : undefined,
   class:
-    form.role === "class_teacher" || form.role === "teacher" || form.role === "student"
+    form.role === "teacher" || form.role === "student"
       ? form.className.trim() || undefined
       : undefined,
   section: form.section.trim() || undefined,
@@ -361,9 +359,7 @@ export default function Users() {
       return;
     }
     if (
-      (form.role === "staff" ||
-        form.role === "class_teacher" ||
-        form.role === "teacher") &&
+      (form.role === "staff" || form.role === "teacher") &&
       !form.refId.trim()
     ) {
       toast("Staff ID is required — enter the Staff ID created in Teachers & Staff", "error");
@@ -383,7 +379,7 @@ export default function Users() {
         role: form.role,
         admissionId: form.role === "student" ? form.refId.trim() : null,
         staffId:
-          form.role === "staff" || form.role === "class_teacher" || form.role === "teacher"
+          form.role === "staff" || form.role === "teacher"
             ? form.refId.trim()
             : null,
         password: form.password,
@@ -500,9 +496,7 @@ export default function Users() {
                   )}
                 </>
               )}
-              {(form.role === "class_teacher" ||
-                form.role === "teacher" ||
-                form.role === "student") && (
+              {(form.role === "teacher" || form.role === "student") && (
                 <>
                    <SearchableSelect
                      options={CLASS_OPTIONS}
@@ -536,9 +530,7 @@ export default function Users() {
                 cannot be changed here.
               </p>
             )}
-            {(form.role === "staff" ||
-              form.role === "class_teacher" ||
-              form.role === "teacher") &&
+            {(form.role === "staff" || form.role === "teacher") &&
               !form.lockedRefId && (
                 <p className="text-[12px] text-slate-text/70 bg-paper border border-black/[0.06] rounded-lg px-3 py-2">
                   <Link2 size={12} className="inline -mt-0.5 mr-1" />

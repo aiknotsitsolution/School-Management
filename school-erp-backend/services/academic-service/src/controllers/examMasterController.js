@@ -7,6 +7,7 @@ const SchoolSubject = require("../models/SchoolSubject");
 const TimeSlot = require("../models/TimeSlot");
 const Room = require("../models/Room");
 const AttendanceStatus = require("../models/AttendanceStatus");
+const LeaveType = require("../models/LeaveType");
 const NoticeCategory = require("../models/NoticeCategory");
 const NoticeAudience = require("../models/NoticeAudience");
 const EventCategory = require("../models/EventCategory");
@@ -69,6 +70,14 @@ const TIME_SLOT_SEEDS = [
   ["11:00", "13:00"], ["13:00", "15:00"], ["14:00", "16:00"],
 ];
 const ATTENDANCE_STATUS_SEEDS = ["Present", "Absent", "Late", "Leave"];
+const LEAVE_TYPE_SEEDS = [
+  "Casual Leave",
+  "Sick Leave",
+  "Privilege Leave",
+  "Medical Leave",
+  "Maternity Leave",
+  "Emergency Leave",
+];
 const NOTICE_CATEGORY_SEEDS = [
   "Academic", "Holiday", "Sports", "Fees", "Event", "Transport", "General",
 ];
@@ -246,6 +255,21 @@ const MASTERS = {
       return name ? { key: name } : null;
     },
     seeds: () => ATTENDANCE_STATUS_SEEDS.map((name) => ({ name })),
+  },
+  "leave-types": {
+    label: "Leave type",
+    model: LeaveType,
+    sort: { name: 1 },
+    build(payload) {
+      const name = clean(payload.name);
+      if (!name) throw httpError(400, "Leave type name is required");
+      return { name };
+    },
+    dupFilter(payload) {
+      const name = normalizeKey(payload.name);
+      return name ? { key: name } : null;
+    },
+    seeds: () => LEAVE_TYPE_SEEDS.map((name) => ({ name })),
   },
   "notice-categories": {
     label: "Notice category",

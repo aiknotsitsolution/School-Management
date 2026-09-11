@@ -54,35 +54,30 @@ router.get(
   "/:id",
   requirePermission("students:read"),
   restrictToOwnStudent((req) => req.params.id),
-  scopeClassTeacher,
   ctrl.getStudentById,
 );
 router.put(
   "/:id",
   requirePermission("students:write"),
   restrictToOwnStudent((req) => req.params.id),
-  scopeClassTeacher,
   ctrl.updateStudent,
 );
 router.post(
   "/:id/complete-profile",
   requirePermission("students:write"),
   restrictToOwnStudent((req) => req.params.id),
-  scopeClassTeacher,
   ctrl.completeProfile,
 );
 router.delete(
   "/:id",
   requirePermission("students:write"),
   restrictToOwnStudent((req) => req.params.id),
-  scopeClassTeacher,
   ctrl.deleteStudent,
 );
 router.post(
   "/:id/issue-id-card",
   requirePermission("students:write"),
   restrictToOwnStudent((req) => req.params.id),
-  scopeClassTeacher,
   ctrl.issueIdCard,
 );
 

@@ -1,15 +1,12 @@
-import { useMemo, useState, useEffect } from "react";
+﻿import { useMemo, useState, useEffect } from "react";
 import {
   Check,
   X,
-  Clock3,
   Download,
-  CalendarCheck,
   Search,
   UserCheck,
   UserX,
   Timer,
-  CalendarDays,
   CheckCircle2,
   AlertCircle,
 } from "lucide-react";
@@ -21,17 +18,10 @@ import {
   Avatar,
   StatCard,
   Pill,
+  Select,
 } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
-import {
-  AreaChart,
-  Area,
-  ResponsiveContainer,
-  XAxis,
-  Tooltip,
-  CartesianGrid,
-  YAxis,
-} from "recharts";
+import AttendanceTrendChart from "../components/AttendanceTrendChart";
 import { api } from "../lib/api";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 
@@ -88,7 +78,9 @@ export default function Attendance() {
   const { options: SECTION_OPTIONS, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
   const { options: attendanceStatusOptions } = useMasterOptions("attendance-statuses", DEFAULT_STATUSES);
   const [students, setStudents] = useState([]);
-  const [attendanceTrend, setAttendanceTrend] = useState([]);
+  const [attendanceRecords, setAttendanceRecords] = useState([]);
+  const [trendLoading, setTrendLoading] = useState(true);
+  const [trendError, setTrendError] = useState("");
   const [cls, setCls] = useState("8");
   const [section, setSection] = useState("A");
   const [query, setQuery] = useState("");
@@ -124,29 +116,9 @@ export default function Attendance() {
           avatar: student.photoUrl,
         }));
         const records = attendanceResponse.data || [];
-        const grouped = new Map();
-        records.forEach((record) => {
-          const key = new Date(record.date).toISOString().slice(0, 7);
-          const current = grouped.get(key) || {
-            total: 0,
-            present: 0,
-            date: record.date,
-          };
-          current.total += 1;
-          if (record.status === "Present") current.present += 1;
-          grouped.set(key, current);
-        });
         setStudents(loadedStudents);
-        setAttendanceTrend(
-          [...grouped.values()].map((item) => ({
-            month: new Date(item.date).toLocaleDateString("en-IN", {
-              month: "short",
-            }),
-            attendance: item.total
-              ? Math.round((item.present / item.total) * 100)
-              : 0,
-          })),
-        );
+        setAttendanceRecords(records);
+        setTrendError("");
 
         const today = new Date().toISOString().slice(0, 10);
         const existing = {};
@@ -167,8 +139,25 @@ export default function Attendance() {
           });
         setMarks(existing);
       })
-      .catch((requestError) => setError(requestError.message));
+      .catch((requestError) => {
+        setError(requestError.message);
+        setTrendError(requestError.message);
+      })
+      .finally(() => setTrendLoading(false));
   }, []);
+
+  const retryTrend = () => {
+    setTrendLoading(true);
+    setTrendError("");
+    api.attendance
+      .list()
+      .then(({ data }) => {
+        setAttendanceRecords(data || []);
+        setTrendError("");
+      })
+      .catch((requestError) => setTrendError(requestError.message))
+      .finally(() => setTrendLoading(false));
+  };
 
   const list = useMemo(() => {
     return students
@@ -331,55 +320,12 @@ export default function Attendance() {
       </div>
 
       {/* Trend Chart */}
-      <Card title="Monthly Attendance Trend (School-wide)">
-        <ResponsiveContainer width="100%" height={200}>
-          <AreaChart
-            data={attendanceTrend}
-            margin={{ top: 8, right: 12, left: -10, bottom: 0 }}
-          >
-            <defs>
-              <linearGradient id="attGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3F8F5F" stopOpacity={0.28} />
-                <stop offset="100%" stopColor="#3F8F5F" stopOpacity={0} />
-              </linearGradient>
-            </defs>
-            <CartesianGrid
-              strokeDasharray="3 3"
-              vertical={false}
-              stroke="#EEEAE0"
-            />
-            <XAxis
-              dataKey="month"
-              tick={{ fontSize: 12, fill: "#64748B" }}
-              axisLine={false}
-              tickLine={false}
-            />
-            <YAxis
-              domain={[80, 100]}
-              tick={{ fontSize: 12, fill: "#64748B" }}
-              axisLine={false}
-              tickLine={false}
-              tickFormatter={(v) => `${v}%`}
-            />
-            <Tooltip
-              contentStyle={{
-                borderRadius: 10,
-                border: "1px solid #E5E2D9",
-                fontSize: 13,
-                boxShadow: "0 4px 12px rgba(0,0,0,0.06)",
-              }}
-              formatter={(value) => [`${value}%`, "Attendance"]}
-            />
-            <Area
-              type="monotone"
-              dataKey="attendance"
-              stroke="#3F8F5F"
-              strokeWidth={2.5}
-              fill="url(#attGrad)"
-            />
-          </AreaChart>
-        </ResponsiveContainer>
-      </Card>
+      <AttendanceTrendChart
+        records={attendanceRecords}
+        loading={trendLoading}
+        error={trendError}
+        onRetry={retryTrend}
+      />
 
       {/* Marking Panel */}
       <Card
@@ -488,7 +434,7 @@ export default function Attendance() {
                       <Pill tone="neutral">#{s.roll}</Pill>
                     </div>
                     <p className="text-[11.5px] text-slate-text/60 mt-0.5">
-                      {s.id} · {s.gender} · {s.house} House
+                      {s.id} Â· {s.gender} Â· {s.house} House
                     </p>
                   </div>
 
@@ -521,18 +467,18 @@ export default function Attendance() {
         {list.length > attPageSize && (
           <div className="flex items-center justify-between pt-4 mt-3 border-t border-black/[0.04]">
             <p className="text-[12px] text-slate-text/55">
-              Showing {list.length === 0 ? 0 : (attSafePage - 1) * attPageSize + 1}–{Math.min(attSafePage * attPageSize, list.length)} of {list.length}
+              Showing {list.length === 0 ? 0 : (attSafePage - 1) * attPageSize + 1}â€“{Math.min(attSafePage * attPageSize, list.length)} of {list.length}
             </p>
             <div className="flex items-center gap-2">
-              <select
+              <Select
                 value={attPageSize}
                 onChange={(e) => { setAttPageSize(Number(e.target.value)); setAttPage(1); }}
-                className="text-[12px] border border-black/[0.08] rounded-lg px-2 py-1.5 bg-paper text-ink"
+                className="text-[12px]"
               >
                 {[10, 20, 50].map((n) => (
                   <option key={n} value={n}>{n} / page</option>
                 ))}
-              </select>
+              </Select>
               <Button variant="outline" className="px-3 py-1.5 text-[12px]" disabled={attSafePage <= 1} onClick={() => setAttPage((p) => Math.max(1, p - 1))}>
                 Prev
               </Button>
@@ -552,7 +498,7 @@ export default function Attendance() {
               students{" "}
               {Object.entries(statusConfig).map(([key, cfg]) => (
                 <span key={key}>
-                  · {cfg.full}{" "}
+                  Â· {cfg.full}{" "}
                   <strong className={`text-${cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "amber" ? "amber-dark" : "info"}`}>
                     {counts[key] || 0}
                   </strong>
@@ -582,117 +528,3 @@ export default function Attendance() {
     </div>
   );
 }
-
-// import { useMemo, useState } from "react";
-// import { Check, X, Clock3, Download, CalendarCheck } from "lucide-react";
-// import { PageIntro, Card, Button, Select, Avatar, StatCard } from "../components/UI";
-// import { AreaChart, Area, ResponsiveContainer, XAxis, Tooltip, CartesianGrid, YAxis } from "recharts";
-
-// const classShortMap = { "Class 1":"1","Class 2":"2","Class 3":"3","Class 4":"4","Class 5":"5","Class 6":"6","Class 7":"7","Class 8":"8","Class 9":"9","Class 10":"10" };
-
-// export default function Attendance() {
-//   const [cls, setCls] = useState("8");
-//   const [section, setSection] = useState("A");
-//   const list = useMemo(
-//     () => students.filter((s) => s.class === cls && s.section === section),
-//     [cls, section]
-//   );
-//   const [marks, setMarks] = useState({});
-
-//   const setMark = (id, val) => setMarks((m) => ({ ...m, [id]: val }));
-//   const present = list.filter((s) => (marks[s.id] || "present") === "present").length;
-
-//   return (
-//     <div className="space-y-6">
-//       <PageIntro
-//         eyebrow="Academics"
-//         title="Attendance"
-//         description="Mark and monitor daily attendance across classes."
-//         right={
-//           <Button variant="outline"><Download size={15} /> Export Register</Button>
-//         }
-//       />
-
-//       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-//         <StatCard icon={CalendarCheck} label="School Average Today" value="96.2%" sub="1,024 of 1,065 present" accent="success" />
-//         <StatCard icon={Check} label="Selected Class Present" value={`${present}/${list.length}`} accent="amber" />
-//         <StatCard icon={Clock3} label="Late Arrivals" value="14" sub="Before 9:15 AM cutoff" accent="info" />
-//         <StatCard icon={X} label="On Leave (Approved)" value="9" accent="alert" />
-//       </div>
-
-//       <Card title="Weekly Attendance Trend">
-//         <ResponsiveContainer width="100%" height={180}>
-//           <AreaChart data={attendanceTrend} margin={{ left: -20 }}>
-//             <defs>
-//               <linearGradient id="a2" x1="0" y1="0" x2="0" y2="1">
-//                 <stop offset="0%" stopColor="#3F8F5F" stopOpacity={0.3} />
-//                 <stop offset="100%" stopColor="#3F8F5F" stopOpacity={0} />
-//               </linearGradient>
-//             </defs>
-//             <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEEAE0" />
-//             <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#475467" }} axisLine={false} tickLine={false} />
-//             <YAxis domain={[80, 100]} tick={{ fontSize: 12, fill: "#475467" }} axisLine={false} tickLine={false} />
-//             <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #eee", fontSize: 12.5 }} />
-//             <Area type="monotone" dataKey="attendance" stroke="#3F8F5F" strokeWidth={2.5} fill="url(#a2)" />
-//           </AreaChart>
-//         </ResponsiveContainer>
-//       </Card>
-
-//       <Card
-//         title={`Mark Attendance — ${new Date().toLocaleDateString("en-IN", { day: "numeric", month: "long", year: "numeric" })}`}
-//         action={
-//           <div className="flex gap-2">
-//             <Select value={cls} onChange={(e) => setCls(e.target.value)}>
-//               {["1","2","3","4","5","6","7","8","9","10"].map((c) => <option key={c} value={c}>Class {c}</option>)}
-//             </Select>
-//             <Select value={section} onChange={(e) => setSection(e.target.value)}>
-//               {["A","B","C"].map((s) => <option key={s} value={s}>Section {s}</option>)}
-//             </Select>
-//           </div>
-//         }
-//       >
-//         <div className="divide-y divide-black/[0.06]">
-//           {list.length === 0 && <p className="text-sm text-slate-text py-6 text-center">No students found for this class/section.</p>}
-//           {list.map((s) => {
-//             const status = marks[s.id] || "present";
-//             return (
-//               <div key={s.id} className="flex items-center gap-3 py-3">
-//                 <Avatar src={s.avatar} name={s.name} size={36} />
-//                 <div className="flex-1 min-w-0">
-//                   <p className="text-[13.5px] font-semibold text-ink truncate">{s.name}</p>
-//                   <p className="text-[11.5px] text-slate-text/60">Roll No. {s.roll}</p>
-//                 </div>
-//                 <div className="flex gap-1.5">
-//                   {[
-//                     { key: "present", label: "P", tone: "success" },
-//                     { key: "absent", label: "A", tone: "alert" },
-//                     { key: "late", label: "L", tone: "amber" },
-//                   ].map((btn) => (
-//                     <button
-//                       key={btn.key}
-//                       onClick={() => setMark(s.id, btn.key)}
-//                       className={`w-9 h-9 rounded-lg text-[12.5px] font-bold border transition-colors ${
-//                         status === btn.key
-//                           ? btn.tone === "success" ? "bg-success text-white border-success"
-//                           : btn.tone === "alert" ? "bg-alert text-white border-alert"
-//                           : "bg-amber text-ink border-amber"
-//                           : "bg-white text-slate-text/60 border-black/10 hover:bg-paper"
-//                       }`}
-//                     >
-//                       {btn.label}
-//                     </button>
-//                   ))}
-//                 </div>
-//               </div>
-//             );
-//           })}
-//         </div>
-//         {list.length > 0 && (
-//           <div className="flex justify-end mt-4 pt-4 border-t border-black/[0.06]">
-//             <Button variant="amber">Save Attendance</Button>
-//           </div>
-//         )}
-//       </Card>
-//     </div>
-//   );
-// }

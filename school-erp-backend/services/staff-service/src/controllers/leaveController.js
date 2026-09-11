@@ -11,7 +11,7 @@ const pick = (obj, keys) =>
 
 const applyLeave = async (req, res) => {
   try {
-    const staffId = ["class_teacher", "teacher", "staff"].includes(req.user.role) ? req.user.refId : req.body.staffId;
+    const staffId = ["teacher", "staff"].includes(req.user.role) ? req.user.refId : req.body.staffId;
     const leave = await Leave.create({ ...pick(req.body, LEAVE_FIELDS), staffId, schoolId: req.tenantId });
     res.status(201).json({ success: true, data: leave });
   } catch (err) {
@@ -22,7 +22,7 @@ const applyLeave = async (req, res) => {
 const getLeaves = async (req, res) => {
   try {
     const filter = { schoolId: req.tenantId };
-    if (["class_teacher", "teacher", "staff"].includes(req.user.role)) {
+    if (["teacher", "staff"].includes(req.user.role)) {
       filter.staffId = req.user.refId;
     }
     if (req.query.status) filter.status = req.query.status;

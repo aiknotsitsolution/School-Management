@@ -149,10 +149,7 @@ const reviewSubmission = async (req, res) => {
       return res.status(404).json({ success: false, message: "Homework not found" });
     }
     if (req.teacherScope) {
-      const inScope =
-        String(homework.class) === String(req.teacherScope.class) &&
-        (!req.teacherScope.section || String(homework.section) === String(req.teacherScope.section));
-      if (!inScope) {
+      if (!req.teacherScope.has(homework.class, homework.section)) {
         return res.status(403).json({ success: false, message: "Not authorized to review this submission" });
       }
     } else if (req.user.role === "student") {

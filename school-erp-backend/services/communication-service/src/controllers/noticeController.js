@@ -12,12 +12,17 @@ const NOTICE_FIELDS = [
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
+// Audience -> concrete User roles for fan-out. "class_teacher" entries here map
+// to "teacher" (Class Teacher is now a TeacherAssignment responsibility loaded
+// on a teacher account) and only exist to resolve documents published before
+// the role collapse; new notices use the "teacher" audience.
 const AUDIENCE_ROLES = {
   school_admin: ["school_admin"],
-  class_teacher: ["class_teacher", "teacher"],
+  class_teacher: ["teacher"],
+  teacher: ["teacher"],
   staff: ["staff"],
   student: ["student"],
-  all: ["school_admin", "class_teacher", "teacher", "staff", "student"],
+  all: ["school_admin", "teacher", "staff", "student"],
 };
 
 // After a notice is published, fan out an inbox notification to the matching

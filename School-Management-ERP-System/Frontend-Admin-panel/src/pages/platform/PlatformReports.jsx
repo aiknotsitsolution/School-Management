@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Download, FileBarChart, CalendarDays, ArrowDown } from "lucide-react";
 import { api } from "../../lib/api";
 import { Button, Card, Input, PageIntro, Select, toast } from "../../components/UI";
+import { Pagination } from "../../components/Pagination";
 
 const fmtValue = (value) => {
   if (value === null || value === undefined || value === "") return "—";
@@ -36,7 +37,8 @@ export default function PlatformReports() {
   const [query, setQuery] = useState("");
   const [sortKey, setSortKey] = useState("");
   const [sortDir, setSortDir] = useState(1);
-  const [maxRows, setMaxRows] = useState(100);
+  const [pageSize, setPageSize] = useState(100);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
     api.platform.reports
@@ -58,6 +60,7 @@ export default function PlatformReports() {
     try {
       const { data } = await api.platform.reports.generate(nextType, params.toString());
       setReport(data);
+      setPage(1);
       setSortKey("");
       setSortDir(1);
     } catch (err) {
@@ -84,10 +87,13 @@ export default function PlatformReports() {
       return String(av ?? "").localeCompare(String(bv ?? "")) * sortDir;
     });
   }
-  const limitedRows = rows.slice(0, maxRows);
+  const pageCount = Math.max(1, Math.ceil(rows.length / pageSize));
+  const safePage = Math.min(page, pageCount);
+  const pagedRows = rows.slice((safePage - 1) * pageSize, safePage * pageSize);
   const columns = report?.columns || [];
 
   const toggleSort = (key) => {
+    setPage(1);
     if (sortKey === key) {
       setSortDir((d) => -d);
     } else {
@@ -97,7 +103,7 @@ export default function PlatformReports() {
   };
 
   const download = () => {
-    const csv = toCsv(limitedRows);
+    const csv = toCsv(rows);
     if (!csv) return;
     const blob = new Blob([csv], { type: "text/csv" });
     const url = URL.createObjectURL(blob);
@@ -109,7 +115,7 @@ export default function PlatformReports() {
   };
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <PageIntro
         eyebrow="Platform Owner · Insights"
         title="Reports"
@@ -185,20 +191,22 @@ export default function PlatformReports() {
                   placeholder="Filter rows…"
                   className="max-w-xs"
                   value={query}
-                  onChange={(e) => setQuery(e.target.value)}
+                  onChange={(e) => { setQuery(e.target.value); setPage(1); }}
                 />
-                <Select value={String(maxRows)} onChange={(e) => setMaxRows(Number(e.target.value))} className="w-28">
+                <Select value={String(pageSize)} onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }} className="w-28">
                   <option value="50">50 rows</option>
                   <option value="100">100 rows</option>
+                  <option value="200">200 rows</option>
                   <option value="500">500 rows</option>
-                  <option value="100000">All</option>
                 </Select>
                 <span className="text-[12px] text-slate-text/60 ml-auto">
-                  showing {limitedRows.length} of {rows.length}
+                  {rows.length
+                    ? `showing ${(safePage - 1) * pageSize + 1}–${Math.min(safePage * pageSize, rows.length)} of ${rows.length}`
+                    : "0 rows"}
                 </span>
               </div>
 
-              {limitedRows.length === 0 ? (
+              {pagedRows.length === 0 ? (
                 <p className="text-[13px] text-slate-text/70 py-8 text-center">No rows to display.</p>
               ) : (
                 <div className="overflow-x-auto max-h-[520px] overflow-y-auto scrollbar-thin rounded-lg border border-black/[0.06]">
@@ -220,7 +228,7 @@ export default function PlatformReports() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-black/[0.04]">
-                      {limitedRows.map((row, index) => (
+                      {pagedRows.map((row, index) => (
                         <tr key={index} className="hover:bg-paper/60">
                           {columns.map((column) => (
                             <td key={column} className="py-2 px-3 text-slate-text whitespace-nowrap">
@@ -233,6 +241,7 @@ export default function PlatformReports() {
                   </table>
                 </div>
               )}
+              <Pagination page={safePage} pages={pageCount} onPage={setPage} />
             </Card>
           ) : (
             <Card>

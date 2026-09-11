@@ -112,7 +112,7 @@ const getStaff = async (req, res) => {
     const { department, role, status, search } = req.query;
     const filter = { schoolId: req.tenantId };
 
-    if (["class_teacher", "teacher", "staff"].includes(req.user.role)) {
+    if (["teacher", "staff"].includes(req.user.role)) {
       filter._id = req.user.refId;
     }
 
@@ -171,7 +171,7 @@ const getPendingRegistrations = async (req, res) => {
 // staff-scoped request.
 const getMyStaff = async (req, res) => {
   try {
-    if (!["class_teacher", "teacher", "staff"].includes(req.user.role)) {
+    if (!["teacher", "staff"].includes(req.user.role)) {
       return res.status(403).json({
         success: false,
         message: "Only a staff, teacher or class-teacher account can request its own profile",
@@ -211,7 +211,7 @@ const updateStaff = async (req, res) => {
     // Staff/Teacher/Class Teacher users reach here only for their OWN record
     // (restrictToOwnStaff) and may only touch self-service fields. Admins keep
     // the full mass-assignment guard.
-    const selfService = ["class_teacher", "teacher", "staff"].includes(req.user.role);
+    const selfService = ["teacher", "staff"].includes(req.user.role);
     const allowed = selfService ? STAFF_SELF_EDITABLE : STAFF_FIELDS;
     const patch = pick(req.body, allowed);
     if (patch.employeeId !== undefined) patch.employeeId = String(patch.employeeId).trim();

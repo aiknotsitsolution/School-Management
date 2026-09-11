@@ -13,6 +13,8 @@ const feeStructureRoutes = require("./routes/feeStructureRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const paymentOrderRoutes = require("./routes/paymentOrderRoutes");
+const webhookRoutes = require("./routes/webhookRoutes");
+const internalPaymentRoutes = require("./routes/internalPaymentRoutes");
 
 const app = express();
 const PORT = process.env.FEE_SERVICE_PORT || 5005;
@@ -27,6 +29,15 @@ app.use(
   }),
 );
 app.use(morgan("dev"));
+
+// Provider webhooks need the RAW body for signature verification — this must
+// run BEFORE the JSON parser that follows.
+app.use(
+  "/api/webhooks",
+  express.raw({ type: () => true, limit: "200kb" }),
+  webhookRoutes,
+);
+
 app.use(express.json({ limit: "100kb" }));
 
 mongoose
@@ -46,6 +57,7 @@ app.get("/health", (req, res) =>
 );
 app.use("/api/fees/structure", feeStructureRoutes);
 app.use("/api/fees", invoiceRoutes);
+app.use("/api/payments/internal", internalPaymentRoutes);
 app.use("/api/payments", paymentRoutes);
 app.use("/api/payments/orders", paymentOrderRoutes);
 

@@ -24,8 +24,7 @@ export function useTeacherContext() {
   const user = useSelector(selectUser);
   const school = useSelector(selectSchool);
 
-  const isTeacherRole =
-    user?.role === "class_teacher" || user?.role === "teacher";
+  const isTeacherRole = user?.role === "teacher";
 
   const [myData, setMyData] = useState(null);
   const [loading, setLoading] = useState(isTeacherRole);
@@ -120,7 +119,7 @@ export function useTeacherContext() {
     assignment,
     loading,
     // Assignment-aware extras (the null-safe defaults keep existing pages
-    // working for legacy class_teacher accounts with no assignments yet).
+    // working for teacher accounts with no assignments yet).
     teacherData: myData,
     classTeacherAssignments,
     teachingAssignments,

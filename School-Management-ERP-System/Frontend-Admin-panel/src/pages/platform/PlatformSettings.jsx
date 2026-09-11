@@ -129,7 +129,7 @@ export default function PlatformSettings() {
   };
 
   return (
-    <div className="max-w-4xl">
+    <div className="w-full">
       <PageIntro
         eyebrow="Platform Owner · System"
         title="Platform Settings"

@@ -22,6 +22,7 @@ const studentSchema = new mongoose.Schema(
     parentEmail: { type: String },
     motherName: { type: String },
     house: { type: String },
+    medium: { type: String, enum: ["English", "Hindi"], default: "English" },
     admissionDate: { type: Date, default: Date.now },
     feeCategory: { type: String, default: "Regular" },
     status: {

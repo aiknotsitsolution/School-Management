@@ -79,8 +79,11 @@ const getHomework = async (req, res) => {
 
 const updateHomework = async (req, res) => {
   try {
-    const existing = await Homework.findOne({ _id: req.params.id, schoolId: req.tenantId, ...(req.teacherScope || {}) });
+    const existing = await Homework.findOne({ _id: req.params.id, schoolId: req.tenantId });
     if (!existing) return res.status(404).json({ success: false, message: "Homework not found" });
+    if (req.teacherScope && !req.teacherScope.has(existing.class, existing.section)) {
+      return res.status(403).json({ success: false, message: "You can only manage homework in your assigned classes and sections" });
+    }
 
     const updates = pick(req.body, HOMEWORK_FIELDS);
     // Validate only the fields being changed so legacy stored values (left
@@ -96,7 +99,7 @@ const updateHomework = async (req, res) => {
     }
 
     const hw = await Homework.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId, ...(req.teacherScope || {}) },
+      { _id: req.params.id, schoolId: req.tenantId },
       updates,
       { new: true },
     );
@@ -108,7 +111,12 @@ const updateHomework = async (req, res) => {
 
 const deleteHomework = async (req, res) => {
   try {
-    const hw = await Homework.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId, ...(req.teacherScope || {}) });
+    const existing = await Homework.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    if (!existing) return res.status(404).json({ success: false, message: "Homework not found" });
+    if (req.teacherScope && !req.teacherScope.has(existing.class, existing.section)) {
+      return res.status(403).json({ success: false, message: "You can only manage homework in your assigned classes and sections" });
+    }
+    const hw = await Homework.findOneAndDelete({ _id: existing._id, schoolId: req.tenantId });
     if (!hw) return res.status(404).json({ success: false, message: "Homework not found" });
     res.json({ success: true, message: "Homework deleted" });
   } catch (err) {

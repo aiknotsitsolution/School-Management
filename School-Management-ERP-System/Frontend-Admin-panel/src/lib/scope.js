@@ -18,7 +18,6 @@ const ROLE_SCOPE = {
   super_admin: PLATFORM_SCOPE,
   school_admin: SCHOOL_SCOPE,
   admin: SCHOOL_SCOPE,
-  class_teacher: SCHOOL_SCOPE,
   teacher: SCHOOL_SCOPE,
   staff: SCHOOL_SCOPE,
   student: SCHOOL_SCOPE,

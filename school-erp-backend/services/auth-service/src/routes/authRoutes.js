@@ -5,6 +5,8 @@ const { validateObjectIdParam } = require("@school-erp/shared/src/middleware/obj
 router.param("id", validateObjectIdParam);
 router.param("homeworkId", validateObjectIdParam);
 const ctrl = require("../controllers/authController");
+const tenantCtrl = require("../controllers/tenantController");
+const gatewayCtrl = require("../controllers/paymentGatewayController");
 const { verifyToken, resolveTenant, requirePermission, authorizeRoles } = require("../middleware/auth");
 
 const photoUpload = multer({
@@ -34,6 +36,17 @@ router.get("/verify", verifyToken, ctrl.verify);
 // Self-service school branding / report-card customization (own tenant only)
 router.get("/school/me", verifyToken, resolveTenant, ctrl.getMySchool);
 router.patch("/school/me", verifyToken, resolveTenant, requirePermission("school:settings"), ctrl.updateMySchool);
+
+// Self-service subscription & upgrade (own tenant only)
+router.get("/school/me/subscription", verifyToken, resolveTenant, requirePermission("school:settings"), tenantCtrl.getMySubscription);
+router.get("/school/me/plans", verifyToken, resolveTenant, requirePermission("school:settings"), tenantCtrl.listPublicPlans);
+router.get("/school/me/usage", verifyToken, resolveTenant, requirePermission("school:settings"), tenantCtrl.getMyUsage);
+router.post("/school/me/upgrade", verifyToken, resolveTenant, requirePermission("school:settings"), tenantCtrl.upgradeMyPlan);
+
+// Self-service payment gateway configuration (own tenant only)
+router.get("/school/me/payment-gateway", verifyToken, resolveTenant, requirePermission("payments:settings"), gatewayCtrl.getMyGateway);
+router.patch("/school/me/payment-gateway", verifyToken, resolveTenant, requirePermission("payments:settings"), gatewayCtrl.updateMyGateway);
+router.post("/school/me/payment-gateway/test", verifyToken, resolveTenant, requirePermission("payments:settings"), gatewayCtrl.testMyGateway);
 
 // Password recovery - admin initiated (no email provider in the fleet)
 router.post("/users/:id/reset-password", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.adminResetPassword);

@@ -12,7 +12,9 @@ const mongoose = require("mongoose");
 const authRoutes = require("./routes/authRoutes");
 const sessionRoutes = require("./routes/sessionRoutes");
 const platformRoutes = require("./routes/platformRoutes");
+const internalRoutes = require("./routes/internalRoutes");
 const ensureBillingDefaults = require("./init/ensureBillingDefaults");
+const ensureGatewayDefaults = require("./init/ensureGatewayDefaults");
 
 const app = express();
 const PORT = process.env.AUTH_SERVICE_PORT || 5001;
@@ -25,6 +27,7 @@ const start = async () =>
   {
     await connectDB();
     await ensureBillingDefaults();
+    await ensureGatewayDefaults();
     app.listen(PORT, () => console.log(`Auth Service running on port ${PORT}`));
   } catch (err)
   {
@@ -49,6 +52,7 @@ app.use(express.json({ limit: "100kb" }));
 app.get("/health", (req, res) =>
   res.json({ success: true, service: "auth-service", status: "UP" }),
 );
+app.use("/api/auth/internal", internalRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/auth/sessions", sessionRoutes);
 app.use("/api/platform", platformRoutes);

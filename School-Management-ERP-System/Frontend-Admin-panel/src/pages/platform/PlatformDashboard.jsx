@@ -77,7 +77,7 @@ export default function PlatformDashboard() {
 
   if (loading) {
     return (
-      <div className="max-w-6xl">
+      <div className="w-full">
         <PageIntro eyebrow="Platform Owner" title="Platform Dashboard" />
         <Card>
           <p className="text-[13px] text-slate-text/70">Loading platform overview…</p>
@@ -88,7 +88,7 @@ export default function PlatformDashboard() {
 
   if (error || !data) {
     return (
-      <div className="max-w-6xl">
+      <div className="w-full">
         <PageIntro eyebrow="Platform Owner" title="Platform Dashboard" />
         <Card>
           <p className="text-[13px] text-alert">Unable to load platform analytics: {error || "no data"}</p>
@@ -115,7 +115,7 @@ export default function PlatformDashboard() {
   const growth = data.schoolGrowth || [];
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <PageIntro
         eyebrow="Platform Owner"
         title="Platform Dashboard"

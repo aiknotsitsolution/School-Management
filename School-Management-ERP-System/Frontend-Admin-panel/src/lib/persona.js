@@ -13,7 +13,7 @@ export const STAFF_PERSONAS = {
   classTeacher: {
     key: "classTeacher",
     designation: null,
-    label: "Class Teacher",
+    label: "Teacher",
     landing: "/teacher-dashboard",
   },
   accountant: {
@@ -68,7 +68,7 @@ export function isPersonaStaff(user) {
 
 export function resolvePersona(user) {
   if (!user) return null;
-  if (user.role === "class_teacher" || user.role === "teacher") {
+  if (user.role === "teacher") {
     return STAFF_PERSONAS.classTeacher;
   }
   if (user.role === "staff") {

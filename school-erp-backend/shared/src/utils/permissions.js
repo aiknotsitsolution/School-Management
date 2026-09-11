@@ -1,10 +1,23 @@
 // Fixed RBAC permission map. Single source of truth in @school-erp/shared
 // (previously copied per service; reconciled into this canonical version).
-// "teacher" role added; facility-service historical swap of student
-// transport:read -> hostel:read is intentionally resolved to transport:read.
+// facility-service historical swap of student transport:read -> hostel:read is
+// intentionally resolved to transport:read.
 //
 // Permission format: "module:action"
 // "*" = full access (super_admin / platform owner)
+
+// Teachers share one canonical permission bundle (TEACHING_PERMISSIONS).
+// Class Teacher is a *responsibility* layered on a teacher account (homeroom
+// ownership via TeacherAssignment-type="class_teacher") — not a distinct
+// permission surface and NOT a User role. Assignment data decides WHERE a
+// teacher can act; the bundle decides WHAT a teacher can do.
+const TEACHING_PERMISSIONS = [
+  "dashboard:view", "staff:read", "students:read", "attendance:read",
+  "attendance:mark",
+  "timetable:read", "timetable:write", "homework:read", "homework:write",
+  "exams:read", "marks:read", "notices:read", "leaves:apply", "payroll:view",
+  "promotion:read", "transfer:read", "rollover:read",
+];
 
 const STAFF_PERMISSIONS = {
   admission_counsellor: [
@@ -44,26 +57,15 @@ const ROLE_PERMISSIONS = {
     "transport:read", "transport:update", "inventory:read", "inventory:write",
     "payroll:view", "payroll:admin", "leaves:apply", "leaves:approve",
     "hostel:read", "hostel:manage", "users:manage", "school:settings",
-    "sessions:read", "sessions:write",
+    "payments:settings", "sessions:read", "sessions:write",
     "promotion:read", "promotion:write", "transfer:read", "transfer:write",
     "rollover:read", "rollover:write",
   ],
-  class_teacher: [
-    "dashboard:view", "staff:read", "students:read", "attendance:read",
-    "attendance:mark",
-    "timetable:read", "timetable:write", "homework:read", "homework:write",
-    "exams:read", "marks:read", "notices:read", "leaves:apply", "payroll:view",
-    "promotion:read", "transfer:read", "rollover:read",
-  ],
-  // Plain teaching role — same teaching permissions as a Class Teacher. The
-  // Class Teacher is a *responsibility* layered on top of a teacher account.
-  teacher: [
-    "dashboard:view", "staff:read", "students:read", "attendance:read",
-    "attendance:mark",
-    "timetable:read", "timetable:write", "homework:read", "homework:write",
-    "exams:read", "marks:read", "notices:read", "leaves:apply", "payroll:view",
-    "promotion:read", "transfer:read", "rollover:read",
-  ],
+  // Legacy "class_teacher" tokens (issued pre-collapse, within their JWT
+  // lifetime) intentionally resolve to NO permissions: Class Teacher is not a
+  // User role in the final architecture and users must re-login to obtain a
+  // teacher token.
+  teacher: [...TEACHING_PERMISSIONS],
   staff: ["staff:read", "leaves:apply", "payroll:view"],
   student: [
     "dashboard:view", "attendance:read", "homework:read", "exams:read",

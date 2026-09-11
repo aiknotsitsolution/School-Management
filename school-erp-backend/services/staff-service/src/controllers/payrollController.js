@@ -17,7 +17,7 @@ const generatePayroll = async (req, res) => {
 const getPayroll = async (req, res) => {
   try {
     const filter = { schoolId: req.tenantId };
-    if (["class_teacher", "teacher", "staff"].includes(req.user.role)) {
+    if (["teacher", "staff"].includes(req.user.role)) {
       filter.staffId = req.user.refId;
     }
     if (req.query.month) filter.month = req.query.month;

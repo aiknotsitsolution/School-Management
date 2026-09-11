@@ -65,13 +65,16 @@ sensitiveLimiters.forEach(({ path, window, max }) => {
 // Internal-only endpoints must NOT be reachable through the public gateway:
 //  - /api/notifications/internal/*  (service-to-service key, no user JWT)
 //  - /api/students/internal/*       (service-to-service roster resolution)
-//  - /api/payments/orders/:id/confirm (provider webhook; reachable only
-//    directly on the fee service with the provider signature)
+//  - /api/auth/internal/*           (service-to-service payment engine lookups)
+//  - /api/payments/internal/*       (payment engine internal order creation)
+// Note: /api/payments/orders/:id/confirm IS public now — it requires a valid
+// provider payment signature (HMAC-keyed), so a forged confirm is impossible.
 app.use((req, res, next) => {
   if (
     req.path.startsWith("/api/notifications/internal") ||
     req.path.startsWith("/api/students/internal") ||
-    /^\/api\/payments\/orders\/[^/]+\/confirm\/?$/.test(req.path)
+    req.path.startsWith("/api/auth/internal") ||
+    req.path.startsWith("/api/payments/internal")
   ) {
     return res
       .status(404)
@@ -152,11 +155,27 @@ const routes = [
     target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
   },
   {
+    path: "/api/promotions",
+    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
+  },
+  {
+    path: "/api/transfers",
+    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
+  },
+  {
+    path: "/api/rollover",
+    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
+  },
+  {
     path: "/api/fees",
     target: process.env.FEE_SERVICE_URL || "http://localhost:5005",
   },
   {
     path: "/api/payments",
+    target: process.env.FEE_SERVICE_URL || "http://localhost:5005",
+  },
+  {
+    path: "/api/webhooks",
     target: process.env.FEE_SERVICE_URL || "http://localhost:5005",
   },
   {

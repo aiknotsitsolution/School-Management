@@ -162,17 +162,14 @@ const getTimetable = async (req, res) => {
 
 const deleteTimetable = async (req, res) => {
   try {
-    // Class teachers may only delete records for their own class/section.
+    // Teachers may only delete records for their own assigned classes/sections.
     if (req.teacherScope) {
       const slot = await Timetable.findOne({ _id: req.params.id, schoolId: req.tenantId }).lean();
       if (!slot) return res.status(404).json({ success: false, message: "Timetable slot not found" });
-      const inScope =
-        String(slot.class) === req.teacherScope.class &&
-        (!req.teacherScope.section || String(slot.section) === req.teacherScope.section);
-      if (!inScope) {
+      if (!req.teacherScope.has(slot.class, slot.section)) {
         return res.status(403).json({
           success: false,
-          message: "Class Teacher can only manage their assigned class and section",
+          message: "Teachers can only manage their assigned classes and sections",
         });
       }
     }

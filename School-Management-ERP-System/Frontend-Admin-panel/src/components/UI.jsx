@@ -1,6 +1,7 @@
 // Shared, small UI primitives used across module pages.
 
-import { useState } from "react";
+import { Children, useEffect, useRef, useState } from "react";
+import { ChevronDown } from "lucide-react";
 
 export function StatCard({ icon: Icon, label, value, sub, accent = "amber" }) {
   const accents = {
@@ -101,13 +102,13 @@ export function Avatar({ src, name, size = 32, className = "" }) {
   );
 }
 
-export function PageIntro({ eyebrow, title, description, right }) {
+export function PageIntro({ eyebrow, title, description, descriptionClassName = "max-w-xl", right }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
       <div>
         {eyebrow && <p className="text-[12.5px] font-semibold text-amber-dark mb-1">{eyebrow}</p>}
         <h2 className="font-display text-2xl font-bold text-ink">{title}</h2>
-        {description && <p className="text-slate-text text-[13.5px] mt-1 max-w-xl">{description}</p>}
+        {description && <p className={`text-slate-text text-[13.5px] mt-1 ${descriptionClassName}`}>{description}</p>}
       </div>
       {right}
     </div>
@@ -140,14 +141,158 @@ export function Input({ className = "", ...props }) {
   );
 }
 
-export function Select({ className = "", children, ...props }) {
+export function Select({
+  className = "",
+  children,
+  value,
+  defaultValue,
+  onChange,
+  name,
+  id,
+  required,
+  disabled,
+  onClick,
+  ...rest
+}) {
+  const [open, setOpen] = useState(false);
+  const [draft, setDraft] = useState(defaultValue ?? "");
+  const rootRef = useRef(null);
+  const hiddenRef = useRef(null);
+
+  const isControlled = value !== undefined;
+  const current = isControlled ? value ?? "" : draft;
+  const hasWidth = /\bw-/.test(className || "");
+
+  const options = Children.toArray(children)
+    .filter((child) => child && child.props && child.props.value !== undefined)
+    .map((child) => ({
+      value: String(child.props.value),
+      label: child.props.children,
+      disabled: Boolean(child.props.disabled),
+      placeholder: String(child.props.value) === "",
+    }));
+
+  const selected =
+    options.find((option) => String(option.value) === String(current)) || null;
+  const shown = selected ? selected.label : rest.placeholder || "Select";
+
+  useEffect(() => {
+    if (!open) return;
+    const onDown = (e) => {
+      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
+    };
+    const onKey = (e) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("mousedown", onDown);
+    document.addEventListener("keydown", onKey);
+    return () => {
+      document.removeEventListener("mousedown", onDown);
+      document.removeEventListener("keydown", onKey);
+    };
+  }, [open]);
+
+  const commit = (option) => {
+    if (option.disabled) return;
+    const next = String(option.value);
+    if (!isControlled) {
+      setDraft(next);
+      if (hiddenRef.current) hiddenRef.current.value = next;
+    }
+    setOpen(false);
+    onChange?.({ target: { value: next, name } });
+  };
+
   return (
-    <select
-      className={`w-full px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15 ${className}`}
-      {...props}
-    >
-      {children}
-    </select>
+    <div ref={rootRef} className={`relative ${className}`}>
+      {/* Hidden native select keeps form/FormData submission working. */}
+      <select
+        ref={hiddenRef}
+        name={name}
+        id={id}
+        required={required}
+        disabled={disabled}
+        tabIndex={-1}
+        aria-hidden="true"
+        className="sr-only"
+        value={current}
+        onChange={(e) => commit({ value: e.target.value, disabled: false })}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value} disabled={option.disabled}>
+            {option.label}
+          </option>
+        ))}
+      </select>
+
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={(e) => {
+          onClick?.(e);
+          if (!disabled) setOpen((prev) => !prev);
+        }}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        {...rest}
+        className={`flex items-center justify-between gap-2 rounded-xl border bg-white px-3 py-2.5 text-left text-[13px] outline-none transition-all ${hasWidth ? "" : "w-full"} ${className} ${
+          disabled
+            ? "cursor-not-allowed bg-slate-50 opacity-50"
+            : open
+              ? "border-amber ring-4 ring-amber/15"
+              : "border-black/10 hover:border-black/20"
+        }`}
+      >
+        <span
+          className={`truncate ${selected ? "text-ink" : "text-slate-text/60"}`}
+        >
+          {shown}
+        </span>
+        <ChevronDown
+          size={15}
+          className={`shrink-0 text-slate-text/50 transition-transform ${open ? "rotate-180" : ""}`}
+        />
+      </button>
+
+      {open && (
+        <div
+          role="listbox"
+          className="absolute left-0 top-full z-40 mt-1.5 w-full overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg shadow-black/5"
+        >
+          <div className="max-h-72 overflow-y-auto p-1">
+            {options.map((option) => {
+              const active = String(option.value) === String(current);
+              return (
+                <button
+                  key={option.value}
+                  type="button"
+                  role="option"
+                  aria-selected={active}
+                  disabled={option.disabled}
+                  onClick={() => commit(option)}
+                  className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-[13px] transition-colors ${
+                    active
+                      ? "bg-amber/10 font-semibold text-ink"
+                      : option.disabled
+                        ? "cursor-not-allowed text-slate-text/40"
+                        : "text-slate-text hover:bg-paper hover:text-ink"
+                  }`}
+                >
+                  <span
+                    className={`truncate ${option.placeholder && !active ? "text-slate-text/60" : ""}`}
+                  >
+                    {option.label}
+                  </span>
+                  {active && (
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-dark" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 

@@ -674,15 +674,15 @@ export default function Teachers() {
             <p className="text-[12px] text-slate-text/55">
               Showing {filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length}
             </p>
-            <select
+            <Select
               value={pageSize}
               onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
-              className="text-[12px] border border-black/[0.08] rounded-lg px-2 py-1.5 bg-paper text-ink"
+              className="text-[12px]"
             >
               {[5, 10, 20, 50].map((n) => (
                 <option key={n} value={n}>{n} / page</option>
               ))}
-            </select>
+            </Select>
           </div>
           <Pagination page={safePage} pages={totalPages} onPage={setPage} info={false} />
         </>
@@ -692,14 +692,16 @@ export default function Teachers() {
       {viewStaff && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setViewStaff(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto scrollbar-hidden">
             <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06] sticky top-0 bg-white">
               <h3 className="font-display font-semibold text-ink text-[17px]">Staff Profile</h3>
               <button onClick={() => setViewStaff(null)} className="p-2 rounded-lg hover:bg-paper text-slate-text">
                 <X size={20} />
               </button>
             </div>
-            <div className="px-6 py-5 space-y-5">
+            <div className="px-6 py-5">
+              <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_400px] gap-6 items-start">
+                <div className="space-y-5 min-w-0">
               {/* Header */}
               <div className="flex items-center gap-4">
                 <Avatar src={viewStaff.avatar} name={viewStaff.name} size={56} />
@@ -723,59 +725,8 @@ export default function Teachers() {
                 </div>
               </div>
 
-              {/* Onboarding & ID Card */}
-              <div className="rounded-xl border border-black/[0.06] p-4 space-y-3">
-                <p className="text-[11px] font-semibold text-slate-text/50 uppercase tracking-wide">Onboarding · ID Card</p>
-                <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-slate-text/70">
-                  <span className="inline-flex items-center gap-1.5">
-                    <UserCheck size={13} className={viewStaff.userId ? "text-success" : "text-amber-dark"} />
-                    {viewStaff.userId ? "Account created — profile completion is two-way" : "No account yet — register in Users & Access"}
-                  </span>
-                </div>
-                {viewStaff.idCardNumber ? (
-                  <div className="flex items-center justify-between gap-3 flex-wrap">
-                    <p className="text-[12.5px] text-ink">
-                      ID Card <span className="font-mono font-semibold text-info">{viewStaff.idCardNumber}</span>
-                      <span className="text-slate-text/50"> · issued {fmtDate(viewStaff.idCardIssuedAt)}</span>
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-[12px] text-slate-text/55">
-                    {viewStaff.profileStatus === "complete"
-                      ? "Profile complete — issue the ID card when ready."
-                      : "ID card issues automatically once the profile is completed."}
-                  </p>
-                )}
-                {viewStaff.profileStatus === "complete" && (
-                  <div className="rounded-lg bg-paper/70 p-3">
-                    <TeacherIdCard teacher={viewStaff} school={school} />
-                  </div>
-                )}
-                <PermissionGate permission="staff:write">
-                  <div className="flex flex-wrap gap-2">
-                    {viewStaff.profileStatus !== "complete" ? (
-                      <Button variant="amber" onClick={() => openComplete(viewStaff)}>
-                        <AlertCircle size={15} /> Complete Profile (Admin)
-                      </Button>
-                    ) : (
-                      <Button
-                        variant="outline"
-                        disabled={issuingId === viewStaff.id}
-                        onClick={() => handleIssueIdCard(viewStaff)}
-                      >
-                        <CreditCard size={15} />
-                        {viewStaff.idCardNumber ? "Reissue ID Card" : "Issue ID Card"}
-                      </Button>
-                    )}
-                    <Button variant="outline" disabled={!viewStaff.idCardNumber} onClick={() => printTeacherIdCard({ teacher: viewStaff, school })}>
-                      <Printer size={15} /> Print
-                    </Button>
-                  </div>
-                </PermissionGate>
-              </div>
-
               {/* Details Grid */}
-              <div className="grid grid-cols-2 gap-4 text-[13px]">
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 text-[13px]">
                 {viewStaff.employeeId && (
                   <div><span className="text-slate-text/50 text-[12px] block">Employee ID</span><span className="text-ink font-mono">{viewStaff.employeeId}</span></div>
                 )}
@@ -851,10 +802,65 @@ export default function Teachers() {
                       </div>
                     ))}
                   </div>
-                </div>
+</div>
               )}
             </div>
-            <div className="px-6 py-4 border-t border-black/[0.06] flex justify-end gap-2 sticky bottom-0 bg-white">
+
+            {/* Right: ID Card panel */}
+            <div className="space-y-3">
+              <div className="rounded-xl border border-black/[0.06] p-4 space-y-3 xl:sticky xl:top-20">
+                <p className="text-[11px] font-semibold text-slate-text/50 uppercase tracking-wide">Onboarding · ID Card</p>
+                <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-slate-text/70">
+                  <span className="inline-flex items-center gap-1.5">
+                    <UserCheck size={13} className={viewStaff.userId ? "text-success" : "text-amber-dark"} />
+                    {viewStaff.userId ? "Account created — profile completion is two-way" : "No account yet — register in Users & Access"}
+                  </span>
+                </div>
+                {viewStaff.idCardNumber ? (
+                  <div className="flex items-center justify-between gap-3 flex-wrap">
+                    <p className="text-[12.5px] text-ink">
+                      ID Card <span className="font-mono font-semibold text-info">{viewStaff.idCardNumber}</span>
+                      <span className="text-slate-text/50"> · issued {fmtDate(viewStaff.idCardIssuedAt)}</span>
+                    </p>
+                  </div>
+                ) : (
+                  <p className="text-[12px] text-slate-text/55">
+                    {viewStaff.profileStatus === "complete"
+                      ? "Profile complete — issue the ID card when ready."
+                      : "ID card issues automatically once the profile is completed."}
+                  </p>
+                )}
+                {viewStaff.profileStatus === "complete" && (
+                  <div className="rounded-lg bg-paper/70 p-3">
+                    <TeacherIdCard teacher={viewStaff} school={school} />
+                  </div>
+                )}
+                <PermissionGate permission="staff:write">
+                  <div className="flex flex-wrap gap-2">
+                    {viewStaff.profileStatus !== "complete" ? (
+                      <Button variant="amber" onClick={() => openComplete(viewStaff)}>
+                        <AlertCircle size={15} /> Complete Profile (Admin)
+                      </Button>
+                    ) : (
+                      <Button
+                        variant="outline"
+                        disabled={issuingId === viewStaff.id}
+                        onClick={() => handleIssueIdCard(viewStaff)}
+                      >
+                        <CreditCard size={15} />
+                        {viewStaff.idCardNumber ? "Reissue ID Card" : "Issue ID Card"}
+                      </Button>
+                    )}
+                    <Button variant="outline" disabled={!viewStaff.idCardNumber} onClick={() => printTeacherIdCard({ teacher: viewStaff, school })}>
+                      <Printer size={15} /> Print
+                    </Button>
+                  </div>
+                </PermissionGate>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="px-6 py-4 border-t border-black/[0.06] flex justify-end gap-2 sticky bottom-0 bg-white">
               <Button variant="outline" onClick={() => setViewStaff(null)}>Close</Button>
               <PermissionGate permission="staff:write">
                 <Button variant="amber" onClick={() => { setViewStaff(null); openEdit(viewStaff); }}>

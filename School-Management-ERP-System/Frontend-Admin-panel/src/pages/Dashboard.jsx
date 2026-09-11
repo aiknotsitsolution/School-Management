@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import {
   Users,
   Wallet,
@@ -8,11 +9,18 @@ import {
   Bus,
   Bell,
   ClipboardList,
+  GraduationCap,
+  CalendarDays,
+  Megaphone,
+  BookOpenCheck,
+  CreditCard,
+  BriefcaseBusiness,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { hasPermission } from "../lib/permissions";
+import { useSelector } from "react-redux";
+import { selectUser } from "../store/selectors";
 import {
-  AreaChart,
-  Area,
   BarChart,
   Bar,
   PieChart,
@@ -24,7 +32,14 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { StatCard, Card, Pill, statusTone, Avatar } from "../components/UI";
+import {
+  StatCard,
+  Card,
+  Pill,
+  statusTone,
+  Avatar,
+} from "../components/UI";
+import AttendanceTrendChart from "../components/AttendanceTrendChart";
 import {
   DashboardPagination,
   usePaged,
@@ -47,6 +62,7 @@ function monthKey(value) {
 }
 
 export default function Dashboard() {
+  const user = useSelector(selectUser);
   const [data, setData] = useState({
     studentStats: { total: 0, active: 0, byClass: [] },
     students: [],
@@ -56,9 +72,12 @@ export default function Dashboard() {
     admissions: [],
     notices: [],
     busRoutes: [],
+    staff: [],
+    events: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [attendanceFailed, setAttendanceFailed] = useState(false);
 
   useEffect(() => {
     Promise.allSettled([
@@ -70,11 +89,14 @@ export default function Dashboard() {
       api.admissions.list(),
       api.notices.list(),
       api.transport.list(),
+      api.staff.list(),
+      api.events.list(),
     ])
       .then((results) => {
         const value = (index) =>
           results[index].status === "fulfilled" ? results[index].value : {};
         const failed = results.filter((result) => result.status === "rejected");
+        setAttendanceFailed(results[2].status === "rejected");
         setData({
           studentStats: value(0).data || { total: 0, active: 0, byClass: [] },
           students: value(1).data || [],
@@ -84,6 +106,8 @@ export default function Dashboard() {
           admissions: value(5).data || [],
           notices: value(6).data || [],
           busRoutes: value(7).data || [],
+          staff: value(8).data || [],
+          events: value(9).data || [],
         });
         if (failed.length === results.length) {
           setError("Dashboard data could not be loaded. Please try again.");
@@ -93,6 +117,17 @@ export default function Dashboard() {
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const retryAttendance = () => {
+    setAttendanceFailed(false);
+    setData((prev) => ({ ...prev, attendance: [] }));
+    api.attendance
+      .list()
+      .then(({ data }) =>
+        setData((prev) => ({ ...prev, attendance: data || [] })),
+      )
+      .catch(() => setAttendanceFailed(true));
+  };
 
   const students = data.students;
   const attendance = data.attendance;
@@ -157,28 +192,6 @@ export default function Dashboard() {
   const lowAttendanceAll = attendanceByStudent
     .filter((student) => student.attendance > 0)
     .sort((a, b) => a.attendance - b.attendance);
-  const attendanceTrend = useMemo(() => {
-    const grouped = new Map();
-    attendance.forEach((record) => {
-      const key = monthKey(record.date);
-      const current = grouped.get(key) || {
-        total: 0,
-        present: 0,
-        date: record.date,
-      };
-      current.total += 1;
-      if (record.status === "Present") current.present += 1;
-      grouped.set(key, current);
-    });
-    return [...grouped.values()].map((item) => ({
-      month: new Date(item.date).toLocaleDateString("en-IN", {
-        month: "short",
-      }),
-      attendance: item.total
-        ? Math.round((item.present / item.total) * 100)
-        : 0,
-    }));
-  }, [attendance]);
   const feeCollectionTrend = useMemo(() => {
     const grouped = new Map();
     data.payments.forEach((payment) => {
@@ -247,11 +260,16 @@ export default function Dashboard() {
   const pendingEnquiries = admissionEnquiries.filter(
     (item) => item.status === "New",
   ).length;
-  const currentUser =
-    typeof window !== "undefined" && localStorage.getItem("erp_user")
-      ? JSON.parse(localStorage.getItem("erp_user"))
-      : { name: "Administrator" };
-  const firstName = currentUser.name.split(" ")[0];
+  const firstName = (user?.name || "Administrator").split(" ")[0];
+  const teachersCount = (data.staff || []).filter(
+    (s) => s.role === "teacher",
+  ).length;
+  const staffCount = (data.staff || []).length - teachersCount;
+  const classesCount = classStrength.length;
+  const upcomingEvents = (data.events || [])
+    .filter((e) => e.date && new Date(e.date) >= new Date())
+    .sort((a, b) => new Date(a.date) - new Date(b.date))
+    .slice(0, 5);
 
   return (
     <div className="space-y-6">
@@ -277,10 +295,13 @@ export default function Dashboard() {
             </h2>
             <p className="text-white/60 text-[13.5px] mt-1.5">
               {studentStats.total.toLocaleString("en-IN")} students ·{" "}
-              {studentStats.active.toLocaleString("en-IN")} active ·
+              {studentStats.active.toLocaleString("en-IN")} active ·{" "}
+              {teachersCount} teachers ·{" "}
+              {staffCount} staff ·{" "}
+              {classesCount} class sections
               {loading
-                ? " Loading live data..."
-                : " Live school operations overview"}
+                ? " · Loading live data…"
+                : ""}
             </p>
           </div>
           <div className="flex gap-3">
@@ -301,6 +322,31 @@ export default function Dashboard() {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { to: "/addstudent", icon: UserPlus, label: "Add Student", perm: "students:write" },
+          { to: "/teachers", icon: GraduationCap, label: "Add Teacher", perm: "staff:write" },
+          { to: "/fees-collection", icon: CreditCard, label: "Fee Collection", perm: "fees:collect" },
+          { to: "/notice-board", icon: Megaphone, label: "Publish Notice", perm: "notices:publish" },
+          { to: "/events", icon: CalendarDays, label: "New Event", perm: "events:publish" },
+          { to: "/homework", icon: BookOpenCheck, label: "Homework", perm: "homework:read" },
+        ]
+          .filter((item) => hasPermission(user, item.perm))
+          .map((item) => (
+            <Link
+              key={item.to}
+              to={item.to}
+              className="flex items-center gap-2.5 rounded-xl border border-black/[0.06] bg-white px-3.5 py-3 hover:bg-amber/5 transition-colors"
+            >
+              <div className="w-8 h-8 rounded-lg bg-amber/12 text-amber-dark flex items-center justify-center shrink-0">
+                <item.icon size={15} />
+              </div>
+              <span className="text-[12.5px] font-semibold text-ink">{item.label}</span>
+            </Link>
+          ))}
       </div>
 
       {error && (
@@ -341,50 +387,47 @@ export default function Dashboard() {
         />
       </div>
 
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          icon={GraduationCap}
+          label="Teachers"
+          value={String(teachersCount)}
+          sub={teachersCount === 1 ? "teaching staff" : "teaching staff"}
+          accent="info"
+        />
+        <StatCard
+          icon={BriefcaseBusiness}
+          label="Other Staff"
+          value={String(staffCount)}
+          sub={staffCount === 1 ? "support staff" : "support staff"}
+          accent="amber"
+        />
+        <StatCard
+          icon={ClipboardList}
+          label="Class Sections"
+          value={String(classesCount)}
+          sub={`${classStrengthTotal} total students`}
+          accent="success"
+        />
+        <StatCard
+          icon={CalendarDays}
+          label="Upcoming Events"
+          value={String(upcomingEvents.length)}
+          sub={upcomingEvents.length ? `Next: ${upcomingEvents[0]?.title?.slice(0, 20) || "event"}` : "No events scheduled"}
+          accent="alert"
+        />
+      </div>
+
       <div className="grid lg:grid-cols-3 gap-5">
-        <Card title="Attendance Trend" className="lg:col-span-2">
-          <ResponsiveContainer width="100%" height={230}>
-            <AreaChart data={attendanceTrend} margin={{ left: -20, top: 5 }}>
-              <defs>
-                <linearGradient id="attGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#E8A33D" stopOpacity={0.35} />
-                  <stop offset="100%" stopColor="#E8A33D" stopOpacity={0} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid
-                strokeDasharray="3 3"
-                vertical={false}
-                stroke="#EEEAE0"
-              />
-              <XAxis
-                dataKey="month"
-                tick={{ fontSize: 12, fill: "#475467" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <YAxis
-                domain={["dataMin - 5", 100]}
-                tick={{ fontSize: 12, fill: "#475467" }}
-                axisLine={false}
-                tickLine={false}
-              />
-              <Tooltip
-                contentStyle={{
-                  borderRadius: 10,
-                  border: "1px solid #eee",
-                  fontSize: 12.5,
-                }}
-              />
-              <Area
-                type="monotone"
-                dataKey="attendance"
-                stroke="#E8A33D"
-                strokeWidth={2.5}
-                fill="url(#attGrad)"
-              />
-            </AreaChart>
-          </ResponsiveContainer>
-        </Card>
+        <AttendanceTrendChart
+          records={attendance}
+          loading={loading}
+          error={attendanceFailed ? "Attendance data could not be loaded." : ""}
+          onRetry={retryAttendance}
+          title="Attendance Trend"
+          className="lg:col-span-2"
+          defaultRange="thisYear"
+        />
 
         <Card title="Students by Section">
           {classStrength.length === 0 ? (
@@ -647,6 +690,46 @@ export default function Dashboard() {
           </div>
         )}
         <DashboardPagination {...busPaged} unit="buses" />
+      </Card>
+
+      <Card
+        title="Upcoming Events"
+        action={
+          <Link
+            to="/events"
+            className="text-[12px] font-semibold text-info flex items-center gap-1"
+          >
+            All events <ArrowUpRight size={13} />
+          </Link>
+        }
+      >
+        {upcomingEvents.length === 0 ? (
+          <div className="flex items-center justify-center h-24 text-[13px] text-slate-text/60">
+            No upcoming events
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {upcomingEvents.map((ev) => (
+              <div
+                key={ev._id}
+                className="flex items-center justify-between gap-3 pb-3 border-b border-black/[0.06] last:border-0 last:pb-0"
+              >
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-ink truncate">
+                    {ev.title}
+                  </p>
+                  <p className="text-[11.5px] text-slate-text/70">
+                    {formatDate(ev.date)}
+                    {ev.venue ? ` · ${ev.venue}` : ""}
+                  </p>
+                </div>
+                <Pill tone={statusTone(ev.category || "All")}>
+                  {ev.category || "General"}
+                </Pill>
+              </div>
+            ))}
+          </div>
+        )}
       </Card>
     </div>
   );

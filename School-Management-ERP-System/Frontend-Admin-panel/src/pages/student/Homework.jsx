@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { BookOpenCheck, FileText, Send, CheckCircle2 } from "lucide-react";
-import { PageIntro, Card, Pill, Button, toast } from "../../components/UI";
+import { PageIntro, Card, Pill, Button, toast, Select } from "../../components/UI";
 import FileDropzone from "../../components/upload/FileDropzone";
 import UploadProgress from "../../components/upload/UploadProgress";
 import AttachmentLinks from "../../components/upload/AttachmentLinks";
@@ -120,14 +120,13 @@ export default function Homework() {
         title="Assignments"
         action={
           subjects.length > 1 ? (
-            <select
+            <Select
               value={subject}
               onChange={(e) => setSubject(e.target.value)}
-              className="bg-paper border border-black/10 rounded-lg px-2.5 py-1.5 text-[12px] text-ink outline-none"
             >
               <option value="all">All subjects</option>
               {subjects.map((s) => <option key={s} value={s}>{s}</option>)}
-            </select>
+            </Select>
           ) : undefined
         }
       >

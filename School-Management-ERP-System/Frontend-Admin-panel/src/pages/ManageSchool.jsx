@@ -25,8 +25,10 @@ import {
   Card,
   PageIntro,
   Pill,
+  Select,
   toast,
 } from "../components/UI";
+import { Pagination } from "../components/Pagination";
 import CustomMasterModal from "../components/CustomMasterModal";
 
 const TABS = [
@@ -35,6 +37,7 @@ const TABS = [
   { key: "subjects", label: "Subjects", singular: "Subject", icon: BookOpen, kind: "subjects" },
   { key: "fee-types", label: "Fee Types", singular: "Fee Type", icon: Wallet, kind: "fee-types" },
   { key: "attendance-statuses", label: "Attendance Statuses", singular: "Attendance Status", icon: CheckCircle2, kind: "attendance-statuses" },
+  { key: "leave-types", label: "Leave Types", singular: "Leave Type", icon: CalendarDays, kind: "leave-types" },
   { key: "notice-categories", label: "Notice Categories", singular: "Notice Category", icon: Bell, kind: "notice-categories" },
   { key: "notice-audiences", label: "Notice Audiences", singular: "Notice Audience", icon: Users, kind: "notice-audiences" },
   { key: "event-categories", label: "Event Categories", singular: "Event Category", icon: CalendarDays, kind: "event-categories" },
@@ -85,48 +88,33 @@ function MasterList({
   items,
   loading,
   label,
-  searchPlaceholder,
+  searchQuery,
   filterFn,
   onDeactivate,
   onReactivate,
   onEdit,
   renderItem,
 }) {
-  const [query, setQuery] = useState("");
   const filtered = useMemo(() => {
     const base = filterFn ? filterFn(items) : items;
-    if (!query.trim()) return base;
-    const q = query.toLowerCase();
+    if (!searchQuery.trim()) return base;
+    const q = searchQuery.toLowerCase();
     return base.filter((i) => i.name?.toLowerCase().includes(q));
-  }, [items, query, filterFn]);
+  }, [items, searchQuery, filterFn]);
+
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paged = filtered.slice((safePage - 1) * pageSize, safePage * pageSize);
+
+  useEffect(() => {
+    setPage(1);
+  }, [searchQuery, pageSize]);
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-4">
-        <div className="relative flex-1 max-w-sm">
-          <Search
-            size={14}
-            className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-text/40"
-          />
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={searchPlaceholder || `Search ${label.toLowerCase()}...`}
-            className="w-full pl-9 pr-8 py-2.5 rounded-lg border border-black/10 text-[13px] outline-none focus:border-ink/40 bg-white placeholder:text-slate-text/50"
-          />
-          {query && (
-            <button
-              onClick={() => setQuery("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-text/40 hover:text-ink"
-            >
-              <X size={13} />
-            </button>
-          )}
-        </div>
-        <div className="text-[12px] text-slate-text/60 shrink-0">
-          {filtered.length} {filtered.length === 1 ? "item" : "items"}
-        </div>
-      </div>
       {loading ? (
         <div className="py-10 text-center text-[13px] text-slate-text/60">
           Loading {label.toLowerCase()}...
@@ -139,7 +127,7 @@ function MasterList({
         </div>
       ) : (
         <div className="space-y-0.5">
-          {filtered.map((item) =>
+          {paged.map((item) =>
             renderItem ? (
               renderItem(item)
             ) : (
@@ -193,6 +181,30 @@ function MasterList({
           )}
         </div>
       )}
+      {!loading && filtered.length > 0 && (
+        <>
+          <div className="flex items-center justify-between pt-2">
+            <p className="text-[12px] text-slate-text/55">
+              Showing {filtered.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length}
+            </p>
+            <Select
+              value={pageSize}
+              onChange={(e) => {
+                setPageSize(Number(e.target.value));
+                setPage(1);
+              }}
+              className="text-[12px]"
+            >
+              {[5, 10, 20].map((n) => (
+                <option key={n} value={n}>
+                  {n} / page
+                </option>
+              ))}
+            </Select>
+          </div>
+          <Pagination page={safePage} pages={totalPages} onPage={setPage} info={false} />
+        </>
+      )}
     </div>
   );
 }
@@ -205,6 +217,7 @@ export default function ManageSchool() {
     subjects: [],
     "fee-types": [],
     "attendance-statuses": [],
+    "leave-types": [],
     "notice-categories": [],
     "notice-audiences": [],
     "event-categories": [],
@@ -212,6 +225,7 @@ export default function ManageSchool() {
   });
   const [loading, setLoading] = useState(true);
   const [customModal, setCustomModal] = useState(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -221,6 +235,7 @@ export default function ManageSchool() {
       api.examMasters.list("subjects"),
       api.examMasters.list("fee-types"),
       api.examMasters.list("attendance-statuses"),
+      api.examMasters.list("leave-types"),
       api.examMasters.list("notice-categories"),
       api.examMasters.list("notice-audiences"),
       api.examMasters.list("event-categories"),
@@ -234,10 +249,11 @@ export default function ManageSchool() {
       subjects: pick(2),
       "fee-types": pick(3),
       "attendance-statuses": pick(4),
-      "notice-categories": pick(5),
-      "notice-audiences": pick(6),
-      "event-categories": pick(7),
-      "hostel-blocks": pick(8),
+      "leave-types": pick(5),
+      "notice-categories": pick(6),
+      "notice-audiences": pick(7),
+      "event-categories": pick(8),
+      "hostel-blocks": pick(9),
     });
     setLoading(false);
   }, []);
@@ -300,6 +316,7 @@ export default function ManageSchool() {
   const subjectCount = items.subjects.filter((i) => isActiveItem(i)).length;
   const feeTypeCount = items["fee-types"].filter((i) => isActiveItem(i)).length;
   const attendanceStatusCount = items["attendance-statuses"].filter((i) => isActiveItem(i)).length;
+  const leaveTypeCount = items["leave-types"].filter((i) => isActiveItem(i)).length;
   const noticeCategoryCount = items["notice-categories"].filter((i) => isActiveItem(i)).length;
   const noticeAudienceCount = items["notice-audiences"].filter((i) => isActiveItem(i)).length;
   const eventCategoryCount = items["event-categories"].filter((i) => isActiveItem(i)).length;
@@ -323,6 +340,7 @@ export default function ManageSchool() {
             subjects: subjectCount,
             "fee-types": feeTypeCount,
             "attendance-statuses": attendanceStatusCount,
+            "leave-types": leaveTypeCount,
             "notice-categories": noticeCategoryCount,
             "notice-audiences": noticeAudienceCount,
             "event-categories": eventCategoryCount,
@@ -331,7 +349,10 @@ export default function ManageSchool() {
           return (
             <button
               key={t.key}
-              onClick={() => setActiveTab(t.key)}
+              onClick={() => {
+                setActiveTab(t.key);
+                setSearchQuery("");
+              }}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors text-left ${
                 activeTab === t.key
                   ? "bg-ink text-white border-ink"
@@ -357,15 +378,37 @@ export default function ManageSchool() {
       <Card
         title={tab?.label}
         action={
-          <Button
-            variant="amber"
-            onClick={() =>
-              setCustomModal({ kind: tab.kind, label: tab.singular })
-            }
-          >
-            <Plus size={15} />
-            Add {tab.singular}
-          </Button>
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/40"
+              />
+              <input
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={`Search ${(tab?.label || "").toLowerCase()}...`}
+                className="w-52 pl-9 pr-8 py-2 rounded-lg border border-black/10 text-[13px] outline-none focus:border-ink/40 bg-white placeholder:text-slate-text/50"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-text/40 hover:text-ink"
+                >
+                  <X size={13} />
+                </button>
+              )}
+            </div>
+            <Button
+              variant="amber"
+              onClick={() =>
+                setCustomModal({ kind: tab.kind, label: tab.singular })
+              }
+            >
+              <Plus size={15} />
+              Add {tab.singular}
+            </Button>
+          </div>
         }
       >
         <MasterList
@@ -373,6 +416,7 @@ export default function ManageSchool() {
           loading={loading}
           kind={activeTab}
           label={tab?.label}
+          searchQuery={searchQuery}
           onDeactivate={(id) => handleDeactivate(activeTab, id)}
           onReactivate={(id) => handleRestore(activeTab, id)}
           onEdit={(item) =>

@@ -8,8 +8,9 @@ import {
   FileClock,
   ExternalLink,
 } from "lucide-react";
-import { PageIntro, Card, Button, Input, Pill, Select } from "../components/UI";
+import { PageIntro, Card, Button, Input, Pill, Select, toast } from "../components/UI";
 import { useMasterOptions } from "../hooks/useMasterOptions";
+import { openRazorpayCheckout } from "../utils/razorpay";
 
 const CLASS_OPTIONS_FALLBACK = [
   "All",
@@ -35,6 +36,7 @@ const CLASS_OPTIONS_FALLBACK = [
 const ORDER_TONE = {
   pending: "amber",
   awaiting_confirmation: "amber",
+  awaiting_manual_confirm: "amber",
   completed: "success",
   failed: "alert",
   cancelled: "neutral",
@@ -171,6 +173,37 @@ export default function OnlinePayment() {
       const { data } = await api.fees.orders.initiate(orderId);
       if (data?.checkoutUrl) {
         window.open(data.checkoutUrl, "_blank");
+        return;
+      }
+      const chk = data?.checkout;
+      if (chk?.keyId && chk?.providerOrderId) {
+        const payload = await openRazorpayCheckout({
+          keyId: chk.keyId,
+          orderId: chk.providerOrderId,
+          amount: chk.amount,
+          currency: chk.currency,
+          description: "School fee payment",
+        });
+        await api.payments.orders.confirm(orderId, payload);
+        setOrders((prev) =>
+          prev.map((x) =>
+            x._id === orderId
+              ? { ...x, status: "completed", confirmedAt: new Date().toISOString() }
+              : x,
+          ),
+        );
+        toast("Payment confirmed", "success");
+      } else if (chk) {
+        setOrders((prev) =>
+          prev.map((x) =>
+            x._id === orderId ? { ...x, status: "awaiting_manual_confirm" } : x,
+          ),
+        );
+        setOrderNote([
+          { id: orderId, externalRef: orderId, amount: chk.amount || 0, status: "awaiting_manual_confirm" },
+        ]);
+      } else {
+        setError("Payment gateway is not configured for this school yet.");
       }
     } catch (err) {
       setError(err.message);
@@ -208,8 +241,8 @@ export default function OnlinePayment() {
                 Payment {orderNote.length > 1 ? "orders" : "order"} created
               </p>
               <p className="text-[12.5px] text-slate-text/80 mt-1">
-                The order remains <strong>pending</strong> until a payment provider is configured and
-                confirms it. No payment has been recorded.
+                Share the payment details with the parent — the order is confirmed once the office verifies
+                the receipt (bank transfer / UPI reference). No fee is recorded as paid before that.
               </p>
               <div className="mt-2 space-y-1">
                 {orderNote.map((o) => (
@@ -314,8 +347,8 @@ export default function OnlinePayment() {
                       <Pill tone={ORDER_TONE[o.status] || "neutral"}>{o.status}</Pill>
                     </div>
                     <p className="text-[11.5px] text-slate-text/60 mt-0.5">
-                      ₹{o.amount.toLocaleString("en-IN")} · Provider {o.provider || "—"} · {o.confirmedAt ? fmtDate(o.confirmedAt) : "Created " + fmtDate(o.createdAt)}
-                    </p>
+                        ₹{o.amount.toLocaleString("en-IN")} · {o.gatewayMode || "—"} · {o.confirmedAt ? fmtDate(o.confirmedAt) : "Created " + fmtDate(o.createdAt)}
+                      </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
                     {o.status === "pending" && (

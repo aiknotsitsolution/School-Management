@@ -239,6 +239,13 @@ export const api = {
         request(`/platform/invoices/${id}`, json("PATCH", { status })),
     },
   },
+  // School-facing (own tenant only) subscription/plan self-service.
+  subscription: {
+    me: () => request("/auth/school/me/subscription"),
+    plans: () => request("/auth/school/me/plans"),
+    usage: () => request("/auth/school/me/usage"),
+    upgrade: (planId) => request("/auth/school/me/upgrade", json("POST", { planId })),
+  },
   students: {
     list: (params = "") => request(`/students${params ? `?${params}` : ""}`),
     get: (id) => request(`/students/${id}`),
@@ -404,6 +411,7 @@ export const api = {
       list: (params = "") => request(`/payments/orders${params ? `?${params}` : ""}`),
       create: (item) => request("/payments/orders", json("POST", item)),
       initiate: (id) => request(`/payments/orders/${id}/initiate`, { method: "POST" }),
+      confirm: (id, payload) => request(`/payments/orders/${id}/confirm`, json("POST", payload)),
       cancel: (id) => request(`/payments/orders/${id}/cancel`, { method: "PATCH" }),
     },
   },

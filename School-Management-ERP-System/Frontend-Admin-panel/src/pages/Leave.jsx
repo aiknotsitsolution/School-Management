@@ -111,6 +111,16 @@ export default function Leave() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
+  const [leaveTypes, setLeaveTypes] = useState(TYPES);
+
+  useEffect(() => {
+    api.examMasters.list("leave-types").then((res) => {
+      const items = res?.data;
+      if (Array.isArray(items) && items.length > 0) {
+        setLeaveTypes(items.map((i) => i.name));
+      }
+    }).catch(() => {});
+  }, []);
 
   const filtered = useMemo(() => {
     const q = query.toLowerCase();
@@ -416,7 +426,7 @@ export default function Leave() {
                     setForm((f) => ({ ...f, type: e.target.value }))
                   }
                 >
-                  {TYPES.map((t) => (
+                  {leaveTypes.map((t) => (
                     <option key={t} value={t}>
                       {t}
                     </option>

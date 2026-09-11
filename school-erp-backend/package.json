@@ -9,9 +9,8 @@
     "docker:up": "docker-compose up --build",
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
-    "seed": "node scripts/seed-full.js",
-    "seed:seed-only": "node scripts/seed-full.js --seed-only",
-    "test:all": "npm test --prefix services/auth-service && npm test --prefix services/student-service && npm test --prefix services/academic-service"
+    "db:clean": "node scripts/clean-db.js",
+    "bootstrap:super-admin": "node scripts/bootstrap-super-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

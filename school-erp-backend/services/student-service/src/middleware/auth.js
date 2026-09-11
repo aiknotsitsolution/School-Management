@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
 const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
+const { scopeClassTeacher } = require("@school-erp/shared/src/middleware/teacherScopeAuth");
 const JWT_SECRET = getJwtSecret();
 
 // Decodes the JWT and attaches the tenant + role payload to req.user.
@@ -84,30 +85,15 @@ const scopeStudentQuery = (req, res, next) => {
 
 // Restrict a student to only their own record(s); staff/teachers allowed.
 const restrictToOwnStudent = (getStudentIdFromReq) => (req, res, next) => {
-  if (["school_admin", "class_teacher", "teacher", "staff"].includes(req.user.role)) return next();
+  if (["school_admin", "teacher", "staff"].includes(req.user.role)) return next();
   const targetId = getStudentIdFromReq(req);
   if (req.user.role === "student" && req.user.refId === targetId) return next();
   return res.status(403).json({ success: false, message: "You can only access your own student record" });
 };
 
-// Teacher scoping (class_teacher or teacher): locks GET queries to the token's
-// class & section and rejects teachers with no class assignment.
-const scopeClassTeacher = (req, res, next) => {
-  const { role, class: cls, section } = req.user || {};
-  if (!["class_teacher", "teacher"].includes(role)) return next();
-  if (!cls) {
-    return res.status(403).json({
-      success: false,
-      message: "No class assigned to this account. Contact your school admin.",
-    });
-  }
-  req.teacherScope = { class: String(cls), section: section ? String(section) : null };
-  if (req.method === "GET") {
-    req.query.class = req.teacherScope.class;
-    if (req.teacherScope.section) req.query.section = req.teacherScope.section;
-    else delete req.query.section;
-  }
-  next();
-};
+// Teacher scoping is ASSIGNMENT-driven: the teacher's authority is resolved
+// from active TeacherAssignment records (teaching + class_teacher) for the
+// current session and attached to req.teacherScope (see
+// @school-erp/shared/src/middleware/teacherScopeAuth).
 
 module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery, restrictToOwnStudent, scopeClassTeacher };

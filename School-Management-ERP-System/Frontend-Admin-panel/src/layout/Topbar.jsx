@@ -21,7 +21,7 @@ import { api } from "../lib/api";
 const roleLabel = (role, designation) => {
   if (role === "super_admin") return "Platform Owner";
   if (role === "school_admin" || role === "admin") return "School Admin";
-  if (role === "class_teacher" || role === "teacher") return "Class Teacher";
+  if (role === "teacher") return "Teacher";
   if (role === "staff") return designation ? `Staff · ${designation}` : "Staff";
   if (role === "student" || role === "parent") return "Student / Parent";
   return "User";
@@ -139,12 +139,12 @@ export default function Topbar({ onMenuClick, title }) {
     navigate("/login", { replace: true });
   };
 
-  const legacyRole = { admin: "school_admin", teacher: "class_teacher", parent: "student" }[role] || role;
+  const legacyRole = { admin: "school_admin", parent: "student" }[role] || role;
   const profileTarget = {
     school_admin: "/profile",
     super_admin: "/profile",
     staff: "/staff/profile",
-    class_teacher: "/teacher/profile",
+    teacher: "/teacher/profile",
     student: "/student/profile",
   }[legacyRole] || "/profile";
   const settingsTarget = legacyRole === "super_admin" ? "/platform/settings" : "/settings";

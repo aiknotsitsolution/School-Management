@@ -143,7 +143,7 @@ export default function Plans() {
   };
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <PageIntro
         eyebrow="Platform Owner · Billing"
         title="Plans & Pricing"

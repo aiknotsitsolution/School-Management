@@ -11,7 +11,7 @@ import {
 import { api } from "../lib/api";
 import { Button, Card, Input, PageIntro, Pill, Select, StatCard, toast } from "../components/UI";
 
-const roleOptions = ["school_admin", "class_teacher", "staff", "student"];
+const roleOptions = ["school_admin", "teacher", "staff", "student"];
 const fmtDate = (value) =>
   value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" }) : "—";
 
@@ -111,7 +111,7 @@ export default function Platform() {
         password: userForm.password,
         role: userForm.role,
         designation: userForm.role === "staff" ? userForm.designation || undefined : undefined,
-        class: userForm.role === "class_teacher" ? userForm.className || undefined : undefined,
+        class: userForm.role === "teacher" ? userForm.className || undefined : undefined,
         section: userForm.section || undefined,
         refId: userForm.refId.trim() || undefined,
       });

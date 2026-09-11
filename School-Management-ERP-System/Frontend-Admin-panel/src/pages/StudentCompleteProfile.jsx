@@ -36,6 +36,7 @@ const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 const HOUSE_OPTIONS = ["Aravali", "Nilgiri", "Shivalik", "Vindhya"];
 const BLOOD_OPTIONS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
+const MEDIUM_OPTIONS = ["English", "Hindi"];
 
 const REQUIRED_FIELDS = [
   "class",
@@ -67,6 +68,7 @@ const empty = (student) => ({
   dob: student?.dob ? String(student.dob).slice(0, 10) : "",
   gender: student?.gender || "",
   bloodGroup: student?.bloodGroup || "",
+  medium: student?.medium || "English",
   house: student?.house || "",
   address: student?.address || "",
   parentName: student?.parentName || "",
@@ -111,6 +113,7 @@ export default function StudentCompleteProfile() {
         dob: form.dob || undefined,
         gender: form.gender || undefined,
         bloodGroup: form.bloodGroup || undefined,
+        medium: form.medium || undefined,
         house: form.house || undefined,
         address: form.address || undefined,
         parentName: form.parentName || undefined,
@@ -258,6 +261,14 @@ export default function StudentCompleteProfile() {
             <Select value={form.bloodGroup} onChange={(e) => setForm({ ...form, bloodGroup: e.target.value })}>
               <option value="">Select…</option>
               {BLOOD_OPTIONS.map((option) => (
+                <option key={option} value={option}>{option}</option>
+              ))}
+            </Select>
+          </label>
+          <label className="block">
+            <span className="text-[11.5px] font-semibold text-slate-text/60 uppercase block mb-1">Medium</span>
+            <Select value={form.medium} onChange={(e) => setForm({ ...form, medium: e.target.value })}>
+              {MEDIUM_OPTIONS.map((option) => (
                 <option key={option} value={option}>{option}</option>
               ))}
             </Select>

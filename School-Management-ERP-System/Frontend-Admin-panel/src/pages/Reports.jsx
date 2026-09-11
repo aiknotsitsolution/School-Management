@@ -19,8 +19,6 @@ import { hasPermission } from "../lib/permissions";
 import { selectUser } from "../store/selectors";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import {
-  AreaChart,
-  Area,
   BarChart,
   Bar,
   PieChart,
@@ -32,7 +30,15 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import { PageIntro, Card, StatCard, Button, Input, Select } from "../components/UI";
+import {
+  PageIntro,
+  Card,
+  StatCard,
+  Button,
+  Input,
+  Select,
+} from "../components/UI";
+import AttendanceTrendChart from "../components/AttendanceTrendChart";
 
 const PIE_COLORS = ["#16213E", "#E8A33D", "#3F8F5F", "#3B6FA0", "#D65A4A"];
 const TABS = [
@@ -626,6 +632,7 @@ export default function Reports() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [attendanceFailed, setAttendanceFailed] = useState(false);
 
   const user = useSelector(selectUser);
   const canViewFeeReports = hasPermission(user, "fees:reports");
@@ -644,6 +651,7 @@ export default function Reports() {
         const value = (index) =>
           results[index].status === "fulfilled" ? results[index].value : {};
         const failed = results.filter((result) => result.status === "rejected");
+        setAttendanceFailed(results[2].status === "rejected");
         setData({
           studentStats: value(0).data || { total: 0, active: 0, byClass: [] },
           students: value(1).data || [],
@@ -662,6 +670,17 @@ export default function Reports() {
       .finally(() => setLoading(false));
   }, []);
 
+  const retryAttendance = () => {
+    setAttendanceFailed(false);
+    setData((prev) => ({ ...prev, attendance: [] }));
+    api.attendance
+      .list()
+      .then(({ data }) =>
+        setData((prev) => ({ ...prev, attendance: data || [] })),
+      )
+      .catch(() => setAttendanceFailed(true));
+  };
+
   const classStrength = useMemo(
     () =>
       (data.studentStats.byClass || []).map((item) => ({
@@ -670,27 +689,6 @@ export default function Reports() {
       })),
     [data.studentStats],
   );
-
-  const attendanceTrend = useMemo(() => {
-    const grouped = new Map();
-    data.attendance.forEach((record) => {
-      const key = monthKey(record.date);
-      const current = grouped.get(key) || {
-        total: 0,
-        present: 0,
-        date: record.date,
-      };
-      current.total += 1;
-      if (record.status === "Present") current.present += 1;
-      grouped.set(key, current);
-    });
-    return [...grouped.values()].map((item) => ({
-      month: formatMonth(item.date),
-      attendance: item.total
-        ? Math.round((item.present / item.total) * 100)
-        : 0,
-    }));
-  }, [data.attendance]);
 
   const feeTrend = useMemo(() => {
     const grouped = new Map();
@@ -880,71 +878,17 @@ export default function Reports() {
                   )}
                 </Card>
 
-                <Card title="Attendance Trend">
-                  {attendanceTrend.length === 0 ? (
-                    <p className="py-14 text-center text-[13px] text-slate-text/60">
-                      No attendance records yet
-                    </p>
-                  ) : (
-                    <ResponsiveContainer width="100%" height={260}>
-                      <AreaChart
-                        data={attendanceTrend}
-                        margin={{ left: -20, top: 5 }}
-                      >
-                        <defs>
-                          <linearGradient
-                            id="analyticsAttGrad"
-                            x1="0"
-                            y1="0"
-                            x2="0"
-                            y2="1"
-                          >
-                            <stop
-                              offset="0%"
-                              stopColor="#E8A33D"
-                              stopOpacity={0.35}
-                            />
-                            <stop
-                              offset="100%"
-                              stopColor="#E8A33D"
-                              stopOpacity={0}
-                            />
-                          </linearGradient>
-                        </defs>
-                        <CartesianGrid
-                          strokeDasharray="3 3"
-                          vertical={false}
-                          stroke="#EEEAE0"
-                        />
-                        <XAxis
-                          dataKey="month"
-                          tick={{ fontSize: 12, fill: "#475467" }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <YAxis
-                          tick={{ fontSize: 12, fill: "#475467" }}
-                          axisLine={false}
-                          tickLine={false}
-                        />
-                        <Tooltip
-                          contentStyle={{
-                            borderRadius: 10,
-                            border: "1px solid #eee",
-                            fontSize: 12.5,
-                          }}
-                        />
-                        <Area
-                          type="monotone"
-                          dataKey="attendance"
-                          stroke="#E8A33D"
-                          strokeWidth={2.5}
-                          fill="url(#analyticsAttGrad)"
-                        />
-                      </AreaChart>
-                    </ResponsiveContainer>
-                  )}
-                </Card>
+                <AttendanceTrendChart
+                  records={data.attendance}
+                  loading={loading}
+                  error={
+                    attendanceFailed
+                      ? "Attendance data could not be loaded."
+                      : ""
+                  }
+                  onRetry={retryAttendance}
+                  height={260}
+                />
               </div>
 
               <div className="grid lg:grid-cols-2 gap-5">

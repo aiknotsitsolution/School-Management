@@ -20,7 +20,7 @@ import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../../compo
 const ROLE_LABELS = {
   super_admin: "Platform Owner",
   school_admin: "School Admin",
-  class_teacher: "Class Teacher",
+  teacher: "Teacher",
   staff: "Staff",
   student: "Student",
 };
@@ -69,7 +69,6 @@ const emptyForm = () => ({
 const REF_ID_FIELDS = {
   student: { label: "Admission ID", placeholder: "Enter Admission ID", required: true },
   staff: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
-  class_teacher: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
   school_admin: { label: "Ref ID", disabled: true, placeholder: "Not required for this role" },
   super_admin: null,
 };
@@ -256,7 +255,7 @@ export default function PlatformUsers() {
         password: form.password,
         role: form.role,
         designation: form.role === "staff" ? form.designation || undefined : undefined,
-        class: form.role === "class_teacher" ? form.className || undefined : undefined,
+        class: form.role === "teacher" ? form.className || undefined : undefined,
         section: form.section || undefined,
         refId: form.refId.trim() || undefined,
       });
@@ -292,7 +291,7 @@ export default function PlatformUsers() {
   };
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <PageIntro
         eyebrow="Platform Owner · Access & Security"
         title="Users & Access"
@@ -342,7 +341,7 @@ export default function PlatformUsers() {
                   ))}
                 </Select>
               )}
-              {form.role === "class_teacher" && (
+              {form.role === "teacher" && (
                 <Input placeholder="Class" autoComplete="off" value={form.className} onChange={(e) => setForm({ ...form, className: e.target.value })} />
               )}
               {refField && (

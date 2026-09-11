@@ -7,6 +7,7 @@ import {
   Info,
   AlertCircle,
   UserCheck,
+  ClipboardList,
 } from "lucide-react";
 import {
   PageIntro,
@@ -20,6 +21,7 @@ import {
 } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
 import ProfilePhotoPicker from "../components/upload/ProfilePhotoPicker";
+import { SegmentedTabs } from "../components/Pagination";
 import { api } from "../lib/api";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import OnboardedStudentsSection from "../components/onboard/OnboardedStudentsSection";
@@ -48,6 +50,7 @@ const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
 const GENDER_OPTIONS = ["Male", "Female", "Other"];
 const HOUSE_OPTIONS = ["Red", "Blue", "Green", "Yellow"];
 const BLOOD_GROUP_OPTIONS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+const MEDIUM_OPTIONS = ["English", "Hindi"];
 
 const EMPTY_FORM = {
   name: "",
@@ -59,6 +62,7 @@ const EMPTY_FORM = {
   dob: "",
   house: "Red",
   bloodGroup: "O+",
+  medium: "English",
   fatherName: "",
   motherName: "",
   phone: "",
@@ -133,6 +137,8 @@ function PreviewRow({ label, value, className = "" }) {
 export default function AddStudent() {
   const { options: CLASS_OPTIONS } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
   const { options: SECTION_OPTIONS, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
+  const [tab, setTab] = useState("students");
+  const [addedCount, setAddedCount] = useState(0);
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -185,6 +191,7 @@ export default function AddStudent() {
       dob: normalizeDate(student.dob),
       house: student.house || "Red",
       bloodGroup: student.bloodGroup || "O+",
+      medium: student.medium || "English",
       fatherName: student.parentName || student.fatherName || "",
       motherName: student.motherName || "",
       phone: student.parentContact || "",
@@ -195,6 +202,7 @@ export default function AddStudent() {
     setPhotoPreview(student.photoUrl || "");
     setError("");
     setOnboardingStudent(student);
+    setTab("form");
     window.setTimeout(
       () => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
       80,
@@ -237,6 +245,7 @@ export default function AddStudent() {
         dob: form.dob || undefined,
         house: form.house,
         bloodGroup: form.bloodGroup,
+        medium: form.medium,
         fatherName: form.fatherName.trim() || undefined,
         motherName: form.motherName.trim() || undefined,
         phone: form.phone.trim(),
@@ -256,6 +265,7 @@ export default function AddStudent() {
           dob: payload.dob,
           house: payload.house,
           bloodGroup: payload.bloodGroup,
+          medium: payload.medium,
           parentName: payload.fatherName,
           parentContact: payload.phone,
           parentEmail: payload.email,
@@ -282,12 +292,8 @@ export default function AddStudent() {
       <PageIntro
         eyebrow="Academics"
         title="Onboard Student"
-        description="Register a new student or complete onboarding for students added via Users & Access, then issue their ID card."
-        right={
-          <Button variant="outline" onClick={resetForm}>
-            <X size={15} /> Reset Form
-          </Button>
-        }
+        description="New students added via Users & Access are listed in the first tab — start onboarding to pre-fill their profile, or use the Onboarding Form to register a new student directly. Once the mandatory fields are complete, issue their ID card."
+        descriptionClassName="max-w-none"
       />
 
       {error && (
@@ -297,6 +303,25 @@ export default function AddStudent() {
         </div>
       )}
 
+      <SegmentedTabs
+        tabs={[
+          { id: "students", label: "Students Added via User & Access", icon: UserCheck, count: addedCount },
+          { id: "form", label: "Onboarding Form", icon: ClipboardList },
+        ]}
+        active={tab}
+        onChange={setTab}
+      />
+
+      {tab === "students" && (
+        <OnboardedStudentsSection
+          onOnboardNow={startOnboarding}
+          reloadToken={reloadToken}
+          onTotalChange={setAddedCount}
+        />
+      )}
+
+      {tab === "form" && (
+        <>
       {onboardingStudent && (
         <div className="flex items-center justify-between gap-3 rounded-xl bg-info/10 border border-info/25 px-4 py-3 text-[13px] text-info">
           <p className="flex items-center gap-2">
@@ -309,8 +334,6 @@ export default function AddStudent() {
           </Button>
         </div>
       )}
-
-      <OnboardedStudentsSection onOnboardNow={startOnboarding} reloadToken={reloadToken} />
 
       <form
         ref={formRef}
@@ -435,6 +458,19 @@ export default function AddStudent() {
                 ))}
               </Select>
             </Field>
+
+            <Field label="Medium">
+              <Select
+                value={form.medium}
+                onChange={(e) => update("medium", e.target.value)}
+              >
+                {MEDIUM_OPTIONS.map((m) => (
+                  <option key={m} value={m}>
+                    {m}
+                  </option>
+                ))}
+              </Select>
+            </Field>
           </div>
         </Card>
 
@@ -540,6 +576,7 @@ export default function AddStudent() {
                 <PreviewRow label="Gender" value={form.gender} />
                 <PreviewRow label="Date of Birth" value={formatDate(form.dob)} />
                 <PreviewRow label="Blood Group" value={form.bloodGroup} />
+                <PreviewRow label="Medium" value={form.medium} />
                 <PreviewRow label="House" value={form.house} />
                 <PreviewRow label="Father's Name" value={form.fatherName} />
                 <PreviewRow label="Mother's Name" value={form.motherName} />
@@ -587,6 +624,8 @@ export default function AddStudent() {
             : " After adding, the student will appear in the attendance register for their class & section."}
         </p>
       </div>
+        </>
+      )}
     </div>
   );
 }

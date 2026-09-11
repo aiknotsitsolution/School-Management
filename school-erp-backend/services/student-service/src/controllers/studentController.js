@@ -2,6 +2,19 @@ const mongoose = require("mongoose");
 const Student = require("../models/Student");
 const { notifyByRefIds } = require("../utils/notify");
 const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
+const { resolveTeacherScope } = require("@school-erp/shared/src/utils/teacherScope");
+
+// Teacher access to a single student record is assignment-driven: the student's
+// class + section must be inside the teacher's active assignment union,
+// otherwise 403. Non-teachers are unaffected.
+const assertTeacherStudentAccess = async (req, student) => {
+  if (!student || req.user.role !== "teacher") return null;
+  const tscope = await resolveTeacherScope({ tenantId: req.tenantId, user: req.user });
+  if (!tscope || tscope.allScopes.length === 0 || !tscope.has(student.class, student.section)) {
+    return { status: 403, message: "You can only access students in your assigned classes and sections" };
+  }
+  return null;
+};
 
 // Neutralizes regex metacharacters in user-supplied search terms so they cannot
 // inject regex operators ($regex pattern injection) or craft catastrophic
@@ -15,7 +28,7 @@ const escapeRegex = (term) =>
 const STUDENT_EDITABLE = [
   "name", "dob", "gender", "class", "section", "rollNo", "bloodGroup",
   "address", "photoUrl", "parentName", "parentContact", "parentEmail",
-  "motherName", "house", "admissionDate", "feeCategory", "status", "admissionNo",
+  "motherName", "house", "medium", "admissionDate", "feeCategory", "status", "admissionNo",
 ];
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
@@ -286,12 +299,13 @@ const getStudentById = async (req, res) => {
     const student = await Student.findOne({
       _id: req.params.id,
       schoolId: req.tenantId,
-      ...(req.teacherScope || {}),
     });
     if (!student)
       return res
         .status(404)
         .json({ success: false, message: "Student not found" });
+    const denied = await assertTeacherStudentAccess(req, student);
+    if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
     res.json({ success: true, data: student });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -308,6 +322,8 @@ const updateStudent = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Student not found" });
+    const denied = await assertTeacherStudentAccess(req, student);
+    if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
 
     const patch = pick(req.body, STUDENT_EDITABLE);
     delete patch.schoolId;
@@ -367,6 +383,8 @@ const completeProfile = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Student not found" });
+    const denied = await assertTeacherStudentAccess(req, student);
+    if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
 
     const missing = PROFILE_REQUIRED_FIELDS.filter((f) => isEmpty(student[f]));
     if (missing.length) {
@@ -400,6 +418,8 @@ const issueIdCard = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Student not found" });
+    const denied = await assertTeacherStudentAccess(req, student);
+    if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
 
     if (student.profileStatus !== "complete") {
       return res.status(400).json({
@@ -431,7 +451,7 @@ const issueIdCard = async (req, res) => {
 
 const deleteStudent = async (req, res) => {
   try {
-    const student = await Student.findOneAndDelete({
+    const student = await Student.findOne({
       _id: req.params.id,
       schoolId: req.tenantId,
     });
@@ -439,6 +459,9 @@ const deleteStudent = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Student not found" });
+    const denied = await assertTeacherStudentAccess(req, student);
+    if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
+    await Student.deleteOne({ _id: student._id });
     res.json({ success: true, message: "Student deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

@@ -29,13 +29,19 @@ const markAttendance = async (req, res) => {
       return res.status(400).json({ success: false, message: "records array is required" });
     }
 
-    // Class-teacher writes are tied to their assigned class/section. Every
+    // Teacher writes are tied to their assigned class/section (guardClassBody
+    // already validated every record against the teacherScope union). Every
     // studentId must actually be enrolled there, or the whole submission is
     // rejected — clients do not get to nominate arbitrary classmates.
     if (req.teacherScope) {
+      const first = records.find((r) => r) || {};
       let allowed;
       try {
-        allowed = await getEnrolledStudentIds(req.tenantId, req.teacherScope.class, req.teacherScope.section);
+        allowed = await getEnrolledStudentIds(
+          req.tenantId,
+          String(first.class || "").trim() || undefined,
+          String(first.section || "").trim() || undefined,
+        );
       } catch (err) {
         return res.status(503).json({ success: false, message: err.message });
       }

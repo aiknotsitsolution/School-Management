@@ -22,7 +22,7 @@ const photoUpload = multer({
 // any record in the school, while a Staff/Teacher/Class Teacher completes only
 // their OWN record (ownership enforced by restrictToOwnStaff below).
 const gateOwnOrStaffWrite = (req, res, next) => {
-  if (["class_teacher", "teacher", "staff"].includes(req.user.role)) return next();
+  if (["teacher", "staff"].includes(req.user.role)) return next();
   return requirePermission("staff:write")(req, res, next);
 };
 
@@ -40,12 +40,12 @@ router.get(
 );
 // Own profile lookup for a Staff/Teacher/Class Teacher account. Must be
 // declared before /:id.
-router.get("/me", authorizeRoles("class_teacher", "teacher", "staff"), ctrl.getMyStaff);
+router.get("/me", authorizeRoles("teacher", "staff"), ctrl.getMyStaff);
 
 // Photo upload — a staff/teacher uploads their own; admin can upload for any.
 router.post(
   "/upload-photo",
-  authorizeRoles("class_teacher", "teacher", "staff"),
+  authorizeRoles("teacher", "staff"),
   photoUpload.single("photo"),
   ctrl.uploadStaffPhoto,
 );

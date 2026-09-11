@@ -231,15 +231,15 @@ export default function Transfers() {
                 Showing {history.length === 0 ? 0 : (histSafePage - 1) * histPageSize + 1}–{Math.min(histSafePage * histPageSize, history.length)} of {history.length}
               </p>
               <div className="flex items-center gap-2">
-                <select
+                <Select
                   value={histPageSize}
                   onChange={(e) => { setHistPageSize(Number(e.target.value)); setHistPage(1); }}
-                  className="text-[12px] border border-black/[0.08] rounded-lg px-2 py-1.5 bg-paper text-ink"
+                  className="text-[12px]"
                 >
                   {[5, 10, 25, 50].map((n) => (
                     <option key={n} value={n}>{n} / page</option>
                   ))}
-                </select>
+                </Select>
                 <Button variant="outline" className="px-3 py-1.5 text-[12px]" disabled={histSafePage <= 1} onClick={() => setHistPage((p) => Math.max(1, p - 1))}>
                   Prev
                 </Button>

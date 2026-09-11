@@ -27,8 +27,8 @@ import SearchableSelect from "../components/SearchableSelect";
 
 const STATUS_OPTIONS = ["All", "Pending", "In Progress", "Completed", "Overdue"];
 const PRIORITY_OPTIONS = ["Low", "Medium", "High"];
-const ROLE_FILTER_OPTIONS = ["All", "Teacher", "Class Teacher", "Staff"];
-const ROLE_API_MAP = { Teacher: "teacher", "Class Teacher": "class_teacher", Staff: "staff" };
+const ROLE_FILTER_OPTIONS = ["All", "Teacher", "Staff"];
+const ROLE_API_MAP = { Teacher: "teacher", Staff: "staff" };
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -70,7 +70,6 @@ function emptyForm() {
 
 const ROLE_LABELS = {
   teacher: "Teacher",
-  class_teacher: "Class Teacher",
   staff: "Staff",
 };
 
@@ -96,7 +95,7 @@ export default function Homework() {
       .list()
       .then(({ data }) => {
         const list = (data || []).filter(
-          (u) => ["teacher", "class_teacher", "staff"].includes(u.role) && u.isActive !== false
+          (u) => ["teacher", "staff"].includes(u.role) && u.isActive !== false
         );
         setUsers(list);
       })

@@ -14,6 +14,7 @@ const {
   clean,
   normalizeKey,
 } = require("./master-data/index");
+const paymentGateways = require("./payment-gateways");
 
 module.exports = {
   getJwtSecret,
@@ -32,4 +33,5 @@ module.exports = {
   httpError,
   clean,
   normalizeKey,
+  paymentGateways,
 };

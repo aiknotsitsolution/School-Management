@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
   BadgeCheck,
   CalendarCheck,
@@ -8,6 +9,8 @@ import {
   UserRound,
   BriefcaseBusiness,
   ChevronRight,
+  Clock,
+  UserCog,
 } from "lucide-react";
 import { api } from "../lib/api";
 import {
@@ -46,8 +49,10 @@ function greeting() {
 
 export default function StaffDashboard() {
   const user = useSelector(selectUser);
-  const [data, setData] = useState({ staff: null, leaves: [], payroll: [] });
+  const navigate = useNavigate();
+  const [data, setData] = useState({ staff: null, leaves: [], payroll: [], attendance: [] });
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   const persona = isPersonaStaff(user) ? resolvePersona(user) : null;
 
@@ -57,19 +62,25 @@ export default function StaffDashboard() {
       api.staff.list(),
       api.leaves.list(),
       api.payroll.list(),
+      api.staff.attendance.list("limit=10"),
     ]).then((results) => {
+      const failed = results.some((r) => r.status === "rejected");
       const value = (i) => (results[i].status === "fulfilled" ? results[i].value.data : null);
       const staff = Array.isArray(value(0)) ? value(0)[0] || null : value(0) || null;
       setData({
         staff,
         leaves: value(1) || [],
         payroll: value(2) || [],
+        attendance: value(3) || [],
       });
+      if (failed && results[0].status === "rejected") {
+        setError("Some data could not be loaded. Please try again.");
+      }
       setLoading(false);
     });
   }, [persona]);
 
-  const { staff, leaves, payroll } = data;
+  const { staff, leaves, payroll, attendance } = data;
 
   const leaveCounts = useMemo(() => {
     const byStatus = { Pending: 0, Approved: 0, Rejected: 0 };
@@ -86,7 +97,7 @@ export default function StaffDashboard() {
           <p className="text-[13px] text-slate-text/70 mt-1 mb-6">
             Your role has a dedicated workspace. Opening it now…
           </p>
-          <Button variant="amber" onClick={() => (window.location.href = persona.landing)}>
+          <Button variant="amber" onClick={() => navigate(persona.landing)}>
             Open {persona.label} Workspace <ChevronRight size={15} />
           </Button>
         </div>
@@ -110,11 +121,26 @@ export default function StaffDashboard() {
             : "Your profile, leave applications and salary at a glance."
         }
         right={
-          <Button variant="outline" onClick={() => (window.location.href = "/leave")}>
-            <CalendarClock size={15} /> Apply for Leave
-          </Button>
+          <div className="flex gap-2">
+            <Link to="/staff/my-attendance">
+              <Button variant="outline">
+                <Clock size={15} /> My Attendance
+              </Button>
+            </Link>
+            <Link to="/leave">
+              <Button variant="outline">
+                <CalendarClock size={15} /> Apply for Leave
+              </Button>
+            </Link>
+          </div>
         }
       />
+
+      {error && (
+        <Card>
+          <p className="text-sm text-alert">{error}</p>
+        </Card>
+      )}
 
       {/* Hero */}
       <div className="relative rounded-2xl overflow-hidden bg-ink">
@@ -263,6 +289,62 @@ export default function StaffDashboard() {
           </p>
         )}
       </Card>
+
+      <div className="grid lg:grid-cols-2 gap-5">
+        <Card
+          title="My Recent Attendance"
+          action={
+            <Link to="/staff/my-attendance" className="text-[12px] font-semibold text-info flex items-center gap-1">
+              View all <ChevronRight size={13} />
+            </Link>
+          }
+        >
+          {attendance.length === 0 ? (
+            <p className="text-[13px] text-slate-text py-6 text-center">No attendance records yet.</p>
+          ) : (
+            <div className="space-y-2.5">
+              {attendance.slice(0, 5).map((a) => (
+                <div key={a._id} className="flex items-center justify-between gap-3 py-2 border-b border-black/[0.06] last:border-0 last:pb-0">
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    <div className="w-8 h-8 rounded-lg bg-info/10 text-info flex items-center justify-center shrink-0">
+                      <Clock size={15} />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="text-[12.5px] font-semibold text-ink">{fmtDate(a.date)}</p>
+                      {a.checkIn && (
+                        <p className="text-[11px] text-slate-text/60">In: {a.checkIn}{a.checkOut ? ` · Out: ${a.checkOut}` : ""}</p>
+                      )}
+                    </div>
+                  </div>
+                  <Pill tone={statusTone(a.status)}>{a.status}</Pill>
+                </div>
+              ))}
+            </div>
+          )}
+        </Card>
+
+        <Card title="Quick Actions" action={<UserCog size={16} className="text-slate-text/50" />}>
+          <div className="space-y-2.5">
+            {[
+              { to: "/leave", icon: CalendarClock, label: "Apply for Leave" },
+              { to: "/staff/my-attendance", icon: Clock, label: "My Attendance" },
+              { to: "/staff/profile", icon: UserCog, label: "My Profile" },
+            ].map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-amber/5 transition-colors border-b border-black/[0.06] last:border-0 last:pb-0"
+              >
+                <div className="w-8 h-8 rounded-lg bg-amber/12 text-amber-dark flex items-center justify-center shrink-0">
+                  <item.icon size={15} />
+                </div>
+                <span className="text-[13px] font-semibold text-ink">{item.label}</span>
+                <ChevronRight size={14} className="ml-auto text-slate-text/40" />
+              </Link>
+            ))}
+          </div>
+        </Card>
+      </div>
     </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { Select } from "./UI";
 
 // Reusable lightweight pagination bar for dashboard widgets.
 // Matches the dashboard card aesthetic (border-black/[0.06] dividers,
@@ -29,9 +30,8 @@ export function DashboardPagination({
       </p>
       <div className="flex items-center gap-2">
         {showSizeSelector && (
-          <select
+          <Select
             aria-label="Items per page"
-            className="px-2 py-1.5 rounded-lg border border-black/10 text-[12px] outline-none bg-white focus:border-ink/40"
             value={pageSize}
             onChange={(e) => onPageSizeChange?.(Number(e.target.value))}
           >
@@ -40,7 +40,7 @@ export function DashboardPagination({
                 {size} per page
               </option>
             ))}
-          </select>
+          </Select>
         )}
         <button
           type="button"

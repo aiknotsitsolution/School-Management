@@ -4,6 +4,7 @@ const crypto = require("crypto");
 const User = require("../models/User");
 const School = require("../models/School");
 const OtpToken = require("../models/OtpToken");
+const PaymentGateway = require("../models/PaymentGateway");
 const { validatePassword } = require("../utils/password");
 const { sendEmail } = require("../utils/email");
 const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
@@ -12,8 +13,11 @@ const { generateAccessToken, generateRefreshToken } = require("../utils/generate
 const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const { writeAudit } = require("../utils/audit");
 
-const VALID_ROLES = ["super_admin", "school_admin", "class_teacher", "teacher", "staff", "student"];
-const SCHOOL_ADMIN_CREATABLE = ["class_teacher", "teacher", "staff", "student"];
+const VALID_ROLES = ["super_admin", "school_admin", "teacher", "staff", "student"];
+// School admins create tenant-level accounts. "class_teacher" is not creatable:
+// a Class Teacher is a TeacherAssignment responsibility, assigned by the school
+// admin through the assignment-manager, not a User role.
+const SCHOOL_ADMIN_CREATABLE = ["teacher", "staff", "student"];
 
 // Failure responses never dump raw error/debug text (stack traces, DB paths,
 // index/duplicate details) to the client. Details go to the server log only.
@@ -92,18 +96,16 @@ const studentExistsFor = async (schoolId, admissionNo) => {
 };
 
 // ---------------------------------------------------------------------------
-// Staff/Teacher/Class Teacher linking — the shared "Register User" flow for
-// person records. A person record must ALREADY exist (created from the
-// Teachers & Staff page, manual Staff ID); Register User only links to it,
-// it NEVER fabricates one. The stored user.refId is the linked Staff._id
-// (keeps every staff-scoped lookup in the fleet — attendance, leaves, teacher
-// assignments, /me — consistent), while the submitted Staff ID (employeeId)
-// is the discovery key.
+// Teacher/Staff linking — the shared "Register User" flow for person records.
+// A person record must ALREADY exist (created from the Teachers & Staff page,
+// manual Staff ID); Register User only links to it, it NEVER fabricates one.
+// The stored user.refId is the linked Staff._id (keeps every staff-scoped
+// lookup in the fleet — attendance, leaves, teacher assignments, /me —
+// consistent), while the submitted Staff ID (employeeId) is the discovery key.
 // ---------------------------------------------------------------------------
-const STAFF_LINK_ROLES = ["teacher", "class_teacher", "staff"];
+const STAFF_LINK_ROLES = ["teacher", "staff"];
 const STAFF_LINK_OK = {
   teacher: ["teacher"],
-  class_teacher: ["teacher"],
   staff: ["admin-staff", "support"],
 };
 
@@ -206,12 +208,9 @@ const createUser = async (req, res) => {
     if (role === "staff" && !designation) {
       return res.status(400).json({ success: false, message: "designation is required for staff role" });
     }
-    if (role === "class_teacher" && !cls) {
-      return res.status(400).json({ success: false, message: "class is required for class_teacher role" });
-    }
-    // A plain "teacher" account's class/section is an optional PRIMARY teaching
-    // scope used by teaching modules (timetable, attendance, homework, marks).
-    // Full multi-class scope lives in TeacherAssignment records.
+    // A teacher account's class/section is an optional PRIMARY teaching scope.
+    // Full multi-class scope lives in TeacherAssignment records
+    // (type="teaching" | "class_teacher").
 
     const admissionId = role === "student" ? String(refId || "").trim() : null;
     if (role === "student" && !admissionId) {
@@ -249,7 +248,7 @@ const createUser = async (req, res) => {
       });
     }
 
-    // Staff/Teacher/Class Teacher accounts link to a person record created from
+    // Teacher/Staff accounts link to a person record created from
     // the Teachers & Staff page (Staff ID is entered manually on that page —
     // never generated). A nonexistent / already-linked / wrong-role Staff ID is
     // rejected up-front so no account is created for a record that cannot be
@@ -1035,6 +1034,13 @@ const createSchool = async (req, res) => {
     if (existing) return res.status(409).json({ success: false, message: "School code already exists" });
 
     const school = await School.create({ name, code: codeSlug, shortName, address, city, phone, email, logo, session, plan, status });
+    // Every school starts on the platform-hosted gateway (best-effort; the
+    // startup backfill covers any failure here).
+    try {
+      await PaymentGateway.create({ schoolId: school._id, mode: "platform", status: "active" });
+    } catch (gwErr) {
+      console.error("[auth] gateway seed failed for " + codeSlug + ":", gwErr.message);
+    }
     await writeAudit({ req, user: req.user, action: "school.created", targetType: "school", targetId: school._id, message: `Created school ${name} (${codeSlug})` });
     res.status(201).json({ success: true, message: "School created successfully", data: school });
   } catch (err) {

@@ -6,33 +6,39 @@
 import { useSelector } from "react-redux";
 import { selectUser } from "../store/selectors";
 
-const legacyRole = (role) =>
-  ({ admin: "school_admin", teacher: "class_teacher", parent: "student" })[
-    role
-  ] || role;
+const legacyRole = (role) => (role === "admin" ? "school_admin" : role);
+
+// Kept in sync with the backend TEACHING_PERMISSIONS bundle.
+const TEACHING_PERMISSIONS = [
+  "dashboard:view", "staff:read", "students:read", "attendance:read",
+  "attendance:mark",
+  "timetable:read", "timetable:write", "homework:read", "homework:write",
+  "exams:read", "marks:read", "notices:read", "leaves:apply", "payroll:view",
+  "promotion:read", "transfer:read", "rollover:read",
+];
 
 const STAFF_PERMISSIONS = {
   admission_counsellor: [
     "dashboard:view", "staff:read", "students:read", "students:write",
     "admissions:read", "admissions:write", "enquiries:read", "enquiries:write",
-    "notices:read", "leaves:apply",
+    "notices:read", "leaves:apply", "payroll:view",
   ],
   accountant: [
     "dashboard:view", "staff:read", "students:read", "fees:read", "fees:collect",
-    "fees:structure", "fees:reports", "reports:view", "leaves:apply",
+    "fees:structure", "fees:reports", "reports:view", "leaves:apply", "payroll:view",
   ],
   librarian: [
     "dashboard:view", "staff:read", "students:read", "library:read",
-    "library:manage", "library:notify", "leaves:apply",
+    "library:manage", "library:notify", "leaves:apply", "payroll:view",
   ],
   receptionist: [
     "dashboard:view", "staff:read", "students:read", "admissions:read",
     "admissions:write", "enquiries:read", "enquiries:write", "notices:read",
-    "leaves:apply",
+    "leaves:apply", "payroll:view",
   ],
   transport: [
     "dashboard:view", "staff:read", "students:read", "transport:read",
-    "transport:update", "leaves:apply",
+    "transport:update", "leaves:apply", "payroll:view",
   ],
 };
 
@@ -51,25 +57,12 @@ const ROLE_PERMISSIONS = {
     "transport:read", "transport:update", "inventory:read", "inventory:write",
     "payroll:view", "payroll:admin", "leaves:apply", "leaves:approve",
     "hostel:read", "hostel:manage", "users:manage", "school:settings",
-    "sessions:read", "sessions:write",
+    "payments:settings", "sessions:read", "sessions:write",
     "promotion:read", "promotion:write", "transfer:read", "transfer:write",
     "rollover:read", "rollover:write",
   ],
-  class_teacher: [
-    "dashboard:view", "staff:read", "students:read", "attendance:read",
-    "attendance:mark",
-    "timetable:read", "timetable:write", "homework:read", "homework:write",
-    "exams:read", "marks:read", "notices:read", "leaves:apply",
-    "promotion:read", "transfer:read", "rollover:read",
-  ],
-  teacher: [
-    "dashboard:view", "staff:read", "students:read", "attendance:read",
-    "attendance:mark",
-    "timetable:read", "timetable:write", "homework:read", "homework:write",
-    "exams:read", "marks:read", "notices:read", "leaves:apply",
-    "promotion:read", "transfer:read", "rollover:read",
-  ],
-  staff: {},
+  teacher: [...TEACHING_PERMISSIONS],
+  staff: ["staff:read", "leaves:apply", "payroll:view"],
   student: [
     "dashboard:view", "attendance:read", "homework:read",
     "exams:read", "marks:read", "fees:read", "library:read", "notices:read",

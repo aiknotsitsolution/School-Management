@@ -13,7 +13,9 @@ const eventSchema = new mongoose.Schema(
     audience: [
       {
         type: String,
-        enum: ["school_admin", "class_teacher", "staff", "student", "all"],
+        // "class_teacher" is retained only as a legacy value for documents
+        // written before the role collapse; new audiences use "teacher".
+        enum: ["school_admin", "class_teacher", "teacher", "staff", "student", "all"],
         default: "all",
       },
     ],

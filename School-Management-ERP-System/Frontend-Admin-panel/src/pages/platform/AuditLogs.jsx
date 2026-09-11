@@ -77,7 +77,7 @@ export default function AuditLogs() {
   };
 
   return (
-    <div className="max-w-6xl">
+    <div className="w-full">
       <PageIntro
         eyebrow="Platform Owner · System"
         title="Audit Logs"
