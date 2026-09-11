@@ -1,4 +1,15 @@
 node_modules/
-playwright-report/
 test-results/
-tests/e2e/.sessions/
+playwright-report/
+.env
+*.log
+.DS_Store
+# Local/test/report files - do not commit
+**/test/
+**/tests/
+**/*.test.*
+**/*.spec.*
+**/*.md
+**/report/
+**/reports/
+**/report-*
