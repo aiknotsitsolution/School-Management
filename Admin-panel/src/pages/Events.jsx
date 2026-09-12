@@ -18,6 +18,7 @@ import {
   Input,
   Pill,
   StatCard,
+  toast,
 } from "../components/UI";
 import ImageDropzone from "../components/upload/ImageDropzone";
 import { api } from "../lib/api";
@@ -366,7 +367,10 @@ export default function Events() {
   };
 
   const handleSave = async () => {
-    if (!form.title.trim() || !form.date) return;
+    if (!form.title.trim() || !form.date) {
+      toast("Title and date are required", "error");
+      return;
+    }
 
     let image =
       form.image || CATEGORY_IMAGES[form.category] || CATEGORY_IMAGES.Other;

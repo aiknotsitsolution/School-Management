@@ -10,8 +10,10 @@ const { sendEmail } = require("../utils/email");
 const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 const { generateAccessToken, generateRefreshToken } = require("../utils/generateToken");
+const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
 const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const { writeAudit } = require("../utils/audit");
+const { resolveCurrentSessionInfo, deriveSessionName } = require("./academicSessionController");
 
 const VALID_ROLES = ["super_admin", "school_admin", "teacher", "staff", "student"];
 // School admins create tenant-level accounts. "class_teacher" is not creatable:
@@ -43,7 +45,6 @@ const SCHOOL_EDITABLE_FIELDS = [
   "logo",
   "website",
   "domain",
-  "session",
   "plan",
   "status",
 ];
@@ -184,6 +185,12 @@ const createUser = async (req, res) => {
 
     if (!name || !email || !password || !role) {
       return res.status(400).json({ success: false, message: "name, email, password and role are required" });
+    }
+    if (!EMAIL_RE.test(String(email || "").trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid email address" });
+    }
+    if (phone !== undefined && String(phone).trim() !== "" && !PHONE_RE.test(String(phone).trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
     }
     const passErr = validatePassword(password);
     if (passErr) return res.status(400).json({ success: false, message: passErr });
@@ -353,7 +360,9 @@ const createUser = async (req, res) => {
 const login = async (req, res) => {
   try {
     const { email, password } = req.body;
-    if (!email || !password) return res.status(400).json({ success: false, message: "email and password are required" });
+    if (typeof email !== "string" || !String(email).trim() || typeof password !== "string" || !password) {
+      return res.status(400).json({ success: false, message: "email and password are required" });
+    }
 
     const user = await User.findOne({ email }).select("+password");
     if (!user || !user.isActive) return res.status(401).json({ success: false, message: "Invalid credentials" });
@@ -375,6 +384,7 @@ const login = async (req, res) => {
 
     const accessToken = generateAccessToken(user);
     const refreshToken = generateRefreshToken(user);
+    const currentSession = school ? await resolveCurrentSessionInfo(school._id) : null;
 
     res.json({
       success: true,
@@ -384,7 +394,7 @@ const login = async (req, res) => {
         refreshToken,
         user: toPublicUser(user),
         school: school
-          ? { id: school._id, name: school.name, code: school.code, shortName: school.shortName, logo: school.logo, session: school.session, plan: school.plan, status: school.status, city: school.city, state: school.state, pincode: school.pincode }
+          ? { id: school._id, name: school.name, code: school.code, shortName: school.shortName, logo: school.logo, session: school.session, currentSession, academicConfigConfirmed: Boolean(school.academicConfigConfirmed), plan: school.plan, status: school.status, city: school.city, state: school.state, pincode: school.pincode, settings: school.settings || {} }
           : null,
       },
     });
@@ -422,7 +432,15 @@ const getMe = async (req, res) => {
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
     let school = null;
-    if (user.schoolId) school = await School.findById(user.schoolId).select("name code shortName city state pincode logo session plan status").lean();
+    if (user.schoolId) {
+      const doc = await School.findById(user.schoolId)
+        .select("name code shortName city state pincode logo session plan status settings")
+        .lean();
+      if (doc) {
+        const currentSession = await resolveCurrentSessionInfo(doc._id);
+        school = { id: doc._id, name: doc.name, code: doc.code, shortName: doc.shortName, logo: doc.logo, session: doc.session, currentSession, academicConfigConfirmed: Boolean(doc.academicConfigConfirmed), plan: doc.plan, status: doc.status, city: doc.city, state: doc.state, pincode: doc.pincode, settings: doc.settings || {} };
+      }
+    }
 
     res.json({ success: true, data: { user: toPublicUser(user), school } });
   } catch (err) {
@@ -474,6 +492,10 @@ const uploadUserPhoto = async (req, res) => {
   try {
     if (!req.file)
       return res.status(400).json({ success: false, message: "Photo file is required" });
+    const uploadErr = assertAllowedUpload(req.file);
+    if (uploadErr) {
+      return res.status(400).json({ success: false, message: uploadErr });
+    }
     const imagekit = require("@school-erp/shared/src/config/imagekit");
     if (!imagekit)
       return res.status(503).json({ success: false, message: "Image provider is not configured" });
@@ -611,6 +633,9 @@ const updateUser = async (req, res) => {
     if (designation !== undefined) target.designation = designation || null;
     if (cls !== undefined) target.class = cls || null;
     if (section !== undefined) target.section = section || null;
+    if (phone !== undefined && phone && !PHONE_RE.test(String(phone).trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
+    }
     if (phone !== undefined) target.phone = phone || null;
     if (target.role === "student") {
       const newRef = refId !== undefined ? String(refId || "").trim() : (target.refId || "");
@@ -1043,7 +1068,7 @@ const PINCODE_RE = /^[1-9][0-9]{5}$/;
 
 const createSchool = async (req, res) => {
   try {
-    const { name, code, shortName, address, city, state, pincode, phone, email, logo, session, plan, status } = req.body;
+    const { name, code, shortName, address, city, state, pincode, phone, email, logo, session, sessionStart, sessionEnd, plan, status } = req.body;
     if (!name || !code) return res.status(400).json({ success: false, message: "name and code are required" });
 
     // --- Field validation ---
@@ -1092,31 +1117,46 @@ const createSchool = async (req, res) => {
       const now = new Date();
       const currentYear = now.getFullYear();
 
-      // Parse session string into start/end dates
-      // Supported formats: "2026-2027", "2026-27", "2026"
-      let sessionName, startDate, endDate;
-      const fullRangeMatch = rawSession.match(/(\d{4})\s*[-–]\s*(\d{4})/);
-      const shortRangeMatch = rawSession.match(/(\d{4})\s*[-–]\s*(\d{2})$/);
+      // Explicit start/end dates (Org Profile "Academic Configuration" inputs)
+      // take priority; otherwise fall back to string inference so a bare
+      // "2026-27" / "2026" still bootstraps sensibly. Dates are never assumed
+      // to be April-March — the school configures its own calendar.
+      const parseDate = (value) => {
+        if (value === undefined || value === null || value === "") return null;
+        const d = new Date(String(value));
+        return Number.isNaN(d.getTime()) ? null : d;
+      };
+      let startDate = parseDate(sessionStart);
+      let endDate = parseDate(sessionEnd);
 
-      if (fullRangeMatch) {
-        const y1 = parseInt(fullRangeMatch[1], 10);
-        const y2 = parseInt(fullRangeMatch[2], 10);
-        sessionName = `${y1}-${y2}`;
-        startDate = new Date(`${y1}-04-01`);
-        endDate = new Date(`${y2}-03-31`);
-      } else if (shortRangeMatch) {
-        const y1 = parseInt(shortRangeMatch[1], 10);
-        const y2 = y1 + 1;
-        sessionName = `${y1}-${y2}`;
-        startDate = new Date(`${y1}-04-01`);
-        endDate = new Date(`${y2}-03-31`);
-      } else {
-        // Single year or empty — default to current academic year
-        const y = parseInt(rawSession, 10) || currentYear;
-        sessionName = `${y}-${y + 1}`;
-        startDate = new Date(`${y}-04-01`);
-        endDate = new Date(`${y + 1}-03-31`);
+      let sessionName = null;
+      if (startDate && endDate) {
+        if (endDate.getTime() <= startDate.getTime()) {
+          console.warn("[auth] invalid sessionStart/sessionEnd (end <= start); falling back to string inference");
+          startDate = null;
+          endDate = null;
+        } else {
+          sessionName = deriveSessionName(startDate, endDate);
+        }
       }
+
+      // Fallback: infer Apr->Mar window + canonical "2026-27" label from the
+      // submitted session string (also covers empty session for a default year).
+      if (!startDate || !endDate) {
+        const fullRangeMatch = rawSession.match(/(\d{4})\s*[-–]\s*(\d{4})/);
+        const shortRangeMatch = rawSession.match(/(\d{4})\s*[-–]\s*(\d{2})$/);
+        const singleYearMatch = rawSession.match(/^(\d{4})$/);
+        let y1;
+        if (fullRangeMatch) y1 = parseInt(fullRangeMatch[1], 10);
+        else if (shortRangeMatch) y1 = parseInt(shortRangeMatch[1], 10);
+        else if (singleYearMatch) y1 = parseInt(singleYearMatch[1], 10);
+        else y1 = currentYear;
+        startDate = new Date(`${y1}-04-01`);
+        endDate = new Date(`${y1 + 1}-03-31`);
+      }
+      if (!sessionName) sessionName = deriveSessionName(startDate, endDate);
+      if (!sessionName) sessionName = rawSession || `${currentYear}-${String((currentYear + 1) % 100).padStart(2, "0")}`;
+
       const existingSession = await AcademicSession.findOne({ schoolId: school._id, name: sessionName }).lean();
       if (!existingSession) {
         const academicSession = await AcademicSession.create({
@@ -1224,7 +1264,7 @@ const sanitizeLogo = (logo) => {
   if (str === "") return "";
   if (str.length > 2_000_000) return null;
   if (/^https?:\/\//i.test(str)) return str;
-  if (/^data:image\/(png|jpe?g|webp|gif|svg\+xml);base64,/.test(str)) return str;
+  if (/^data:image\/(png|jpe?g|webp|gif);base64,/.test(str)) return str;
   return null;
 };
 
@@ -1236,12 +1276,16 @@ const publicSchool = (s) =>
     name: s.name,
     code: s.code,
     shortName: s.shortName || "",
+    email: s.email || "",
+    phone: s.phone || "",
     address: s.address || "",
     city: s.city || "",
     state: s.state || "",
     pincode: s.pincode || "",
+    website: s.website || "",
     logo: s.logo || "",
     session: s.session || "",
+    academicConfigConfirmed: Boolean(s.academicConfigConfirmed),
     plan: s.plan || "trial",
     status: s.status || "active",
     settings: s.settings || {},
@@ -1254,7 +1298,8 @@ const getMySchool = async (req, res) => {
     }
     const school = await School.findById(req.tenantId).lean();
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
-    res.json({ success: true, data: publicSchool(school) });
+    const currentSession = await resolveCurrentSessionInfo(req.tenantId);
+    res.json({ success: true, data: { ...publicSchool(school), currentSession } });
   } catch (err) {
     return unexpectedError(res, err);
   }
@@ -1319,6 +1364,13 @@ const updateMySchool = async (req, res) => {
       }
       set.logo = logo;
     }
+    if (req.body.website !== undefined) {
+      const ws = String(req.body.website).trim();
+      if (ws && !/^https?:\/\/.+/i.test(ws)) {
+        return res.status(400).json({ success: false, message: "Please enter a valid website URL (https://...)" });
+      }
+      set.website = ws;
+    }
 
     const rc = req.body.reportCard;
     if (rc && typeof rc === "object") {
@@ -1353,6 +1405,17 @@ const updateMySchool = async (req, res) => {
           set[path] = String(idc[key] ?? "").trim();
         }
       }
+    }
+
+    if (req.body.bannerImage !== undefined) {
+      const banner = sanitizeLogo(req.body.bannerImage);
+      if (banner === null) {
+        return res.status(400).json({
+          success: false,
+          message: "Banner image must be an image URL or an uploaded image (max 2MB)",
+        });
+      }
+      set["settings.bannerImage"] = banner;
     }
 
     if (Object.keys(set).length) {

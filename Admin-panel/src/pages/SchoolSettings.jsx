@@ -5,6 +5,7 @@ import { PageIntro, Card, Button, Input, Pill, toast } from "../components/UI";
 import { selectSchool, selectUser } from "../store/selectors";
 import { setSchool as setSchoolAction } from "../store/authSlice";
 import { hasPermission } from "../lib/permissions";
+import { sessionLabel } from "../lib/session";
 import { api } from "../lib/api";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -166,7 +167,7 @@ export default function SchoolSettings() {
                   Session
                 </label>
                 <div className="flex items-center h-[38px]">
-                  <Pill tone="neutral">{school?.session || "—"}</Pill>
+                  <Pill tone="neutral">{sessionLabel(school) || "—"}</Pill>
                 </div>
               </div>
             </div>

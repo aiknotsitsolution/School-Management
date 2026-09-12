@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { sessionLabel } from "../../lib/session";
 
 const ACCENT_RE = /^#[0-9a-fA-F]{6}$/;
 
@@ -92,7 +93,7 @@ export function idCardMarkup({ student, school }) {
   const s = idCardSettings(school);
   const schoolName = school?.name || "Zipschool OS";
   const shortName = school?.shortName || "SCHOOL";
-  const session = school?.session || String(new Date().getFullYear());
+  const session = sessionLabel(school) || String(new Date().getFullYear());
   const idNumber = student.idCardNumber || "—";
   const issuedDate = formatDate(student.idCardIssuedAt);
   const guardian =

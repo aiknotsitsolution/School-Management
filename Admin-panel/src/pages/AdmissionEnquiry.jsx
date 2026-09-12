@@ -88,7 +88,7 @@ const SOURCE_OPTIONS = [
 const backendStatus = {
   New: "New",
   Contacted: "Contacted",
-  "Campus Visit Scheduled": "Contacted",
+  "Campus Visit Scheduled": "Campus Visit Scheduled",
   "Admission Confirmed": "Admitted",
   Declined: "Rejected",
 };
@@ -133,6 +133,7 @@ function emptyForm() {
     parentName: "",
     classApplied: "Class 1",
     contact: "",
+    studentEmail: "",
     date: new Date().toISOString().slice(0, 10),
     source: "Website",
     status: "New",
@@ -161,12 +162,6 @@ function validateForm(form) {
   const contact = form.contact.trim();
   if (!contact) errors.contact = "Contact is required";
   else if (!PHONE_RE.test(contact)) errors.contact = "Enter a valid 10-digit phone number";
-
-  if (form.date) {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (new Date(form.date) > today) errors.date = "Enquiry date cannot be in the future";
-  }
 
   if (form.followUp && form.date && form.followUp < form.date) {
     errors.followUp = "Follow-up date cannot be before the enquiry date";
@@ -277,6 +272,7 @@ export default function AdmissionEnquiry() {
       parentName: item.parentName,
       classApplied: item.classApplied,
       contact: item.contact,
+      studentEmail: item.email || "",
       date: item.date,
       source: item.source,
       status: item.status,
@@ -299,6 +295,7 @@ export default function AdmissionEnquiry() {
   };
 
   const handleSave = async () => {
+    if (saving) return;
     const errors = validateForm(form);
     if (Object.keys(errors).length > 0) {
       setFormErrors(errors);
@@ -312,6 +309,7 @@ export default function AdmissionEnquiry() {
       parentName: form.parentName.trim(),
       classApplied: form.classApplied,
       contact: form.contact.trim(),
+      email: form.studentEmail.trim() || undefined,
       source: backendSource[form.source] || "Other",
       status: backendStatus[form.status] || "New",
       followUpDate: form.followUp || undefined,
@@ -338,7 +336,7 @@ export default function AdmissionEnquiry() {
       } else {
         const { data } = await api.admissions.create(payload);
         setList((prev) => [
-          { ...data, id: data._id, ...form, followUp: form.followUp || "—" },
+          { ...data, id: data._id, enquiryNo: enquiryNo(data._id), ...form, followUp: form.followUp || "—" },
           ...prev,
         ]);
       }
@@ -486,58 +484,48 @@ export default function AdmissionEnquiry() {
       {/* ========== ENQUIRY TABLE ========== */}
       <Card
         title={
-          <span className="inline-flex items-center gap-2">
-            All Enquiries
-            <span className="text-[11px] font-bold bg-paper text-slate-text px-2 py-0.5 rounded-full">
-              {filtered.length}
-            </span>
-          </span>
-        }
-        action={
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative">
-              <Search
-                size={14}
-                className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/40"
-              />
-              <Input
-                placeholder="Search child, parent, ID..."
-                value={query}
-                onChange={(e) => setQuery(e.target.value)}
-                className="pl-8 w-60"
-              />
-            </div>
-          </div>
-        }
-      >
-        {/* Status chips */}
-        <div className="flex flex-wrap items-center gap-1.5 px-5 pt-2 pb-3 border-b border-black/[0.05]">
-          <button
-            onClick={() => setStatusFilter("All")}
-            className={`px-3 py-1.5 rounded-full text-[11.5px] font-semibold transition-colors ${
-              statusFilter === "All"
-                ? "bg-ink text-white"
-                : "bg-paper text-slate-text hover:bg-slate-200"
-            }`}
-          >
-            All · {counts.total}
-          </button>
-          {STAGES.map((stage) => (
+          <div className="flex items-center gap-2 flex-wrap">
             <button
-              key={stage.key}
-              onClick={() => toggleStage(stage.key)}
-              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11.5px] font-semibold transition-colors ${
-                statusFilter === stage.key
-                  ? "bg-ink text-white"
+              onClick={() => setStatusFilter("All")}
+              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11.5px] font-semibold transition-all ${
+                statusFilter === "All"
+                  ? "bg-ink text-white shadow-sm"
                   : "bg-paper text-slate-text hover:bg-slate-200"
               }`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${stage.dot}`} />
-              {stage.label} · {counts[stage.key] || 0}
+              All · {counts.total}
             </button>
-          ))}
-        </div>
-
+            {STAGES.map((stage) => (
+              <button
+                key={stage.key}
+                onClick={() => toggleStage(stage.key)}
+                className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
+                  statusFilter === stage.key
+                    ? "bg-ink text-white shadow-sm"
+                    : "bg-paper text-slate-text hover:bg-slate-200"
+                }`}
+              >
+                <span className={`w-1.5 h-1.5 rounded-full ${stage.dot}`} />
+                {stage.label} · {counts[stage.key] || 0}
+              </button>
+            ))}
+          </div>
+        }
+        action={
+          <div className="relative">
+            <Search
+              size={14}
+              className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/40"
+            />
+            <Input
+              placeholder="Search..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-8 w-48 h-8 text-[12px]"
+            />
+          </div>
+        }
+      >
         {filtered.length === 0 ? (
           <div className="py-14 text-center">
             <UserPlus size={36} className="mx-auto text-slate-text/30 mb-3" />
@@ -553,20 +541,17 @@ export default function AdmissionEnquiry() {
           </div>
         ) : (
           <div className="overflow-x-auto -mx-5">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[12.5px]">
               <thead>
                 <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
-                  <th className="px-5 py-2.5 font-semibold">Enquiry ID</th>
-                  <th className="px-5 py-2.5 font-semibold">Child</th>
-                  <th className="px-5 py-2.5 font-semibold">Admission ID</th>
-                  <th className="px-5 py-2.5 font-semibold">Class Applied</th>
-                  <th className="px-5 py-2.5 font-semibold">Contact</th>
-                  <th className="px-5 py-2.5 font-semibold">Source</th>
-                  <th className="px-5 py-2.5 font-semibold">Follow-up</th>
-                  <th className="px-5 py-2.5 font-semibold">Status</th>
-                  <th className="px-5 py-2.5 font-semibold text-right">
-                    Actions
-                  </th>
+                  <th className="px-4 py-2.5 font-semibold">ID</th>
+                  <th className="px-4 py-2.5 font-semibold">Child / Parent</th>
+                  <th className="px-4 py-2.5 font-semibold">Class</th>
+                  <th className="px-4 py-2.5 font-semibold">Contact</th>
+                  <th className="px-4 py-2.5 font-semibold">Source</th>
+                  <th className="px-4 py-2.5 font-semibold">Follow-up</th>
+                  <th className="px-4 py-2.5 font-semibold">Status</th>
+                  <th className="px-4 py-2.5 font-semibold">Action</th>
                 </tr>
               </thead>
               <tbody>
@@ -576,100 +561,66 @@ export default function AdmissionEnquiry() {
                     onClick={() => setSelectedId(e.id)}
                     className="group cursor-pointer border-b border-black/[0.04] last:border-0 hover:bg-paper/60 transition-colors"
                   >
-                    <td className="px-5 py-3">
-                      <span className="font-mono text-[11.5px] font-semibold text-slate-text/80 bg-paper px-2 py-1 rounded-lg">
+                    <td className="px-4 py-2.5">
+                      <span className="font-mono text-[10.5px] font-semibold text-slate-text/70 bg-paper px-1.5 py-0.5 rounded">
                         {e.enquiryNo}
                       </span>
                     </td>
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar src={e.avatar} name={e.childName} size={36} />
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2">
+                        <Avatar src={e.avatar} name={e.childName} size={30} />
                         <div>
-                          <p className="font-semibold text-ink flex items-center gap-1.5">
-                            {e.childName}
-                            <ArrowUpRight
-                              size={13}
-                              className="text-slate-text/40 opacity-0 group-hover:opacity-100 transition-opacity"
-                            />
-                          </p>
-                          <p className="text-[11.5px] text-slate-text/55">
-                            {e.parentName}
-                          </p>
+                          <p className="font-semibold text-ink text-[12.5px] leading-tight">{e.childName}</p>
+                          <p className="text-[11px] text-slate-text/55">{e.parentName}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3">
-                      {e.admissionNo ? (
-                        <span className="font-mono text-[11.5px] font-semibold bg-amber/15 text-amber-dark px-2 py-1 rounded-lg">
-                          {e.admissionNo}
-                        </span>
-                      ) : (
-                        <span className="text-[12px] text-slate-text/40">
-                          Not assigned
-                        </span>
-                      )}
+                    <td className="px-4 py-2.5">
+                      <span className="font-medium text-ink">{e.classApplied}</span>
                     </td>
-                    <td className="px-5 py-3">
-                      <div className="flex flex-col">
-                        <span className="font-medium text-ink">
-                          {e.classApplied}
-                        </span>
-                        <span className="text-[11.5px] text-slate-text/55">
-                          {e.section ? `Section ${e.section}` : "Section —"}
-                        </span>
-                      </div>
-                    </td>
-                    <td className="px-5 py-3">
-                      <span className="inline-flex items-center gap-1.5 text-slate-text text-[12.5px] whitespace-nowrap">
-                        <Phone size={12} className="text-slate-text/50" />
+                    <td className="px-4 py-2.5">
+                      <span className="inline-flex items-center gap-1 text-slate-text text-[12px] whitespace-nowrap">
+                        <Phone size={11} className="text-slate-text/40" />
                         {e.contact}
                       </span>
                     </td>
-                    <td className="px-5 py-3">
-                      <span className="text-[11.5px] font-medium bg-slate-100 text-slate-600 px-2 py-1 rounded-full">
+                    <td className="px-4 py-2.5">
+                      <span className="text-[11px] font-medium bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full">
                         {e.source}
                       </span>
                     </td>
-                    <td className="px-5 py-3 whitespace-nowrap">
+                    <td className="px-4 py-2.5 whitespace-nowrap">
                       {e.followUp && e.followUp !== "—" ? (
-                        <span className="inline-flex items-center gap-1 text-[12.5px] text-slate-text">
-                          <Calendar size={12} className="text-slate-text/40" />
+                        <span className="inline-flex items-center gap-1 text-[12px] text-slate-text">
+                          <Calendar size={11} className="text-slate-text/40" />
                           {formatDate(e.followUp)}
                         </span>
                       ) : (
-                        <span className="text-[12px] text-slate-text/40">
-                          None
-                        </span>
+                        <span className="text-[11px] text-slate-text/35">—</span>
                       )}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-2.5 whitespace-nowrap">
                       <Pill tone={statusTone(e.status)}>{e.status}</Pill>
                     </td>
                     <td
-                      className="px-5 py-3 text-right"
+                      className="px-4 py-2.5 whitespace-nowrap"
                       onClick={(ev) => ev.stopPropagation()}
                     >
-                      <div className="inline-flex items-center gap-1.5">
-                        <select
-                          className="text-[11.5px] font-semibold border border-black/[0.1] rounded-lg px-2 py-1.5 bg-white text-ink cursor-pointer hover:border-amber/50 focus:border-amber focus:ring-1 focus:ring-amber/20 outline-none transition-colors"
-                          value={e.status}
-                          onChange={(ev) => updateStatusFromList(e.id, ev.target.value)}
+                      <div className="inline-flex items-center gap-1" onClick={(ev) => ev.stopPropagation()}>
+                        <button
+                          className="text-[11px] font-semibold border border-black/[0.1] rounded-lg px-2.5 py-1.5 bg-white text-ink cursor-pointer hover:border-amber/50 hover:bg-amber/5 transition-colors disabled:opacity-50"
+                          onClick={() => setSelectedId(e.id)}
                           disabled={updatingStatusId === e.id}
                         >
-                          {STATUS_OPTIONS.filter((s) => s !== "All").map((s) => (
-                            <option key={s} value={s}>
-                              {s}
-                            </option>
-                          ))}
-                        </select>
-                        <Button
-                          variant="outline"
-                          className="!px-3 !py-1.5"
+                          {updatingStatusId === e.id ? "Saving…" : "Update"}
+                        </button>
+                        <button
+                          className="p-1.5 rounded text-slate-text hover:bg-paper transition-colors"
                           onClick={() => openEdit(e)}
                           title="Edit enquiry"
                         >
-                          <Pencil size={13} /> Edit
-                        </Button>
+                          <Pencil size={13} />
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -1006,6 +957,18 @@ export default function AdmissionEnquiry() {
                   {formErrors.contact && (
                     <p className="text-alert text-[11.5px] mt-1">{formErrors.contact}</p>
                   )}
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Student Email
+                  </label>
+                  <Input
+                    type="email"
+                    placeholder="student@example.com"
+                    value={form.studentEmail}
+                    onChange={(e) => updateForm("studentEmail", e.target.value)}
+                  />
                 </div>
 
                 <div>

@@ -37,6 +37,7 @@ import { selectSchool, selectUser } from "../store/selectors";
 import { canSeeNavigation } from "../lib/scope";
 import { resolvePersona, isPersonaStaff } from "../lib/persona";
 import { PERSONA_NAV } from "../lib/personaNav";
+import { sessionLabel } from "../lib/session";
 
 const groups = [
   {
@@ -264,6 +265,18 @@ const groups = [
     label: "Academics",
     items: [
       {
+        to: "/addstudent",
+        icon: UserPlus,
+        label: "Onboard Student",
+        perm: "students:write",
+      },
+      {
+        to: "/students",
+        icon: Users,
+        label: "Student Database",
+        perm: "students:read",
+      },
+      {
         to: "/attendance",
         icon: CalendarCheck,
         label: "Attendance",
@@ -292,24 +305,6 @@ const groups = [
         icon: ScrollText,
         label: "Report Card",
         perm: "marks:read",
-      },
-      {
-        to: "/addstudent",
-        icon: UserPlus,
-        label: "Onboard Student",
-        perm: "students:write",
-      },
-      {
-        to: "/students",
-        icon: Users,
-        label: "Student Database",
-        perm: "students:read",
-      },
-      {
-        to: "/library",
-        icon: BookOpen,
-        label: "Library Management",
-        perm: "library:read",
       },
       {
         to: "/promotions",
@@ -357,6 +352,12 @@ const groups = [
         icon: BedDouble,
         label: "Hostel Management",
         perm: "hostel:read",
+      },
+      {
+        to: "/library",
+        icon: BookOpen,
+        label: "Library Management",
+        perm: "library:read",
       },
     ],
   },
@@ -560,8 +561,8 @@ export default function Sidebar({ open, onClose }) {
       : groups;
 
   const brandName = school?.shortName || "Zipschool OS";
-  const brandSession = school?.session
-    ? `Zipschool OS · ${school.session}`
+  const brandSession = sessionLabel(school)
+    ? `Zipschool OS · ${sessionLabel(school)}`
     : `Zipschool OS · ${new Date().getFullYear()}`;
 
   return (
@@ -579,11 +580,19 @@ export default function Sidebar({ open, onClose }) {
       >
         <div className="flex items-center justify-between px-5 h-16 border-b border-white/10 shrink-0">
           <div className="flex items-center gap-2.5">
-            <img
-              src="/ZipschoolOS-Transparent-logo.png"
-              alt=""
-              className="w-9 h-9 object-contain shrink-0"
-            />
+            {school?.logo ? (
+              <img
+                src={school.logo}
+                alt=""
+                className="w-9 h-9 rounded-lg object-contain shrink-0 bg-white/10"
+              />
+            ) : (
+              <img
+                src="/ZipschoolOS-Transparent-logo.png"
+                alt=""
+                className="w-9 h-9 object-contain shrink-0"
+              />
+            )}
             <div className="leading-tight">
               <p className="font-display font-bold text-[15px] tracking-tight">
                 {brandName}
@@ -644,7 +653,7 @@ export default function Sidebar({ open, onClose }) {
                 {school.name}
               </p>
               <p className="text-[11px] text-white/50 mt-0.5">
-                {school.code} · {school.session}
+                {school.code} · {sessionLabel(school) || "—"}
               </p>
             </div>
           )}

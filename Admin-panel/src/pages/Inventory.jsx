@@ -22,7 +22,9 @@ import {
   Select,
   Pill,
   StatCard,
+  toast,
 } from "../components/UI";
+import { isNonEmpty, isNonNegativeNumber } from "../lib/validation.js";
 const initialInventory = [];
 
 const CATEGORIES = [
@@ -142,7 +144,14 @@ export default function Inventory() {
   };
 
   const handleSave = async () => {
-    if (!form.item.trim()) return;
+    if (!isNonEmpty(form.item)) {
+      toast("Item name is required", "error");
+      return;
+    }
+    if (!isNonNegativeNumber(form.stock)) {
+      toast("Stock must be a non-negative number", "error");
+      return;
+    }
     const payload = {
       itemName: form.item.trim(),
       category: form.category,
@@ -165,7 +174,7 @@ export default function Inventory() {
       setForm(emptyForm());
       setEditId(null);
     } catch (requestError) {
-      window.alert(requestError.message);
+      toast(requestError.message, "error");
     }
   };
 
@@ -174,7 +183,7 @@ export default function Inventory() {
       await api.inventory.remove(id);
       setItems((prev) => prev.filter((item) => item.id !== id));
     } catch (requestError) {
-      window.alert(requestError.message);
+      toast(requestError.message, "error");
     }
   };
 
@@ -195,7 +204,7 @@ export default function Inventory() {
         prev.map((entry) => (entry.id === id ? updated : entry)),
       );
     } catch (requestError) {
-      window.alert(requestError.message);
+      toast(requestError.message, "error");
     }
   };
 

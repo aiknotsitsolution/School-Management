@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Check, Pencil, Plus, Power, Trash2, X, AlertTriangle } from "lucide-react";
 import { api } from "../lib/api";
+import { isNonEmpty, isNonNegativeNumber } from "../lib/validation.js";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../components/UI";
 
 const LIMIT_LABELS = {
@@ -106,6 +107,18 @@ export default function Plans() {
 
   const save = async (event) => {
     event.preventDefault();
+    if (!isNonEmpty(form.name)) {
+      toast("Plan name is required", "error");
+      return;
+    }
+    if (
+      !isNonNegativeNumber(form.price) ||
+      !isNonNegativeNumber(form.trialDays) ||
+      !isNonNegativeNumber(form.sortOrder)
+    ) {
+      toast("All plan fields must be non-negative numbers", "error");
+      return;
+    }
     const payload = parseForm(form);
     try {
       if (editing === "new") {

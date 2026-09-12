@@ -7,6 +7,7 @@ import { selectSchool } from "../store/selectors";
 import { setSchool as setSchoolAction } from "../store/authSlice";
 import { computeGrade, computePercentage } from "../lib/grading";
 import { usePermission } from "../lib/permissions";
+import { sessionLabel } from "../lib/session";
 
 const ACCENT_RE = /^#[0-9a-fA-F]{6}$/;
 const DEFAULT_ACCENT = "#E8A33D";
@@ -34,7 +35,7 @@ export default function ReportCard() {
   const schoolName = school?.name || "Zipschool OS";
   const schoolAddress = school?.address || "";
   const schoolLogo = (school?.shortName || "S").slice(0, 1).toUpperCase();
-  const session = school?.session || String(new Date().getFullYear());
+  const session = sessionLabel(school) || String(new Date().getFullYear());
   const canCustomize = usePermission("school:settings");
   const reportCardSettings = school?.settings?.reportCard || {};
   const schoolAffiliation =

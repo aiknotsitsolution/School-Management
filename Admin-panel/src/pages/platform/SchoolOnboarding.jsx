@@ -22,7 +22,8 @@ const initialForm = {
   name: "",
   code: "",
   shortName: "",
-  session: `${new Date().getFullYear()}-${new Date().getFullYear() + 1}`,
+  sessionStart: `${new Date().getFullYear()}-04-01`,
+  sessionEnd: `${new Date().getFullYear() + 1}-03-31`,
   email: "",
   phone: "",
   address: "",
@@ -67,6 +68,14 @@ export default function SchoolOnboarding() {
     }
     if (form.pincode && !/^[1-9][0-9]{5}$/.test(form.pincode.trim())) {
       toast("Please enter a valid 6-digit pincode", "error");
+      return;
+    }
+    if (!form.sessionStart || !form.sessionEnd) {
+      toast("Academic session start and end dates are required", "error");
+      return;
+    }
+    if (new Date(form.sessionEnd) <= new Date(form.sessionStart)) {
+      toast("Session end date must be after the start date", "error");
       return;
     }
     setStepIndex(1);
@@ -227,7 +236,23 @@ export default function SchoolOnboarding() {
               </p>
             </div>
             <Input placeholder="Short name" value={form.shortName} onChange={set("shortName")} />
-            <Input placeholder="Session (e.g. 2026-2027)" value={form.session} onChange={set("session")} />
+            <div className="grid sm:col-span-2 grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-[12px] font-medium text-slate-text/70 mb-1">
+                  Academic session start *
+                </label>
+                <Input type="date" value={form.sessionStart} onChange={set("sessionStart")} />
+              </div>
+              <div>
+                <label className="block text-[12px] font-medium text-slate-text/70 mb-1">
+                  Academic session end *
+                </label>
+                <Input type="date" value={form.sessionEnd} onChange={set("sessionEnd")} />
+              </div>
+            </div>
+            <p className="text-[11px] text-slate-text/60">
+              Session name (e.g. 2026-27) is derived from these dates automatically and can be adjusted later in Organisation Profile.
+            </p>
             <Input type="email" placeholder="School email" value={form.email} onChange={set("email")} />
             <Input placeholder="Phone" value={form.phone} onChange={set("phone")} />
             <Input placeholder="Address" value={form.address} onChange={set("address")} className="sm:col-span-2" />

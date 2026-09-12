@@ -225,7 +225,10 @@ export default function Examination() {
   };
 
   const handleSave = async () => {
-    if (!form.date || !form.subject) return;
+    if (!form.date || !form.subject) {
+      toast("Fill all required exam fields", "error");
+      return;
+    }
     const [startTime, endTime] = form.startTime || form.endTime
       ? [form.startTime, form.endTime]
       : [undefined, undefined];

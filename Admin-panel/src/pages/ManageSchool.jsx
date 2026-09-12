@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useRef } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   Search,
@@ -18,6 +18,7 @@ import {
   Blocks,
   Building2,
   Save,
+  Camera,
 } from "lucide-react";
 import { api } from "../lib/api";
 import {
@@ -37,6 +38,7 @@ import CustomMasterModal from "../components/CustomMasterModal";
 import { selectSchool, selectUser } from "../store/selectors";
 import { setSchool as setSchoolAction } from "../store/authSlice";
 import { hasPermission } from "../lib/permissions";
+import { sessionLabel } from "../lib/session";
 
 const TABS = [
   { key: "school-profile", label: "School Profile", singular: "School Profile", icon: Building2, kind: "school-profile" },
@@ -58,6 +60,8 @@ const PINCODE_RE = /^[1-9][0-9]{5}$/;
 
 function SchoolProfileForm({ school, user, onSave }) {
   const dispatch = useDispatch();
+  const logoInputRef = useRef(null);
+  const bannerInputRef = useRef(null);
   const [form, setForm] = useState({
     name: school?.name || "",
     shortName: school?.shortName || "",
@@ -69,6 +73,8 @@ function SchoolProfileForm({ school, user, onSave }) {
     pincode: school?.pincode || "",
   });
   const [saving, setSaving] = useState(false);
+  const [logoSaving, setLogoSaving] = useState(false);
+  const [bannerSaving, setBannerSaving] = useState(false);
 
   useEffect(() => {
     setForm({
@@ -129,8 +135,125 @@ function SchoolProfileForm({ school, user, onSave }) {
     }
   };
 
+  const handleLogoPick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type || !file.type.startsWith("image/")) {
+      toast("Please choose an image file", "error");
+      return;
+    }
+    if (file.size > 1024 * 1024) {
+      toast("Logo should be smaller than 1MB", "error");
+      return;
+    }
+    setLogoSaving(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const { data } = await api.school.update({ logo: reader.result });
+        dispatch(setSchoolAction(data));
+        localStorage.setItem("erp_school", JSON.stringify(data));
+        toast("School logo updated");
+      } catch (err) {
+        toast(err.message || "Logo upload failed", "error");
+      } finally {
+        setLogoSaving(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
+  const handleBannerPick = (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type || !file.type.startsWith("image/")) {
+      toast("Please choose an image file", "error");
+      return;
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      toast("Banner image should be smaller than 2MB", "error");
+      return;
+    }
+    setBannerSaving(true);
+    const reader = new FileReader();
+    reader.onload = async () => {
+      try {
+        const { data } = await api.school.update({ bannerImage: reader.result });
+        dispatch(setSchoolAction(data));
+        localStorage.setItem("erp_school", JSON.stringify(data));
+        toast("Dashboard banner updated");
+      } catch (err) {
+        toast(err.message || "Banner upload failed", "error");
+      } finally {
+        setBannerSaving(false);
+      }
+    };
+    reader.readAsDataURL(file);
+    e.target.value = "";
+  };
+
   return (
     <div className="space-y-5">
+      <div className="flex items-center gap-5">
+        <div className="relative group">
+          <div className="w-20 h-20 rounded-full overflow-hidden bg-ink flex items-center justify-center shrink-0">
+            {school?.logo ? (
+              <img src={school.logo} alt="School logo" className="w-full h-full object-contain" />
+            ) : (
+              <span className="text-amber text-3xl font-display font-bold">
+                {(school?.shortName || school?.name || "S").slice(0, 1).toUpperCase()}
+              </span>
+            )}
+          </div>
+          <label className="absolute inset-0 rounded-full bg-ink/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer">
+            <Camera size={18} className="text-white" />
+            <span className="text-[10px] font-semibold text-white">Change</span>
+            <input
+              ref={logoInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={handleLogoPick}
+            />
+          </label>
+        </div>
+        <div>
+          <p className="text-[12.5px] text-slate-text/60">
+            {logoSaving ? "Uploading logo…" : "Hover over the logo to change it."}
+          </p>
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[12px] font-semibold text-ink mb-1.5 block">Dashboard Banner</label>
+        <div className="relative rounded-xl overflow-hidden bg-ink group cursor-pointer" style={{ height: 140 }}>
+          <img
+            src={school?.settings?.bannerImage || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1600&h=400&q=80"}
+            alt="Dashboard banner"
+            className="absolute inset-0 w-full h-full object-cover opacity-25"
+          />
+          <div className="absolute inset-0 bg-ink/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-white">
+            <Camera size={20} />
+            <span className="text-[12px] font-semibold">
+              {bannerSaving ? "Uploading…" : "Change Banner Image"}
+            </span>
+          </div>
+          <label className="absolute inset-0 cursor-pointer">
+            <input
+              ref={bannerInputRef}
+              type="file"
+              accept="image/png,image/jpeg,image/webp"
+              className="sr-only"
+              onChange={handleBannerPick}
+            />
+          </label>
+        </div>
+        <p className="text-[11px] text-slate-text/50 mt-1">
+          {bannerSaving ? "Uploading banner…" : "This image appears as the background on the Admin Dashboard."}
+        </p>
+      </div>
+
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
           <label className="text-[12px] font-semibold text-ink mb-1.5 block">School Name</label>
@@ -148,7 +271,7 @@ function SchoolProfileForm({ school, user, onSave }) {
         <div>
           <label className="text-[12px] font-semibold text-ink mb-1.5 block">Session</label>
           <div className="flex items-center h-[38px]">
-            <Pill tone="neutral">{school?.session || "—"}</Pill>
+            <Pill tone="neutral">{sessionLabel(school) || "—"}</Pill>
           </div>
         </div>
       </div>
@@ -180,13 +303,7 @@ function SchoolProfileForm({ school, user, onSave }) {
         </div>
       </div>
 
-      <div className="flex items-center justify-between pt-2">
-        <div className="flex items-center gap-2">
-          <Building2 size={14} className="text-slate-text/50" />
-          <span className="text-[12.5px] text-slate-text/70">
-            Branding like the report-card logo lives under <span className="text-ink font-medium">Report Card</span>.
-          </span>
-        </div>
+      <div className="flex items-center justify-end pt-2">
         <Button variant="amber" onClick={save} disabled={saving}>
           <Save size={15} />
           {saving ? "Saving…" : "Save Profile"}

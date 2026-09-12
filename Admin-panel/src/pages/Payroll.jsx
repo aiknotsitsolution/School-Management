@@ -24,6 +24,7 @@ import {
   toast,
 } from "../components/UI";
 import { api } from "../lib/api";
+import { isNonEmpty, isNonNegativeNumber, isPositiveNumber } from "../lib/validation.js";
 import { selectSchool } from "../store/selectors";
 const payrollSeed = [];
 
@@ -156,7 +157,22 @@ export default function Payroll() {
   };
 
   const saveEmp = async () => {
-    if (!form.staffId || !Number(form.basic)) return;
+    if (!isNonEmpty(form.staffId)) {
+      toast("Select an employee", "error");
+      return;
+    }
+    if (!isPositiveNumber(form.basic)) {
+      toast("Basic salary must be a positive number", "error");
+      return;
+    }
+    if (!isNonNegativeNumber(form.allowances)) {
+      toast("Allowances must be a non-negative number", "error");
+      return;
+    }
+    if (!isNonNegativeNumber(form.deductions)) {
+      toast("Deductions must be a non-negative number", "error");
+      return;
+    }
     try {
       await api.payroll.create({
         staffId: form.staffId,

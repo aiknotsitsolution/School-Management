@@ -12,7 +12,6 @@ const brand = {
   shortName: "Zipschool OS",
   tagline: "School operations, connected",
   affiliation: "School Administration",
-  session: String(new Date().getFullYear()),
 };
 
 const roleHome = {
@@ -137,7 +136,7 @@ export default function Login() {
             Sign in to Zipschool OS
           </h1>
           <p className="text-slate-text text-[13.5px] mb-8">
-            Session {brand.session}
+            Sign in with your registered email address.
           </p>
 
           <form className="space-y-4" onSubmit={handleSubmit}>

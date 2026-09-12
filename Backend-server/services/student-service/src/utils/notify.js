@@ -24,4 +24,23 @@ async function notifyByRefIds({ schoolId, refIds, title, message, kind = "system
   }
 }
 
-module.exports = { notifyByRefIds };
+async function notifyByRoles({ schoolId, roles, designations = [], title, message, kind = "system", link = null }) {
+  if (!INTERNAL_KEY || !roles || roles.length === 0) return null;
+  try {
+    const res = await fetch(`${COMM_URL}/api/notifications/internal/push-by-roles`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Internal-Key": INTERNAL_KEY,
+      },
+      body: JSON.stringify({ schoolId: String(schoolId || ""), roles, designations, title, message, kind, link }),
+    });
+    if (!res.ok) throw new Error(`[notify-roles] ${res.status} ${await res.text()}`);
+    return await res.json();
+  } catch (err) {
+    console.error("[notification push-by-roles skipped]", err.message);
+    return null;
+  }
+}
+
+module.exports = { notifyByRefIds, notifyByRoles };

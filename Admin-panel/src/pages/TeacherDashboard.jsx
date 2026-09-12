@@ -22,6 +22,7 @@ import {
 } from "../components/UI";
 import { api } from "../lib/api";
 import { selectUser, selectSchool } from "../store/selectors";
+import { sessionLabel } from "../lib/session";
 import { useSelector } from "react-redux";
 import { todayISO, fmtDate, useTeacherContext } from "./teacher/useTeacherContext";
 import { EmptyBlock } from "../components/StateViews";
@@ -123,7 +124,7 @@ export default function TeacherDashboard() {
           {hasClassTeacher ? "No class assigned yet" : "No teaching assignment yet"}
         </p>
         <p className="text-[13px] text-slate-text">
-          Contact the school admin to assign you a class, section and subject{school?.session ? ` for session ${school.session}` : ""}.
+          Contact the school admin to assign you a class, section and subject{sessionLabel(school) ? ` for session ${sessionLabel(school)}` : ""}.
         </p>
       </div>
     );
@@ -513,7 +514,7 @@ export default function TeacherDashboard() {
             </div>
           </div>
           <div className="mt-4 pt-3 border-t border-black/[0.06] text-[11.5px] text-slate-text/50">
-            {school?.name || "School"} · Session {school?.session || "—"}
+            {school?.name || "School"} · Session {sessionLabel(school) || "—"}
           </div>
         </Card>
       </div>

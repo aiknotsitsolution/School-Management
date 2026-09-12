@@ -22,6 +22,7 @@ import {
   Pill,
   StatCard,
   statusTone,
+  toast,
 } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
 
@@ -151,7 +152,10 @@ export default function Homework() {
   };
 
   const handleSave = async () => {
-    if (!form.title.trim() || !form.dueDate || !form.assignedTo.trim()) return;
+    if (!form.title.trim() || !form.dueDate || !form.assignedTo.trim()) {
+      toast("Title, due date and audience are required", "error");
+      return;
+    }
 
     const matchedUser = users.find(
       (u) => `${u.name} (${ROLE_LABELS[u.role] || u.role})` === form.assignedTo

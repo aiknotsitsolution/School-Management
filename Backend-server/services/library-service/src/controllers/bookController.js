@@ -21,6 +21,9 @@ const addBook = async (req, res) => {
     });
     res.status(201).json({ success: true, data: book });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: "A record with these details already exists" });
+    }
     res.status(400).json({ success: false, message: err.message });
   }
 };
@@ -52,6 +55,9 @@ const updateBook = async (req, res) => {
     if (!book) return res.status(404).json({ success: false, message: "Book not found" });
     res.json({ success: true, data: book });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: "A record with these details already exists" });
+    }
     res.status(400).json({ success: false, message: err.message });
   }
 };

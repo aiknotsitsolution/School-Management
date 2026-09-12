@@ -279,12 +279,24 @@ export default function FeesCollection() {
   };
 
   const handleSave = async () => {
-    if (!form.studentId || !form.invoiceId || form.amount <= 0) return;
+    if (!form.studentId) {
+      toast("Select a student", "error");
+      return;
+    }
+    if (!form.invoiceId) {
+      toast("Select a pending invoice", "error");
+      return;
+    }
+    const amount = Number(form.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast("Enter a valid payment amount", "error");
+      return;
+    }
     setBusy(true);
     try {
       const { data } = await api.fees.payments.create({
         invoiceId: form.invoiceId,
-        amount: Number(form.amount),
+        amount,
         mode: form.mode,
         transactionId: form.transactionId.trim() || undefined,
       });
@@ -319,12 +331,21 @@ export default function FeesCollection() {
   };
 
   const handleSaveStructure = async () => {
+    const amount = Number(structureForm.amount);
     const payload = {
       ...structureForm,
-      amount: Number(structureForm.amount),
+      amount,
     };
-    if (!payload.class || !payload.feeType || !payload.amount) {
-      toast("Class, fee type and amount are required", "error");
+    if (!payload.class || !payload.feeType) {
+      toast("Class and fee type are required", "error");
+      return;
+    }
+    if (!String(payload.session || "").trim()) {
+      toast("Session is required", "error");
+      return;
+    }
+    if (!Number.isFinite(amount) || amount <= 0) {
+      toast("Amount must be a positive number", "error");
       return;
     }
     setStructureBusy(true);
@@ -371,6 +392,10 @@ export default function FeesCollection() {
   const handlePreviewInvoices = async () => {
     if (!invoiceForm.class || !invoiceForm.feeType) {
       toast("Class and fee type are required", "error");
+      return;
+    }
+    if (!String(invoiceForm.session || "").trim()) {
+      toast("Session is required", "error");
       return;
     }
     setInvoiceBusy(true);

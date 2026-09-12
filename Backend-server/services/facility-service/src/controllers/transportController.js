@@ -14,6 +14,9 @@ const createRoute = async (req, res) => {
     const route = await BusRoute.create({ ...pick(req.body, ROUTE_FIELDS), schoolId: req.tenantId });
     res.status(201).json({ success: true, data: route });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: "A record with these details already exists" });
+    }
     res.status(400).json({ success: false, message: err.message });
   }
 };

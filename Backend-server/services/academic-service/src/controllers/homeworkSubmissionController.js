@@ -3,6 +3,7 @@ const HomeworkSubmission = require("../models/HomeworkSubmission");
 const imagekit = require("@school-erp/shared/src/config/imagekit");
 const { notifyByRefIds } = require("../utils/notify");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
+const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
 
 // Neutralizes problematic characters in uploaded filenames before they reach
 // ImageKit while keeping the original name for display purposes.
@@ -54,6 +55,10 @@ const submitHomework = async (req, res) => {
     // Optional single file attachment, uploaded securely server-side via the
     // service's ImageKit configuration (never the browser).
     if (req.file) {
+      const uploadErr = assertAllowedUpload(req.file, { allowDocs: true });
+      if (uploadErr) {
+        return res.status(400).json({ success: false, message: uploadErr });
+      }
       if (!imagekit) {
         return res.status(503).json({ success: false, message: "Image provider is not configured" });
       }

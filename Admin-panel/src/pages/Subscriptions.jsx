@@ -12,6 +12,7 @@ import {
   X,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { isPositiveNumber } from "../lib/validation.js";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../components/UI";
 
 const STATUS_TONES = {
@@ -357,7 +358,14 @@ export default function Subscriptions() {
                     <Button
                       variant="outline"
                       disabled={busy}
-                      onClick={() => runAction("extendTrial", { days: Number(form.days) })}
+                      onClick={() => {
+                        const days = Number(form.days);
+                        if (!isPositiveNumber(days)) {
+                          toast("Trial days must be a positive number", "error");
+                          return;
+                        }
+                        runAction("extendTrial", { days });
+                      }}
                     >
                       <CalendarPlus size={14} /> Extend trial
                     </Button>

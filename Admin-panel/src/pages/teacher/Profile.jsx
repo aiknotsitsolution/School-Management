@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { PageIntro, Card, Avatar, Pill, Button, Input, Select, toast } from "../../components/UI";
 import { api } from "../../lib/api";
+import { sessionLabel } from "../../lib/session";
 import { useTeacherContext, fmtDate } from "./useTeacherContext";
 import TeacherIdCard, { printTeacherIdCard } from "../../components/idcard/TeacherIdCard";
 import ProfilePhotoPicker from "../../components/upload/ProfilePhotoPicker";
@@ -302,7 +303,7 @@ export default function Profile() {
       <Card>
         <p className="text-[13px] text-slate-text leading-relaxed">
           <strong className="text-ink">School:</strong> {school?.name || "—"} ·{" "}
-          {school?.code || "—"} · Session {school?.session || "—"}. To update
+          {school?.code || "—"} · Session {sessionLabel(school) || "—"}. To update
           your designation or class assignment, ask the school admin.
         </p>
       </Card>

@@ -10,6 +10,7 @@ const School = require("../models/School");
 const User = require("../models/User");
 const AuditLog = require("../models/AuditLog");
 const PlatformSetting = require("../models/PlatformSetting");
+const AcademicSession = require("../models/AcademicSession");
 const { writeAudit } = require("../utils/audit");
 const { sendEmail } = require("../utils/email");
 
@@ -1161,6 +1162,7 @@ const toSchoolJson = (raw) => ({
   state: raw.state || null,
   pincode: raw.pincode || null,
   session: raw.session || null,
+  academicConfigConfirmed: Boolean(raw.academicConfigConfirmed),
   logo: raw.logo || null,
   website: raw.website || null,
   status: raw.status,
@@ -1197,7 +1199,7 @@ const getSchool360 = async (req, res) => {
     const school = await School.findById(id).lean();
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
 
-    const [adminUsers, activeUsers, subscription, recentInvoices] = await Promise.all([
+    const [adminUsers, activeUsers, subscription, recentInvoices, currentSession] = await Promise.all([
       User.find({ schoolId: id, role: "school_admin", deletedAt: null }).select("name email lastLogin isActive").sort({ createdAt: -1 }).limit(5).lean(),
       User.countDocuments({ schoolId: id, role: { $ne: "super_admin" }, deletedAt: null }),
       Subscription.findOne({ schoolId: id, status: { $in: CURRENT_SUBSCRIPTION_STATUSES } })
@@ -1205,6 +1207,7 @@ const getSchool360 = async (req, res) => {
         .sort({ createdAt: -1 })
         .lean(),
       BillingInvoice.find({ schoolId: id }).sort({ createdAt: -1 }).limit(5).lean(),
+      AcademicSession.findOne({ schoolId: id, isCurrent: true }).select("name startDate endDate").lean(),
     ]);
 
     res.json({
@@ -1215,6 +1218,7 @@ const getSchool360 = async (req, res) => {
         activeUsers,
         subscription: subscription ? toSubscriptionJson(subscription) : null,
         recentInvoices: recentInvoices.map(toInvoiceJson),
+        currentSession,
       },
     });
   } catch (err) {
@@ -1222,7 +1226,7 @@ const getSchool360 = async (req, res) => {
   }
 };
 
-const SCHOOL_PROFILE_FIELDS = ["name", "shortName", "email", "phone", "address", "city", "state", "pincode", "session", "website", "logo"];
+const SCHOOL_PROFILE_FIELDS = ["name", "shortName", "email", "phone", "address", "city", "state", "pincode", "website", "logo"];
 
 const updateSchoolProfile = async (req, res) => {
   try {

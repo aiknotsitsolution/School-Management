@@ -5,12 +5,13 @@ const {
   verifyToken,
   resolveTenant,
   requireTenant,
+  requirePermission,
   authorizeRoles,
 } = require("../middleware/auth");
 
 router.use(verifyToken, resolveTenant, requireTenant, authorizeRoles("school_admin", "teacher", "staff"));
 
-router.post("/", ctrl.markAttendance);
+router.post("/", requirePermission("attendance:mark"), ctrl.markAttendance);
 router.get("/", ctrl.getAttendance);
 
 module.exports = router;

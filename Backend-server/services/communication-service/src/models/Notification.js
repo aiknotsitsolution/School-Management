@@ -6,7 +6,7 @@ const notificationSchema = new mongoose.Schema(
     userId: { type: String, required: true, index: true },
     title: { type: String, required: true },
     message: { type: String, default: null },
-    kind: { type: String, enum: ["notice", "leave", "payroll", "student", "staff", "homework", "exam", "profile", "event", "system"], default: "system" },
+    kind: { type: String, enum: ["notice", "leave", "payroll", "student", "staff", "homework", "exam", "profile", "event", "system", "enquiry"], default: "system" },
     link: { type: String, default: null },
     read: { type: Boolean, default: false },
   },

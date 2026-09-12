@@ -15,6 +15,11 @@ const schoolSchema = new mongoose.Schema(
     website: { type: String, trim: true },
     domain: { type: String, lowercase: true, trim: true },
     session: { type: String },
+    // Set true the first time the school admin explicitly creates or edits the
+    // current academic session (Org Profile → Academic Configuration / Academic
+    // Sessions). The onboarding auto-created session keeps this false so the
+    // admin is prompted to verify the school-year calendar once.
+    academicConfigConfirmed: { type: Boolean, default: false },
     plan: {
       type: String,
       enum: ["trial", "basic", "standard", "premium"],

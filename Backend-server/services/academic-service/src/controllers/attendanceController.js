@@ -74,13 +74,34 @@ const markAttendance = async (req, res) => {
       return res.status(400).json({ success: false, message: missingMessage(missing), missing });
     }
 
-    const ops = records.map((r) => ({
-      updateOne: {
-        filter: { schoolId: req.tenantId, studentId: r.studentId, date: new Date(r.date) },
-        update: { ...r, schoolId: req.tenantId, date: new Date(r.date), markedBy: req.user.name },
-        upsert: true,
-      },
-    }));
+    const ops = records.map((r) => {
+      // Whitelisted rebuild: record bodies are attacker input, so Mongo update
+      // operators ($set/$inc/$push/...) in a record never reach the db.
+      const studentId = String(r.studentId || "").trim();
+      const classLabel = String(r.class || "").trim();
+      const section = String(r.section || "").trim();
+      const status = String(r.status || "").trim();
+      const date = new Date(r.date);
+      const set = {
+        studentId,
+        class: classLabel,
+        section,
+        status,
+        date,
+        schoolId: req.tenantId,
+        markedBy: req.user.name,
+      };
+      if (typeof r.remarks === "string" && String(r.remarks).trim() !== "") {
+        set.remarks = String(r.remarks).slice(0, 500);
+      }
+      return {
+        updateOne: {
+          filter: { schoolId: req.tenantId, studentId, date },
+          update: { $set: set },
+          upsert: true,
+        },
+      };
+    });
     await Attendance.bulkWrite(ops);
     res.json({ success: true, message: `Attendance marked for ${records.length} student(s)` });
   } catch (err) {

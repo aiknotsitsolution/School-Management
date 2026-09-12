@@ -49,7 +49,7 @@ app.use(
   }),
 );
 app.use(morgan("dev"));
-app.use(express.json({ limit: "100kb" }));
+app.use(express.json({ limit: "5mb" }));
 
 app.get("/health", (req, res) =>
   res.json({ success: true, service: "auth-service", status: "UP" }),

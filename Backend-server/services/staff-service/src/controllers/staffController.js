@@ -2,6 +2,7 @@ const Staff = require("../models/Staff");
 const TeacherAssignment = require("../models/TeacherAssignment");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 const { pushNotifications } = require("../utils/notify");
+const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
 
 // Escapes regex metacharacters in user search terms to prevent regex
 // injection / ReDoS-style patterns; length-capped to bound scan cost.
@@ -33,6 +34,9 @@ const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
 const isEmpty = (v) => v === undefined || v === null || String(v).trim() === "";
+
+const PHONE_RE = /^[+]?[0-9\s-]{10,15}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const isDuplicateKey = (err) =>
   err && (err.code === 11000 || (err.name === "MongoServerError" && err.code === 11000));
@@ -84,6 +88,15 @@ const createStaff = async (req, res) => {
   try {
     const payload = pick(req.body, STAFF_FIELDS);
     if (payload.employeeId !== undefined) payload.employeeId = String(payload.employeeId).trim();
+    if (isEmpty(payload.name)) {
+      return res.status(400).json({ success: false, message: "Staff name is required" });
+    }
+    if (payload.email !== undefined && String(payload.email).trim() !== "" && !EMAIL_RE.test(String(payload.email).trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid email address" });
+    }
+    if (payload.contact !== undefined && String(payload.contact).trim() !== "" && !PHONE_RE.test(String(payload.contact).trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
+    }
     const staff = await Staff.create({ ...payload, schoolId: req.tenantId });
     // A fully-filled record is complete immediately (admin-driven completion)
     // and auto-issues its card.
@@ -215,6 +228,15 @@ const updateStaff = async (req, res) => {
     const allowed = selfService ? STAFF_SELF_EDITABLE : STAFF_FIELDS;
     const patch = pick(req.body, allowed);
     if (patch.employeeId !== undefined) patch.employeeId = String(patch.employeeId).trim();
+    if (patch.name !== undefined && isEmpty(patch.name)) {
+      return res.status(400).json({ success: false, message: "Staff name cannot be empty" });
+    }
+    if (patch.email !== undefined && String(patch.email).trim() !== "" && !EMAIL_RE.test(String(patch.email).trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid email address" });
+    }
+    if (patch.contact !== undefined && String(patch.contact).trim() !== "" && !PHONE_RE.test(String(patch.contact).trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
+    }
 
     const staff = await Staff.findOne({ _id: req.params.id, schoolId: req.tenantId });
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
@@ -341,6 +363,10 @@ const uploadStaffPhoto = async (req, res) => {
   try {
     if (!req.file)
       return res.status(400).json({ success: false, message: "Photo file is required" });
+    const uploadErr = assertAllowedUpload(req.file);
+    if (uploadErr) {
+      return res.status(400).json({ success: false, message: uploadErr });
+    }
     const imagekit = require("@school-erp/shared/src/config/imagekit");
     if (!imagekit)
       return res.status(503).json({ success: false, message: "Image provider is not configured" });

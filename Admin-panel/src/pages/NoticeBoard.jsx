@@ -387,15 +387,17 @@ export default function NoticeBoard() {
   const handleSave = async () => {
     if (!form.title.trim() || !form.body.trim()) return;
     try {
-      if (editId) await api.notices.remove(editId);
-      const { data } = await api.notices.create({
+      const payload = {
         title: form.title.trim(),
         description: form.body.trim(),
         category: form.category,
         pinned: form.pinned,
         audience: resolveAudience(form.audience),
         expiryDate: form.date,
-      });
+      };
+      const { data } = editId
+        ? await api.notices.update(editId, payload)
+        : await api.notices.create(payload);
       setNotices((prev) => [
         normalizeNotice(data),
         ...prev.filter((notice) => (notice._id || notice.id) !== editId),
@@ -413,15 +415,7 @@ export default function NoticeBoard() {
     const notice = notices.find((item) => (item._id || item.id) === id);
     if (!notice) return;
     try {
-      await api.notices.remove(id);
-      const { data } = await api.notices.create({
-        title: notice.title,
-        description: notice.body,
-        category: notice.category,
-        pinned: !notice.pinned,
-        audience: resolveAudience(notice.audience),
-        expiryDate: notice.date,
-      });
+      const { data } = await api.notices.update(id, { pinned: !notice.pinned });
       setNotices((prev) =>
         prev.map((item) =>
           (item._id || item.id) === id ? normalizeNotice(data) : item,

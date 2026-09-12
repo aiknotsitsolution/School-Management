@@ -9,6 +9,7 @@ import {
   TrendingUp,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { sessionLabel } from "../lib/session";
 import { Button, Card, Input, PageIntro, Pill, Select, StatCard, toast } from "../components/UI";
 
 const roleOptions = ["school_admin", "teacher", "staff", "student"];
@@ -228,7 +229,7 @@ export default function Platform() {
                       {school.name}
                     </p>
                     <p className="text-[11.5px] text-slate-text/70">
-                      {school.shortName || "—"} · Session {school.session || "—"}
+                      {school.shortName || "—"} · Session {sessionLabel(school) || "—"}
                     </p>
                   </div>
                   <Pill tone={school.status === "active" ? "success" : "alert"}>

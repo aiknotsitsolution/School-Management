@@ -19,7 +19,7 @@ import {
 import { api } from "../lib/api";
 import { hasPermission } from "../lib/permissions";
 import { useSelector } from "react-redux";
-import { selectUser } from "../store/selectors";
+import { selectUser, selectSchool } from "../store/selectors";
 import {
   BarChart,
   Bar,
@@ -63,6 +63,7 @@ function monthKey(value) {
 
 export default function Dashboard() {
   const user = useSelector(selectUser);
+  const school = useSelector(selectSchool);
   const [data, setData] = useState({
     studentStats: { total: 0, active: 0, byClass: [] },
     students: [],
@@ -274,12 +275,13 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       {/* Hero banner */}
-      <div className="relative rounded-2xl overflow-hidden bg-ink">
+      <div className="relative rounded-2xl overflow-hidden bg-ink min-h-[200px] sm:min-h-[240px]">
         <img
-          src="https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1600&h=400&q=80"
+          src={school?.settings?.bannerImage || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1600&h=400&q=80"}
           alt="School campus"
-          className="absolute inset-0 w-full h-full object-cover opacity-25"
+          className="absolute inset-0 w-full h-full object-cover"
         />
+        <div className="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/60 to-transparent" />
         <div className="relative z-10 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <p className="text-amber font-semibold text-[12.5px]">
@@ -327,8 +329,8 @@ export default function Dashboard() {
       {/* Quick Actions */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
         {[
-          { to: "/addstudent", icon: UserPlus, label: "Add Student", perm: "students:write" },
-          { to: "/teachers", icon: GraduationCap, label: "Add Teacher", perm: "staff:write" },
+          { to: "/users", icon: UserPlus, label: "Add Student", perm: "students:write" },
+          { to: "/teachers", icon: GraduationCap, label: "Add Staff", perm: "staff:write" },
           { to: "/fees-collection", icon: CreditCard, label: "Fee Collection", perm: "fees:collect" },
           { to: "/notice-board", icon: Megaphone, label: "Publish Notice", perm: "notices:publish" },
           { to: "/events", icon: CalendarDays, label: "New Event", perm: "events:publish" },
@@ -337,7 +339,7 @@ export default function Dashboard() {
           .filter((item) => hasPermission(user, item.perm))
           .map((item) => (
             <Link
-              key={item.to}
+              key={item.label}
               to={item.to}
               className="flex items-center gap-2.5 rounded-xl border border-black/[0.06] bg-white px-3.5 py-3 hover:bg-amber/5 transition-colors"
             >

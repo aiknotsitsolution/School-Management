@@ -15,6 +15,9 @@ const applyLeave = async (req, res) => {
     const leave = await Leave.create({ ...pick(req.body, LEAVE_FIELDS), staffId, schoolId: req.tenantId });
     res.status(201).json({ success: true, data: leave });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: "A record with these details already exists" });
+    }
     res.status(400).json({ success: false, message: err.message });
   }
 };

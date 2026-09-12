@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { PageIntro, Card, Avatar, Pill, toast } from "../../components/UI";
 import { api } from "../../lib/api";
+import { sessionLabel } from "../../lib/session";
 import { setUser } from "../../store/authSlice";
 import useStudentContext, { fmtDate } from "./useStudentContext";
 import ProfilePhotoPicker from "../../components/upload/ProfilePhotoPicker";
@@ -112,7 +113,7 @@ export default function Profile() {
       <Card>
         <p className="text-[13px] text-slate-text leading-relaxed">
           <strong className="text-ink">School:</strong> {school?.name || "—"} ·{" "}
-          {school?.code || "—"} · Session {school?.session || "—"}. Click the
+          {school?.code || "—"} · Session {sessionLabel(school) || "—"}. Click the
           photo above to upload your profile picture. To update personal details,
           contact the school office.
         </p>

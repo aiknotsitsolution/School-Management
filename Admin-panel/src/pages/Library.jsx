@@ -30,6 +30,7 @@ import CustomMasterModal from "../components/CustomMasterModal";
 import { invalidateMasterCache } from "../lib/masterCache";
 import { api } from "../lib/api";
 import { hasPermission } from "../lib/permissions";
+import { isNonEmpty, isPositiveNumber } from "../lib/validation.js";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import SearchableSelect from "../components/SearchableSelect";
 const seed = [];
@@ -261,7 +262,14 @@ export default function Library() {
     setShowModal(true);
   };
   const saveBook = async () => {
-    if (!form.title.trim() || !form.author.trim()) return;
+    if (!isNonEmpty(form.title) || !isNonEmpty(form.author)) {
+      toast("Book title and author are required", "error");
+      return;
+    }
+    if (!isPositiveNumber(Number(form.copies)) || !Number.isInteger(Number(form.copies))) {
+      toast("Copies must be a positive integer", "error");
+      return;
+    }
     const payload = {
       title: form.title.trim(),
       author: form.author.trim(),
@@ -293,7 +301,7 @@ export default function Library() {
     try {
       await api.books.remove(id);
       setBooks((prev) => prev.filter((book) => book.id !== id));
-      toast("Book deleted", "error");
+      toast("Book deleted", "success");
     } catch (requestError) {
       toast(requestError.message, "error");
     }
@@ -301,7 +309,10 @@ export default function Library() {
 
   const issueBook = async () => {
     const book = books.find((b) => b.id === issueForm.bookId);
-    if (!book || !issueForm.studentKey) return;
+    if (!book || !isNonEmpty(issueForm.studentKey) || !isNonEmpty(issueForm.dueOn)) {
+      toast("Book, borrower and due date are required", "error");
+      return;
+    }
     const currentAvail = book.available ?? book.copies;
     if (currentAvail <= 0) {
       toast("No available copies", "error");

@@ -51,6 +51,9 @@ const PROFILE_REQUIRED_FIELDS = [
 
 const isEmpty = (v) => v === undefined || v === null || String(v).trim() === "";
 
+const PHONE_RE = /^[+]?[0-9\s-]{10,15}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 const computeProfileStatus = (doc) =>
   isEmpty(doc) || PROFILE_REQUIRED_FIELDS.some((f) => isEmpty(doc[f]))
     ? "incomplete"
@@ -61,11 +64,16 @@ const isDuplicateKey = (err) =>
 
 const uploadStudentPhoto = async (req, res) => {
   try {
-    if (!req.file)
+if (!req.file)
       return res
         .status(400)
         .json({ success: false, message: "Photo file is required" });
+    const uploadErr = assertAllowedUpload(req.file);
+    if (uploadErr) {
+      return res.status(400).json({ success: false, message: uploadErr });
+    }
     const imagekit = require("@school-erp/shared/src/config/imagekit");
+const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
     if (!imagekit) {
       return res
         .status(503)
@@ -118,8 +126,19 @@ const createStudent = async (req, res) => {
       });
     }
 
+    const studentName = String(studentData.name || "").trim();
+    if (!studentName) {
+      return res.status(400).json({ success: false, message: "Student name is required" });
+    }
+    if (email !== undefined && String(email).trim() !== "" && !EMAIL_RE.test(String(email).trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid email address" });
+    }
+    if (phone !== undefined && String(phone).trim() !== "" && !PHONE_RE.test(String(phone).trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
+    }
+
     const data = {
-      ...studentData,
+      ...pick(studentData, STUDENT_EDITABLE),
       schoolId: req.tenantId,
       admissionNo: admissionId,
       parentName: studentData.parentName || fatherName,
@@ -334,6 +353,15 @@ const updateStudent = async (req, res) => {
           .status(400)
           .json({ success: false, message: "Admission ID cannot be empty" });
       }
+    }
+    if (patch.name !== undefined && isEmpty(patch.name)) {
+      return res.status(400).json({ success: false, message: "Student name cannot be empty" });
+    }
+    if (patch.parentEmail !== undefined && String(patch.parentEmail).trim() !== "" && !EMAIL_RE.test(String(patch.parentEmail).trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid parent email address" });
+    }
+    if (patch.parentContact !== undefined && String(patch.parentContact).trim() !== "" && !PHONE_RE.test(String(patch.parentContact).trim())) {
+      return res.status(400).json({ success: false, message: "Please enter a valid parent phone number" });
     }
 
     student.set(patch);

@@ -327,9 +327,21 @@ const getMarks = async (req, res) => {
   try {
     const { examId, class: cls, section, session } = req.query;
     const filter = { schoolId: req.tenantId };
-    if (examId) filter.examId = examId;
-    if (cls) filter.class = cls;
-    if (section) filter.section = section;
+    if (req.user && req.user.role === "student") {
+      // Students are locked to their own records and only ever see published
+      // results (scopeStudentQuery mirrors the self-scoping at the route).
+      filter.studentId = String(req.user.refId || "").trim();
+      const published = await Exam.find({ schoolId: req.tenantId, status: "published" })
+        .select("_id")
+        .lean();
+      filter.examId = { $in: published.map((e) => e._id) };
+    } else {
+      // Teachers are constrained to their assignment scope; admins may filter.
+      if (req.teacherScope) filter.class = req.teacherScope.class;
+      else if (cls) filter.class = cls;
+      if (examId) filter.examId = examId;
+      if (section) filter.section = section;
+    }
     if (session) filter.session = session;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([

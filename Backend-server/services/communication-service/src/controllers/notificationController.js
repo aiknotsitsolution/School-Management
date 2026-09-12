@@ -64,11 +64,15 @@ const getNotifications = async (req, res) => {
 
 const getUnreadCount = async (req, res) => {
   try {
-    const unreadCount = await Notification.countDocuments({
+    const filter = {
       schoolId: req.tenantId,
       userId: String(req.user.id),
       read: false,
-    });
+    };
+    if (req.query.kind) {
+      filter.kind = req.query.kind;
+    }
+    const unreadCount = await Notification.countDocuments(filter);
     res.json({ success: true, unreadCount });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
@@ -166,4 +170,56 @@ const pushByRefIds = async (req, res) => {
   }
 };
 
-module.exports = { getNotifications, getUnreadCount, markAsRead, markAllRead, pushNotifications, pushByRefIds, streamNotifications };
+// [INTERNAL] Service-to-service fanout by roles. Pushes notifications to all
+// active users in a school who have one of the specified roles. Optionally
+// filter staff by designation (e.g. only admission_counsellor + receptionist).
+const pushByRoles = async (req, res) => {
+  try {
+    const { schoolId, roles = [], designations = [], title, message, kind = "system", link = null } = req.body;
+    if (!schoolId || !title || roles.length === 0) {
+      return res.status(400).json({ success: false, message: "schoolId, title and roles are required" });
+    }
+    if (!mongoose.isValidObjectId(String(schoolId))) {
+      return res.status(400).json({ success: false, message: "Invalid schoolId" });
+    }
+    const User = getUserModel();
+    let users;
+    if (roles.includes("staff") && designations.length > 0) {
+      users = await User.find(
+        {
+          schoolId,
+          isActive: true,
+          $or: [
+            { role: { $in: roles.filter((r) => r !== "staff") } },
+            { role: "staff", designation: { $in: designations } },
+          ],
+        },
+        { _id: 1 }
+      ).lean();
+    } else {
+      users = await User.find(
+        { schoolId, isActive: true, role: { $in: roles } },
+        { _id: 1 }
+      ).lean();
+    }
+    const userIds = [...new Set(users.map((u) => String(u._id)))];
+    if (userIds.length === 0) {
+      return res.json({ success: true, count: 0, data: [] });
+    }
+    const docs = userIds.map((userId) => ({
+      schoolId,
+      userId,
+      title: String(title).slice(0, 200),
+      message: message ? String(message).slice(0, 500) : null,
+      kind,
+      link,
+    }));
+    const data = await Notification.insertMany(docs);
+    data.forEach((n) => publish(schoolId, n.userId, n));
+    res.status(201).json({ success: true, count: data.length, data });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { getNotifications, getUnreadCount, markAsRead, markAllRead, pushNotifications, pushByRefIds, pushByRoles, streamNotifications };

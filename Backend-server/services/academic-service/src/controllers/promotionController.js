@@ -1,3 +1,4 @@
+const mongoose = require("mongoose");
 const StudentAcademicRecord = require("../models/StudentAcademicRecord");
 const {
   computeStudentSummary,
@@ -87,6 +88,21 @@ const commit = async (req, res) => {
     }
 
     // --- Pass 1: validate every decision (no writes yet) ---
+    // Reject missing / blank / in-batch duplicate studentIds up front.
+    // Without this, a duplicate would only be caught by the unique
+    // (schoolId, studentId, session, kind) index AFTER earlier records were
+    // already committed, leaving a partially applied promotion batch.
+    const seenStudents = new Set();
+    for (const move of decisions) {
+      const studentId = move.studentId == null ? "" : String(move.studentId).trim();
+      if (studentId === "") {
+        return res.status(400).json({ success: false, message: "Every promotion decision must include a studentId" });
+      }
+      if (seenStudents.has(studentId)) {
+        return res.status(400).json({ success: false, message: `Duplicate student ${studentId} in the promotion batch` });
+      }
+      seenStudents.add(studentId);
+    }
     for (const move of decisions) {
       if (!ACADEMIC_RECORD_STATUSES.includes(move.status)) {
         return res.status(400).json({ success: false, message: `Unknown promotion status: ${move.status}` });
@@ -172,21 +188,53 @@ const commit = async (req, res) => {
     }
 
     // --- Pass 3: apply (all validation passed above) ---
-    const results = [];
+    // Written as two bulk operations: all promotion records first, then all
+    // student updates. Records carry pre-assigned _ids so that a failure in
+    // either op can compensate (delete this batch's records) and a mid-pass
+    // failure can never leave a partially committed promotion batch.
     for (const record of records) {
-      const saved = await StudentAcademicRecord.create(record);
+      record._id = new mongoose.Types.ObjectId();
+    }
+    const plannedRecordIds = records.map((r) => r._id);
+
+    const studentOps = [];
+    for (const record of records) {
       const { student, move } = rowById[record.studentId];
+      const set = {};
       if (move.status === "Promoted" || move.status === "Promoted with Conditions") {
-        student.class = move.toClass;
-        student.section = record.toSection;
+        set.class = move.toClass;
+        set.section = record.toSection;
       }
-      if (move.status === "Transferred") student.status = "Transferred";
-      if (move.status === "Graduated") student.status = "Alumni";
-      await student.save();
-      results.push(saved);
+      if (move.status === "Transferred") set.status = "Transferred";
+      if (move.status === "Graduated") set.status = "Alumni";
+      if (Object.keys(set).length > 0) {
+        studentOps.push({
+          updateOne: {
+            filter: { schoolId: req.tenantId, admissionNo: record.studentId },
+            update: { $set: set },
+          },
+        });
+      }
     }
 
-    res.json({ success: true, count: results.length, data: results });
+    let inserted;
+    try {
+      inserted = await StudentAcademicRecord.insertMany(records, { ordered: true });
+      if (studentOps.length > 0) await Student.bulkWrite(studentOps);
+    } catch (err) {
+      // Compensating rollback: remove any records this batch already wrote so
+      // a failure mid-pass never surfaces as a partial promotion.
+      await StudentAcademicRecord.deleteMany({ _id: { $in: plannedRecordIds } }).catch(() => {});
+      if (err && err.code === 11000) {
+        return res.status(409).json({
+          success: false,
+          message: `One of the students already has a promotion record for ${fromSession}`,
+        });
+      }
+      throw err;
+    }
+
+    res.json({ success: true, count: inserted.length, data: inserted });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message });
   }

@@ -10,7 +10,7 @@ router.use(verifyToken, resolveTenant);
 
 router.post("/push", requireTenant, requirePermission("notices:publish"), ctrl.pushNotifications);
 router.get("/", requireTenant, ctrl.getNotifications);
-router.get("/stream", ctrl.streamNotifications);
+router.get("/stream", requireTenant, ctrl.streamNotifications);
 router.get("/unread-count", requireTenant, ctrl.getUnreadCount);
 router.patch("/read-all", requireTenant, ctrl.markAllRead);
 router.patch("/:id/read", requireTenant, ctrl.markAsRead);

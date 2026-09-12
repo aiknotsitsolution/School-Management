@@ -8,6 +8,7 @@ const userSchema = new mongoose.Schema(
     schoolId: { type: mongoose.Schema.Types.ObjectId, index: true },
     refId: { type: String, index: true },
     role: { type: String, index: true },
+    designation: { type: String, default: null },
     isActive: { type: Boolean, default: true },
   },
   { strict: true }

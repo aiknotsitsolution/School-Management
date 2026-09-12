@@ -1,6 +1,7 @@
 const StudentDocument = require("../models/StudentDocument");
 const imagekit = require("@school-erp/shared/src/config/imagekit");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
+const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
 
 const sanitizeFileName = (name = "") =>
   name.replace(/[^a-zA-Z0-9._-]/g, "-").slice(0, 100);
@@ -11,6 +12,10 @@ const uploadDocument = async (req, res) => {
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "Document file is required" });
+    }
+    const uploadErr = assertAllowedUpload(req.file, { allowDocs: true });
+    if (uploadErr) {
+      return res.status(400).json({ success: false, message: uploadErr });
     }
     const { title, category = "other", studentId } = req.body || {};
 

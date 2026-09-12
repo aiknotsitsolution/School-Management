@@ -16,6 +16,7 @@ import {
   GraduationCap,
 } from "lucide-react";
 import { api } from "../lib/api";
+import { isNonEmpty, isValidEmail } from "../lib/validation.js";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../components/UI";
 import { SegmentedTabs, Pagination } from "../components/Pagination";
 import SearchableSelect from "../components/SearchableSelect";
@@ -128,7 +129,7 @@ const emptyForm = () => ({
   name: "",
   email: "",
   password: "",
-  role: "teacher",
+  role: "",
   designation: "",
   customDesignation: "",
   className: "",
@@ -354,6 +355,18 @@ export default function Users() {
 
   const createUser = async (event) => {
     event.preventDefault();
+    if (!isNonEmpty(form.name)) {
+      toast("Name is required", "error");
+      return;
+    }
+    if (!isValidEmail(form.email)) {
+      toast("Enter a valid email", "error");
+      return;
+    }
+    if (!isNonEmpty(form.password)) {
+      toast("Password is required", "error");
+      return;
+    }
     if (form.role === "student" && !form.refId.trim()) {
       toast("Admission ID is required for student accounts", "error");
       return;
@@ -464,6 +477,7 @@ export default function Users() {
                 disabled={form.lockedRefId}
                 onChange={(e) => setForm({ ...form, role: e.target.value })}
               >
+                <option value="">Select role…</option>
                 {CREATABLE_ROLES.map((value) => (
                   <option key={value} value={value}>
                     {ROLE_LABELS[value]}
@@ -553,16 +567,18 @@ export default function Users() {
         </Card>
       )}
 
-      <SegmentedTabs
-        tabs={TABS({ total, pendingTotal, pendingStaffTotal })}
-        active={tab}
-        onChange={(next) => {
-          setTab(next);
-          setPage(1);
-          setPendingPage(1);
-          setPendingStaffPage(1);
-        }}
-      />
+      <div className="mb-5">
+        <SegmentedTabs
+          tabs={TABS({ total, pendingTotal, pendingStaffTotal })}
+          active={tab}
+          onChange={(next) => {
+            setTab(next);
+            setPage(1);
+            setPendingPage(1);
+            setPendingStaffPage(1);
+          }}
+        />
+      </div>
 
       {tab === "students" && (
       <Card
@@ -662,13 +678,9 @@ export default function Users() {
         ) : pendingStaff.length === 0 ? (
           <div className="py-4">
             <p className="text-[13px] text-slate-text/70">
-              Teachers are created in{" "}
+              Teachers added from the{" "}
               <span className="font-medium text-ink">Teachers &amp; Staff</span>{" "}
-              (Staff ID is entered manually there — never generated). They
-              appear here until you register their login. Registering a user
-              links the person record to an account; afterwards the profile
-              completion and ID card flow is two-way — from this page or the
-              teacher's My Profile.
+              module will appear here. Click <span className="font-medium text-ink">Register</span> to create their login account. Once registered, they can log in and complete their profile — and their ID card can be generated from either this page or their My Profile.
             </p>
           </div>
         ) : (

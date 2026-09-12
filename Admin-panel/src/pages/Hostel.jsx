@@ -25,6 +25,7 @@ import {
 import SearchableSelect from "../components/SearchableSelect";
 import { api } from "../lib/api";
 import { invalidateMasterCache } from "../lib/masterCache";
+import { isNonEmpty, isPositiveNumber } from "../lib/validation.js";
 
 const roomsSeed = [];
 const studentSeed = [];
@@ -328,6 +329,10 @@ export default function Hostel({ embedded = false }) {
   );
 
   const addRoom = async () => {
+    if (!isPositiveNumber(roomForm.capacity)) {
+      toast("Capacity must be a positive number", "error");
+      return;
+    }
     try {
       const { data } = await api.hostel.create({
         roomNo: nextRoomId(rooms),
@@ -372,6 +377,10 @@ export default function Hostel({ embedded = false }) {
       return;
     }
     const studentId = allotForm.studentId.trim() || allotForm.name.trim();
+    if (!isNonEmpty(studentId)) {
+      toast("Select a student", "error");
+      return;
+    }
     try {
       await api.hostel.allot(room.backendId || room.id, { studentId });
       const student = {

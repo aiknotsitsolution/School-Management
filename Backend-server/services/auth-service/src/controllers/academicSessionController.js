@@ -18,6 +18,26 @@ function startOfToday() {
   return d;
 }
 
+// "2026-04-01" -> "2027-03-31" => "2026-27" (codebase-wide 2-digit convention,
+// matching academicYearService.deriveNextSession). Same calendar-year sessions
+// (e.g. Jan-Dec 2026) derive to a plain 4-digit label "2026". Returns null
+// when either date is invalid.
+function deriveSessionName(startDate, endDate) {
+  const s = new Date(startDate);
+  const e = new Date(endDate);
+  if (
+    Number.isNaN(s.getTime()) ||
+    Number.isNaN(e.getTime()) ||
+    !startDate ||
+    !endDate
+  ) {
+    return null;
+  }
+  const y1 = s.getFullYear();
+  const y2 = e.getFullYear();
+  return y2 === y1 ? `${y1}` : `${y1}-${String(y2 % 100).padStart(2, "0")}`;
+}
+
 // Half-open interval [start, end): a session ends the moment the next begins,
 // so back-to-back sessions like 2026-04-01..2027-03-31 and
 // 2027-04-01..2028-03-31 are NOT considered overlapping.
@@ -53,6 +73,20 @@ const listSessions = async (req, res) => {
       .sort({ startDate: 1 })
       .lean();
     res.json({ success: true, count: data.length, data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Single source of truth for "which session is live right now". Returns
+// null when no session is current yet (school has no live session).
+const getCurrentSession = async (req, res) => {
+  try {
+    const session = await AcademicSession.findOne({
+      schoolId: req.tenantId,
+      isCurrent: true,
+    }).lean();
+    res.json({ success: true, data: session || null });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
@@ -104,18 +138,41 @@ const deleteSession = async (req, res) => {
   }
 };
 
+// Compact current-session summary used by login / me / school-profile payloads
+// so every surface can render the live session without an extra round-trip.
+async function resolveCurrentSessionInfo(schoolId) {
+  const session = await AcademicSession.findOne({
+    schoolId,
+    isCurrent: true,
+  }).lean();
+  if (!session) return null;
+  return {
+    name: session.name,
+    startDate: session.startDate,
+    endDate: session.endDate,
+  };
+}
+
 const createSession = async (req, res) => {
   try {
     const body = pick(req.body, PICK_FIELDS);
-    const name = String(body.name || "").trim();
     const startDate = toDate(body.startDate);
     const endDate = toDate(body.endDate);
 
-    if (!name) throw httpError(400, "Session name is required (e.g. 2026-27)");
     if (!startDate || !endDate) throw httpError(400, "startDate and endDate are required");
     if (endDate.getTime() <= startDate.getTime()) {
       throw httpError(400, "endDate must be after startDate");
     }
+
+    // Name is derived from the dates by default (e.g. 01 Apr 2026 - 31 Mar 2027
+    // -> "2026-27"); an explicitly typed name is only honored while it matches
+    // a plausible calendar label.
+    const name =
+      String(body.name || "").trim() ||
+      deriveSessionName(startDate, endDate) ||
+      "";
+
+    if (!name) throw httpError(400, "Session name is required (e.g. 2026-27)");
 
     await assertUniqueName(req.tenantId, name);
     await assertNoOverlap(req.tenantId, startDate, endDate);
@@ -142,6 +199,9 @@ const createSession = async (req, res) => {
     if (session.isCurrent) {
       await School.updateOne({ _id: req.tenantId }, { $set: { session: session.name } });
     }
+    // Explicit session create = the admin engaged with the academic calendar,
+    // so the post-onboarding "confirm academic configuration" prompt is cleared.
+    await School.updateOne({ _id: req.tenantId }, { $set: { academicConfigConfirmed: true } });
 
     res.status(201).json({ success: true, data: session });
   } catch (err) {
@@ -157,19 +217,39 @@ const updateSession = async (req, res) => {
     });
     if (!session) return res.status(404).json({ success: false, message: "Academic session not found" });
 
-    // Only never-activated (planned) sessions are editable; live/historical
-    // sessions keep their identity so snapshots and references stay stable.
-    if (session.status !== "planned") {
-      throw httpError(400, "Only planned (upcoming) sessions can be edited");
+    // Planned and active sessions are editable so a school can fix its
+    // calendar (start/end dates) even after going live. Ended sessions are
+    // immutable history. Renaming is only allowed while planned: once a session
+    // is live its name is referenced by fee structures, teacher assignments,
+    // exams and marks across services — changing it would orphan those records.
+    if (session.status === "ended") {
+      throw httpError(400, "Ended sessions cannot be edited");
     }
 
     const body = pick(req.body, PICK_FIELDS);
-    const name =
-      body.name !== undefined ? String(body.name || "").trim() : session.name;
+    const rawName = body.name !== undefined ? String(body.name || "").trim() : null;
     const rawStart = body.startDate !== undefined ? body.startDate : session.startDate;
     const rawEnd = body.endDate !== undefined ? body.endDate : session.endDate;
     const startDate = toDate(rawStart);
     const endDate = toDate(rawEnd);
+
+    let name;
+    if (rawName !== null && rawName !== "" && session.status === "active" && rawName !== session.name) {
+      throw httpError(
+        400,
+        "The current session's name is locked once live because fee structures, teacher assignments and marks reference it. Adjust the start/end dates instead — the label is derived from them.",
+      );
+    }
+    if (rawName !== null && rawName !== "") {
+      name = rawName;
+    } else if (session.status === "active") {
+      // Dates-only edit on a live session — keep identity, never auto-rename
+      // (a date shift like Jan-Dec would otherwise derive a new label and
+      // orphan fee/assignment/exam references).
+      name = session.name;
+    } else {
+      name = deriveSessionName(startDate, endDate) || session.name;
+    }
 
     if (!name) throw httpError(400, "Session name is required");
     if (!startDate || !endDate) throw httpError(400, "startDate and endDate are required");
@@ -187,6 +267,7 @@ const updateSession = async (req, res) => {
       session.metadata = typeof body.metadata === "object" ? body.metadata : session.metadata;
     }
     await session.save();
+    await School.updateOne({ _id: req.tenantId }, { $set: { academicConfigConfirmed: true } });
     res.json({ success: true, data: session });
   } catch (err) {
     res.status(err.status || 400).json({ success: false, message: err.message });
@@ -255,7 +336,10 @@ const endSession = async (req, res) => {
 
 module.exports = {
   listSessions,
+  getCurrentSession,
   getSessionById,
+  resolveCurrentSessionInfo,
+  deriveSessionName,
   createSession,
   updateSession,
   activateSession,

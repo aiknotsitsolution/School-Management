@@ -84,6 +84,28 @@ const getNotices = async (req, res) => {
   }
 };
 
+// Tenant-scoped atomic update replacing the previous delete-then-recreate edit
+// flow on the frontend (which could lose a notice if the recreate failed).
+// Only notice-owned fields may be patched; schoolId / postedBy stay server-owned.
+// Passed body keys are pick-guarded, so pin toggles can send { pinned } alone.
+const updateNotice = async (req, res) => {
+  try {
+    const updates = pick(req.body, NOTICE_FIELDS);
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ success: false, message: "Nothing to update" });
+    }
+    const notice = await Notice.findOneAndUpdate(
+      { _id: req.params.id, schoolId: req.tenantId },
+      { $set: updates },
+      { new: true, runValidators: true },
+    );
+    if (!notice) return res.status(404).json({ success: false, message: "Notice not found" });
+    res.json({ success: true, data: notice });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+};
+
 const deleteNotice = async (req, res) => {
   try {
     const notice = await Notice.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
@@ -94,4 +116,4 @@ const deleteNotice = async (req, res) => {
   }
 };
 
-module.exports = { createNotice, getNotices, deleteNotice };
+module.exports = { createNotice, getNotices, updateNotice, deleteNotice };

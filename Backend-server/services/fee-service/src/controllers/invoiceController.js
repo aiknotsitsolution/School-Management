@@ -15,10 +15,22 @@ const dupKey = (inv) => `${inv.feeType}||${inv.session}||${String(inv.studentId)
 
 const createInvoice = async (req, res) => {
   try {
+    if (req.body.session !== undefined && String(req.body.session).trim() === "") {
+      return res.status(400).json({ success: false, message: "session is required" });
+    }
+    if (req.body.amount !== undefined) {
+      const amount = Number(req.body.amount);
+      if (!Number.isFinite(amount) || amount <= 0) {
+        return res.status(400).json({ success: false, message: "amount must be a positive number" });
+      }
+    }
     await assertAcademicRefs({ req, values: { class: req.body.class } });
     const invoice = await FeeInvoice.create({ ...pick(req.body, INVOICE_FIELDS), schoolId: req.tenantId });
     res.status(201).json({ success: true, data: invoice });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: "A record with these details already exists" });
+    }
     if (err.status) return res.status(err.status).json({ success: false, message: err.message });
     res.status(400).json({ success: false, message: err.message });
   }
@@ -203,6 +215,9 @@ const confirmGenerate = async (req, res) => {
       skippedItems: skipped,
     });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: "A record with these details already exists" });
+    }
     if (err.status) return res.status(err.status).json({ success: false, message: err.message });
     res.status(500).json({ success: false, message: err.message });
   }

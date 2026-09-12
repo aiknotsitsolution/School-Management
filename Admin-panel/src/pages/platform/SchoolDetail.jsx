@@ -42,7 +42,6 @@ const EDIT_FIELDS = [
   { key: "shortName", label: "Short Name" },
   { key: "email", label: "Email", type: "email" },
   { key: "phone", label: "Phone" },
-  { key: "session", label: "Session (e.g. 2026-2027)" },
   { key: "address", label: "Address" },
   { key: "city", label: "City" },
   { key: "state", label: "State" },
@@ -94,7 +93,6 @@ export default function SchoolDetail() {
       shortName: s.shortName || "",
       email: s.email || "",
       phone: s.phone || "",
-      session: s.session || "",
       address: s.address || "",
       city: s.city || "",
       state: s.state || "",
@@ -179,7 +177,7 @@ export default function SchoolDetail() {
           >
             <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-[13.5px]">
               {PROFILE_FIELDS.map(({ key, label, render, className, span }) => {
-                const value = school[key];
+                const value = key === "session" ? data?.currentSession?.name || school.session || "" : school[key];
                 const isEmpty = !value && value !== 0;
                 return (
                   <div key={key} className={span ? "sm:col-span-2" : ""}>

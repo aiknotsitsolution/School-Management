@@ -5,8 +5,31 @@ const STRUCTURE_FIELDS = ["class", "session", "feeType", "amount", "frequency", 
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
+// Session and amount are the money-critical structure fields. Trim session and
+// reject whitespace-only values; amount must be a finite positive number
+// (Mongoose required only blocks missing/NaN, not 0 or negatives).
+const requireStructureValues = (body) => {
+  if (body.session !== undefined) {
+    const session = String(body.session).trim();
+    if (session === "") {
+      const err = new Error("session is required");
+      err.status = 400;
+      throw err;
+    }
+  }
+  if (body.amount !== undefined) {
+    const amount = Number(body.amount);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      const err = new Error("amount must be a positive number");
+      err.status = 400;
+      throw err;
+    }
+  }
+};
+
 const createStructure = async (req, res) => {
   try {
+    requireStructureValues(req.body);
     await assertAcademicRefs({ req, values: { class: req.body.class } });
     const structure = await FeeStructure.create({ ...pick(req.body, STRUCTURE_FIELDS), schoolId: req.tenantId });
     res.status(201).json({ success: true, data: structure });
@@ -40,6 +63,7 @@ const updateStructure = async (req, res) => {
     if (!struct) return res.status(404).json({ success: false, message: "Fee structure not found" });
 
     const updates = pick(req.body, STRUCTURE_FIELDS);
+    requireStructureValues(updates);
     if (updates.class && updates.class !== struct.class) {
       await assertAcademicRefs({ req, values: { class: updates.class } });
     }

@@ -231,7 +231,12 @@ const listMyInvoices = async (req, res) => {
       if (allowed.includes(req.query.status)) filter.status = req.query.status;
     }
     if (req.query.search) {
-      const regex = new RegExp(req.query.search.trim(), "i");
+      // Escaped: raw search text could carry regex meta-characters (ReDoS).
+      const term = String(req.query.search)
+        .trim()
+        .slice(0, 100)
+        .replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const regex = new RegExp(term, "i");
       filter.$or = [
         { invoiceNumber: regex },
         { planName: regex },

@@ -25,6 +25,7 @@ import {
   statusTone,
   Avatar,
   StatCard,
+  toast,
 } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
 import { Pagination } from "../components/Pagination";
@@ -34,6 +35,7 @@ import { PermissionGate } from "../lib/permissions";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import { useSelector } from "react-redux";
 import { selectSchool } from "../store/selectors";
+import { isNonEmpty, isValidEmail, isValidPhone } from "../lib/validation.js";
 import StudentIdCard, { printIdCard } from "../components/idcard/StudentIdCard";
 
 const CLASS_OPTIONS_FALLBACK = [
@@ -252,9 +254,20 @@ export default function Students() {
   };
 
   const handleSave = async () => {
-    if (!form.name.trim() || !String(form.roll || "").trim()) return;
+    if (!isNonEmpty(form.name) || !isNonEmpty(form.roll)) {
+      toast("Name and roll number are required", "error");
+      return;
+    }
     if (!editId && !form.admissionNo.trim()) {
       setApiError("Admission ID is required when adding a student");
+      return;
+    }
+    if (form.email && !isValidEmail(form.email)) {
+      toast("Enter a valid email", "error");
+      return;
+    }
+    if (form.contact && !isValidPhone(form.contact)) {
+      toast("Enter a valid phone number", "error");
       return;
     }
 

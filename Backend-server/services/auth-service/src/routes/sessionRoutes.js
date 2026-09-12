@@ -19,6 +19,7 @@ const requireTenant = (req, res, next) => {
 router.use(verifyToken, resolveTenant, requireTenant);
 
 router.get("/", requirePermission("sessions:read"), ctrl.listSessions);
+router.get("/current", requirePermission("sessions:read"), ctrl.getCurrentSession);
 router.get("/:id", requirePermission("sessions:read"), ctrl.getSessionById);
 router.post("/", requirePermission("sessions:write"), ctrl.createSession);
 router.patch("/:id", requirePermission("sessions:write"), ctrl.updateSession);

@@ -13,6 +13,9 @@ const addItem = async (req, res) => {
     const item = await InventoryItem.create({ ...pick(req.body, ITEM_FIELDS), schoolId: req.tenantId });
     res.status(201).json({ success: true, data: item });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: "A record with these details already exists" });
+    }
     res.status(400).json({ success: false, message: err.message });
   }
 };
@@ -43,6 +46,9 @@ const updateItem = async (req, res) => {
     if (!item) return res.status(404).json({ success: false, message: "Item not found" });
     res.json({ success: true, data: item });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: "A record with these details already exists" });
+    }
     res.status(400).json({ success: false, message: err.message });
   }
 };

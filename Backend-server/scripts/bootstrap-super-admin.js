@@ -11,8 +11,8 @@
 //   * email exists     -> do nothing (no duplicates, password untouched)
 //
 // No school, no demo data and no other user is ever created here.
-// Password is read from PLATFORM_SUPER_ADMIN_PASSWORD (default is the agreed
-// bootstrap credential) and NEVER printed.
+// Password is read from PLATFORM_SUPER_ADMIN_PASSWORD (required — no fallback)
+// and NEVER printed.
 //
 // The document shape mirrors services/auth-service/src/models/User.js.
 //
@@ -26,7 +26,7 @@ const { resolveDbUri } = require("./lib/atlasSrv");
 const BOOTSTRAP = {
   name: process.env.PLATFORM_SUPER_ADMIN_NAME || "Aiknotsit Admin",
   email: "administrator@aiknotsit.com",
-  password: process.env.PLATFORM_SUPER_ADMIN_PASSWORD || "Administrator@321",
+  password: process.env.PLATFORM_SUPER_ADMIN_PASSWORD || "",
   role: "super_admin",
 };
 
@@ -34,6 +34,10 @@ async function main() {
   const rawUri = process.env.AUTH_MONGODB_URI;
   if (!rawUri || !String(rawUri).trim()) {
     console.error("[bootstrap] AUTH_MONGODB_URI is not configured in .env");
+    process.exit(1);
+  }
+  if (!BOOTSTRAP.password || !String(BOOTSTRAP.password).trim()) {
+    console.error("[bootstrap] PLATFORM_SUPER_ADMIN_PASSWORD is required — refusing to create an account with a known default password");
     process.exit(1);
   }
 

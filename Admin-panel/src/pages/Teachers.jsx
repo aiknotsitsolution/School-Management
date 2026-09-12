@@ -28,6 +28,7 @@ import {
   AlertCircle,
 } from "lucide-react";
 import { selectSchool } from "../store/selectors";
+import { sessionLabel } from "../lib/session";
 import {
   PageIntro,
   Card,
@@ -43,6 +44,7 @@ import SearchableSelect from "../components/SearchableSelect";
 import { SegmentedTabs, Pagination } from "../components/Pagination";
 import { api } from "../lib/api";
 import { PermissionGate } from "../lib/permissions";
+import { isPositiveNumber, isValidEmail, isValidPhone } from "../lib/validation.js";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import TeacherIdCard, { printTeacherIdCard } from "../components/idcard/TeacherIdCard";
 
@@ -130,7 +132,7 @@ function subLabel(sub) {
 
 export default function Teachers() {
   const school = useSelector(selectSchool);
-  const session = school?.session || String(new Date().getFullYear());
+  const session = sessionLabel(school) || String(new Date().getFullYear());
   const { options: CLASS_OPTIONS } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
   const { options: SECTION_OPTIONS, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
   const { options: SUBJECT_SUGGESTIONS } = useMasterOptions("subjects", SUBJECT_SUGGESTIONS_FALLBACK);
@@ -295,6 +297,18 @@ export default function Teachers() {
   const handleSaveStaff = async () => {
     if (!form.name.trim() || !form.employeeId.trim() || !form.designation.trim()) {
       setApiError("Name, Employee ID and Designation are required");
+      return;
+    }
+    if (form.salary !== "" && form.salary != null && !isPositiveNumber(form.salary)) {
+      toast("Salary must be a positive number", "error");
+      return;
+    }
+    if (form.email && !isValidEmail(form.email)) {
+      toast("Enter a valid email", "error");
+      return;
+    }
+    if (form.contact && !isValidPhone(form.contact)) {
+      toast("Enter a valid phone number", "error");
       return;
     }
     try {

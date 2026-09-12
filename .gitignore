@@ -4,6 +4,8 @@ playwright-report/
 DemoTestingUserGuide/
 docs/
 .env
+.env.*
+!.env.example
 *.log
 .DS_Store
 # Local/test/report files - do not commit

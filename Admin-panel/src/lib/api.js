@@ -246,6 +246,7 @@ export const api = {
   sessions: {
     list: () => request("/auth/sessions"),
     get: (id) => request(`/auth/sessions/${id}`),
+    current: () => request("/auth/sessions/current"),
     create: (item) => request("/auth/sessions", json("POST", item)),
     update: (id, item) => request(`/auth/sessions/${id}`, json("PATCH", item)),
     activate: (id) =>
@@ -529,6 +530,7 @@ export const api = {
   notices: {
     list: () => request("/notices"),
     create: (item) => request("/notices", json("POST", item)),
+    update: (id, item) => request(`/notices/${id}`, json("PUT", item)),
     remove: (id) => request(`/notices/${id}`, { method: "DELETE" }),
   },
   notifications: {

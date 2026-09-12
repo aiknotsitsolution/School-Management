@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
 const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
+const { resolveTenant } = require("@school-erp/shared/src/middleware/tenant");
 const JWT_SECRET = getJwtSecret();
 
 const verifyToken = async (req, res, next) => {
@@ -27,15 +28,6 @@ const verifyToken = async (req, res, next) => {
   } catch (err) {
     return res.status(401).json({ success: false, message: "Invalid or expired token" });
   }
-};
-
-const resolveTenant = (req, res, next) => {
-  let schoolId = req.user.schoolId || null;
-  if (req.user.role === "super_admin" && req.header("X-School-Id")) {
-    schoolId = req.header("X-School-Id");
-  }
-  req.tenantId = schoolId;
-  next();
 };
 
 const requireTenant = (req, res, next) => {

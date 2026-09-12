@@ -37,6 +37,10 @@ export default function BusRoutes() {
       .map((s) => s.trim())
       .filter(Boolean)
       .map((name) => ({ name }));
+    if (stops.length < 2) {
+      toast("Add at least two stops", "error");
+      return;
+    }
     const payload = {
       routeNo: fd.get("routeNo"),
       driverName: fd.get("driverName") || undefined,
@@ -59,8 +63,14 @@ export default function BusRoutes() {
     const lat = window.prompt(`Live latitude for Route ${route.routeNo}`, route.currentLocation?.lat || "");
     const lng = window.prompt(`Live longitude for Route ${route.routeNo}`, route.currentLocation?.lng || "");
     if (lat === null || lng === null) return;
+    const numLat = Number(lat);
+    const numLng = Number(lng);
+    if (!Number.isFinite(numLat) || !Number.isFinite(numLng)) {
+      toast("Enter a valid latitude/longitude", "error");
+      return;
+    }
     try {
-      await api.transport.updateLocation(route._id, { lat: Number(lat), lng: Number(lng) });
+      await api.transport.updateLocation(route._id, { lat: numLat, lng: numLng });
       toast("Location updated", "success");
       refresh();
     } catch (err) {

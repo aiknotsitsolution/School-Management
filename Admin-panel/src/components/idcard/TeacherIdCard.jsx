@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { ID_CARD_W, ID_CARD_H, idCardSettings } from "./StudentIdCard";
+import { sessionLabel } from "../../lib/session";
 
 // Staff ID cards share the school's ID-card design infrastructure (accent,
 // logo, footer note) but carry a "STAFF ID CARD" header — the student title in
@@ -64,7 +65,7 @@ export function staffIdCardMarkup({ teacher, school }) {
   const accent = s.accent;
   const schoolName = school?.name || "Zipschool OS";
   const shortName = school?.shortName || "SCHOOL";
-  const session = school?.session || String(new Date().getFullYear());
+  const session = sessionLabel(school) || String(new Date().getFullYear());
   const idNumber = teacher.idCardNumber || "—";
   const issuedDate = formatDate(teacher.idCardIssuedAt);
 

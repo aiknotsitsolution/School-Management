@@ -91,7 +91,7 @@ export default function Fees() {
                       <td className="px-3 py-2.5 font-semibold text-ink">{fmtMoney(inv.amount || 0)}</td>
                       <td className="px-3 py-2.5 text-success">{fmtMoney(inv.paidAmount || 0)}</td>
                       <td className="px-3 py-2.5">
-                        <Pill tone={String(status).toLowerCase().includes("paid") ? "success" : "warning"}>{status}</Pill>
+                        <Pill tone={String(status).toLowerCase().includes("paid") ? "success" : "alert"}>{status}</Pill>
                       </td>
                     </tr>
                   );
@@ -145,7 +145,7 @@ export default function Fees() {
                     <p className="text-[11.5px] text-slate-text/60">₹{Number(o.amount || 0).toLocaleString("en-IN")} · {fmtDate(o.confirmedAt || o.createdAt)}</p>
                   </div>
                 </div>
-                <Pill tone={String(o.status).includes("complete") ? "success" : "warning"}>{o.status}</Pill>
+                <Pill tone={String(o.status).includes("complete") ? "success" : "alert"}>{o.status}</Pill>
               </div>
             ))}
           </div>

@@ -22,6 +22,7 @@ import {
   toast,
 } from "../components/UI";
 import { api } from "../lib/api";
+import { isNonEmpty } from "../lib/validation.js";
 const leaveSeed = [];
 const balanceSeed = [];
 
@@ -156,7 +157,14 @@ export default function Leave() {
   };
 
   const apply = async () => {
-    if (!form.from || !form.to) return;
+    if (!isNonEmpty(form.from) || !isNonEmpty(form.to)) {
+      toast("Select from and to dates", "error");
+      return;
+    }
+    if (form.to < form.from) {
+      toast("To date must be after from date", "error");
+      return;
+    }
     try {
       await api.leaves.create({
         leaveType: LEAVE_TYPE_MAP[form.type] || "Other",

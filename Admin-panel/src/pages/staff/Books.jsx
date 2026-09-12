@@ -10,6 +10,7 @@ import {
   toast,
 } from "../../components/UI";
 import { api } from "../../lib/api";
+import { isPositiveNumber } from "../../lib/validation.js";
 import useStaffContext from "./useStaffContext";
 
 export default function Books() {
@@ -45,12 +46,17 @@ export default function Books() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
+    const copies = Number(fd.get("totalCopies") || 1);
+    if (!isPositiveNumber(copies)) {
+      toast("Copies must be a positive number", "error");
+      return;
+    }
     const payload = {
       title: fd.get("title"),
       author: fd.get("author"),
       isbn: fd.get("isbn") || undefined,
       category: fd.get("category") || undefined,
-      totalCopies: Number(fd.get("totalCopies") || 1),
+      totalCopies: copies,
     };
     try {
       if (editing) await api.books.update(editing._id, payload);

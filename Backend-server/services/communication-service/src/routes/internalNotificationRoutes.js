@@ -34,4 +34,21 @@ router.post("/push-by-refs", (req, res, next) => {
   next();
 }, ctrl.pushByRefIds);
 
+router.post("/push-by-roles", (req, res, next) => {
+  if (!keyUsable) {
+    return res.status(503).json({ success: false, message: "Internal notification channel is not configured" });
+  }
+  const presented = req.headers["x-internal-key"];
+  if (!presented) {
+    return res.status(401).json({ success: false, message: "Invalid internal key" });
+  }
+  const expectedHex = Buffer.from(String(internalKey), "utf8").toString("hex");
+  const presentedHex = Buffer.from(String(presented), "utf8").toString("hex");
+  const valid = expectedHex.length === presentedHex.length && crypto.timingSafeEqual(Buffer.from(expectedHex), Buffer.from(presentedHex));
+  if (!valid) {
+    return res.status(401).json({ success: false, message: "Invalid internal key" });
+  }
+  next();
+}, ctrl.pushByRoles);
+
 module.exports = router;

@@ -4,7 +4,7 @@ import { PageIntro, Card, Button, Input, Pill, toast } from "../components/UI";
 import { api } from "../lib/api";
 import { usePermission } from "../lib/permissions";
 
-const EMPTY = { name: "", startDate: "", endDate: "" };
+const EMPTY = { name: "", startDate: "", endDate: "", status: "" };
 
 function fmt(iso) {
   if (!iso) return "—";
@@ -15,7 +15,6 @@ const toneFor = (status) =>
   status === "active" ? "success" : status === "ended" ? "neutral" : "amber";
 
 const validate = (form) => {
-  if (!String(form.name || "").trim()) return "Session name is required (e.g. 2026-27)";
   if (!form.startDate || !form.endDate) return "Start and end dates are required";
   if (new Date(form.endDate) <= new Date(form.startDate)) {
     return "End date must be after start date";
@@ -37,7 +36,7 @@ export default function AcademicSessions() {
     api.sessions
       .list()
       .then(({ data }) => setSessions(data || []))
-      .catch(() => toast("Could not load academic sessions", "alert"))
+      .catch(() => toast("Could not load academic sessions", "error"))
       .finally(() => setLoading(false));
   };
 
@@ -58,6 +57,7 @@ export default function AcademicSessions() {
       name: session.name || "",
       startDate: fmt(session.startDate),
       endDate: fmt(session.endDate),
+      status: session.status || "",
     });
     setShowModal(true);
   };
@@ -66,7 +66,7 @@ export default function AcademicSessions() {
 
   const handleSave = async () => {
     const message = validate(form);
-    if (message) return toast(message, "alert");
+    if (message) return toast(message, "error");
     setBusy(true);
     try {
       const payload = { name: form.name.trim(), startDate: form.startDate, endDate: form.endDate };
@@ -82,7 +82,7 @@ export default function AcademicSessions() {
       }
       load();
     } catch (err) {
-      toast(err.message || "Save failed", "alert");
+      toast(err.message || "Save failed", "error");
     } finally {
       setBusy(false);
     }
@@ -95,7 +95,7 @@ export default function AcademicSessions() {
       toast(doneMessage);
       load();
     } catch (err) {
-      toast(err.message || "Action failed", "alert");
+      toast(err.message || "Action failed", "error");
     } finally {
       setBusy(false);
     }
@@ -184,7 +184,7 @@ export default function AcademicSessions() {
                 </div>
                 {canWrite && (
                   <div className="flex items-center gap-2">
-                    {session.status !== "active" && session.status !== "ended" && (
+                    {session.status !== "ended" && (
                       <Button variant="ghost" className="text-[12px] px-2.5 py-1.5" onClick={() => openEdit(session)}>
                         <Save size={13} /> Edit
                       </Button>
@@ -226,13 +226,23 @@ export default function AcademicSessions() {
             <div className="p-5 space-y-4">
               <div>
                 <label className="block text-[12.5px] font-medium text-slate-text/70 mb-1.5">
-                  Session name *
+                  Session name
                 </label>
                 <Input
                   value={form.name}
                   onChange={(e) => update("name", e.target.value)}
-                  placeholder="e.g. 2026-27"
+                  disabled={form.status === "active"}
+                  placeholder="Derived from dates, e.g. 2026-27"
                 />
+                {form.status === "active" ? (
+                  <p className="text-[11.5px] text-slate-text/50 mt-1">
+                    Locked once live — fees, assignments and marks reference this label. Change the dates instead.
+                  </p>
+                ) : (
+                  <p className="text-[11.5px] text-slate-text/50 mt-1">
+                    Leave blank to derive from the dates (e.g. 01 Apr 2026 – 31 Mar 2027 → 2026-27).
+                  </p>
+                )}
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>

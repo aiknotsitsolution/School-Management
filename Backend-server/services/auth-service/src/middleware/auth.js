@@ -2,6 +2,7 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
 const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
+const { resolveTenant } = require("@school-erp/shared/src/middleware/tenant");
 const JWT_SECRET = getJwtSecret();
 
 // Decodes the JWT and attaches the tenant + role payload to req.user.
@@ -35,18 +36,6 @@ const verifyToken = async (req, res, next) => {
   } catch (err) {
     return res.status(401).json({ success: false, message: "Invalid or expired token" });
   }
-};
-
-// Resolves the effective tenant for this request. Normal users inherit it from
-// the token; platform (super_admin) can act on behalf of a school via the
-// X-School-Id header.
-const resolveTenant = (req, res, next) => {
-  let schoolId = req.user.schoolId || null;
-  if (req.user.role === "super_admin" && req.header("X-School-Id")) {
-    schoolId = req.header("X-School-Id");
-  }
-  req.tenantId = schoolId;
-  next();
 };
 
 // Role-scoped guard. More granular than authorizeRoles.

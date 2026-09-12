@@ -13,6 +13,9 @@ const createRoom = async (req, res) => {
     const room = await Hostel.create({ ...pick(req.body, HOSTEL_FIELDS), schoolId: req.tenantId });
     res.status(201).json({ success: true, data: room });
   } catch (err) {
+    if (err.code === 11000) {
+      return res.status(409).json({ success: false, message: "A record with these details already exists" });
+    }
     res.status(400).json({ success: false, message: err.message });
   }
 };
