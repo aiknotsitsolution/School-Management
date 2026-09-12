@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
+import { CalendarDays } from "lucide-react";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import SupportChatbot from "../components/SupportChatbot";
@@ -45,18 +46,32 @@ export default function Layout() {
 
       {needsConfig && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
-          <div className="w-full max-w-sm rounded-2xl bg-white p-5 shadow-2xl">
-            <h3 className="text-[15px] font-semibold text-slate-900">Academic session needs confirmation</h3>
-            <p className="mt-2 text-[13px] leading-relaxed text-slate-text/80">
-              Session <span className="font-semibold text-slate-900">{sessionLabel(school)}</span> is currently set from
-              onboarding defaults. Please review and save your academic configuration before adding students, fees or
-              timetables.
-            </p>
-            <div className="mt-5 flex justify-end gap-2">
+          <div className="w-full max-w-md rounded-2xl bg-white p-0 shadow-2xl overflow-hidden">
+            <div className="bg-amber/10 px-6 pt-6 pb-4">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber/20">
+                  <CalendarDays className="h-5 w-5 text-amber-dark" />
+                </div>
+                <div>
+                  <h3 className="text-[15px] font-semibold text-ink">Academic Session Needs Confirmation</h3>
+                  <p className="text-[12px] text-slate-text/60">Set up your school year before proceeding</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="px-6 py-4">
+              <p className="text-[13px] leading-relaxed text-slate-text">
+                Session{" "}
+                <span className="font-semibold text-ink">{sessionLabel(school)}</span> was created from onboarding
+                defaults. Please review the start/end dates and session name before adding students, fees or timetables.
+              </p>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50/50 px-6 py-3">
               <button
                 type="button"
                 onClick={() => setPromptDismissed(true)}
-                className="rounded-lg border border-gray-200 px-4 py-2 text-[13px] font-medium text-slate-text transition hover:bg-gray-50"
+                className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-text transition hover:bg-gray-50"
               >
                 Cancel
               </button>
@@ -66,7 +81,7 @@ export default function Layout() {
                   setPromptDismissed(true);
                   navigate("/account", { state: { configTab: "organization" } });
                 }}
-                className="rounded-lg bg-primary px-4 py-2 text-[13px] font-medium text-white transition hover:bg-primary/90"
+                className="rounded-lg bg-amber px-4 py-2 text-[13px] font-semibold text-ink transition hover:bg-amber-dark"
               >
                 Save now
               </button>
