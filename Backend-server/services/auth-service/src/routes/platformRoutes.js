@@ -25,6 +25,7 @@ router.get("/schools", ctrl.listPlatformSchools);
 router.get("/schools/:id", ctrl.getSchool360);
 router.patch("/schools/:id/status", ctrl.updateSchoolStatus);
 router.patch("/schools/:id/onboarding", ctrl.updateSchoolOnboarding);
+router.patch("/schools/:id", ctrl.updateSchoolProfile);
 router.post("/schools/:id/welcome-email", ctrl.sendSchoolWelcomeEmail);
 
 // Plans

@@ -1222,6 +1222,36 @@ const getSchool360 = async (req, res) => {
   }
 };
 
+const SCHOOL_PROFILE_FIELDS = ["name", "shortName", "email", "phone", "address", "city", "state", "pincode", "session", "website", "logo"];
+
+const updateSchoolProfile = async (req, res) => {
+  try {
+    const patch = {};
+    for (const key of SCHOOL_PROFILE_FIELDS) {
+      if (req.body[key] !== undefined) patch[key] = req.body[key];
+    }
+    if (!Object.keys(patch).length) {
+      return res.status(400).json({ success: false, message: "No fields to update" });
+    }
+
+    const school = await School.findByIdAndUpdate(req.params.id, patch, { new: true, runValidators: true });
+    if (!school) return res.status(404).json({ success: false, message: "School not found" });
+
+    await writeAudit({
+      req,
+      user: req.user,
+      action: "school.updated",
+      targetType: "school",
+      targetId: school._id,
+      message: `School profile updated: ${Object.keys(patch).join(", ")}`,
+    });
+
+    res.json({ success: true, message: "School updated", data: toSchoolJson(school) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
 const SCHOOL_LIFECYCLE = { active: "school.activated", suspended: "school.suspended" };
 
 const updateSchoolStatus = async (req, res) => {
@@ -1737,6 +1767,7 @@ module.exports = {
   getSchool360,
   updateSchoolStatus,
   updateSchoolOnboarding,
+  updateSchoolProfile,
   sendSchoolWelcomeEmail,
   formatMoney,
   // shared helpers reused by tenantController (school self-service).

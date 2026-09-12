@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Users, CreditCard, FileText } from "lucide-react";
+import { ArrowLeft, Users, CreditCard, FileText, Pencil } from "lucide-react";
 import { api } from "../../lib/api";
-import { Button, Card, PageIntro, Pill, toast } from "../../components/UI";
+import { Button, Card, Input, PageIntro, Pill, toast } from "../../components/UI";
 
 const onboardingTone = (status) => {
   const map = { live: "success", subscribed: "success", configured: "amber", created: "info" };
@@ -20,6 +20,36 @@ const fmtDate = (value) =>
     ? new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
     : "—";
 
+const PROFILE_FIELDS = [
+  { key: "code", label: "Code", className: "font-mono text-ink" },
+  { key: "shortName", label: "Short Name" },
+  { key: "plan", label: "Plan", render: (v) => <Pill tone="info">{v}</Pill> },
+  { key: "status", label: "Status", render: (v) => <Pill tone={v === "active" ? "success" : "alert"}>{v}</Pill> },
+  { key: "session", label: "Session" },
+  { key: "email", label: "Email" },
+  { key: "phone", label: "Phone" },
+  { key: "address", label: "Address", span: true },
+  { key: "city", label: "City" },
+  { key: "state", label: "State" },
+  { key: "pincode", label: "Pincode" },
+  { key: "website", label: "Website" },
+  { key: "createdAt", label: "Created", render: (v) => fmtDate(v) },
+  { key: "updatedAt", label: "Last update", render: (v) => fmtDate(v) },
+];
+
+const EDIT_FIELDS = [
+  { key: "name", label: "School Name", required: true },
+  { key: "shortName", label: "Short Name" },
+  { key: "email", label: "Email", type: "email" },
+  { key: "phone", label: "Phone" },
+  { key: "session", label: "Session (e.g. 2026-2027)" },
+  { key: "address", label: "Address" },
+  { key: "city", label: "City" },
+  { key: "state", label: "State" },
+  { key: "pincode", label: "Pincode" },
+  { key: "website", label: "Website" },
+];
+
 export default function SchoolDetail() {
   const { id } = useParams();
   const [data, setData] = useState(null);
@@ -27,6 +57,10 @@ export default function SchoolDetail() {
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+
+  const [editOpen, setEditOpen] = useState(false);
+  const [editForm, setEditForm] = useState({});
+  const [editBusy, setEditBusy] = useState(false);
 
   useEffect(() => {
     api.platform.schools
@@ -50,6 +84,41 @@ export default function SchoolDetail() {
       toast(err.message, "error");
     } finally {
       setBusy(false);
+    }
+  };
+
+  const openEdit = () => {
+    const s = data?.school || {};
+    setEditForm({
+      name: s.name || "",
+      shortName: s.shortName || "",
+      email: s.email || "",
+      phone: s.phone || "",
+      session: s.session || "",
+      address: s.address || "",
+      city: s.city || "",
+      state: s.state || "",
+      pincode: s.pincode || "",
+      website: s.website || "",
+    });
+    setEditOpen(true);
+  };
+
+  const saveEdit = async () => {
+    if (!editForm.name?.trim()) {
+      toast("School name is required", "error");
+      return;
+    }
+    setEditBusy(true);
+    try {
+      await api.platform.schools.update(id, editForm);
+      toast("School updated");
+      setEditOpen(false);
+      setRefreshKey((k) => k + 1);
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setEditBusy(false);
     }
   };
 
@@ -100,32 +169,31 @@ export default function SchoolDetail() {
 
       <div className="grid lg:grid-cols-3 gap-5">
         <div className="lg:col-span-2 space-y-5">
-          <Card title="Profile">
+          <Card
+            title="Profile"
+            action={
+              <Button variant="outline" size="sm" onClick={openEdit}>
+                <Pencil size={13} /> Edit
+              </Button>
+            }
+          >
             <div className="grid sm:grid-cols-2 gap-x-6 gap-y-3 text-[13.5px]">
-              <div>
-                <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">Code</p>
-                <p className="font-mono text-ink">{school.code}</p>
-              </div>
-              <div>
-                <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">Plan</p>
-                <Pill tone="info">{school.plan}</Pill>
-              </div>
-              <div>
-                <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">Status</p>
-                <Pill tone={school.status === "active" ? "success" : "alert"}>{school.status}</Pill>
-              </div>
-              <div>
-                <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">City</p>
-                <p className="text-ink">{school.city || "—"}</p>
-              </div>
-              <div>
-                <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">Created</p>
-                <p className="text-ink">{fmtDate(school.createdAt)}</p>
-              </div>
-              <div>
-                <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">Last update</p>
-                <p className="text-ink">{fmtDate(school.updatedAt)}</p>
-              </div>
+              {PROFILE_FIELDS.map(({ key, label, render, className, span }) => {
+                const value = school[key];
+                const isEmpty = !value && value !== 0;
+                return (
+                  <div key={key} className={span ? "sm:col-span-2" : ""}>
+                    <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">{label}</p>
+                    {render ? (
+                      <div className="mt-0.5">{isEmpty ? <span className="text-slate-text/50">—</span> : render(value)}</div>
+                    ) : (
+                      <p className={`mt-0.5 ${className || "text-ink"}`}>
+                        {isEmpty ? <span className="text-slate-text/50">—</span> : value}
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </Card>
 
@@ -268,6 +336,48 @@ export default function SchoolDetail() {
           </Card>
         </div>
       </div>
+
+      {/* Edit School Modal */}
+      {editOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={() => !editBusy && setEditOpen(false)} />
+          <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-black/[0.06] px-5 py-4 flex items-center justify-between rounded-t-xl">
+              <h3 className="text-[15px] font-semibold text-ink">Edit School Profile</h3>
+              <button
+                onClick={() => setEditOpen(false)}
+                disabled={editBusy}
+                className="w-7 h-7 flex items-center justify-center rounded-md text-slate-text/60 hover:bg-paper transition-colors text-lg leading-none"
+              >
+                ×
+              </button>
+            </div>
+            <div className="p-5 space-y-4">
+              {EDIT_FIELDS.map(({ key, label, type, required }) => (
+                <div key={key}>
+                  <label className="block text-[11.5px] font-semibold text-slate-text/60 uppercase mb-1">
+                    {label}{required && <span className="text-alert ml-0.5">*</span>}
+                  </label>
+                  <Input
+                    type={type || "text"}
+                    value={editForm[key] || ""}
+                    onChange={(e) => setEditForm((f) => ({ ...f, [key]: e.target.value }))}
+                    placeholder={label}
+                  />
+                </div>
+              ))}
+            </div>
+            <div className="sticky bottom-0 bg-white border-t border-black/[0.06] px-5 py-3 flex items-center justify-end gap-2 rounded-b-xl">
+              <Button variant="ghost" onClick={() => setEditOpen(false)} disabled={editBusy}>
+                Cancel
+              </Button>
+              <Button onClick={saveEdit} disabled={editBusy}>
+                {editBusy ? "Saving…" : "Save Changes"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

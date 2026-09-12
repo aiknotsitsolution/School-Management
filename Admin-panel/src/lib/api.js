@@ -276,6 +276,7 @@ export const api = {
     schools: {
       list: (params = "") => request(`/platform/schools${params ? `?${params}` : ""}`),
       get360: (id) => request(`/platform/schools/${id}`),
+      update: (id, payload) => request(`/platform/schools/${id}`, json("PATCH", payload)),
       setStatus: (id, status, reason) =>
         request(`/platform/schools/${id}/status`, json("PATCH", { status, reason })),
       updateOnboarding: (id, status, notes) =>
