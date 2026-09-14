@@ -8,8 +8,9 @@ const { verifyToken, resolveTenant, requireTenant, authorizeRoles, requirePermis
 
 router.use(verifyToken, resolveTenant, requireTenant);
 
-router.post("/", authorizeRoles("school_admin", "teacher", "staff"), requirePermission("leaves:apply"), ctrl.applyLeave);
-router.get("/", authorizeRoles("school_admin", "teacher", "staff"), requirePermission("leaves:apply"), ctrl.getLeaves);
+router.post("/", authorizeRoles("school_admin", "teacher", "staff", "student"), requirePermission("leaves:apply"), ctrl.applyLeave);
+router.get("/", authorizeRoles("school_admin", "teacher", "staff", "student"), requirePermission("leaves:apply"), ctrl.getLeaves);
+router.get("/balance", authorizeRoles("school_admin", "teacher", "staff", "student"), requirePermission("leaves:apply"), ctrl.getLeaveBalance);
 router.patch("/:id/status", requirePermission("leaves:approve"), ctrl.updateLeaveStatus);
 
 module.exports = router;

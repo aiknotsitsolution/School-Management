@@ -5,7 +5,7 @@ const { validateObjectIdParam } = require("@school-erp/shared/src/middleware/obj
 router.param("id", validateObjectIdParam);
 router.param("homeworkId", validateObjectIdParam);
 const ctrl = require("../controllers/documentController");
-const { verifyToken, resolveTenant, requireTenant, requirePermission } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeClassTeacher } = require("../middleware/auth");
 
 router.use(verifyToken, resolveTenant, requireTenant);
 
@@ -35,8 +35,8 @@ const gateDocRead = (req, res, next) => {
 // ignored, derived from token).
 router.post("/", gateDocWrite, upload.single("file"), ctrl.uploadDocument);
 
-// List: students own-only; staff any/filtered.
-router.get("/", gateDocRead, ctrl.getDocuments);
+// List: students own-only; staff any/filtered (teachers scoped to their classes).
+router.get("/", gateDocRead, scopeClassTeacher, ctrl.getDocuments);
 
 // Delete: students own-only; staff any in-tenant.
 router.delete("/:id", gateDocWrite, ctrl.deleteDocument);

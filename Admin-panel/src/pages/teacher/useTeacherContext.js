@@ -20,6 +20,26 @@ function fetchMyAssignments(user) {
   return assignmentsCache.get(key);
 }
 
+// Shared active scope state (persists across page navigation within a session).
+let _activeScopeIdx = 0;
+const _scopeListeners = new Set();
+
+function useActiveScopeIdx() {
+  const [, forceUpdate] = useState(0);
+  useEffect(() => {
+    const fn = () => forceUpdate((n) => n + 1);
+    _scopeListeners.add(fn);
+    return () => _scopeListeners.delete(fn);
+  }, []);
+  return [
+    _activeScopeIdx,
+    (idx) => {
+      _activeScopeIdx = idx;
+      _scopeListeners.forEach((fn) => fn());
+    },
+  ];
+}
+
 export function useTeacherContext() {
   const user = useSelector(selectUser);
   const school = useSelector(selectSchool);
@@ -28,6 +48,7 @@ export function useTeacherContext() {
 
   const [myData, setMyData] = useState(null);
   const [loading, setLoading] = useState(isTeacherRole);
+  const [activeScopeIdx, setActiveScopeIdx] = useActiveScopeIdx();
 
   useEffect(() => {
     if (!isTeacherRole) {
@@ -68,12 +89,37 @@ export function useTeacherContext() {
 
   const hasClassTeacher = classTeacherAssignments.length > 0;
 
+  // All distinct scopes the teacher can access (class_teacher first, then teaching).
+  const allScopes = useMemo(() => {
+    const map = new Map();
+    classTeacherAssignments.forEach((a) => {
+      const key = `${a.class}::${a.section || ""}`;
+      if (!map.has(key)) map.set(key, { class: a.class, section: a.section || null, type: "class_teacher" });
+    });
+    teachingScopes.forEach((s) => {
+      const key = `${s.class}::${s.section || ""}`;
+      if (!map.has(key)) map.set(key, { class: s.class, section: s.section || null, type: "teaching" });
+    });
+    return Array.from(map.values());
+  }, [classTeacherAssignments, teachingScopes]);
+
+  // Clamp active index when scopes change.
+  const clampedIdx = Math.min(activeScopeIdx, Math.max(allScopes.length - 1, 0));
+
+  const activeScope = allScopes[clampedIdx] || null;
+
+  const setActiveScope = (idx) => {
+    setActiveScopeIdx(Math.max(0, Math.min(idx, allScopes.length - 1)));
+  };
+
   // PRIMARY teaching scope used by the single-class teacher pages and as the
   // token-level scope on the server:
-  //   1. the Class Teacher homeroom, if any
-  //   2. the first active teaching assignment
-  //   3. the legacy class/section carried on the account (backward compat)
+  //   1. the active scope (switcher), if any
+  //   2. the Class Teacher homeroom, if any
+  //   3. the first active teaching assignment
+  //   4. the legacy class/section carried on the account (backward compat)
   const primaryScope = useMemo(() => {
+    if (activeScope) return activeScope;
     if (classTeacherAssignments[0]) {
       return {
         class: classTeacherAssignments[0].class,
@@ -86,7 +132,7 @@ export function useTeacherContext() {
     return user?.class || user?.section
       ? { class: user.class || null, section: user.section || null }
       : null;
-  }, [classTeacherAssignments, teachingScopes, user?.class, user?.section]);
+  }, [activeScope, classTeacherAssignments, teachingScopes, user?.class, user?.section]);
 
   const cls = primaryScope?.class || user?.class || null;
   const section = primaryScope?.section || user?.section || null;
@@ -118,8 +164,12 @@ export function useTeacherContext() {
     query,
     assignment,
     loading,
-    // Assignment-aware extras (the null-safe defaults keep existing pages
-    // working for teacher accounts with no assignments yet).
+    // Multi-class switching
+    allScopes,
+    activeScope,
+    activeScopeIdx: clampedIdx,
+    setActiveScope,
+    // Assignment-aware extras
     teacherData: myData,
     classTeacherAssignments,
     teachingAssignments,

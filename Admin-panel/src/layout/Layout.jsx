@@ -6,7 +6,16 @@ import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import SupportChatbot from "../components/SupportChatbot";
 import { selectSchool, selectRole } from "../store/selectors";
-import { sessionLabel, schoolNeedsConfig } from "../lib/session";
+import { sessionLabel, schoolNeedsConfig, getDismissConfigKey } from "../lib/session";
+
+function isOnboardingDefaultDates(session) {
+  if (!session?.startDate || !session?.endDate) return false;
+  const s = new Date(session.startDate);
+  const e = new Date(session.endDate);
+  return s.getUTCFullYear() + 1 === e.getUTCFullYear()
+    && s.getUTCMonth() === 3 && s.getUTCDate() === 1
+    && e.getUTCMonth() === 2 && e.getUTCDate() === 31;
+}
 
 export default function Layout() {
   const [open, setOpen] = useState(false);
@@ -14,11 +23,28 @@ export default function Layout() {
   const navigate = useNavigate();
   const school = useSelector(selectSchool);
   const role = useSelector(selectRole);
+
   const needsConfig = useMemo(() => {
-    if (promptDismissed) return false;
     if (!["school_admin", "admin"].includes(role)) return false;
-    return schoolNeedsConfig(school);
+    if (!schoolNeedsConfig(school)) return false;
+    if (promptDismissed) return false;
+    if (typeof localStorage !== "undefined") {
+      if (localStorage.getItem(getDismissConfigKey(school?.id || school?._id)) === "1") return false;
+    }
+    const session = school?.currentSession || school?.school?.currentSession;
+    if (session && !isOnboardingDefaultDates(session)) return false;
+    return true;
   }, [promptDismissed, role, school]);
+
+  const dismissConfigPrompt = () => {
+    setPromptDismissed(true);
+    try { localStorage.setItem(getDismissConfigKey(school?.id || school?._id), "1"); } catch {}
+  };
+
+  const goToConfig = () => {
+    dismissConfigPrompt();
+    navigate("/account", { state: { configTab: "organization" } });
+  };
 
   return (
     <div className="flex h-screen overflow-hidden bg-paper">
@@ -70,17 +96,14 @@ export default function Layout() {
             <div className="flex items-center justify-end gap-2 border-t border-gray-100 bg-gray-50/50 px-6 py-3">
               <button
                 type="button"
-                onClick={() => setPromptDismissed(true)}
+                onClick={dismissConfigPrompt}
                 className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-[13px] font-medium text-slate-text transition hover:bg-gray-50"
               >
                 Cancel
               </button>
               <button
                 type="button"
-                onClick={() => {
-                  setPromptDismissed(true);
-                  navigate("/account", { state: { configTab: "organization" } });
-                }}
+                onClick={goToConfig}
                 className="rounded-lg bg-amber px-4 py-2 text-[13px] font-semibold text-ink transition hover:bg-amber-dark"
               >
                 Save now

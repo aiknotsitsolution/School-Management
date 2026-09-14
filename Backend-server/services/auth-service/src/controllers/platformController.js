@@ -1163,6 +1163,11 @@ const toSchoolJson = (raw) => ({
   pincode: raw.pincode || null,
   session: raw.session || null,
   academicConfigConfirmed: Boolean(raw.academicConfigConfirmed),
+  board: raw.board || null,
+  recognitionNumber: raw.recognitionNumber || null,
+  recognitionAuthority: raw.recognitionAuthority || null,
+  recognitionVerified: Boolean(raw.recognitionVerified),
+  recognitionVerifiedAt: raw.recognitionVerifiedAt || null,
   logo: raw.logo || null,
   website: raw.website || null,
   status: raw.status,
@@ -1226,7 +1231,7 @@ const getSchool360 = async (req, res) => {
   }
 };
 
-const SCHOOL_PROFILE_FIELDS = ["name", "shortName", "email", "phone", "address", "city", "state", "pincode", "website", "logo"];
+const SCHOOL_PROFILE_FIELDS = ["name", "shortName", "email", "phone", "address", "city", "state", "pincode", "website", "logo", "board", "recognitionNumber", "recognitionAuthority", "recognitionVerified"];
 
 const updateSchoolProfile = async (req, res) => {
   try {

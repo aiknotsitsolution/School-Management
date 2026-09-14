@@ -10,6 +10,9 @@ import {
   Timer,
   ArrowRight,
   GraduationCap,
+  AlertTriangle,
+  ShieldAlert,
+  Trophy,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
@@ -26,6 +29,7 @@ import { sessionLabel } from "../lib/session";
 import { useSelector } from "react-redux";
 import { todayISO, fmtDate, useTeacherContext } from "./teacher/useTeacherContext";
 import { EmptyBlock } from "../components/StateViews";
+import AttendanceCheckinModal from "../components/AttendanceCheckinModal";
 
 const WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
@@ -53,6 +57,10 @@ export default function TeacherDashboard() {
     hasClassTeacher,
     teachingAssignments,
     teachingScopes,
+    allScopes,
+    activeScope,
+    activeScopeIdx,
+    setActiveScope,
     loading: ctxLoading,
   } = useTeacherContext();
 
@@ -64,8 +72,11 @@ export default function TeacherDashboard() {
   const [timetable, setTimetable] = useState([]);
   const [notices, setNotices] = useState([]);
   const [staff, setStaff] = useState(null);
+  const [behaviorRecords, setBehaviorRecords] = useState([]);
+  const [achievements, setAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [showCheckin, setShowCheckin] = useState(false);
 
   const q = useMemo(
     () =>
@@ -84,6 +95,8 @@ export default function TeacherDashboard() {
       cls ? api.homework.list(q) : Promise.resolve({ data: [] }),
       cls ? api.exams.list(q) : Promise.resolve({ data: [] }),
       cls ? api.timetable.list(q) : Promise.resolve({ data: [] }),
+      cls ? api.behavior.list(`${q}&limit=50`) : Promise.resolve({ data: [] }),
+      cls ? api.achievements.list(`${q}&limit=50`) : Promise.resolve({ data: [] }),
     ]).then((res) => {
       const val = (i, key = "data") =>
         res[i].status === "fulfilled" ? res[i].value?.[key] : null;
@@ -95,6 +108,8 @@ export default function TeacherDashboard() {
       setHomework(Array.isArray(val(4)) ? val(4) : []);
       setExams(Array.isArray(val(5)) ? val(5) : []);
       setTimetable(Array.isArray(val(6)) ? val(6) : []);
+      setBehaviorRecords(Array.isArray(val(7)) ? val(7) : []);
+      setAchievements(Array.isArray(val(8)) ? val(8) : []);
       setLoading(false);
     });
   }, [cls, q]);
@@ -116,6 +131,14 @@ export default function TeacherDashboard() {
     });
     setMarkMap(map);
   }, [todayAttendance, students]);
+
+  useEffect(() => {
+    api.staff.attendance.meToday()
+      .then(({ data }) => {
+        if (!data) setShowCheckin(true);
+      })
+      .catch(() => setShowCheckin(true));
+  }, []);
 
   if (!ctxLoading && !loading && !cls) {
     return (
@@ -182,8 +205,17 @@ export default function TeacherDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="relative rounded-2xl overflow-hidden bg-ink">
-        <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink-light to-ink opacity-90" />
+      {showCheckin && (
+        <AttendanceCheckinModal
+          userName={user?.name || "Teacher"}
+          onDone={() => setShowCheckin(false)}
+        />
+      )}
+      <div className="relative rounded-2xl overflow-hidden bg-ink min-h-[200px] sm:min-h-[240px]">
+        {school?.settings?.bannerImage && (
+          <img src={school.settings.bannerImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/60 to-transparent" />
         <div className="relative z-10 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Avatar src={staff?.photoUrl} name={user?.name || "Teacher"} size={54} />
@@ -204,6 +236,26 @@ export default function TeacherDashboard() {
             </div>
           </div>
           <div className="flex gap-3">
+            {allScopes.length > 1 && (
+              <div className="relative bg-white/10 backdrop-blur rounded-xl px-3 py-2">
+                <label className="text-[10px] text-white/50 uppercase tracking-wide font-semibold block">Active Class</label>
+                <div className="flex items-center gap-1 mt-0.5">
+                  {allScopes.map((s, i) => (
+                    <button
+                      key={`${s.class}-${s.section}`}
+                      onClick={() => setActiveScope(i)}
+                      className={`text-[11.5px] font-semibold px-2 py-1 rounded-lg transition-colors ${
+                        i === activeScopeIdx
+                          ? "bg-white/20 text-white"
+                          : "text-white/50 hover:text-white/80"
+                      }`}
+                    >
+                      {s.class}-{s.section || "?"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-3 text-center">
               <p className="font-display text-xl font-bold text-white">{presentCount}</p>
               <p className="text-white/50 text-[11px]">Present today</p>
@@ -246,6 +298,60 @@ export default function TeacherDashboard() {
           accent="amber"
         />
       </div>
+
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          icon={ShieldAlert}
+          label="Behavior Records"
+          value={String(behaviorRecords.length)}
+          sub={`${behaviorRecords.filter((r) => !r.resolved).length} unresolved`}
+          accent="alert"
+        />
+        <StatCard
+          icon={Trophy}
+          label="Achievements"
+          value={String(achievements.length)}
+          sub={`${achievements.filter((r) => r.category === "academic").length} academic`}
+          accent="success"
+        />
+      </div>
+
+      {(() => {
+        const unmarkedStudents = students.filter((s) => !todayAttendance[s.admissionNo]);
+        const attentionItems = [];
+        if (unmarkedStudents.length > 0) {
+          attentionItems.push({
+            label: `${unmarkedStudents.length} student${unmarkedStudents.length === 1 ? "" : "s"} with no attendance marked today`,
+            tone: "alert",
+          });
+        }
+        if (overdueHomework.length > 0) {
+          attentionItems.push({
+            label: `${overdueHomework.length} homework assignment${overdueHomework.length === 1 ? "" : "s"} overdue`,
+            tone: "amber",
+          });
+        }
+        if (attentionItems.length === 0) return null;
+        return (
+          <Card title="Attention Required" className="border-l-4 border-l-alert">
+            <div className="flex flex-wrap gap-3">
+              {attentionItems.map((item, i) => (
+                <div
+                  key={i}
+                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[12.5px] font-semibold ${
+                    item.tone === "alert"
+                      ? "bg-alert/10 text-alert"
+                      : "bg-amber/15 text-amber-dark"
+                  }`}
+                >
+                  <AlertTriangle size={14} />
+                  {item.label}
+                </div>
+              ))}
+            </div>
+          </Card>
+        );
+      })()}
 
       <div className="grid lg:grid-cols-3 gap-5">
         <Card

@@ -1,4 +1,5 @@
 const StudentDocument = require("../models/StudentDocument");
+const Student = require("../models/Student");
 const imagekit = require("@school-erp/shared/src/config/imagekit");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
@@ -74,13 +75,28 @@ const uploadDocument = async (req, res) => {
 };
 
 // Lists documents. Students always see only their own; staff may filter by
-// studentId (and are tenant-scoped by resolveTenant).
+// studentId (and are tenant-scoped by resolveTenant). Teachers are additionally
+// constrained to their assigned classes — when a studentId is provided the
+// teacher's scope is verified against the student's class/section.
 const getDocuments = async (req, res) => {
   try {
     const filter = { schoolId: req.tenantId };
     if (req.user.role === "student") {
       filter.studentId = req.user.refId;
     } else if (req.query.studentId) {
+      // For teachers, verify the student belongs to an assigned class/section.
+      if (req.user.role === "teacher" && req.teacherScope) {
+        const student = await Student.findOne({
+          schoolId: req.tenantId,
+          $or: [
+            { admissionNo: req.query.studentId },
+            { _id: req.query.studentId },
+          ],
+        }).lean();
+        if (!student || !req.teacherScope.has(student.class, student.section)) {
+          return res.status(403).json({ success: false, message: "Access denied — student is not in your assigned classes" });
+        }
+      }
       filter.studentId = req.query.studentId;
     }
     if (req.query.category) filter.category = req.query.category;

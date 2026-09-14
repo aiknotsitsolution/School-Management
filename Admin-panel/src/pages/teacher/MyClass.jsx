@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Users, Search, X, Phone, MapPin, CalendarDays, UserRound } from "lucide-react";
+import { Users, Search, UserRound, CalendarDays } from "lucide-react";
 import {
   PageIntro,
   Card,
@@ -10,15 +10,16 @@ import {
   toast,
 } from "../../components/UI";
 import { api } from "../../lib/api";
-import { useTeacherContext, fmtDate } from "./useTeacherContext";
+import { useTeacherContext } from "./useTeacherContext";
+import StudentDetailModal from "./StudentDetailModal";
 
 export default function MyClass() {
-  const { cls, section, query, hasClassTeacher, teachingScopes, loading: ctxLoading } =
+  const { cls, section, query, hasClassTeacher, loading: ctxLoading } =
     useTeacherContext();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [profile, setProfile] = useState(null);
+  const [profileId, setProfileId] = useState(null);
 
   useEffect(() => {
     if (!query) return;
@@ -43,47 +44,24 @@ export default function MyClass() {
       .sort((a, b) => (a.rollNo || "").localeCompare(b.rollNo || ""));
   }, [students, search]);
 
-  const openProfile = async (id) => {
-    try {
-      const { data } = await api.students.get(id);
-      setProfile(data);
-    } catch (e) {
-      toast(e.message, "error");
-    }
+  const openProfile = (id) => {
+    setProfileId(id);
   };
 
   const present = (students || []).filter((s) => s.status === "Active").length;
 
-  if (!ctxLoading && !hasClassTeacher) {
+  if (!ctxLoading && !cls) {
     return (
       <Card>
         <div className="py-16 text-center">
           <Users size={40} className="mx-auto text-slate-text/30 mb-3" />
           <p className="text-[15px] font-semibold text-ink">
-            You are not a Class Teacher yet
+            No class assigned to your account yet
           </p>
-          <p className="text-[13px] text-slate-text/70 mt-1">
-            {teachingScopes.length
-              ? "This page is for your homeroom class. You are a subject teacher for " +
-                teachingScopes.map((s) => `Class ${s.class}-${s.section}`).join(", ") +
-                " — use Attendance, Timetable and Homework instead."
-              : "Your school admin will assign a Class Teacher responsibility to you."}
-          </p>
-        </div>
-      </Card>
-    );
-  }
-
-  if (!cls) {
-    return (
-      <Card>
-        <div className="py-16 text-center">
-          <Users size={40} className="mx-auto text-slate-text/30 mb-3" />
-          <p className="text-[15px] font-semibold text-ink">
-            No class assigned yet
-          </p>
-          <p className="text-[13px] text-slate-text/70 mt-1">
-            Contact your school admin to link your class and section.
+          <p className="text-[13px] text-slate-text/70 mt-1 max-w-sm mx-auto">
+            Your school admin needs to assign you a class and section before you
+            can view students here. Once assigned, your class roster will appear
+            on this page.
           </p>
         </div>
       </Card>
@@ -95,7 +73,11 @@ export default function MyClass() {
       <PageIntro
         eyebrow="My Teaching"
         title="My Class"
-        description={`Students assigned to Class ${cls}${section ? `-${section}` : ""}.`}
+        description={
+          hasClassTeacher
+            ? `You are the Class Teacher for ${cls}${section ? `-${section}` : ""}.`
+            : `Students in Class ${cls}${section ? `-${section}` : ""} that you teach.`
+        }
         right={
           <span className="text-[13px] font-medium text-slate-text">
             {students.length} students
@@ -216,83 +198,12 @@ export default function MyClass() {
         )}
       </Card>
 
-      {profile && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div
-            className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
-            onClick={() => setProfile(null)}
-          />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="bg-ink px-6 py-5 flex items-center justify-between">
-              <div className="flex items-center gap-3.5">
-                <Avatar name={profile.name} size={48} />
-                <div>
-                  <h3 className="font-display font-semibold text-white text-[17px]">
-                    {profile.name}
-                  </h3>
-                  <p className="text-white/60 text-[12.5px]">
-                    {profile.admissionNo} · Class {profile.class}-
-                    {profile.section}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={() => setProfile(null)}
-                className="p-2 rounded-lg hover:bg-white/10 text-white/70"
-              >
-                <X size={20} />
-              </button>
-            </div>
-            <div className="px-6 py-5 space-y-3.5">
-              <Row
-                icon={UserRound}
-                label="Roll No"
-                value={profile.rollNo || "—"}
-              />
-              <Row
-                icon={CalendarDays}
-                label="Date of Birth"
-                value={fmtDate(profile.dob)}
-              />
-              <Row icon={UserRound} label="Gender" value={profile.gender || "—"} />
-              <Row icon={MapPin} label="Address" value={profile.address || "—"} />
-              <Row
-                icon={Phone}
-                label="Parent Contact"
-                value={`${profile.parentName || "—"} · ${profile.parentContact || "—"}`}
-              />
-              <Row
-                icon={CalendarDays}
-                label="Admission Date"
-                value={fmtDate(profile.admissionDate)}
-              />
-              <Row
-                icon={UserRound}
-                label="Profile Status"
-                value={profile.profileStatus === "complete" ? "Complete" : "Incomplete"}
-              />
-            </div>
-          </div>
-        </div>
+      {profileId && (
+        <StudentDetailModal
+          studentId={profileId}
+          onClose={() => setProfileId(null)}
+        />
       )}
-    </div>
-  );
-}
-
-function Row({ icon: Icon, label, value }) {
-  return (
-    <div className="flex items-start gap-3">
-      <div className="w-8 h-8 rounded-lg bg-paper flex items-center justify-center text-slate-text shrink-0">
-        <Icon size={15} />
-      </div>
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold text-slate-text/60 uppercase tracking-wide">
-          {label}
-        </p>
-        <p className="text-[13.5px] font-medium text-ink mt-0.5 break-words">
-          {value}
-        </p>
-      </div>
     </div>
   );
 }

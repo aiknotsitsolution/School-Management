@@ -13,8 +13,11 @@ import {
   Settings,
   School,
   ShieldCheck,
+  Users,
+  GraduationCap,
+  Briefcase,
 } from "lucide-react";
-import { selectRole, selectUser } from "../store/selectors";
+import { selectRole, selectUser, selectSchool } from "../store/selectors";
 import { logout } from "../store/authSlice";
 import { api } from "../lib/api";
 
@@ -47,12 +50,19 @@ export default function Topbar({ onMenuClick }) {
   const navigate = useNavigate();
   const user = useSelector(selectUser);
   const role = useSelector(selectRole);
+  const school = useSelector(selectSchool);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const dropdownRef = useRef(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [searchResults, setSearchResults] = useState({ students: [], staff: [] });
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchLoading, setSearchLoading] = useState(false);
+  const searchRef = useRef(null);
+  const searchTimerRef = useRef(null);
 
   const refresh = useCallback(async () => {
     try {
@@ -107,6 +117,42 @@ export default function Topbar({ onMenuClick }) {
       document.removeEventListener("keydown", onKeyDown);
     };
   }, [profileOpen]);
+
+  // Global search
+  useEffect(() => {
+    if (!searchOpen) return;
+    const onClickOutside = (e) => {
+      if (searchRef.current && !searchRef.current.contains(e.target)) {
+        setSearchOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, [searchOpen]);
+
+  useEffect(() => {
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    const q = searchQuery.trim();
+    if (q.length < 2) {
+      setSearchResults({ students: [], staff: [] });
+      setSearchLoading(false);
+      return;
+    }
+    setSearchLoading(true);
+    searchTimerRef.current = setTimeout(() => {
+      Promise.allSettled([
+        api.students.list(`search=${encodeURIComponent(q)}&limit=5`),
+        api.staff.list(`search=${encodeURIComponent(q)}&limit=5`),
+      ]).then(([sRes, stRes]) => {
+        setSearchResults({
+          students: sRes.status === "fulfilled" ? (sRes.value.data || []).slice(0, 5) : [],
+          staff: stRes.status === "fulfilled" ? (stRes.value.data || []).slice(0, 5) : [],
+        });
+        setSearchLoading(false);
+      });
+    }, 350);
+    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+  }, [searchQuery]);
 
   const handleMarkAllRead = async () => {
     await api.notifications.markAllRead().catch(() => {});
@@ -166,15 +212,93 @@ export default function Topbar({ onMenuClick }) {
         <button onClick={onMenuClick} className="lg:hidden text-ink p-1 -ml-1">
           <Menu size={22} />
         </button>
+        {school?.name && (
+          <div className="hidden lg:flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-amber/10 flex items-center justify-center shrink-0">
+              <School size={17} className="text-amber" />
+            </div>
+            <p className="text-[16px] font-bold text-ink truncate max-w-[260px]">{school.name}</p>
+          </div>
+        )}
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
-        <div className="hidden md:flex items-center gap-2 bg-paper rounded-full px-4 py-2 w-64 border border-black/[0.06]">
-          <Search size={16} className="text-slate-text/60" />
-          <input
-            placeholder="Search students, staff, records..."
-            className="bg-transparent outline-none text-[13px] w-full placeholder:text-slate-text/50"
-          />
+        <div className="hidden md:block relative" ref={searchRef}>
+          <div className="flex items-center gap-2 bg-paper rounded-full px-4 py-2 w-64 border border-black/[0.06] focus-within:border-amber focus-within:ring-2 focus-within:ring-amber/15 transition-all">
+            <Search size={16} className="text-slate-text/60" />
+            <input
+              placeholder="Search students, staff..."
+              value={searchQuery}
+              onChange={(e) => { setSearchQuery(e.target.value); setSearchOpen(true); }}
+              onFocus={() => setSearchOpen(true)}
+              className="bg-transparent outline-none text-[13px] w-full placeholder:text-slate-text/50"
+            />
+          </div>
+
+          {searchOpen && searchQuery.trim().length >= 2 && (
+            <div className="absolute right-0 mt-2 w-96 bg-white rounded-xl border border-black/[0.08] shadow-lg shadow-black/5 overflow-hidden z-30">
+              {searchLoading ? (
+                <div className="px-4 py-8 text-center">
+                  <div className="w-5 h-5 border-2 border-amber border-t-transparent rounded-full animate-spin mx-auto" />
+                  <p className="text-[12px] text-slate-text/60 mt-2">Searching...</p>
+                </div>
+              ) : (searchResults.students.length === 0 && searchResults.staff.length === 0) ? (
+                <div className="px-4 py-8 text-center">
+                  <Search size={20} className="text-slate-text/30 mx-auto mb-2" />
+                  <p className="text-[13px] text-slate-text/60">No results for "{searchQuery.trim()}"</p>
+                </div>
+              ) : (
+                <div className="max-h-80 overflow-y-auto">
+                  {searchResults.students.length > 0 && (
+                    <div>
+                      <div className="px-4 py-2 border-b border-black/[0.04] flex items-center gap-2">
+                        <GraduationCap size={13} className="text-primary" />
+                        <p className="text-[11px] font-semibold text-slate-text/60 uppercase tracking-wide">Students</p>
+                      </div>
+                      {searchResults.students.map((s) => (
+                        <button
+                          key={s._id}
+                          onClick={() => { setSearchOpen(false); setSearchQuery(""); navigate("/students"); }}
+                          className="w-full text-left px-4 py-2.5 hover:bg-paper transition-colors flex items-center gap-3"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <GraduationCap size={14} className="text-primary" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-ink truncate">{s.name}</p>
+                            <p className="text-[11px] text-slate-text/60">{s.admissionNo || "—"} · Class {s.class}-{s.section}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                  {searchResults.staff.length > 0 && (
+                    <div>
+                      <div className="px-4 py-2 border-b border-black/[0.04] flex items-center gap-2">
+                        <Briefcase size={13} className="text-amber" />
+                        <p className="text-[11px] font-semibold text-slate-text/60 uppercase tracking-wide">Staff</p>
+                      </div>
+                      {searchResults.staff.map((s) => (
+                        <button
+                          key={s._id}
+                          onClick={() => { setSearchOpen(false); setSearchQuery(""); navigate("/teachers"); }}
+                          className="w-full text-left px-4 py-2.5 hover:bg-paper transition-colors flex items-center gap-3"
+                        >
+                          <div className="w-8 h-8 rounded-full bg-amber/10 flex items-center justify-center shrink-0">
+                            <Briefcase size={14} className="text-amber" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-[13px] font-semibold text-ink truncate">{s.name}</p>
+                            <p className="text-[11px] text-slate-text/60">{s.employeeId || "—"} · {s.designation || "Staff"}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         <div className="relative" ref={dropdownRef}>

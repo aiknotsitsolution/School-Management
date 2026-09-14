@@ -952,7 +952,7 @@ export default function Teachers() {
                     </div>
                     <div>
                       <label className="text-[12px] font-semibold text-ink mb-1.5 block">Email</label>
-                      <Input type="email" value={form.email} onChange={(e) => updateForm("email", e.target.value)} placeholder="name@school.edu" />
+                      <Input type="email" value={form.email} onChange={(e) => updateForm("email", e.target.value)} placeholder="enter-personal@gmail.com" />
                     </div>
                     <div className="sm:col-span-2">
                       <label className="text-[12px] font-semibold text-ink mb-1.5 block">Address</label>

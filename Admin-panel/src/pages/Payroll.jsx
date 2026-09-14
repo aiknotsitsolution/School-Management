@@ -12,6 +12,7 @@ import {
   TrendingUp,
   FileText,
   Save,
+  Pencil,
 } from "lucide-react";
 import {
   PageIntro,
@@ -23,6 +24,7 @@ import {
   StatCard,
   toast,
 } from "../components/UI";
+import SearchableSelect from "../components/SearchableSelect";
 import { api } from "../lib/api";
 import { isNonEmpty, isNonNegativeNumber, isPositiveNumber } from "../lib/validation.js";
 import { selectSchool } from "../store/selectors";
@@ -52,9 +54,10 @@ function payMonth() {
 function emptyForm() {
   return {
     staffId: "",
-    basic: 0,
-    allowances: 0,
-    deductions: 0,
+    basic: "",
+    allowances: "",
+    deductions: "",
+    deductionReason: "",
   };
 }
 
@@ -68,6 +71,7 @@ export default function Payroll() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [payslip, setPayslip] = useState(null);
+  const [editing, setEditing] = useState(null);
 
   const reload = useCallback(() => {
     Promise.all([
@@ -85,6 +89,7 @@ export default function Payroll() {
           const s = map[String(p.staffId)];
           return {
             id: p._id,
+            employeeId: s?.employeeId || "—",
             name: s?.name || "Staff member",
             department: s?.department || "—",
             designation: s?.designation || "—",
@@ -93,6 +98,7 @@ export default function Payroll() {
             basic: Number(p.basic || 0),
             allowances: Number(p.allowances || 0),
             deductions: Number(p.deductions || 0),
+            deductionReason: p.deductionReason || "",
             paid: p.status === "Paid",
           };
         }),
@@ -118,7 +124,7 @@ export default function Payroll() {
       const matchQuery =
         !q ||
         e.name.toLowerCase().includes(q) ||
-        e.id.toLowerCase().includes(q) ||
+        e.employeeId.toLowerCase().includes(q) ||
         e.designation.toLowerCase().includes(q);
       return matchPeriod && matchDept && matchQuery;
     });
@@ -165,12 +171,17 @@ export default function Payroll() {
       toast("Basic salary must be a positive number", "error");
       return;
     }
-    if (!isNonNegativeNumber(form.allowances)) {
+    if (form.allowances !== "" && !isNonNegativeNumber(form.allowances)) {
       toast("Allowances must be a non-negative number", "error");
       return;
     }
-    if (!isNonNegativeNumber(form.deductions)) {
+    if (form.deductions !== "" && !isNonNegativeNumber(form.deductions)) {
       toast("Deductions must be a non-negative number", "error");
+      return;
+    }
+    const ded = Number(form.deductions) || 0;
+    if (ded > 0 && !isNonEmpty(form.deductionReason)) {
+      toast("Please provide a reason for the deduction", "error");
       return;
     }
     try {
@@ -179,10 +190,11 @@ export default function Payroll() {
         month,
         year,
         basic: Number(form.basic),
-        allowances: Number(form.allowances),
-        deductions: Number(form.deductions),
+        allowances: Number(form.allowances) || 0,
+        deductions: ded,
+        deductionReason: form.deductionReason || "",
       });
-      toast("Employee added to payroll");
+      toast("Payroll entry created");
       setShowModal(false);
       setForm(emptyForm());
       reload();
@@ -196,9 +208,69 @@ export default function Payroll() {
     setShowModal(true);
   };
 
+  const [generating, setGenerating] = useState(false);
+
+  const openEdit = (e) => {
+    setEditing({
+      id: e.id,
+      name: e.name,
+      basic: String(e.basic),
+      allowances: String(e.allowances),
+      deductions: String(e.deductions),
+      deductionReason: "",
+    });
+  };
+
+  const saveEdit = async () => {
+    if (!isPositiveNumber(editing.basic)) {
+      toast("Basic salary must be a positive number", "error");
+      return;
+    }
+    if (editing.allowances !== "" && !isNonNegativeNumber(editing.allowances)) {
+      toast("Allowances must be a non-negative number", "error");
+      return;
+    }
+    if (editing.deductions !== "" && !isNonNegativeNumber(editing.deductions)) {
+      toast("Deductions must be a non-negative number", "error");
+      return;
+    }
+    const ded = Number(editing.deductions) || 0;
+    if (ded > 0 && !isNonEmpty(editing.deductionReason)) {
+      toast("Please provide a reason for the deduction", "error");
+      return;
+    }
+    try {
+      await api.payroll.update(editing.id, {
+        basic: Number(editing.basic),
+        allowances: Number(editing.allowances) || 0,
+        deductions: ded,
+        deductionReason: editing.deductionReason || "",
+      });
+      toast("Payroll entry updated");
+      setEditing(null);
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  };
+
+  const generateAll = async () => {
+    if (!window.confirm(`Generate payroll for ALL active staff for ${month} ${year}? Staff with existing entries will be skipped.`)) return;
+    setGenerating(true);
+    try {
+      const { data } = await api.payroll.generateAll(month, year);
+      toast(`Created ${data.created} new payroll entries (${data.skipped} already existed)`);
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const exportCsv = () => {
     const header = [
-      "ID",
+      "Employee ID",
       "Name",
       "Department",
       "Basic",
@@ -208,7 +280,7 @@ export default function Payroll() {
       "Status",
     ];
     const rows = filtered.map((e) => [
-      e.id,
+      e.employeeId,
       e.name,
       e.department,
       e.basic,
@@ -244,15 +316,20 @@ export default function Payroll() {
               <Download size={15} /> Export CSV
             </Button>
             <PermissionGate permission="payroll:admin">
+              <Button variant="outline" onClick={generateAll} disabled={generating}>
+                <TrendingUp size={15} /> {generating ? "Generating…" : "Generate for all staff"}
+              </Button>
+            </PermissionGate>
+            <PermissionGate permission="payroll:admin">
               <Button variant="amber" onClick={openAdd}>
-                <Plus size={15} /> Add Employee
+                <Plus size={15} /> Create new payroll entry
               </Button>
             </PermissionGate>
           </div>
         }
       />
 
-      <Card className="!p-0 overflow-hidden">
+      <Card className="!p-0">
         <div className="flex flex-wrap items-center gap-3 p-4 border-b border-black/[0.06]">
           <div className="flex items-center gap-1.5 rounded-xl border border-black/10 bg-white p-1.5 shadow-sm">
             <Select
@@ -394,7 +471,7 @@ export default function Payroll() {
                       <td className="px-5 py-3">
                         <p className="font-semibold text-ink">{e.name}</p>
                         <p className="text-[11.5px] text-slate-text/50">
-                          {e.id} · {e.designation}
+                          {e.employeeId} · {e.designation}
                         </p>
                       </td>
                       <td className="px-5 py-3 text-slate-text">
@@ -426,12 +503,21 @@ export default function Payroll() {
                             <FileText size={14} /> Payslip
                           </button>
                           {!e.paid && (
-                            <button
-                              onClick={() => togglePaid(e.id)}
-                              className="text-[12px] font-semibold text-success hover:underline"
-                            >
-                              Pay
-                            </button>
+                            <>
+                              <button
+                                onClick={() => openEdit(e)}
+                                className="p-1 rounded hover:bg-paper text-slate-text/60 hover:text-ink"
+                                title="Edit entry"
+                              >
+                                <Pencil size={14} />
+                              </button>
+                              <button
+                                onClick={() => togglePaid(e.id)}
+                                className="text-[12px] font-semibold text-success hover:underline"
+                              >
+                                Release Salary
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -453,7 +539,7 @@ export default function Payroll() {
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
               <h3 className="font-display font-semibold text-ink text-[17px]">
-                Add Employee
+                Create Payroll Entry
               </h3>
               <button
                 onClick={() => setShowModal(false)}
@@ -464,23 +550,29 @@ export default function Payroll() {
             </div>
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
               <PayField label="Employee *">
-                <Select
+                <SearchableSelect
+                  options={staffList.map((s) => String(s._id || s.id))}
                   value={form.staffId}
-                  onChange={(e) =>
-                    setForm((f) => ({ ...f, staffId: e.target.value }))
-                  }
-                >
-                  <option value="">Select staff…</option>
-                  {staffList.map((s) => (
-                    <option
-                      key={String(s._id || s.id)}
-                      value={String(s._id || s.id)}
-                    >
-                      {s.name}
-                      {s.employeeId ? ` (${s.employeeId})` : ""}
-                    </option>
-                  ))}
-                </Select>
+                  onChange={(sid) => {
+                    const selected = staffList.find(
+                      (s) => String(s._id || s.id) === sid,
+                    );
+                    setForm((f) => ({
+                      ...f,
+                      staffId: sid,
+                      basic: selected?.salary || f.basic,
+                    }));
+                  }}
+                  placeholder="Search by name or staff ID…"
+                  renderLabel={(sid) => {
+                    const s = staffList.find(
+                      (st) => String(st._id || st.id) === sid,
+                    );
+                    return s
+                      ? `${s.name}${s.employeeId ? ` (${s.employeeId})` : ""}`
+                      : sid;
+                  }}
+                />
               </PayField>
               <p className="text-[12px] text-slate-text/60 -mt-2">
                 Creates a payroll entry for the selected staff for {month}{" "}
@@ -492,8 +584,9 @@ export default function Payroll() {
                     type="number"
                     min={0}
                     value={form.basic}
+                    className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     onChange={(e) =>
-                      setForm((f) => ({ ...f, basic: Number(e.target.value) }))
+                      setForm((f) => ({ ...f, basic: e.target.value }))
                     }
                   />
                 </PayField>
@@ -502,10 +595,11 @@ export default function Payroll() {
                     type="number"
                     min={0}
                     value={form.allowances}
+                    className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     onChange={(e) =>
                       setForm((f) => ({
                         ...f,
-                        allowances: Number(e.target.value),
+                        allowances: e.target.value,
                       }))
                     }
                   />
@@ -516,14 +610,30 @@ export default function Payroll() {
                   type="number"
                   min={0}
                   value={form.deductions}
+                  className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                   onChange={(e) =>
                     setForm((f) => ({
                       ...f,
-                      deductions: Number(e.target.value),
+                      deductions: e.target.value,
                     }))
                   }
                 />
               </PayField>
+              {Number(form.deductions) > 0 && (
+                <PayField label="Deduction Reason *">
+                  <Input
+                    type="text"
+                    placeholder="e.g. Late attendance, advance recovery…"
+                    value={form.deductionReason}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        deductionReason: e.target.value,
+                      }))
+                    }
+                  />
+                </PayField>
+              )}
             </div>
             <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowModal(false)}>
@@ -534,7 +644,7 @@ export default function Payroll() {
                 onClick={saveEmp}
                 disabled={!form.staffId || !Number(form.basic)}
               >
-                <Save size={15} /> Add Employee
+                <Save size={15} /> Create Payroll Entry
               </Button>
             </div>
           </div>
@@ -542,91 +652,248 @@ export default function Payroll() {
       )}
 
       {payslip && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" id="payslip-print-root">
           <div
             className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
             onClick={() => setPayslip(null)}
           />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+          <div className="relative bg-white shadow-2xl w-full max-w-[780px] overflow-hidden payslip-a4">
+            {/* Close button — hidden on print */}
+            <button
+              onClick={() => setPayslip(null)}
+              className="absolute top-3 right-3 z-10 p-2 rounded-lg hover:bg-ink/10 text-ink/40 hover:text-ink payslip-hide-on-print"
+            >
+              <X size={18} />
+            </button>
+
+            {/* School Header */}
+            <div className="bg-ink px-8 py-5 flex items-center gap-5">
+              {school?.logo ? (
+                <img
+                  src={school.logo}
+                  alt="School Logo"
+                  className="w-16 h-16 rounded-lg object-contain bg-white p-1 shrink-0"
+                />
+              ) : (
+                <div className="w-16 h-16 rounded-lg bg-white/10 flex items-center justify-center text-amber font-display font-bold text-[22px] shrink-0">
+                  {(school?.shortName || "S").slice(0, 2).toUpperCase()}
+                </div>
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="font-display font-bold text-white text-[19px] truncate">
+                  {school?.name || "School Name"}
+                </p>
+                <p className="text-amber/80 text-[12px] truncate">
+                  {[school?.address, school?.city, school?.state].filter(Boolean).join(", ")}
+                </p>
+                <p className="text-white/50 text-[11px] mt-0.5">
+                  {[school?.phone, school?.email].filter(Boolean).join(" · ")}
+                  {school?.website ? ` · ${school.website}` : ""}
+                </p>
+              </div>
+            </div>
+
+            {/* Title bar */}
+            <div className="bg-paper/60 border-b border-black/[0.06] px-8 py-3 flex items-center justify-between">
+              <div>
+                <p className="font-display font-bold text-ink text-[16px]">Salary Slip</p>
+                <p className="text-[12px] text-slate-text/60">{month} {year}</p>
+              </div>
+              <div className="text-right text-[11px] text-slate-text/50">
+                {school?.board && <p>Board: <span className="font-medium text-ink">{school.board}</span></p>}
+                {school?.recognitionNumber && <p>Affiliation: <span className="font-medium text-ink">{school.recognitionNumber}</span></p>}
+              </div>
+            </div>
+
+            <div className="px-8 py-5 space-y-5">
+              {/* Employee details grid */}
+              <div className="grid grid-cols-3 gap-x-6 gap-y-3 text-[13px] border border-black/[0.06] rounded-xl p-4">
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-text/50">Employee Name</span>
+                  <p className="font-semibold text-ink mt-0.5">{payslip.name}</p>
+                </div>
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-text/50">Employee ID</span>
+                  <p className="font-mono font-medium text-ink mt-0.5">{payslip.employeeId}</p>
+                </div>
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-text/50">Department</span>
+                  <p className="font-medium text-ink mt-0.5">{payslip.department}</p>
+                </div>
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-text/50">Designation</span>
+                  <p className="font-medium text-ink mt-0.5">{payslip.designation}</p>
+                </div>
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-text/50">Pay Period</span>
+                  <p className="font-medium text-ink mt-0.5">{month} {year}</p>
+                </div>
+                <div>
+                  <span className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-text/50">Payment Date</span>
+                  <p className="font-medium text-ink mt-0.5">{payslip.paid ? new Date().toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" }) : "—"}</p>
+                </div>
+              </div>
+
+              {/* Earnings + Deductions side by side */}
+              <div className="grid grid-cols-2 gap-5">
+                {/* Earnings */}
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-text/50 mb-2">Earnings</p>
+                  <div className="rounded-xl border border-black/[0.06] divide-y divide-black/[0.04]">
+                    <div className="flex justify-between px-4 py-2.5 text-[13px]">
+                      <span className="text-slate-text">Basic Salary</span>
+                      <span className="font-semibold text-ink">₹{payslip.basic.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between px-4 py-2.5 text-[13px]">
+                      <span className="text-slate-text">Allowances</span>
+                      <span className="font-semibold text-success">+ ₹{payslip.allowances.toLocaleString("en-IN")}</span>
+                    </div>
+                    <div className="flex justify-between px-4 py-2.5 text-[13px] bg-success/[0.03]">
+                      <span className="font-semibold text-ink">Gross Earnings</span>
+                      <span className="font-bold text-ink">₹{(payslip.basic + payslip.allowances).toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Deductions */}
+                <div>
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-text/50 mb-2">Deductions</p>
+                  <div className="rounded-xl border border-black/[0.06] divide-y divide-black/[0.04]">
+                    <div className="flex justify-between px-4 py-2.5 text-[13px]">
+                      <span className="text-slate-text">Deductions</span>
+                      <span className="font-semibold text-alert">- ₹{payslip.deductions.toLocaleString("en-IN")}</span>
+                    </div>
+                    {payslip.deductions > 0 && payslip.deductionReason && (
+                      <div className="px-4 py-2 text-[12px] text-slate-text/60">
+                        Reason: {payslip.deductionReason}
+                      </div>
+                    )}
+                    <div className="flex justify-between px-4 py-2.5 text-[13px] bg-alert/[0.03]">
+                      <span className="font-semibold text-ink">Total Deductions</span>
+                      <span className="font-bold text-alert">₹{payslip.deductions.toLocaleString("en-IN")}</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Net salary */}
+              <div className="rounded-xl bg-ink px-6 py-4 flex items-center justify-between">
+                <div>
+                  <p className="text-[13px] text-white/80 font-semibold">Net Payable</p>
+                  <p className="text-[11px] text-white/40">After all deductions</p>
+                </div>
+                <p className="text-[28px] font-display font-bold text-amber">
+                  ₹{(payslip.basic + payslip.allowances - payslip.deductions).toLocaleString("en-IN")}
+                </p>
+              </div>
+
+              {/* Signature + footer */}
+              <div className="flex items-end justify-between pt-2 border-t border-black/[0.06]">
+                <div className="text-[12px] text-slate-text/50">
+                  {school?.recognitionAuthority && <p>Authority: {school.recognitionAuthority}</p>}
+                  <p className="mt-1">This is a computer-generated payslip.</p>
+                </div>
+                <div className="text-center">
+                  <div className="border-t border-ink/30 w-40 pt-1 text-[12px] text-slate-text/60">
+                    Authorized Signatory
+                  </div>
+                </div>
+              </div>
+
+              {/* Status + actions */}
+              <div className="flex items-center justify-between pt-1 payslip-hide-on-print">
+                <Pill tone={payslip.paid ? "success" : "amber"}>
+                  {payslip.paid ? "Paid" : "Pending"}
+                </Pill>
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setPayslip(null)}>Close</Button>
+                  <Button variant="amber" onClick={() => window.print()}>
+                    <Download size={14} /> Print
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {editing && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
+            onClick={() => setEditing(null)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
               <h3 className="font-display font-semibold text-ink text-[17px]">
-                Payslip — {month} {year}
+                Edit Payroll — {editing.name}
               </h3>
               <button
-                onClick={() => setPayslip(null)}
+                onClick={() => setEditing(null)}
                 className="p-2 rounded-lg hover:bg-paper text-slate-text"
               >
                 <X size={20} />
               </button>
             </div>
-            <div className="px-5 py-5 space-y-3">
-              <div className="text-center">
-                <p className="font-display font-bold text-ink text-[18px]">
-                  {school?.name || "Zipschool OS"}
-                </p>
-                <p className="text-[12px] text-slate-text/60">
-                  Salary Statement — {month} {year}
-                </p>
+            <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div className="grid grid-cols-2 gap-3">
+                <PayField label="Basic Salary">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={editing.basic}
+                    className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    onChange={(e) =>
+                      setEditing((f) => ({ ...f, basic: e.target.value }))
+                    }
+                  />
+                </PayField>
+                <PayField label="Allowances">
+                  <Input
+                    type="number"
+                    min={0}
+                    value={editing.allowances}
+                    className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                    onChange={(e) =>
+                      setEditing((f) => ({ ...f, allowances: e.target.value }))
+                    }
+                  />
+                </PayField>
               </div>
-              <div className="h-px bg-black/[0.06]" />
-              <div className="grid grid-cols-2 gap-2 text-[13px]">
-                <div>
-                  <span className="text-slate-text/60">Employee</span>
-                  <p className="font-semibold text-ink">{payslip.name}</p>
-                </div>
-                <div>
-                  <span className="text-slate-text/60">ID</span>
-                  <p className="font-mono font-medium text-ink">{payslip.id}</p>
-                </div>
-                <div>
-                  <span className="text-slate-text/60">Department</span>
-                  <p className="font-medium text-ink">{payslip.department}</p>
-                </div>
-                <div>
-                  <span className="text-slate-text/60">Designation</span>
-                  <p className="font-medium text-ink">{payslip.designation}</p>
-                </div>
-              </div>
-              <div className="h-px bg-black/[0.06]" />
-              <div className="space-y-2 text-[13px]">
-                <div className="flex justify-between">
-                  <span className="text-slate-text">Basic</span>
-                  <span className="font-medium text-ink">
-                    ₹{payslip.basic.toLocaleString("en-IN")}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-text">Allowances</span>
-                  <span className="font-medium text-ink">
-                    + ₹{payslip.allowances.toLocaleString("en-IN")}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-slate-text">Deductions</span>
-                  <span className="font-medium text-ink">
-                    - ₹{payslip.deductions.toLocaleString("en-IN")}
-                  </span>
-                </div>
-              </div>
-              <div className="h-px bg-black/[0.06]" />
-              <div className="flex justify-between items-center">
-                <span className="text-[14px] font-semibold text-ink">
-                  Net Salary
-                </span>
-                <span className="text-[20px] font-display font-bold text-success">
-                  ₹
-                  {(
-                    payslip.basic +
-                    payslip.allowances -
-                    payslip.deductions
-                  ).toLocaleString("en-IN")}
-                </span>
-              </div>
-              <div className="flex justify-end">
-                <Pill tone={payslip.paid ? "success" : "amber"}>
-                  {payslip.paid ? "Paid" : "Pending"}
-                </Pill>
-              </div>
+              <PayField label="Deductions">
+                <Input
+                  type="number"
+                  min={0}
+                  value={editing.deductions}
+                  className="[appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                  onChange={(e) =>
+                    setEditing((f) => ({ ...f, deductions: e.target.value }))
+                  }
+                />
+              </PayField>
+              {Number(editing.deductions) > 0 && (
+                <PayField label="Deduction Reason *">
+                  <Input
+                    type="text"
+                    placeholder="e.g. Late attendance, advance recovery…"
+                    value={editing.deductionReason}
+                    onChange={(e) =>
+                      setEditing((f) => ({
+                        ...f,
+                        deductionReason: e.target.value,
+                      }))
+                    }
+                  />
+                </PayField>
+              )}
+            </div>
+            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setEditing(null)}>
+                Cancel
+              </Button>
+              <Button variant="amber" onClick={saveEdit}>
+                <Save size={15} /> Save Changes
+              </Button>
             </div>
           </div>
         </div>

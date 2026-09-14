@@ -53,6 +53,12 @@ import StudentTransport from "./pages/student/Transport";
 import StudentDocuments from "./pages/student/Documents";
 import StudentHostel from "./pages/student/Hostel";
 import StudentEvents from "./pages/student/Events";
+import StudentAchievements from "./pages/student/Achievements";
+import StudentBehavior from "./pages/student/Behavior";
+import StudentLeave from "./pages/student/Leave";
+import StudentNotifications from "./pages/student/Notifications";
+import StudentStudyMaterials from "./pages/student/StudyMaterials";
+import StudentSyllabus from "./pages/student/Syllabus";
 import StaffDashboard from "./pages/StaffDashboard";
 import MyAttendance from "./pages/MyAttendance";
 import Notifications from "./pages/Notifications";
@@ -87,6 +93,8 @@ import Plans from "./pages/Plans";
 import Subscriptions from "./pages/Subscriptions";
 import CounsellorWorkspace from "./pages/CounsellorWorkspace";
 import StudentCompleteProfile from "./pages/StudentCompleteProfile";
+import BehaviorLog from "./pages/BehaviorLog";
+import Achievements from "./pages/Achievements";
 import {
   selectIsAuthenticated,
   selectRole,
@@ -145,6 +153,17 @@ function RequirePersona({ designation, children, fallback = "/" }) {
 function RequireNotStudent({ children, fallback = "/student-dashboard" }) {
   const role = useSelector(selectRole);
   if (role === "student") {
+    return <Navigate to={fallback} replace />;
+  }
+  return children;
+}
+
+// Teacher attendance management lives under /teacher/attendance with
+// class-scoped APIs. The admin /attendance page shows school-wide data that
+// should not be accessible to teachers via direct URL navigation.
+function RequireNotTeacher({ children, fallback = "/teacher-dashboard" }) {
+  const role = useSelector(selectRole);
+  if (role === "teacher") {
     return <Navigate to={fallback} replace />;
   }
   return children;
@@ -478,6 +497,54 @@ export default function App() {
             }
           />
           <Route
+            path="/student/achievements"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentAchievements />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/behavior"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentBehavior />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/leave"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentLeave />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/notifications"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentNotifications />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/study-materials"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentStudyMaterials />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/student/syllabus"
+            element={
+              <RequireRole roles={["student"]}>
+                <StudentSyllabus />
+              </RequireRole>
+            }
+          />
+          <Route
             path="/staff-dashboard"
             element={
               <RequireRole roles={["staff"]}>
@@ -488,7 +555,7 @@ export default function App() {
           <Route
             path="/staff/my-attendance"
             element={
-              <RequireRole roles={["staff"]}>
+              <RequireRole roles={["staff", "teacher"]}>
                 <MyAttendance />
               </RequireRole>
             }
@@ -603,7 +670,9 @@ export default function App() {
             element={
               <RequirePermission permission="attendance:read">
                 <RequireNotStudent>
-                  <Attendance />
+                  <RequireNotTeacher>
+                    <Attendance />
+                  </RequireNotTeacher>
                 </RequireNotStudent>
               </RequirePermission>
             }
@@ -778,6 +847,26 @@ export default function App() {
             element={
               <RequirePermission permission="reports:view">
                 <Reports />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/behavior"
+            element={
+              <RequirePermission permission="conduct:read">
+                <RequireNotStudent>
+                  <BehaviorLog />
+                </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/achievements"
+            element={
+              <RequirePermission permission="achievements:read">
+                <RequireNotStudent>
+                  <Achievements />
+                </RequireNotStudent>
               </RequirePermission>
             }
           />

@@ -106,6 +106,15 @@ function toRollText(value) {
   return String(value).trim();
 }
 
+function fmtDate(d) {
+  if (!d) return "—";
+  return new Date(d).toLocaleDateString("en-IN", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function normalizeStudent(student) {
   return {
     ...student,
@@ -392,20 +401,18 @@ export default function Students() {
         ) : (
           <>
           <div className="overflow-x-auto -mx-5">
-            <table className="w-full text-[13px]">
+            <table className="w-full text-[12.5px]">
               <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
-                  <th className="px-5 py-2.5 font-semibold">Student</th>
-                  <th className="px-5 py-2.5 font-semibold">Admission ID</th>
-                  <th className="px-5 py-2.5 font-semibold">Class</th>
-                  <th className="px-5 py-2.5 font-semibold">Medium</th>
-                  <th className="px-5 py-2.5 font-semibold">Roll No.</th>
-                  <th className="px-5 py-2.5 font-semibold">Attendance</th>
-                  <th className="px-5 py-2.5 font-semibold">Fee Status</th>
-                  <th className="px-5 py-2.5 font-semibold">Contact</th>
-                  <th className="px-5 py-2.5 font-semibold text-right">
-                    Actions
-                  </th>
+                <tr className="text-left text-slate-text/60 text-[11px] uppercase tracking-wide border-b border-black/[0.06]">
+                  <th className="px-4 py-2.5 font-semibold">Student</th>
+                  <th className="px-4 py-2.5 font-semibold">Admission ID</th>
+                  <th className="px-4 py-2.5 font-semibold">Class</th>
+                  <th className="px-4 py-2.5 font-semibold">Medium</th>
+                  <th className="px-4 py-2.5 font-semibold">Roll No.</th>
+                  <th className="px-4 py-2.5 font-semibold">Attendance</th>
+                  <th className="px-4 py-2.5 font-semibold">Fee Status</th>
+                  <th className="px-4 py-2.5 font-semibold">Contact</th>
+                  <th className="px-4 py-2.5 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -415,34 +422,31 @@ export default function Students() {
                     className="border-b border-black/[0.04] last:border-0 hover:bg-paper/50 transition-colors cursor-pointer"
                     onClick={() => setSelected(s)}
                   >
-                    <td className="px-5 py-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar src={s.avatar} name={s.name} size={36} />
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center gap-2.5">
+                        <Avatar src={s.avatar} name={s.name} size={32} />
                         <div>
-                          <p className="font-semibold text-ink">{s.name}</p>
-                          <p className="text-[11.5px] text-slate-text/55">
-                            Roll {s.roll || "—"}
-                          </p>
+                          <p className="font-semibold text-ink text-[12.5px] leading-tight">{s.name}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-5 py-3">
-                      <span className="font-mono text-[12.5px] bg-paper px-2 py-1 rounded">
+                    <td className="px-4 py-2.5">
+                      <span className="font-mono text-[11.5px] font-semibold text-slate-text/70 bg-paper px-1.5 py-0.5 rounded">
                         {s.admissionNo || "—"}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-slate-text">
+                    <td className="px-4 py-2.5 text-slate-text text-[12px]">
                       {formatClass(s.class)}-{s.section}
                     </td>
-                    <td className="px-5 py-3 text-slate-text">
+                    <td className="px-4 py-2.5 text-slate-text text-[12px]">
                       {s.medium || "—"}
                     </td>
-                    <td className="px-5 py-3 font-medium text-ink">
+                    <td className="px-4 py-2.5 font-medium text-ink text-[12px]">
                       {s.roll || "—"}
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-2.5">
                       <span
-                        className={`font-semibold ${
+                        className={`font-semibold text-[12px] ${
                           s.attendance >= 90
                             ? "text-success"
                             : s.attendance >= 75
@@ -453,42 +457,39 @@ export default function Students() {
                         {s.attendance}%
                       </span>
                     </td>
-                    <td className="px-5 py-3">
+                    <td className="px-4 py-2.5">
                       <Pill tone={statusTone(s.feeStatus)}>{s.feeStatus}</Pill>
                     </td>
-                    <td className="px-5 py-3 text-slate-text text-[12.5px]">
+                    <td className="px-4 py-2.5 text-slate-text text-[12px] whitespace-nowrap">
                       {s.contact}
                     </td>
                     <td
-                      className="px-5 py-3 text-right"
+                      className="px-4 py-2.5 text-right"
                       onClick={(e) => e.stopPropagation()}
                     >
-                      <div className="flex items-center justify-end gap-2">
-                        <Button
-                          variant="outline"
-                          className="!px-3 !py-1.5"
+                      <div className="inline-flex items-center gap-1">
+                        <button
+                          className="p-1.5 rounded text-slate-text hover:bg-paper transition-colors"
                           onClick={() => setSelected(s)}
                           title="View student profile"
                         >
-                          <Eye size={13} /> View
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="!px-3 !py-1.5"
+                          <Eye size={13} />
+                        </button>
+                        <button
+                          className="p-1.5 rounded text-slate-text hover:bg-paper transition-colors"
                           onClick={() => setCardStudent(s)}
                           title="View student ID card"
                         >
-                          <CreditCard size={13} /> ID Card
-                        </Button>
+                          <CreditCard size={13} />
+                        </button>
                         <PermissionGate permission="students:write">
-                          <Button
-                            variant="amber"
-                            className="!px-3 !py-1.5"
+                          <button
+                            className="p-1.5 rounded text-amber-dark hover:bg-amber/10 transition-colors"
                             onClick={() => openEdit(s)}
                             title="Edit student"
                           >
-                            <Pencil size={13} /> Edit
-                          </Button>
+                            <Pencil size={13} />
+                          </button>
                         </PermissionGate>
                       </div>
                     </td>
@@ -516,7 +517,7 @@ export default function Students() {
               <div className="absolute -bottom-16 -left-8 w-44 h-44 rounded-full bg-info/25 blur-2xl" />
               <button
                 onClick={() => setSelected(null)}
-                className="absolute top-4 right-4 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
+                className="absolute z-10 top-4 right-4 p-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition-colors"
               >
                 <X size={18} />
               </button>
@@ -532,7 +533,7 @@ export default function Students() {
                     {selected.name}
                   </h3>
                   <p className="text-[12.5px] text-white/70">
-                    {selected.id} · {formatClass(selected.class)}-
+                    {selected.admissionNo || "—"} · {formatClass(selected.class)}-
 {selected.section} · Roll {selected.roll || "—"}
                   </p>
                   <div className="flex flex-wrap gap-2 mt-2">
@@ -553,7 +554,7 @@ export default function Students() {
             <div className="flex-1 overflow-y-auto p-6">
               <div className="grid grid-cols-2 gap-x-5 gap-y-4">
                 {[
-                  ["Admission ID", selected.id],
+                  ["Admission ID", selected.admissionNo || "—"],
                   [
                     "Class & Section",
                     `${formatClass(selected.class)} - Section ${selected.section}`,
@@ -561,7 +562,7 @@ export default function Students() {
                   ["Roll Number", selected.roll ? String(selected.roll) : "—"],
                   ["Medium", selected.medium || "—"],
                   ["Gender", selected.gender || "—"],
-                  ["Date of Birth", selected.dob],
+                  ["Date of Birth", fmtDate(selected.dob)],
                   ["Blood Group", selected.bloodGroup || "—"],
                 ].map(([label, value]) => (
                   <div key={label}>

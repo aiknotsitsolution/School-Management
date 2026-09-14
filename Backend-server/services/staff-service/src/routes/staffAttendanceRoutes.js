@@ -11,7 +11,11 @@ const {
 
 router.use(verifyToken, resolveTenant, requireTenant, authorizeRoles("school_admin", "teacher", "staff"));
 
+router.get("/me/today", ctrl.getMyToday);
+router.get("/today", requirePermission("attendance:read"), ctrl.getTodayAll);
+router.get("/monthly", requirePermission("attendance:read"), ctrl.getMonthlySummary);
 router.post("/", requirePermission("attendance:mark"), ctrl.markAttendance);
+router.patch("/:id/correct", requirePermission("attendance:mark"), ctrl.correctAttendance);
 router.get("/", ctrl.getAttendance);
 
 module.exports = router;

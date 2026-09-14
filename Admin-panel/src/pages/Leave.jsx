@@ -24,7 +24,6 @@ import {
 import { api } from "../lib/api";
 import { isNonEmpty } from "../lib/validation.js";
 const leaveSeed = [];
-const balanceSeed = [];
 
 const TYPES = [
   "Casual Leave",
@@ -79,7 +78,8 @@ function inDays(n) {
 
 export default function Leave() {
   const [requests, setRequests] = useState(leaveSeed);
-  const [balance] = useState(balanceSeed);
+  const [balance, setBalance] = useState([]);
+  const [balanceLoading, setBalanceLoading] = useState(false);
   const reload = () => {
     Promise.all([api.leaves.list(), api.staff.list()])
       .then(([leavesRes, staffRes]) => {
@@ -113,6 +113,27 @@ export default function Leave() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [leaveTypes, setLeaveTypes] = useState(TYPES);
+
+  useEffect(() => {
+    if (tab === "balance") {
+      setBalanceLoading(true);
+      api.leaves.balance()
+        .then((res) => {
+          const data = res?.data?.data || {};
+          const rows = Object.entries(data).map(([type, info]) => ({
+            id: type,
+            name: type === "Sick" ? "Sick Leave" : type === "Casual" ? "Casual Leave" : type === "Earned" ? "Privilege Leave" : type === "Maternity" ? "Maternity Leave" : "Other Leave",
+            role: "—",
+            entitled: info.entitlement,
+            used: info.used,
+            remaining: info.remaining,
+          }));
+          setBalance(rows);
+        })
+        .catch(() => setBalance([]))
+        .finally(() => setBalanceLoading(false));
+    }
+  }, [tab]);
 
   useEffect(() => {
     api.examMasters.list("leave-types").then((res) => {
@@ -346,60 +367,64 @@ export default function Leave() {
           )}
         </Card>
       ) : (
-        <Card title="Staff Leave Balance">
-          <div className="overflow-x-auto -mx-5">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
-                  <th className="px-5 py-2.5 font-semibold">Staff Member</th>
-                  <th className="px-5 py-2.5 font-semibold">Role</th>
-                  <th className="px-5 py-2.5 font-semibold">Entitled</th>
-                  <th className="px-5 py-2.5 font-semibold">Used</th>
-                  <th className="px-5 py-2.5 font-semibold">Remaining</th>
-                </tr>
-              </thead>
-              <tbody>
-                {balance.map((b) => {
-                  const remaining = b.entitled - b.used;
-                  return (
-                    <tr
-                      key={b.id}
-                      className="border-b border-black/[0.04] hover:bg-paper/60"
-                    >
-                      <td className="px-5 py-3 font-semibold text-ink">
-                        {b.name}
-                      </td>
-                      <td className="px-5 py-3 text-slate-text">{b.role}</td>
-                      <td className="px-5 py-3 text-slate-text">
-                        {b.entitled}
-                      </td>
-                      <td className="px-5 py-3 text-slate-text">{b.used}</td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold text-ink">
-                            {remaining}
-                          </span>
-                          <div className="w-24 h-1.5 rounded-full bg-black/[0.06] overflow-hidden">
-                            <div
-                              className={`h-full rounded-full ${remaining <= 2 ? "bg-alert" : "bg-success"}`}
-                              style={{
-                                width: `${Math.min(100, (remaining / b.entitled) * 100)}%`,
-                              }}
-                            />
-                          </div>
-                        </div>
-                      </td>
+        <Card title="My Leave Balance">
+          {balanceLoading ? (
+            <div className="py-10 text-center">
+              <div className="inline-block w-6 h-6 border-2 border-amber/30 border-t-amber rounded-full animate-spin" />
+              <p className="text-[12.5px] text-slate-text/50 mt-2">Loading balance...</p>
+            </div>
+          ) : (
+            <>
+              <div className="overflow-x-auto -mx-5">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                      <th className="px-5 py-2.5 font-semibold">Leave Type</th>
+                      <th className="px-5 py-2.5 font-semibold">Entitled</th>
+                      <th className="px-5 py-2.5 font-semibold">Used</th>
+                      <th className="px-5 py-2.5 font-semibold">Remaining</th>
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-          {balance.length === 0 && (
-            <p className="px-5 pb-4 -mt-1 text-[12.5px] text-slate-text/60">
-              Leave balance tracking is not enabled. Balances are maintained
-              offline by the school office.
-            </p>
+                  </thead>
+                  <tbody>
+                    {balance.map((b) => {
+                      const pct = b.entitled > 0 ? (b.remaining / b.entitled) * 100 : 0;
+                      return (
+                        <tr
+                          key={b.id}
+                          className="border-b border-black/[0.04] hover:bg-paper/60"
+                        >
+                          <td className="px-5 py-3 font-semibold text-ink">
+                            {b.name}
+                          </td>
+                          <td className="px-5 py-3 text-slate-text">
+                            {b.entitled} days
+                          </td>
+                          <td className="px-5 py-3 text-slate-text">{b.used} days</td>
+                          <td className="px-5 py-3">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold text-ink">
+                                {b.remaining} days
+                              </span>
+                              <div className="w-24 h-1.5 rounded-full bg-black/[0.06] overflow-hidden">
+                                <div
+                                  className={`h-full rounded-full ${pct <= 20 ? "bg-alert" : "bg-success"}`}
+                                  style={{ width: `${Math.min(100, pct)}%` }}
+                                />
+                              </div>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+              {balance.length === 0 && (
+                <p className="px-5 pb-4 -mt-1 text-[12.5px] text-slate-text/60">
+                  No leave data available for this year.
+                </p>
+              )}
+            </>
           )}
         </Card>
       )}

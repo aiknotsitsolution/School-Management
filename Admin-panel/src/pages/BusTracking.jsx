@@ -27,12 +27,12 @@ import {
   statusTone,
   StatCard,
 } from "../components/UI";
+import { useSelector } from "react-redux";
+import { selectSchool } from "../store/selectors";
 import { api } from "../lib/api";
 const initialRoutes = [];
-const transportDesk = { name: "", phone: "" };
 
 const STATUS_FILTERS = ["All", "On Route", "Delayed", "Not Started", "Arrived"];
-const SCHOOL_LOCATION = { lat: 23.2599, lng: 77.4126 };
 
 const CAMERA_POSITIONS = [
   { label: "Front Door", pos: "bottom-[6px] left-[8px]" },
@@ -137,7 +137,7 @@ function FleetMap({ routes, positions, selected, onSelect }) {
       zIndexOffset: 1000,
     })
       .addTo(map)
-      .bindTooltip("Brightwood International School", {
+      .bindTooltip(school?.name || "School", {
         direction: "top",
         offset: [0, -20],
       });
@@ -316,6 +316,9 @@ function CctvGrid({ bus, onOpen }) {
 }
 
 export default function BusTracking() {
+  const school = useSelector(selectSchool);
+  const SCHOOL_LOCATION = school?.location || { lat: 23.2599, lng: 77.4126 };
+  const transportDesk = { name: school?.name || "", phone: school?.phone || "" };
   const [routes, setRoutes] = useState(initialRoutes);
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState("");

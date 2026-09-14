@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useDispatch } from "react-redux";
 import {
   UserRoundCog,
   Mail,
@@ -20,12 +21,50 @@ import { sessionLabel } from "../../lib/session";
 import { useTeacherContext, fmtDate } from "./useTeacherContext";
 import TeacherIdCard, { printTeacherIdCard } from "../../components/idcard/TeacherIdCard";
 import ProfilePhotoPicker from "../../components/upload/ProfilePhotoPicker";
+import { setUser } from "../../store/authSlice";
 
 // The same profile-completion rule the admin + self-service UIs share with the
 // backend (single source of truth is server-side; this mirrors it for the gate).
 const REQUIRED = ["dob", "gender", "contact", "address"];
 
+const MAX_DIMENSION = 800;
+const QUALITY = 0.8;
+
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+          const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return reject(new Error("Image compression failed"));
+            resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg", lastModified: Date.now() }));
+          },
+          "image/jpeg",
+          QUALITY
+        );
+      };
+      img.onerror = () => reject(new Error("Failed to load image"));
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
 export default function Profile() {
+  const dispatch = useDispatch();
   const { user, school, assignment, hasClassTeacher } = useTeacherContext();
   const [staff, setStaff] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -38,8 +77,11 @@ export default function Profile() {
     if (!file || !staff) return;
     setPhotoSaving(true);
     try {
-      const { data } = await api.staff.uploadPhoto(file);
+      const compressed = await compressImage(file);
+      const { data } = await api.staff.uploadPhoto(compressed);
       await api.staff.completeProfile(staff.id || staff._id, { photoUrl: data.url });
+      const { data: updatedUser } = await api.users.updateMe({ avatar: data.url });
+      dispatch(setUser(updatedUser));
       setStaff((prev) => ({ ...prev, photoUrl: data.url }));
       toast("Profile photo updated");
     } catch (err) {

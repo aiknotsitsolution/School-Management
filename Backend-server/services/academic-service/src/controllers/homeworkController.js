@@ -4,7 +4,7 @@ const {
   findMissingMasterRefs,
   missingMessage,
 } = require("../utils/masterRefs");
-const { notifyClassStudents } = require("../utils/notify");
+const { notifyByRefIds, notifyClassStudents } = require("../utils/notify");
 
 async function assertRefs(tenantId, body) {
   const missing = await findMissingMasterRefs({
@@ -24,7 +24,7 @@ async function assertRefs(tenantId, body) {
 // (schoolId / assignedBy / timestamps stay server-owned).
 const HOMEWORK_FIELDS = [
   "assignType", "class", "section", "subject", "title", "description",
-  "assignedTo", "assignedToRole", "priority", "dueDate", "maxMarks", "attachments",
+  "assignedTo", "assignedToRole", "assignedToUserId", "priority", "dueDate", "maxMarks", "attachments",
 ];
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
@@ -48,6 +48,15 @@ const createHomework = async (req, res) => {
         section: homework.section,
         title: "New Homework",
         message: `${homework.title} — ${homework.subject || ""} assigned by ${req.user.name}.`,
+        kind: "homework",
+        link: "/homework",
+      });
+    } else if (assignType === "staff" && homework.assignedToUserId) {
+      notifyByRefIds({
+        schoolId: req.tenantId,
+        refIds: [homework.assignedToUserId],
+        title: "New Work Assigned",
+        message: `${homework.title} assigned by ${req.user.name}. Due: ${homework.dueDate ? new Date(homework.dueDate).toLocaleDateString("en-IN") : "No deadline"}.`,
         kind: "homework",
         link: "/homework",
       });
@@ -103,6 +112,16 @@ const updateHomework = async (req, res) => {
       updates,
       { new: true },
     );
+    if (hw && hw.assignType === "staff" && hw.assignedToUserId) {
+      notifyByRefIds({
+        schoolId: req.tenantId,
+        refIds: [hw.assignedToUserId],
+        title: "Work Updated",
+        message: `${hw.title} was updated by ${req.user.name}.`,
+        kind: "homework",
+        link: "/homework",
+      });
+    }
     res.json({ success: true, data: hw });
   } catch (err) {
     res.status(err.status || 400).json({ success: false, message: err.message });

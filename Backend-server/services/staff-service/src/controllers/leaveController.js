@@ -3,6 +3,15 @@ const Staff = require("../models/Staff");
 const { pushNotifications } = require("../utils/notify");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
+// Annual leave entitlements per type
+const LEAVE_ENTITLEMENTS = {
+  Sick: 12,
+  Casual: 12,
+  Earned: 15,
+  Maternity: 180,
+  Other: 5,
+};
+
 // Mass-assignment guard: only these fields may be set from the request body.
 // status / staffId / approvedBy are always server-controlled.
 const LEAVE_FIELDS = ["leaveType", "fromDate", "toDate", "reason", "remarks"];
@@ -12,7 +21,13 @@ const pick = (obj, keys) =>
 const applyLeave = async (req, res) => {
   try {
     const staffId = ["teacher", "staff"].includes(req.user.role) ? req.user.refId : req.body.staffId;
-    const leave = await Leave.create({ ...pick(req.body, LEAVE_FIELDS), staffId, schoolId: req.tenantId });
+    const studentId = req.user.role === "student" ? req.user.refId : undefined;
+    const leave = await Leave.create({
+      ...pick(req.body, LEAVE_FIELDS),
+      staffId: staffId || studentId,
+      studentId,
+      schoolId: req.tenantId,
+    });
     res.status(201).json({ success: true, data: leave });
   } catch (err) {
     if (err.code === 11000) {
@@ -27,6 +42,8 @@ const getLeaves = async (req, res) => {
     const filter = { schoolId: req.tenantId };
     if (["teacher", "staff"].includes(req.user.role)) {
       filter.staffId = req.user.refId;
+    } else if (req.user.role === "student") {
+      filter.studentId = req.user.refId;
     }
     if (req.query.status) filter.status = req.query.status;
     const { page, limit, skip } = paginate(req.query);
@@ -63,7 +80,7 @@ const updateLeaveStatus = async (req, res) => {
           title: `Leave ${status}`,
           message: `Your ${leave.leaveType || "leave"} request (${staff.employeeId || "—"}) was ${status.toLowerCase()}.`,
           kind: "leave",
-          link: "/staff/leave",
+          link: "/leave",
         });
       }
     }
@@ -73,4 +90,41 @@ const updateLeaveStatus = async (req, res) => {
   }
 };
 
-module.exports = { applyLeave, getLeaves, updateLeaveStatus };
+const getLeaveBalance = async (req, res) => {
+  try {
+    const staffId = req.user.role === "student" ? undefined : req.user.refId;
+    const studentId = req.user.role === "student" ? req.user.refId : undefined;
+    const targetId = staffId || studentId;
+    if (!targetId) {
+      return res.status(400).json({ success: false, message: "Unable to determine user" });
+    }
+    const currentYear = new Date().getFullYear();
+    const yearStart = new Date(currentYear, 0, 1);
+    const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59);
+    const filter = {
+      schoolId: req.tenantId,
+      status: "Approved",
+      fromDate: { $lte: yearEnd },
+      toDate: { $gte: yearStart },
+    };
+    if (staffId) filter.staffId = staffId;
+    if (studentId) filter.studentId = studentId;
+
+    const approvedLeaves = await Leave.find(filter).lean();
+    const balance = {};
+    for (const [type, entitlement] of Object.entries(LEAVE_ENTITLEMENTS)) {
+      const used = approvedLeaves.filter((l) => l.leaveType === type).reduce((sum, l) => {
+        const from = new Date(l.fromDate);
+        const to = new Date(l.toDate);
+        const days = Math.ceil((to - from) / (1000 * 60 * 60 * 24)) + 1;
+        return sum + Math.max(0, days);
+      }, 0);
+      balance[type] = { entitlement, used, remaining: Math.max(0, entitlement - used) };
+    }
+    res.json({ success: true, year: currentYear, data: balance });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { applyLeave, getLeaves, updateLeaveStatus, getLeaveBalance };

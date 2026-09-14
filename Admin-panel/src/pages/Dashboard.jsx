@@ -4,6 +4,7 @@ import {
   Users,
   Wallet,
   UserPlus,
+  UserRound,
   CalendarCheck,
   ArrowUpRight,
   Bus,
@@ -15,6 +16,9 @@ import {
   BookOpenCheck,
   CreditCard,
   BriefcaseBusiness,
+  CheckCircle2,
+  XCircle,
+  Clock,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { hasPermission } from "../lib/permissions";
@@ -68,6 +72,7 @@ export default function Dashboard() {
     studentStats: { total: 0, active: 0, byClass: [] },
     students: [],
     attendance: [],
+    staffAttendance: [],
     invoices: [],
     payments: [],
     admissions: [],
@@ -79,6 +84,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [attendanceFailed, setAttendanceFailed] = useState(false);
+  const [staffAttendanceFailed, setStaffAttendanceFailed] = useState(false);
 
   useEffect(() => {
     Promise.allSettled([
@@ -92,16 +98,19 @@ export default function Dashboard() {
       api.transport.list(),
       api.staff.list(),
       api.events.list(),
+      api.staff.attendance.list("limit=5000"),
     ])
       .then((results) => {
         const value = (index) =>
           results[index].status === "fulfilled" ? results[index].value : {};
         const failed = results.filter((result) => result.status === "rejected");
         setAttendanceFailed(results[2].status === "rejected");
+        setStaffAttendanceFailed(results[10].status === "rejected");
         setData({
           studentStats: value(0).data || { total: 0, active: 0, byClass: [] },
           students: value(1).data || [],
           attendance: value(2).data || [],
+          staffAttendance: value(10).data || [],
           invoices: value(3).data || [],
           payments: value(4).data || [],
           admissions: value(5).data || [],
@@ -130,8 +139,20 @@ export default function Dashboard() {
       .catch(() => setAttendanceFailed(true));
   };
 
+  const retryStaffAttendance = () => {
+    setStaffAttendanceFailed(false);
+    setData((prev) => ({ ...prev, staffAttendance: [] }));
+    api.staff.attendance
+      .list("limit=5000")
+      .then(({ data }) =>
+        setData((prev) => ({ ...prev, staffAttendance: data || [] })),
+      )
+      .catch(() => setStaffAttendanceFailed(true));
+  };
+
   const students = data.students;
   const attendance = data.attendance;
+  const staffAttendance = data.staffAttendance;
   const admissionEnquiries = data.admissions;
   const notices = data.notices;
   const busRoutes = data.busRoutes.map((route) => ({
@@ -421,7 +442,30 @@ export default function Dashboard() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
-        <AttendanceTrendChart
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {(() => {
+          const todayStr = new Date().toISOString().slice(0, 10);
+          const todayStaffAtt = staffAttendance.filter((r) => r.date === todayStr);
+          const totalStaff = (data.staff || []).length;
+          const teachers = (data.staff || []).filter((s) => s.role === "teacher");
+          const otherStaff = (data.staff || []).filter((s) => s.role !== "teacher");
+          const presentToday = todayStaffAtt.filter((r) => ["Present", "Late"].includes(r.status)).length;
+          const absentToday = todayStaffAtt.filter((r) => r.status === "Absent").length;
+          const notMarked = totalStaff - todayStaffAtt.length;
+          const teacherPresent = todayStaffAtt.filter((r) => teachers.some((t) => String(t._id) === String(r.staffId)) && ["Present", "Late"].includes(r.status)).length;
+          const teacherNotMarked = teachers.length - todayStaffAtt.filter((r) => teachers.some((t) => String(t._id) === String(r.staffId))).length;
+          return (
+            <>
+              <StatCard icon={UserRound} label="Teachers" value={String(teacherPresent)} sub={`${teachers.length - teacherPresent} other`} accent="success" />
+              <StatCard icon={XCircle} label="Absent Today" value={String(absentToday)} sub={`of ${totalStaff} staff`} accent="alert" />
+              <StatCard icon={Clock} label="Not Marked" value={String(Math.max(0, notMarked))} sub="Pending check-in" accent="amber" />
+              <StatCard icon={CheckCircle2} label="Total Present" value={String(presentToday)} sub={`${totalStaff > 0 ? ((presentToday / totalStaff) * 100).toFixed(0) : 0}% of staff`} accent="success" />
+            </>
+          );
+        })()}
+      </div>
+
+      <AttendanceTrendChart
           records={attendance}
           loading={loading}
           error={attendanceFailed ? "Attendance data could not be loaded." : ""}
@@ -491,6 +535,16 @@ export default function Dashboard() {
           )}
         </Card>
       </div>
+
+      <AttendanceTrendChart
+        records={staffAttendance}
+        loading={loading}
+        error={staffAttendanceFailed ? "Staff attendance data could not be loaded." : ""}
+        onRetry={retryStaffAttendance}
+        title="Staff Attendance Trend"
+        subtitle="Staff-wide attendance performance"
+        defaultRange="thisYear"
+      />
 
       <div className="grid lg:grid-cols-3 gap-5">
         <Card title="Fee Collection vs Pending" className="lg:col-span-2">

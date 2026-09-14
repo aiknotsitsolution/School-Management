@@ -28,7 +28,7 @@ const STAFF_SELF_EDITABLE = ["dob", "gender", "contact", "address", "photoUrl"];
 // Teacher and Staff share this rule; Student keeps its own). A record is
 // complete once these identity fields exist — shared with the Complete-Profile
 // gate on both the admin and self-service UIs.
-const STAFF_PROFILE_FIELDS = ["dob", "gender", "contact", "address"];
+const STAFF_PROFILE_FIELDS = ["dob", "gender", "contact", "address", "photoUrl"];
 
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
@@ -375,6 +375,7 @@ const uploadStaffPhoto = async (req, res) => {
       fileName: `staff-${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "-")}`,
       folder: "/school-erp/staff",
       useUniqueFileName: true,
+      transformation: { pre: "q-80,w-800,h-800,fo-auto" },
     });
     res.status(201).json({ success: true, data: { url: uploaded.url, fileId: uploaded.fileId } });
   } catch (err) {

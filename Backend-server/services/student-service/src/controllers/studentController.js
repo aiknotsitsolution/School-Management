@@ -3,6 +3,7 @@ const Student = require("../models/Student");
 const { notifyByRefIds } = require("../utils/notify");
 const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
 const { resolveTeacherScope } = require("@school-erp/shared/src/utils/teacherScope");
+const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
 
 // Teacher access to a single student record is assignment-driven: the student's
 // class + section must be inside the teacher's active assignment union,
@@ -73,7 +74,6 @@ if (!req.file)
       return res.status(400).json({ success: false, message: uploadErr });
     }
     const imagekit = require("@school-erp/shared/src/config/imagekit");
-const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
     if (!imagekit) {
       return res
         .status(503)
@@ -84,6 +84,7 @@ const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
       fileName: `student-${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "-")}`,
       folder: "/school-erp/students",
       useUniqueFileName: true,
+      transformation: { pre: "q-80,w-800,h-800,fo-auto" },
     });
     res
       .status(201)

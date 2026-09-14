@@ -11,6 +11,7 @@ const homeworkSchema = new mongoose.Schema(
     description: { type: String },
     assignedTo: { type: String },
     assignedToRole: { type: String },
+    assignedToUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
     priority: { type: String, enum: ["Low", "Medium", "High"], default: "Medium" },
     assignedBy: { type: String },
     assignedDate: { type: Date, default: Date.now },

@@ -58,14 +58,23 @@ export default function MyAttendance() {
   const summary = useMemo(() => {
     const counts = {};
     monthRecords.forEach((r) => { counts[r.status] = (counts[r.status] || 0) + 1; });
+    const present = (counts["Present"] || 0) + (counts["Late"] || 0);
+    const total = monthRecords.length;
+    const daysInMonth = new Date(
+      parseInt(today.slice(0, 4), 10),
+      parseInt(today.slice(5, 7), 10),
+      0,
+    ).getDate();
+    const pct = daysInMonth > 0 ? Math.round((present / daysInMonth) * 1000) / 10 : 0;
     return {
       present: counts["Present"] || 0,
       late: counts["Late"] || 0,
       absent: counts["Absent"] || 0,
       leave: (counts["Leave"] || 0) + (counts["Half Day"] || 0),
-      total: monthRecords.length,
+      total,
+      attendancePct: pct,
     };
-  }, [monthRecords]);
+  }, [monthRecords, today]);
 
   const submitMark = async (e) => {
     e.preventDefault();
@@ -96,11 +105,12 @@ export default function MyAttendance() {
         description="Mark and track your own daily attendance."
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard icon={CheckCircle2} label="Present" value={String(summary.present)} sub={`of ${summary.total} this month`} accent="success" />
         <StatCard icon={CarFront} label="Late" value={String(summary.late)} sub="Marked in late" accent="amber" />
         <StatCard icon={XCircle} label="Absent" value={String(summary.absent)} sub="Missed days" accent="alert" />
         <StatCard icon={Sun} label="Leave / Half Day" value={String(summary.leave)} sub="Approved or taken" accent="info" />
+        <StatCard icon={CalendarCheck} label="Attendance %" value={`${summary.attendancePct}%`} sub={`${today.slice(5, 7)}/${today.slice(0, 4)}`} accent="info" />
       </div>
 
       <div className="grid lg:grid-cols-5 gap-6">
@@ -186,7 +196,7 @@ export default function MyAttendance() {
             <div className="py-10 text-center">
               <CalendarCheck size={40} className="mx-auto text-slate-text/30 mb-3" />
               <p className="text-[15px] font-semibold text-ink">No attendance recorded yet</p>
-              <p className="text-[13px] text-slate-text/70 mt-1">Mark today's entry on the left to get started.</p>
+              <p className="text-[13px] text-slate-text/70 mt-1">Mark today&apos;s entry on the left to get started.</p>
             </div>
           ) : (
             <div className="overflow-x-auto -mx-5">

@@ -346,8 +346,8 @@ export default function ReportCard() {
                 <b className="text-ink">{student.name}</b>
               </p>
               <p>
-                <span className="text-slate-text/60">Student ID:</span>{" "}
-                <b className="text-ink">{student.id}</b>
+                <span className="text-slate-text/60">Admission ID:</span>{" "}
+                <b className="text-ink">{student.admissionNo || "—"}</b>
               </p>
               <p>
                 <span className="text-slate-text/60">Class / Section:</span>{" "}

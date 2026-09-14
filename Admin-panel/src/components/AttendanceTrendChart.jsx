@@ -11,11 +11,17 @@ import {
   Layers,
   TrendingDown,
   TrendingUp,
+  Users,
+  UserCheck,
+  UserX,
+  Clock,
 } from "lucide-react";
 import {
   Area,
   AreaChart,
   CartesianGrid,
+  Line,
+  LineChart,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -27,7 +33,6 @@ import {
   RANGE_OPTIONS,
   avgFromTrend,
   computeAttendanceTrend,
-  niceYDomain,
   prevWindow,
   resolveRange,
 } from "../utils/attendanceTrend";
@@ -135,37 +140,40 @@ function TrendTooltip({ active, payload }) {
   if (!active || !payload || payload.length === 0) return null;
   const point = payload[0].payload;
   return (
-    <div className="rounded-xl border border-black/[0.08] bg-white px-3.5 py-3 shadow-lg shadow-black/5">
-      <p className="text-[12.5px] font-semibold text-ink">{point.fullLabel}</p>
+    <div className="rounded-xl border border-black/[0.06] bg-white px-4 py-3.5 shadow-xl shadow-black/8">
+      <p className="text-[12.5px] font-bold text-ink">{point.fullLabel}</p>
       {point.missing ? (
-        <p className="mt-1 text-[12px] text-slate-text/60">
-          No attendance records for this period.
+        <p className="mt-1.5 text-[12px] text-slate-text/55">
+          No records this period
         </p>
       ) : (
-        <div className="mt-2 space-y-1 text-[12px]">
+        <div className="mt-2.5 space-y-1.5 text-[12px]">
           <div className="flex items-center gap-2">
             <span
-              className="h-2 w-2 rounded-full shrink-0"
+              className="h-2.5 w-2.5 rounded-full shrink-0 ring-2 ring-success/20"
               style={{ background: ATT_GREEN }}
             />
             <span className="flex-1 text-slate-text/70">Attendance</span>
-            <span className="font-semibold text-ink">{point.attendance}%</span>
+            <span className="font-bold text-ink">{point.attendance}%</span>
           </div>
+          <div className="h-px bg-black/5" />
           <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-success/60 shrink-0" />
             <span className="flex-1 text-slate-text/70">Present</span>
-            <span className="font-medium text-ink">
+            <span className="font-semibold text-ink">
               {point.present.toLocaleString("en-IN")}
             </span>
           </div>
           <div className="flex items-center gap-2">
+            <span className="h-2 w-2 rounded-full bg-alert/60 shrink-0" />
             <span className="flex-1 text-slate-text/70">Absent</span>
-            <span className="font-medium text-ink">
+            <span className="font-semibold text-ink">
               {point.absent.toLocaleString("en-IN")}
             </span>
           </div>
-          <div className="flex items-center gap-2 border-t border-black/[0.05] pt-1">
+          <div className="flex items-center gap-2 border-t border-black/[0.05] pt-1.5">
             <span className="flex-1 text-slate-text/70">Total records</span>
-            <span className="font-medium text-ink">
+            <span className="font-semibold text-ink">
               {point.total.toLocaleString("en-IN")}
             </span>
           </div>
@@ -176,18 +184,18 @@ function TrendTooltip({ active, payload }) {
 }
 
 function TrendSkeleton() {
-  const bars = [30, 48, 36, 60, 42, 66, 38, 62];
+  const bars = [40, 55, 35, 65, 50, 70, 42, 58];
   return (
     <div
-      className="relative h-full w-full animate-pulse overflow-hidden rounded-xl bg-ink/[0.03]"
+      className="relative h-full w-full animate-pulse overflow-hidden rounded-xl bg-ink/[0.02]"
       role="status"
       aria-label="Loading attendance trend"
     >
-      <div className="absolute inset-x-0 bottom-3 flex items-end gap-3 px-4">
+      <div className="absolute inset-x-0 bottom-3 flex items-end gap-3 px-5">
         {bars.map((h, i) => (
           <div
             key={i}
-            className="flex-1 rounded-t-md bg-ink/[0.07]"
+            className="flex-1 rounded-t-md bg-success/10"
             style={{ height: `${h}%` }}
           />
         ))}
@@ -198,12 +206,14 @@ function TrendSkeleton() {
 
 function TrendEmpty() {
   return (
-    <div className="flex h-full flex-col items-center justify-center gap-1.5 px-6 text-center">
-      <CalendarCheck size={30} className="text-slate-text/25" aria-hidden />
-      <p className="text-[14px] font-medium text-ink">No attendance data yet</p>
-      <p className="max-w-xs text-[12.5px] text-slate-text/60">
-        Attendance trends will appear here once attendance records are
-        available for the selected period.
+    <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center">
+      <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-ink/[0.04]">
+        <CalendarCheck size={26} className="text-slate-text/30" aria-hidden />
+      </div>
+      <p className="text-[14px] font-semibold text-ink">No attendance data yet</p>
+      <p className="max-w-xs text-[12.5px] leading-relaxed text-slate-text/55">
+        Start marking attendance to see trends here. The chart will auto-populate
+        as records accumulate.
       </p>
     </div>
   );
@@ -307,10 +317,19 @@ export default function AttendanceTrendChart({
     return { avg, delta };
   }, [records, bounds, granularity]);
 
-  const yDomain = useMemo(
-    () => niceYDomain(trend.map((p) => p.attendance)),
-    [trend],
-  );
+  const yDomain = useMemo(() => {
+    const values = trend.map((p) => p.attendance).filter((v) => typeof v === "number");
+    if (values.length === 0) return [0, 100];
+    const min = Math.min(...values);
+    const max = Math.max(...values);
+    if (min === max) {
+      if (min >= 90) return [Math.max(0, min - 15), 100];
+      if (min <= 10) return [0, Math.min(100, min + 15)];
+      return [Math.max(0, min - 15), Math.min(100, max + 15)];
+    }
+    const pad = Math.max(5, Math.ceil((max - min) * 0.25));
+    return [Math.max(0, Math.floor((min - pad) / 5) * 5), Math.min(100, Math.ceil((max + pad) / 5) * 5)];
+  }, [trend]);
 
   const tickInterval = trend.length > 8 ? Math.ceil(trend.length / 8) - 1 : 0;
   const hasData = trend.some((p) => !p.missing);
@@ -325,11 +344,11 @@ export default function AttendanceTrendChart({
   } else {
     charted = (
       <ResponsiveContainer width="100%" height="100%">
-        <AreaChart data={trend} margin={{ top: 8, right: 8, left: -8, bottom: 0 }}>
+        <AreaChart data={trend} margin={{ top: 12, right: 12, left: -8, bottom: 0 }}>
           <defs>
             <linearGradient id="attendanceTrendGradient" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor={ATT_GREEN} stopOpacity={0.28} />
-              <stop offset="100%" stopColor={ATT_GREEN} stopOpacity={0} />
+              <stop offset="0%" stopColor={ATT_GREEN} stopOpacity={0.35} />
+              <stop offset="85%" stopColor={ATT_GREEN} stopOpacity={0.04} />
             </linearGradient>
           </defs>
           <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEEAE0" />
@@ -344,7 +363,7 @@ export default function AttendanceTrendChart({
           <YAxis
             domain={yDomain}
             allowDecimals={false}
-            width={40}
+            width={42}
             tick={{ fontSize: 11.5, fill: "#64748B" }}
             axisLine={false}
             tickLine={false}
@@ -362,12 +381,35 @@ export default function AttendanceTrendChart({
             type="monotone"
             dataKey="attendance"
             name="Attendance"
-            stroke={ATT_GREEN}
-            strokeWidth={2.5}
+            stroke="transparent"
             fill="url(#attendanceTrendGradient)"
             connectNulls={false}
             dot={false}
-            activeDot={{ r: 4, strokeWidth: 0, fill: ATT_GREEN }}
+            activeDot={false}
+          />
+          <Line
+            type="monotone"
+            dataKey="attendance"
+            name="Attendance"
+            stroke={ATT_GREEN}
+            strokeWidth={2.5}
+            connectNulls={false}
+            dot={(props) => {
+              const { cx, cy, payload } = props;
+              if (payload.missing) return null;
+              return (
+                <circle
+                  key={`dot-${payload.key}`}
+                  cx={cx}
+                  cy={cy}
+                  r={3.5}
+                  fill="white"
+                  stroke={ATT_GREEN}
+                  strokeWidth={2}
+                />
+              );
+            }}
+            activeDot={{ r: 5.5, strokeWidth: 0, fill: ATT_GREEN }}
           />
         </AreaChart>
       </ResponsiveContainer>
@@ -421,7 +463,7 @@ export default function AttendanceTrendChart({
       }
     >
       <div className="flex flex-wrap items-center gap-2">
-        <div className="w-[150px]">
+        <div className="w-[170px]">
           <ChartSelect
             options={RANGE_OPTIONS}
             value={rangeId}
@@ -430,7 +472,7 @@ export default function AttendanceTrendChart({
             ariaLabel="Date range"
           />
         </div>
-        <div className="w-[120px]">
+        <div className="w-[135px]">
           <ChartSelect
             options={GRANULARITY_OPTIONS}
             value={granularity}
@@ -467,6 +509,38 @@ export default function AttendanceTrendChart({
       <div className="mt-4 min-w-0" style={{ height }}>
         {charted}
       </div>
+
+      {hasData && !loading && !error && (
+        <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-black/5 pt-3">
+          <div className="flex items-center gap-1.5 text-[12px]">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-success/10">
+              <UserCheck size={11} className="text-success" />
+            </span>
+            <span className="text-slate-text/60">Present</span>
+            <span className="font-semibold text-ink">
+              {trend.reduce((sum, p) => sum + (p.present || 0), 0).toLocaleString("en-IN")}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[12px]">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-alert/10">
+              <UserX size={11} className="text-alert" />
+            </span>
+            <span className="text-slate-text/60">Absent</span>
+            <span className="font-semibold text-ink">
+              {trend.reduce((sum, p) => sum + (p.absent || 0), 0).toLocaleString("en-IN")}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 text-[12px]">
+            <span className="flex h-5 w-5 items-center justify-center rounded-md bg-info/10">
+              <Clock size={11} className="text-info" />
+            </span>
+            <span className="text-slate-text/60">Total</span>
+            <span className="font-semibold text-ink">
+              {trend.reduce((sum, p) => sum + (p.total || 0), 0).toLocaleString("en-IN")}
+            </span>
+          </div>
+        </div>
+      )}
     </Card>
   );
 }

@@ -354,7 +354,10 @@ export function Select({
 }
 
 // Lightweight toast/toaster helpers -------------------------------------------
+const _activeToasts = new Set();
 export function toast(message, tone = "success") {
+  if (_activeToasts.has(message)) return;
+  _activeToasts.add(message);
   const tones = {
     success: { bg: "#3F8F5F", icon: "✓" },
     error: { bg: "#D65A4A", icon: "✕" },
@@ -379,6 +382,9 @@ export function toast(message, tone = "success") {
   requestAnimationFrame(() => el.classList.add("toast-visible"));
   setTimeout(() => {
     el.classList.remove("toast-visible");
-    setTimeout(() => el.remove(), 300);
+    setTimeout(() => {
+      el.remove();
+      _activeToasts.delete(message);
+    }, 300);
   }, 3200);
 }

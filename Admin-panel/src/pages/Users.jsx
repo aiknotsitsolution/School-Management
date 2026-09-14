@@ -150,10 +150,10 @@ const toUserPayload = (form) => ({
           : form.designation || undefined)
       : undefined,
   class:
-    form.role === "teacher" || form.role === "student"
+    form.role === "student"
       ? form.className.trim() || undefined
       : undefined,
-  section: form.section.trim() || undefined,
+  section: form.role === "student" ? form.section.trim() || undefined : undefined,
   refId: form.refId.trim() || undefined,
 });
 
@@ -510,7 +510,7 @@ export default function Users() {
                   )}
                 </>
               )}
-              {(form.role === "teacher" || form.role === "student") && (
+              {form.role === "student" && (
                 <>
                    <SearchableSelect
                      options={CLASS_OPTIONS}
@@ -1007,22 +1007,24 @@ export default function Users() {
       )}
 
       {selected && (
-        <div className="fixed inset-0 z-40 bg-black/30 flex justify-end" onClick={() => setSelected(null)}>
+        <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4" onClick={() => setSelected(null)}>
           <div
-            className="w-full max-w-md bg-white h-full overflow-y-auto scrollbar-thin p-5"
+            className="w-full max-w-lg bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto scrollbar-thin"
             onClick={(event) => event.stopPropagation()}
           >
-<User360
-              user={selected}
-              canManage={canManage(selected)}
-              onClose={() => setSelected(null)}
-              onToggleActive={toggleActive}
-              onRemove={removeUser}
-              onRestore={restoreUser}
-              onReset={resetPassword}
-              onEdit={editSelected}
-              busy={busy}
-            />
+            <div className="p-6">
+              <User360
+                user={selected}
+                canManage={canManage(selected)}
+                onClose={() => setSelected(null)}
+                onToggleActive={toggleActive}
+                onRemove={removeUser}
+                onRestore={restoreUser}
+                onReset={resetPassword}
+                onEdit={editSelected}
+                busy={busy}
+              />
+            </div>
           </div>
         </div>
       )}

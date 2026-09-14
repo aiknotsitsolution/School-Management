@@ -30,8 +30,8 @@ import { useTeacherContext, todayISO, fmtDate } from "./useTeacherContext";
 const STATUS_CONFIG = {
   Present: { label: "P", full: "Present", tone: "success", active: "bg-success text-white border-success" },
   Absent: { label: "A", full: "Absent", tone: "alert", active: "bg-alert text-white border-alert" },
-  "Half Day": { label: "L", full: "Late / Half Day", tone: "amber", active: "bg-amber text-ink border-amber" },
-  Leave: { label: "Lv", full: "Leave", tone: "info", active: "bg-info text-white border-info" },
+  "Half Day": { label: "HD", full: "Half Day", tone: "amber", active: "bg-amber text-ink border-amber" },
+  Leave: { label: "L", full: "Leave", tone: "info", active: "bg-info text-white border-info" },
 };
 
 export default function Attendance() {
@@ -210,7 +210,7 @@ export default function Attendance() {
         />
         <StatCard
           icon={Clock3}
-          label="Half Day / Late"
+          label="Half Day"
           value={String(counts["Half Day"])}
           sub="Marked as late today"
           accent="info"
@@ -275,7 +275,7 @@ export default function Attendance() {
                 disabled={!students.length}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-paper text-slate-text hover:bg-black/5 disabled:opacity-50"
               >
-                Mark all {status === "Half Day" ? "Late" : status}
+                Mark all {status === "Half Day" ? "Half Day" : status}
               </button>
             ))}
           </div>
@@ -337,7 +337,7 @@ export default function Attendance() {
             <div className="text-[12.5px] text-slate-text/70">
               Present <strong className="text-success">{counts.Present}</strong>
               {" · "}Absent <strong className="text-alert">{counts.Absent}</strong>
-              {" · "}Late <strong className="text-amber-dark">{counts["Half Day"]}</strong>
+              {" · "}Half Day <strong className="text-amber-dark">{counts["Half Day"]}</strong>
               {" · "}Leave <strong className="text-info">{counts.Leave}</strong>
             </div>
             <Button variant="amber" onClick={saveAttendance} disabled={saving}>
@@ -388,7 +388,7 @@ export default function Attendance() {
                   <div className="text-right shrink-0">
                     <p className="text-[13px] font-bold text-success">{pct}%</p>
                     <p className="text-[11px] text-slate-text/60">
-                      {h.present} P · {h.absent} A · {h.leave} Lv
+                      {h.present} P · {h.absent} A · {h.leave} L
                     </p>
                   </div>
                 </div>

@@ -166,6 +166,7 @@ export default function Homework() {
       description: form.description.trim(),
       assignedTo: form.assignedTo.trim(),
       assignedToRole: matchedUser ? matchedUser.role : "",
+      assignedToUserId: matchedUser ? (matchedUser.id || matchedUser._id) : "",
       priority: form.priority,
       dueDate: form.dueDate,
       status: form.status,
@@ -174,6 +175,7 @@ export default function Homework() {
       subject: form.title.trim(),
     };
     try {
+      const isEdit = !!editId;
       const response = editId
         ? await api.homework.update(editId, payload)
         : await api.homework.create(payload);
@@ -186,8 +188,9 @@ export default function Homework() {
       setShowModal(false);
       setForm(emptyForm());
       setEditId(null);
+      toast(isEdit ? "Task updated successfully" : "Task assigned successfully");
     } catch (err) {
-      window.alert(err.message);
+      toast(err.message || "Failed to save task", "error");
     }
   };
 

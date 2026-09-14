@@ -36,6 +36,9 @@ export default function SchoolSettings() {
     city: school?.city || "",
     state: school?.state || "",
     pincode: school?.pincode || "",
+    board: school?.board || "",
+    recognitionNumber: school?.recognitionNumber || "",
+    recognitionAuthority: school?.recognitionAuthority || "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -49,8 +52,11 @@ export default function SchoolSettings() {
       city: school?.city || "",
       state: school?.state || "",
       pincode: school?.pincode || "",
+      board: school?.board || "",
+      recognitionNumber: school?.recognitionNumber || "",
+      recognitionAuthority: school?.recognitionAuthority || "",
     });
-  }, [school?.name, school?.shortName, school?.email, school?.phone, school?.address, school?.city, school?.state, school?.pincode]);
+  }, [school?.name, school?.shortName, school?.email, school?.phone, school?.address, school?.city, school?.state, school?.pincode, school?.board, school?.recognitionNumber, school?.recognitionAuthority]);
 
   const save = async () => {
     if (form.email && !EMAIL_RE.test(form.email.trim())) {
@@ -76,6 +82,9 @@ export default function SchoolSettings() {
         city: form.city.trim() || undefined,
         state: form.state.trim() || undefined,
         pincode: form.pincode.trim() || undefined,
+        board: form.board.trim() || undefined,
+        recognitionNumber: form.recognitionNumber.trim() || undefined,
+        recognitionAuthority: form.recognitionAuthority.trim() || undefined,
       });
       dispatch(setSchoolAction(data));
       localStorage.setItem("erp_school", JSON.stringify(data));
@@ -88,6 +97,9 @@ export default function SchoolSettings() {
         city: data.city || "",
         state: data.state || "",
         pincode: data.pincode || "",
+        board: data.board || "",
+        recognitionNumber: data.recognitionNumber || "",
+        recognitionAuthority: data.recognitionAuthority || "",
       });
       toast("School settings saved");
     } catch (e) {
@@ -246,6 +258,59 @@ export default function SchoolSettings() {
                   placeholder="6-digit pincode"
                 />
               </div>
+            </div>
+
+            <div className="border-t border-black/5 pt-4 mt-4">
+              <h4 className="text-[13px] font-bold text-ink mb-3">Affiliation & Recognition</h4>
+              <div className="grid sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Board</label>
+                  <select
+                    value={form.board}
+                    onChange={(e) => setForm((f) => ({ ...f, board: e.target.value }))}
+                    className="w-full h-[38px] rounded-lg border border-black/10 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                  >
+                    <option value="">Select board</option>
+                    <option value="CBSE">CBSE</option>
+                    <option value="ICSE">ICSE</option>
+                    <option value="State Board">State Board</option>
+                    <option value="IGCSE">IGCSE</option>
+                    <option value="IB">IB (International Baccalaureate)</option>
+                    <option value="NIOS">NIOS</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Recognition / Affiliation No.</label>
+                  <Input
+                    value={form.recognitionNumber}
+                    onChange={(e) => setForm((f) => ({ ...f, recognitionNumber: e.target.value }))}
+                    placeholder="e.g. 2730456 / UGC-12345"
+                  />
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Issuing Authority</label>
+                  <select
+                    value={form.recognitionAuthority}
+                    onChange={(e) => setForm((f) => ({ ...f, recognitionAuthority: e.target.value }))}
+                    className="w-full h-[38px] rounded-lg border border-black/10 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                  >
+                    <option value="">Select authority</option>
+                    <option value="CBSE">CBSE, New Delhi</option>
+                    <option value="CISCE">CISCE (ICSE), New Delhi</option>
+                    <option value="State Education Dept">State Education Department</option>
+                    <option value="UGC">UGC (University Grants Commission)</option>
+                    <option value="AICTE">AICTE</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+              </div>
+              {school?.recognitionVerified && (
+                <div className="mt-2 flex items-center gap-2 text-[12px] text-success font-medium">
+                  <span className="w-2 h-2 rounded-full bg-success inline-block" />
+                  Verified on {new Date(school.recognitionVerifiedAt).toLocaleDateString("en-IN")}
+                </div>
+              )}
             </div>
 
             <div className="flex flex-wrap gap-2 mt-4">

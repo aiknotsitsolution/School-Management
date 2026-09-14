@@ -32,12 +32,16 @@ import {
   RefreshCcw,
   School,
   Briefcase,
+  ChevronDown,
+  ShieldAlert,
+  Trophy,
 } from "lucide-react";
 import { selectSchool, selectUser } from "../store/selectors";
 import { canSeeNavigation } from "../lib/scope";
 import { resolvePersona, isPersonaStaff } from "../lib/persona";
 import { PERSONA_NAV } from "../lib/personaNav";
 import { sessionLabel } from "../lib/session";
+import { useTeacherContext } from "../pages/teacher/useTeacherContext";
 
 const groups = [
   {
@@ -161,7 +165,7 @@ const groups = [
         to: "/staff/my-attendance",
         icon: CalendarCheck,
         label: "My Attendance",
-        roles: ["staff"],
+        roles: ["staff", "teacher"],
       },
       {
         to: "/notifications",
@@ -197,7 +201,7 @@ const groups = [
       {
         to: "/teacher/attendance",
         icon: CalendarCheck,
-        label: "Attendance",
+        label: "Student Attendance",
         roles: ["teacher"],
       },
       {
@@ -228,6 +232,48 @@ const groups = [
         to: "/teacher/notices",
         icon: Bell,
         label: "Notices",
+        roles: ["teacher"],
+      },
+    ],
+  },
+  {
+    label: "Students",
+    teacherOnly: true,
+    items: [
+      {
+        to: "/behavior",
+        icon: ShieldAlert,
+        label: "Behavior Log",
+        roles: ["teacher"],
+      },
+      {
+        to: "/achievements",
+        icon: Trophy,
+        label: "Achievements",
+        roles: ["teacher"],
+      },
+    ],
+  },
+  {
+    label: "My Account",
+    teacherOnly: true,
+    items: [
+      {
+        to: "/staff/my-attendance",
+        icon: ClipboardCheck,
+        label: "My Attendance",
+        roles: ["teacher"],
+      },
+      {
+        to: "/leave",
+        icon: FileText,
+        label: "Leave Request",
+        roles: ["teacher"],
+      },
+      {
+        to: "/payroll",
+        icon: Banknote,
+        label: "Payroll",
         roles: ["teacher"],
       },
       {
@@ -416,6 +462,18 @@ const groups = [
         label: "Reports",
         perm: "reports:view",
       },
+      {
+        to: "/behavior",
+        icon: ShieldAlert,
+        label: "Behavior Log",
+        perm: "conduct:read",
+      },
+      {
+        to: "/achievements",
+        icon: Trophy,
+        label: "Achievements",
+        perm: "achievements:read",
+      },
     ],
   },
   {
@@ -472,6 +530,18 @@ const STUDENT_NAV = [
         label: "My Timetable",
         roles: ["student"],
       },
+      {
+        to: "/student/achievements",
+        icon: Trophy,
+        label: "My Achievements",
+        roles: ["student"],
+      },
+      {
+        to: "/student/behavior",
+        icon: ShieldAlert,
+        label: "My Behavior Log",
+        roles: ["student"],
+      },
     ],
   },
   {
@@ -495,6 +565,18 @@ const STUDENT_NAV = [
         label: "Results & Report Card",
         roles: ["student"],
       },
+      {
+        to: "/student/study-materials",
+        icon: BookOpen,
+        label: "Study Materials",
+        roles: ["student"],
+      },
+      {
+        to: "/student/syllabus",
+        icon: ScrollText,
+        label: "Syllabus",
+        roles: ["student"],
+      },
     ],
   },
   {
@@ -504,6 +586,18 @@ const STUDENT_NAV = [
         to: "/student/fees",
         icon: Wallet,
         label: "Fees & Payments",
+        roles: ["student"],
+      },
+      {
+        to: "/student/leave",
+        icon: FileText,
+        label: "Leave Request",
+        roles: ["student"],
+      },
+      {
+        to: "/student/notifications",
+        icon: Bell,
+        label: "Notifications",
         roles: ["student"],
       },
       {
@@ -550,6 +644,7 @@ export default function Sidebar({ open, onClose }) {
   const school = useSelector(selectSchool);
   const user = useSelector(selectUser);
   const role = user?.role || "school_admin";
+  const teacherCtx = useTeacherContext();
 
   const canSee = (item) => canSeeNavigation(item, user, role);
 
@@ -621,6 +716,28 @@ export default function Sidebar({ open, onClose }) {
                 <p className="px-3 mb-1.5 text-[11px] font-semibold text-white/35 tracking-wide">
                   {group.label}
                 </p>
+                {group.teacherOnly && role === "teacher" && teacherCtx?.allScopes?.length > 1 && (
+                  <div className="mx-3 mb-2 rounded-lg bg-white/5 p-2">
+                    <p className="text-[10px] text-white/40 uppercase tracking-wide font-semibold px-1 mb-1.5">
+                      Active Class
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {teacherCtx.allScopes.map((s, i) => (
+                        <button
+                          key={`${s.class}-${s.section}`}
+                          onClick={() => teacherCtx.setActiveScope(i)}
+                          className={`text-[11px] font-semibold px-2 py-1 rounded-md transition-colors ${
+                            i === teacherCtx.activeScopeIdx
+                              ? "bg-amber text-ink"
+                              : "text-white/50 hover:text-white/80 hover:bg-white/10"
+                          }`}
+                        >
+                          {s.class}-{s.section || "?"}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="space-y-0.5">
                   {items.map((item) => (
                     <NavLink

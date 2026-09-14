@@ -167,6 +167,26 @@ const routes = [
     target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
   },
   {
+    path: "/api/behavior",
+    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
+  },
+  {
+    path: "/api/achievements",
+    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
+  },
+  {
+    path: "/api/study-materials",
+    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
+  },
+  {
+    path: "/api/syllabus",
+    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
+  },
+  {
+    path: "/api/health",
+    target: process.env.STUDENT_SERVICE_URL || "http://localhost:5002",
+  },
+  {
     path: "/api/fees",
     target: process.env.FEE_SERVICE_URL || "http://localhost:5005",
   },

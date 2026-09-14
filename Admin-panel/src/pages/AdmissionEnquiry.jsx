@@ -615,9 +615,14 @@ export default function AdmissionEnquiry() {
                           {updatingStatusId === e.id ? "Saving…" : "Update"}
                         </button>
                         <button
-                          className="p-1.5 rounded text-slate-text hover:bg-paper transition-colors"
-                          onClick={() => openEdit(e)}
-                          title="Edit enquiry"
+                          className={`p-1.5 rounded transition-colors ${
+                            e.status === "Admission Confirmed"
+                              ? "text-slate-text/30 cursor-not-allowed"
+                              : "text-slate-text hover:bg-paper"
+                          }`}
+                          onClick={() => e.status !== "Admission Confirmed" && openEdit(e)}
+                          disabled={e.status === "Admission Confirmed"}
+                          title={e.status === "Admission Confirmed" ? "Confirmed admission cannot be edited" : "Edit enquiry"}
                         >
                           <Pencil size={13} />
                         </button>
@@ -680,9 +685,9 @@ export default function AdmissionEnquiry() {
               {/* Status stepper */}
               <div>
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-text/60 mb-3">
-                  Update pipeline
+                  {selected.status === "Admission Confirmed" ? "Pipeline completed" : "Update pipeline"}
                 </p>
-                <div className="space-y-1">
+                <div className={`space-y-1 ${selected.status === "Admission Confirmed" ? "opacity-60 pointer-events-none" : ""}`}>
                   {PROGRESS_STAGES.map((stage, i) => {
                     const current = selected.status === stage;
                     const done = PROGRESS_STAGES.indexOf(selected.status) > i;
@@ -691,6 +696,7 @@ export default function AdmissionEnquiry() {
                       <button
                         key={stage}
                         onClick={() => changeStatus(selected.id, stage)}
+                        disabled={selected.status === "Admission Confirmed"}
                         className={`w-full flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
                           current
                             ? "bg-paper"
@@ -772,7 +778,7 @@ export default function AdmissionEnquiry() {
                   </div>
                 )}
 
-                {selected.status !== "Declined" && (
+                {selected.status !== "Declined" && selected.status !== "Admission Confirmed" && (
                   <button
                     onClick={() => changeStatus(selected.id, "Declined")}
                     className="mt-2 w-full inline-flex items-center justify-center gap-2 rounded-xl border border-alert/20 text-alert text-[12.5px] font-semibold px-3 py-2 hover:bg-alert/5 transition-colors"
@@ -857,9 +863,11 @@ export default function AdmissionEnquiry() {
               <Button variant="outline" onClick={() => setSelectedId(null)}>
                 Done
               </Button>
-              <Button variant="amber" onClick={() => openEdit(selected)}>
-                <Pencil size={14} /> Edit Enquiry
-              </Button>
+              {selected.status !== "Admission Confirmed" && (
+                <Button variant="amber" onClick={() => openEdit(selected)}>
+                  <Pencil size={14} /> Edit Enquiry
+                </Button>
+              )}
             </div>
           </aside>
         </div>

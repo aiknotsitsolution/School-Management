@@ -15,6 +15,8 @@ const TEACHING_PERMISSIONS = [
   "timetable:read", "timetable:write", "homework:read", "homework:write",
   "exams:read", "marks:read", "notices:read", "leaves:apply", "payroll:view",
   "promotion:read", "transfer:read", "rollover:read",
+  "health:read", "health:write", "conduct:read", "conduct:write",
+  "achievements:read", "achievements:write",
 ];
 
 const STAFF_PERMISSIONS = {
@@ -25,7 +27,8 @@ const STAFF_PERMISSIONS = {
   ],
   accountant: [
     "dashboard:view", "staff:read", "students:read", "fees:read", "fees:collect",
-    "fees:structure", "fees:reports", "reports:view", "leaves:apply", "payroll:view",
+    "fees:structure", "fees:reports", "reports:view", "attendance:read",
+    "leaves:apply", "payroll:view",
   ],
   librarian: [
     "dashboard:view", "staff:read", "students:read", "library:read",
@@ -60,9 +63,11 @@ const ROLE_PERMISSIONS = {
     "payments:settings", "sessions:read", "sessions:write",
     "promotion:read", "promotion:write", "transfer:read", "transfer:write",
     "rollover:read", "rollover:write",
+    "health:read", "health:write", "conduct:read", "conduct:write",
+    "achievements:read", "achievements:write",
   ],
   teacher: [...TEACHING_PERMISSIONS],
-  staff: ["staff:read", "leaves:apply", "payroll:view"],
+  staff: ["staff:read", "attendance:read", "attendance:mark", "leaves:apply", "payroll:view"],
   student: [
     "dashboard:view", "attendance:read", "homework:read",
     "exams:read", "marks:read", "fees:read", "library:read", "notices:read",

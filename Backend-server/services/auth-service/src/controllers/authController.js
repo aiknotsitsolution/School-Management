@@ -47,6 +47,11 @@ const SCHOOL_EDITABLE_FIELDS = [
   "domain",
   "plan",
   "status",
+  "board",
+  "recognitionNumber",
+  "recognitionAuthority",
+  "recognitionVerified",
+  "recognitionVerifiedAt",
 ];
 
 // Student-role linking: enforce `PlatformUser.refId === Student.admissionNo`
@@ -118,8 +123,13 @@ const staffRecordFor = async (schoolId, employeeId) => {
   try {
     const { getStaffModel } = require("../db/staffDb");
     const Staff = await getStaffModel();
-    return await Staff.findOne({ schoolId, employeeId }).lean();
-  } catch {
+    const record = await Staff.findOne({ schoolId, employeeId }).lean();
+    if (!record) {
+      console.error(`[staffRecordFor] No record found — schoolId=${schoolId} employeeId=${employeeId}`);
+    }
+    return record;
+  } catch (err) {
+    console.error("[staffRecordFor] DB error:", err.message);
     return null;
   }
 };
@@ -394,7 +404,7 @@ const login = async (req, res) => {
         refreshToken,
         user: toPublicUser(user),
         school: school
-          ? { id: school._id, name: school.name, code: school.code, shortName: school.shortName, logo: school.logo, session: school.session, currentSession, academicConfigConfirmed: Boolean(school.academicConfigConfirmed), plan: school.plan, status: school.status, city: school.city, state: school.state, pincode: school.pincode, settings: school.settings || {} }
+          ? { id: school._id, name: school.name, code: school.code, shortName: school.shortName, logo: school.logo, session: school.session, currentSession, academicConfigConfirmed: Boolean(school.academicConfigConfirmed), plan: school.plan, status: school.status, city: school.city, state: school.state, pincode: school.pincode, board: school.board || "", recognitionNumber: school.recognitionNumber || "", recognitionAuthority: school.recognitionAuthority || "", recognitionVerified: Boolean(school.recognitionVerified), settings: school.settings || {} }
           : null,
       },
     });
@@ -419,8 +429,7 @@ const refreshToken = async (req, res) => {
     }
 
     const accessToken = generateAccessToken(user);
-    const newRefresh = generateRefreshToken(user);
-    res.json({ success: true, data: { accessToken, refreshToken: newRefresh } });
+    res.json({ success: true, data: { accessToken, refreshToken } });
   } catch (err) {
     res.status(401).json({ success: false, message: "Invalid or expired refresh token" });
   }
@@ -438,7 +447,7 @@ const getMe = async (req, res) => {
         .lean();
       if (doc) {
         const currentSession = await resolveCurrentSessionInfo(doc._id);
-        school = { id: doc._id, name: doc.name, code: doc.code, shortName: doc.shortName, logo: doc.logo, session: doc.session, currentSession, academicConfigConfirmed: Boolean(doc.academicConfigConfirmed), plan: doc.plan, status: doc.status, city: doc.city, state: doc.state, pincode: doc.pincode, settings: doc.settings || {} };
+        school = { id: doc._id, name: doc.name, code: doc.code, shortName: doc.shortName, logo: doc.logo, session: doc.session, currentSession, academicConfigConfirmed: Boolean(doc.academicConfigConfirmed), plan: doc.plan, status: doc.status, city: doc.city, state: doc.state, pincode: doc.pincode, board: doc.board || "", recognitionNumber: doc.recognitionNumber || "", recognitionAuthority: doc.recognitionAuthority || "", recognitionVerified: Boolean(doc.recognitionVerified), settings: doc.settings || {} };
       }
     }
 
@@ -504,6 +513,7 @@ const uploadUserPhoto = async (req, res) => {
       fileName: `user-${Date.now()}-${req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "-")}`,
       folder: "/school-erp/users",
       useUniqueFileName: true,
+      transformation: { pre: "q-80,w-800,h-800,fo-auto" },
     });
     res.status(201).json({ success: true, data: { url: uploaded.url, fileId: uploaded.fileId } });
   } catch (err) {
@@ -1284,6 +1294,11 @@ const publicSchool = (s) =>
     pincode: s.pincode || "",
     website: s.website || "",
     logo: s.logo || "",
+    board: s.board || "",
+    recognitionNumber: s.recognitionNumber || "",
+    recognitionAuthority: s.recognitionAuthority || "",
+    recognitionVerified: Boolean(s.recognitionVerified),
+    recognitionVerifiedAt: s.recognitionVerifiedAt || null,
     session: s.session || "",
     academicConfigConfirmed: Boolean(s.academicConfigConfirmed),
     plan: s.plan || "trial",

@@ -13,6 +13,7 @@ const morgan = require("morgan");
 const studentRoutes = require("./routes/studentRoutes");
 const enquiryRoutes = require("./routes/enquiryRoutes");
 const documentRoutes = require("./routes/documentRoutes");
+const healthRoutes = require("./routes/healthRoutes");
 const internalRoutes = require("./routes/internalRoutes");
 
 const app = express();
@@ -49,6 +50,7 @@ app.use("/api/students/internal", internalRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/admissions", enquiryRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/health", healthRoutes);
 
 app.use((err, req, res, next) =>
 {

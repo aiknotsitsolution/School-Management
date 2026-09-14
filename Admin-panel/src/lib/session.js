@@ -35,3 +35,11 @@ export function schoolFlag(school, key) {
 export function schoolNeedsConfig(school) {
   return Boolean(sessionLabel(school)) && !schoolFlag(school, "academicConfigConfirmed");
 }
+
+export function getDismissConfigKey(schoolId) {
+  return `school_config_dismissed_${schoolId || "unknown"}`;
+}
+
+export function clearDismissConfigKey(schoolId) {
+  try { localStorage.removeItem(getDismissConfigKey(schoolId)); } catch {}
+}

@@ -23,6 +23,7 @@ const FLOAT_DELAY = [0, 1.4, 2.7, 0.7, 3.4, 1.9, 4.2, 0.3];
 
 const PLACED = (C, style, i = 0, extra = {}) => (
   <C
+    key={i}
     aria-hidden="true"
     strokeWidth={1.4}
     style={{

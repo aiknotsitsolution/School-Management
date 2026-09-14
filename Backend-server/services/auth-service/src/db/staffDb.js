@@ -36,7 +36,7 @@ const staffSchema = new mongoose.Schema(
     },
     profileCompletedAt: { type: Date, default: null },
   },
-  { timestamps: true, collection: "staff" },
+  { timestamps: true, collection: "staffs" },
 );
 
 staffSchema.index({ schoolId: 1, employeeId: 1 }, { unique: true });

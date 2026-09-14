@@ -14,6 +14,12 @@ const schoolSchema = new mongoose.Schema(
     logo: { type: String },
     website: { type: String, trim: true },
     domain: { type: String, lowercase: true, trim: true },
+    // Affiliation & Recognition
+    board: { type: String, trim: true },
+    recognitionNumber: { type: String, trim: true },
+    recognitionAuthority: { type: String, trim: true },
+    recognitionVerified: { type: Boolean, default: false },
+    recognitionVerifiedAt: { type: Date },
     session: { type: String },
     // Set true the first time the school admin explicitly creates or edits the
     // current academic session (Org Profile → Academic Configuration / Academic

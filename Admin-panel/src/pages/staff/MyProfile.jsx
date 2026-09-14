@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useDispatch } from "react-redux";
 import {
   UserRoundCog,
   Mail,
@@ -16,8 +17,46 @@ import { PageIntro, Card, Avatar, Pill, StatCard, toast } from "../../components
 import { api } from "../../lib/api";
 import useStaffContext, { fmtDate } from "./useStaffContext";
 import ProfilePhotoPicker from "../../components/upload/ProfilePhotoPicker";
+import { setUser } from "../../store/authSlice";
+
+const MAX_DIMENSION = 800;
+const QUALITY = 0.8;
+
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+          const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return reject(new Error("Image compression failed"));
+            resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg", lastModified: Date.now() }));
+          },
+          "image/jpeg",
+          QUALITY
+        );
+      };
+      img.onerror = () => reject(new Error("Failed to load image"));
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 export default function MyProfile() {
+  const dispatch = useDispatch();
   const { user, persona } = useStaffContext();
   const [staff, setStaff] = useState(null);
   const [photoFile, setPhotoFile] = useState(null);
@@ -27,8 +66,11 @@ export default function MyProfile() {
     if (!file || !staff) return;
     setPhotoSaving(true);
     try {
-      const { data } = await api.staff.uploadPhoto(file);
+      const compressed = await compressImage(file);
+      const { data } = await api.staff.uploadPhoto(compressed);
       await api.staff.update(staff._id || staff.id, { photoUrl: data.url });
+      const { data: updatedUser } = await api.users.updateMe({ avatar: data.url });
+      dispatch(setUser(updatedUser));
       setStaff((prev) => ({ ...prev, photoUrl: data.url }));
       toast("Profile photo updated");
     } catch (err) {

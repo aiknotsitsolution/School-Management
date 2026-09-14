@@ -8,8 +8,10 @@ const { verifyToken, resolveTenant, requireTenant, requirePermission } = require
 
 router.use(verifyToken, resolveTenant, requireTenant);
 
+router.post("/generate-all", requirePermission("payroll:admin"), ctrl.generateAllPayroll);
 router.post("/", requirePermission("payroll:admin"), ctrl.generatePayroll);
 router.get("/", requirePermission("payroll:view"), ctrl.getPayroll);
+router.patch("/:id", requirePermission("payroll:admin"), ctrl.updatePayroll);
 router.patch("/:id/pay", requirePermission("payroll:admin"), ctrl.markPaid);
 
 module.exports = router;

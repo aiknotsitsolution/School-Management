@@ -10,6 +10,8 @@ import {
 } from "lucide-react";
 import { StatCard, Card, Pill, Avatar } from "../components/UI";
 import { api } from "../lib/api";
+import { useSelector } from "react-redux";
+import { selectSchool } from "../store/selectors";
 import useStudentContext, {
   fmtDate,
   fmtMoney,
@@ -21,6 +23,7 @@ const WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", 
 
 export default function StudentDashboard() {
   const { user, cls, section } = useStudentContext();
+  const school = useSelector(selectSchool);
 
   const [data, setData] = useState({
     profile: null,
@@ -139,8 +142,11 @@ export default function StudentDashboard() {
 
   return (
     <div className="space-y-6">
-      <div className="relative rounded-2xl overflow-hidden bg-ink">
-        <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink-light to-ink opacity-90" />
+      <div className="relative rounded-2xl overflow-hidden bg-ink min-h-[200px] sm:min-h-[240px]">
+        {school?.settings?.bannerImage && (
+          <img src={school.settings.bannerImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/60 to-transparent" />
         <div className="relative z-10 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Avatar name={name} size={56} />
@@ -158,13 +164,13 @@ export default function StudentDashboard() {
             </div>
           </div>
           <div className="flex gap-3">
-            <div className="bg-white rounded-xl px-4 py-3 text-center shadow-sm">
-              <p className="font-display text-xl font-bold text-ink">{attPct}%</p>
-              <p className="text-slate-text/60 text-[11px]">Attendance</p>
+            <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-3 text-center">
+              <p className="font-display text-xl font-bold text-white">{attPct}%</p>
+              <p className="text-white/50 text-[11px]">Attendance</p>
             </div>
-            <div className="bg-white rounded-xl px-4 py-3 text-center shadow-sm">
-              <p className="font-display text-xl font-bold text-ink">{avgMarks}%</p>
-              <p className="text-slate-text/60 text-[11px]">Avg. Marks</p>
+            <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-3 text-center">
+              <p className="font-display text-xl font-bold text-white">{avgMarks}%</p>
+              <p className="text-white/50 text-[11px]">Avg. Marks</p>
             </div>
           </div>
         </div>

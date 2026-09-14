@@ -21,7 +21,44 @@ import { SegmentedTabs } from "../components/Pagination";
 import { selectUser, selectSchool } from "../store/selectors";
 import { setUser, setSchool as setSchoolAction } from "../store/authSlice";
 import { api } from "../lib/api";
+import { clearDismissConfigKey } from "../lib/session";
 import ProfilePhotoPicker from "../components/upload/ProfilePhotoPicker";
+
+const MAX_DIMENSION = 800;
+const QUALITY = 0.8;
+
+function compressImage(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        if (width > MAX_DIMENSION || height > MAX_DIMENSION) {
+          const ratio = Math.min(MAX_DIMENSION / width, MAX_DIMENSION / height);
+          width = Math.round(width * ratio);
+          height = Math.round(height * ratio);
+        }
+        const canvas = document.createElement("canvas");
+        canvas.width = width;
+        canvas.height = height;
+        canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+        canvas.toBlob(
+          (blob) => {
+            if (!blob) return reject(new Error("Image compression failed"));
+            resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg", lastModified: Date.now() }));
+          },
+          "image/jpeg",
+          QUALITY
+        );
+      };
+      img.onerror = () => reject(new Error("Failed to load image"));
+      img.src = reader.result;
+    };
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
 
 const roleLabel = (role, designation) => {
   if (role === "super_admin") return "Platform Owner";
@@ -78,6 +115,7 @@ export default function Account() {
     };
     dispatch(setSchoolAction(refreshed));
     localStorage.setItem("erp_school", JSON.stringify(refreshed));
+    clearDismissConfigKey(base.id || base._id);
   };
 
   useEffect(() => {
@@ -114,7 +152,8 @@ export default function Account() {
     if (!file) return;
     setPhotoSaving(true);
     try {
-      const { data } = await api.users.uploadPhoto(file);
+      const compressed = await compressImage(file);
+      const { data } = await api.users.uploadPhoto(compressed);
       const { data: updated } = await api.users.updateMe({ avatar: data.url });
       dispatch(setUser(updated));
       setProfileData((d) => (d ? { ...d, user: { ...d.user, ...updated } } : d));
@@ -227,6 +266,9 @@ export default function Account() {
       state: schoolData?.state || "",
       pincode: schoolData?.pincode || "",
       website: schoolData?.website || "",
+      board: schoolData?.board || "",
+      recognitionNumber: schoolData?.recognitionNumber || "",
+      recognitionAuthority: schoolData?.recognitionAuthority || "",
     });
     setSchoolEdit(true);
   };
@@ -248,6 +290,9 @@ export default function Account() {
         state: schoolForm.state.trim(),
         pincode: schoolForm.pincode.trim(),
         website: schoolForm.website.trim(),
+        board: schoolForm.board.trim() || undefined,
+        recognitionNumber: schoolForm.recognitionNumber.trim() || undefined,
+        recognitionAuthority: schoolForm.recognitionAuthority.trim() || undefined,
       });
       setSchoolData(updated);
       setSchoolEdit(false);
@@ -526,6 +571,15 @@ const ORG_SECTIONS = [
       { key: "pincode", label: "Pincode" },
     ],
   },
+  {
+    title: "Affiliation & Recognition",
+    fields: [
+      { key: "board", label: "Affiliation Board" },
+      { key: "recognitionNumber", label: "Recognition / Affiliation No." },
+      { key: "recognitionAuthority", label: "Issuing Authority" },
+      { key: "recognitionVerified", label: "Verification Status", readOnly: true },
+    ],
+  },
 ];
 
 const orgFieldIcons = {
@@ -541,10 +595,19 @@ const orgFieldIcons = {
   city: MapPin,
   state: MapPin,
   pincode: MapPin,
+  board: Shield,
+  recognitionNumber: BadgeCheck,
+  recognitionAuthority: Shield,
+  recognitionVerified: BadgeCheck,
 };
 
 const orgFieldRender = {
   plan: (v) => <Pill tone="info">{v}</Pill>,
+  recognitionVerified: (v, ctx) => (
+    <Pill tone={v ? "success" : "warn"}>
+      {v ? `Verified${ctx?.recognitionVerifiedAt ? ` on ${new Date(ctx.recognitionVerifiedAt).toLocaleDateString("en-IN")}` : ""}` : "Not Verified"}
+    </Pill>
+  ),
 };
 
 function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onSave, onCancel, saving, onLogoChange, logoSaving, onBannerChange, currentSession, sessionForm, setSessionForm, onSaveSession, sessionSaving }) {
@@ -756,7 +819,7 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
                       className="flex-1"
                     />
                   ) : orgFieldRender[key] ? (
-                    <span className="text-[13px] font-medium text-ink">{value ? orgFieldRender[key](value) : "—"}</span>
+                    <span className="text-[13px] font-medium text-ink">{value ? orgFieldRender[key](value, school) : "—"}</span>
                   ) : (
                     <span className="text-[13px] font-medium text-ink break-words">{value || "—"}</span>
                   )}

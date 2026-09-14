@@ -22,9 +22,10 @@ import {
   Button,
   statusTone,
 } from "../components/UI";
-import { selectUser } from "../store/selectors";
+import { selectUser, selectSchool } from "../store/selectors";
 import { useSelector } from "react-redux";
 import { isPersonaStaff, resolvePersona } from "../lib/persona";
+import AttendanceCheckinModal from "../components/AttendanceCheckinModal";
 
 function cap(value) {
   if (!value) return "—";
@@ -49,12 +50,14 @@ function greeting() {
 
 export default function StaffDashboard() {
   const user = useSelector(selectUser);
+  const school = useSelector(selectSchool);
   const navigate = useNavigate();
   const [data, setData] = useState({ staff: null, leaves: [], payroll: [], attendance: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   const persona = isPersonaStaff(user) ? resolvePersona(user) : null;
+  const [showCheckin, setShowCheckin] = useState(!persona);
 
   useEffect(() => {
     if (persona) return;
@@ -112,6 +115,12 @@ export default function StaffDashboard() {
 
   return (
     <div className="space-y-6">
+      {showCheckin && (
+        <AttendanceCheckinModal
+          userName={user?.name || "Staff"}
+          onDone={() => setShowCheckin(false)}
+        />
+      )}
       <PageIntro
         eyebrow="My Dashboard"
         title="Staff Overview"
@@ -143,9 +152,12 @@ export default function StaffDashboard() {
       )}
 
       {/* Hero */}
-      <div className="relative rounded-2xl overflow-hidden bg-ink">
-        <div className="absolute inset-0 bg-gradient-to-r from-ink via-ink-light to-ink opacity-90" />
-        <div className="relative z-10 p-6 sm:p-7 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="relative rounded-2xl overflow-hidden bg-ink min-h-[200px] sm:min-h-[240px]">
+        {school?.settings?.bannerImage && (
+          <img src={school.settings.bannerImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
+        )}
+        <div className="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/60 to-transparent" />
+        <div className="relative z-10 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div className="flex items-center gap-4">
             <Avatar name={displayName} size={54} />
             <div>

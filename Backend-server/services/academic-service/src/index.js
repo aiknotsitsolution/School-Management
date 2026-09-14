@@ -20,6 +20,10 @@ const marksRoutes = require("./routes/marksRoutes");
 const promotionRoutes = require("./routes/promotionRoutes");
 const transferRoutes = require("./routes/transferRoutes");
 const rolloverRoutes = require("./routes/rolloverRoutes");
+const behaviorRoutes = require("./routes/behaviorRoutes");
+const achievementRoutes = require("./routes/achievementRoutes");
+const studyMaterialRoutes = require("./routes/studyMaterialRoutes");
+const syllabusRoutes = require("./routes/syllabusRoutes");
 
 const app = express();
 const PORT = process.env.ACADEMIC_SERVICE_PORT || 5004;
@@ -61,6 +65,10 @@ app.use("/api/marks", marksRoutes);
 app.use("/api/promotions", promotionRoutes);
 app.use("/api/transfers", transferRoutes);
 app.use("/api/rollover", rolloverRoutes);
+app.use("/api/behavior", behaviorRoutes);
+app.use("/api/achievements", achievementRoutes);
+app.use("/api/study-materials", studyMaterialRoutes);
+app.use("/api/syllabus", syllabusRoutes);
 
 app.use((err, req, res, next) =>
 {

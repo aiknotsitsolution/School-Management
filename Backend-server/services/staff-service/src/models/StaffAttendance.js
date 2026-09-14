@@ -14,6 +14,11 @@ const staffAttendanceSchema = new mongoose.Schema(
     checkOut: { type: String, default: null }, // HH:mm
     note: { type: String, default: null },
     markedBy: { type: String },
+    source: { type: String, enum: ["self", "admin"], default: "admin" },
+    originalStatus: { type: String, default: null },
+    correctedBy: { type: String, default: null },
+    correctedAt: { type: Date, default: null },
+    correctionReason: { type: String, default: null },
   },
   { timestamps: true }
 );

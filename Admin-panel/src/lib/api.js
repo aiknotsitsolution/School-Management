@@ -27,6 +27,21 @@ function scheduleRefresh() {
   try {
     const payload = JSON.parse(atob(token.split(".")[1]));
     const msUntilExpiry = payload.exp * 1000 - Date.now();
+    if (msUntilExpiry <= 0) {
+      const rt = auth.refreshToken || localStorage.getItem("erp_refresh_token");
+      if (rt) {
+        doRefresh(rt).then(({ ok, body }) => {
+          if (ok && body.data?.accessToken) {
+            store.dispatch(setTokens({
+              accessToken: body.data.accessToken,
+              refreshToken: body.data.refreshToken,
+            }));
+            scheduleRefresh();
+          }
+        }).catch(() => {});
+      }
+      return;
+    }
     const refreshIn = Math.max(msUntilExpiry - 5 * 60 * 1000, 10_000);
     refreshTimer = setTimeout(async () => {
       const rt = store.getState().auth.refreshToken;
@@ -39,9 +54,11 @@ function scheduleRefresh() {
             refreshToken: body.data.refreshToken,
           }));
           scheduleRefresh();
+        } else {
+          setTimeout(() => scheduleRefresh(), 30_000);
         }
       } catch {
-        // will be caught by 401 handler on next request
+        setTimeout(() => scheduleRefresh(), 30_000);
       }
     }, refreshIn);
   } catch {
@@ -189,7 +206,7 @@ async function request(path, options = {}) {
         // network error during refresh — fall through to logout
       }
     }
-    if (refreshToken) store.dispatch(logout());
+    store.dispatch(logout());
   }
   const body = await response.json().catch(() => ({}));
   if (!response.ok || body.success === false) {
@@ -404,6 +421,33 @@ export const api = {
     },
     remove: (id) => request(`/documents/${id}`, { method: "DELETE" }),
   },
+  health: {
+    get: (studentId) => request(`/health?studentId=${studentId}`),
+    upsert: (data) => request("/health", json("PUT", data)),
+  },
+  behavior: {
+    list: (params = "") => request(`/behavior${params ? `?${params}` : ""}`),
+    create: (item) => request("/behavior", json("POST", item)),
+    update: (id, item) => request(`/behavior/${id}`, json("PUT", item)),
+    remove: (id) => request(`/behavior/${id}`, { method: "DELETE" }),
+  },
+  achievements: {
+    list: (params = "") => request(`/achievements${params ? `?${params}` : ""}`),
+    create: (item) => request("/achievements", json("POST", item)),
+    update: (id, item) => request(`/achievements/${id}`, json("PUT", item)),
+    remove: (id) => request(`/achievements/${id}`, { method: "DELETE" }),
+  },
+  studyMaterials: {
+    list: (params = "") => request(`/study-materials${params ? `?${params}` : ""}`),
+    create: (item) => request("/study-materials", json("POST", item)),
+    remove: (id) => request(`/study-materials/${id}`, { method: "DELETE" }),
+  },
+  syllabus: {
+    list: (params = "") => request(`/syllabus${params ? `?${params}` : ""}`),
+    create: (item) => request("/syllabus", json("POST", item)),
+    update: (id, item) => request(`/syllabus/${id}`, json("PATCH", item)),
+    remove: (id) => request(`/syllabus/${id}`, { method: "DELETE" }),
+  },
   attendance: {
     list: (params = "") => request(`/attendance${params ? `?${params}` : ""}`),
     mark: (records) => request("/attendance/mark", json("POST", { records })),
@@ -580,6 +624,13 @@ events: {
       list: (params = "") =>
         request(`/staff/attendance${params ? `?${params}` : ""}`),
       mark: (item) => request("/staff/attendance", json("POST", item)),
+      meToday: () => request("/staff/attendance/me/today"),
+      today: (params = "") =>
+        request(`/staff/attendance/today${params ? `?${params}` : ""}`),
+      monthly: (params = "") =>
+        request(`/staff/attendance/monthly${params ? `?${params}` : ""}`),
+      correct: (id, data) =>
+        request(`/staff/attendance/${id}/correct`, json("PATCH", data)),
     },
   },
   assignments: {
@@ -594,12 +645,15 @@ events: {
   leaves: {
     list: () => request("/leaves"),
     create: (item) => request("/leaves", json("POST", item)),
+    balance: () => request("/leaves/balance"),
     updateStatus: (id, status) =>
       request(`/leaves/${id}/status`, json("PATCH", { status })),
   },
   payroll: {
     list: () => request("/payroll"),
     create: (item) => request("/payroll", json("POST", item)),
+    update: (id, data) => request(`/payroll/${id}`, json("PATCH", data)),
+    generateAll: (month, year) => request("/payroll/generate-all", json("POST", { month, year })),
     markPaid: (id) => request(`/payroll/${id}/pay`, json("PATCH", {})),
   },
   books: {
