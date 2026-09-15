@@ -1,0 +1,226 @@
+```yaml
+services:
+
+  # ==========================================
+  # API GATEWAY
+  # ==========================================
+  - type: pserv
+    name: school-api-gateway
+    runtime: node
+    rootDir: school-erp-backend/api-gateway
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+
+      # MongoDB / common configuration
+      - key: MONGODB_URI
+        sync: false
+
+      # Service URLs
+      - key: AUTH_SERVICE_URL
+        fromService:
+          type: pserv
+          name: school-auth-service
+          property: hostport
+
+      - key: STUDENT_SERVICE_URL
+        fromService:
+          type: pserv
+          name: school-student-service
+          property: hostport
+
+      - key: STAFF_SERVICE_URL
+        fromService:
+          type: pserv
+          name: school-staff-service
+          property: hostport
+
+      - key: ACADEMIC_SERVICE_URL
+        fromService:
+          type: pserv
+          name: school-academic-service
+          property: hostport
+
+      - key: FEE_SERVICE_URL
+        fromService:
+          type: pserv
+          name: school-fee-service
+          property: hostport
+
+      - key: COMMUNICATION_SERVICE_URL
+        fromService:
+          type: pserv
+          name: school-communication-service
+          property: hostport
+
+      - key: LIBRARY_SERVICE_URL
+        fromService:
+          type: pserv
+          name: school-library-service
+          property: hostport
+
+      - key: FACILITY_SERVICE_URL
+        fromService:
+          type: pserv
+          name: school-facility-service
+          property: hostport
+
+
+  # ==========================================
+  # AUTH SERVICE
+  # ==========================================
+  - type: pserv
+    name: school-auth-service
+    runtime: node
+    rootDir: school-erp-backend/services/auth-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+
+
+  # ==========================================
+  # STUDENT SERVICE
+  # ==========================================
+  - type: pserv
+    name: school-student-service
+    runtime: node
+    rootDir: school-erp-backend/services/student-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+
+
+  # ==========================================
+  # STAFF SERVICE
+  # ==========================================
+  - type: pserv
+    name: school-staff-service
+    runtime: node
+    rootDir: school-erp-backend/services/staff-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+
+
+  # ==========================================
+  # ACADEMIC SERVICE
+  # ==========================================
+  - type: pserv
+    name: school-academic-service
+    runtime: node
+    rootDir: school-erp-backend/services/academic-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+
+
+  # ==========================================
+  # FEE SERVICE
+  # ==========================================
+  - type: pserv
+    name: school-fee-service
+    runtime: node
+    rootDir: school-erp-backend/services/fee-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+
+
+  # ==========================================
+  # COMMUNICATION SERVICE
+  # ==========================================
+  - type: pserv
+    name: school-communication-service
+    runtime: node
+    rootDir: school-erp-backend/services/communication-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+
+
+  # ==========================================
+  # LIBRARY SERVICE
+  # ==========================================
+  - type: pserv
+    name: school-library-service
+    runtime: node
+    rootDir: school-erp-backend/services/library-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+
+
+  # ==========================================
+  # FACILITY SERVICE
+  # ==========================================
+  - type: pserv
+    name: school-facility-service
+    runtime: node
+    rootDir: school-erp-backend/services/facility-service
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: PORT
+        value: 10000
+      - key: MONGODB_URI
+        sync: false
+```
