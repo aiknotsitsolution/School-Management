@@ -1452,9 +1452,31 @@ const updateMySchool = async (req, res) => {
   }
 };
 
+// Hard delete — permanently removes the user document. Only for super_admin
+// and only on already soft-deleted users to prevent accidental live deletions.
+const hardDeleteUser = async (req, res) => {
+  try {
+    if (req.user?.role !== "super_admin") {
+      return res.status(403).json({ success: false, message: "Only platform owner can permanently delete users" });
+    }
+    const target = await loadManageableUser(req.user, req.params.id);
+    if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
+    if (!target.deletedAt) {
+      return res.status(400).json({ success: false, message: "User must be removed (soft-deleted) before permanent deletion" });
+    }
+    const email = target.email;
+    const User = target.constructor;
+    await User.deleteOne({ _id: target._id });
+    await writeAudit({ req, user: req.user, action: "user.hard_deleted", targetType: "user", targetId: target._id, message: `Permanently deleted user ${email}` });
+    res.json({ success: true, message: "User permanently deleted" });
+  } catch (err) {
+    return unexpectedError(res, err);
+  }
+};
+
 module.exports = {
   createUser, login, refreshToken, getMe, changePassword,
-  listUsers, updateUserStatus, deleteUser, restoreUser, updateUser,
+  listUsers, updateUserStatus, deleteUser, hardDeleteUser, restoreUser, updateUser,
   adminResetPassword, resetPassword,
   requestPasswordReset, verifyResetOtp, resetPasswordWithOtp, adminSendResetOtp,
   createSchool, listSchools, getSchool, updateSchool,

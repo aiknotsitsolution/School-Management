@@ -442,7 +442,7 @@ export default function Dashboard() {
       </div>
 
       <div className="grid lg:grid-cols-3 gap-5">
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 gap-3">
         {(() => {
           const todayStr = new Date().toISOString().slice(0, 10);
           const todayStaffAtt = staffAttendance.filter((r) => r.date === todayStr);

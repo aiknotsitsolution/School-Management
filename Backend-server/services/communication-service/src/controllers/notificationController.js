@@ -8,7 +8,8 @@ const { publish, subscribe } = require("../realtime/hub");
 // connection alive through the gateway proxy, which has a short inactivity
 // timeout (PROXY_TIMEOUT_MS). The client re-connects on `retry`.
 const streamNotifications = (req, res) => {
-  if (!req.tenantId) {
+  const isSuperAdmin = req.user?.role === "super_admin";
+  if (!req.tenantId && !isSuperAdmin) {
     return res.status(400).json({ success: false, message: "No school context for this request" });
   }
 
@@ -22,7 +23,7 @@ const streamNotifications = (req, res) => {
   res.flushHeaders();
   res.write(`retry: 3000\n\n`);
 
-  const schoolId = req.tenantId;
+  const schoolId = req.tenantId || "platform";
   const userId = String(req.user.id);
   const unsubscribe = subscribe(schoolId, userId, (notification) => {
     res.write(`data: ${JSON.stringify(notification)}\n\n`);
@@ -45,7 +46,9 @@ const getNotifications = async (req, res) => {
   try {
     const { unread } = req.query;
     const { page, limit, skip } = paginate(req.query, { fallback: 100, max: 500 });
-    const filter = { schoolId: req.tenantId, userId: String(req.user.id) };
+    const isSuperAdmin = req.user?.role === "super_admin";
+    const filter = { userId: String(req.user.id) };
+    if (!isSuperAdmin) filter.schoolId = req.tenantId;
     if (unread === "true") filter.read = false;
     const [data, total] = await Promise.all([
       Notification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -64,11 +67,12 @@ const getNotifications = async (req, res) => {
 
 const getUnreadCount = async (req, res) => {
   try {
+    const isSuperAdmin = req.user?.role === "super_admin";
     const filter = {
-      schoolId: req.tenantId,
       userId: String(req.user.id),
       read: false,
     };
+    if (!isSuperAdmin) filter.schoolId = req.tenantId;
     if (req.query.kind) {
       filter.kind = req.query.kind;
     }
@@ -81,8 +85,11 @@ const getUnreadCount = async (req, res) => {
 
 const markAsRead = async (req, res) => {
   try {
+    const isSuperAdmin = req.user?.role === "super_admin";
+    const filter = { _id: req.params.id, userId: String(req.user.id) };
+    if (!isSuperAdmin) filter.schoolId = req.tenantId;
     const record = await Notification.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId, userId: String(req.user.id) },
+      filter,
       { read: true },
       { new: true },
     );
@@ -95,8 +102,11 @@ const markAsRead = async (req, res) => {
 
 const markAllRead = async (req, res) => {
   try {
+    const isSuperAdmin = req.user?.role === "super_admin";
+    const filter = { userId: String(req.user.id), read: false };
+    if (!isSuperAdmin) filter.schoolId = req.tenantId;
     await Notification.updateMany(
-      { schoolId: req.tenantId, userId: String(req.user.id), read: false },
+      filter,
       { read: true },
     );
     res.json({ success: true });

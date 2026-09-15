@@ -121,6 +121,7 @@ export function Button({ children, variant = "primary", className = "", ...props
     amber: "bg-amber text-ink hover:bg-amber-dark",
     outline: "bg-white text-ink border border-black/10 hover:bg-paper",
     ghost: "text-ink hover:bg-black/5",
+    danger: "bg-red-600 text-white hover:bg-red-700",
   };
   return (
     <button

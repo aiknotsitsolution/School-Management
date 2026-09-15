@@ -36,6 +36,9 @@ const schoolSchema = new mongoose.Schema(
       enum: ["active", "suspended"],
       default: "active",
     },
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date, default: null },
+    deletedBy: { type: String, default: null },
     onboarding: {
       status: {
         type: String,

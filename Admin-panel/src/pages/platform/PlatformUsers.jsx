@@ -13,6 +13,7 @@ import {
   FilterX,
   Building2,
   KeyRound,
+  AlertTriangle,
 } from "lucide-react";
 import { api } from "../../lib/api";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../../components/UI";
@@ -122,7 +123,6 @@ export default function PlatformUsers() {
   const [debouncedQ, setDebouncedQ] = useState("");
   const [role, setRole] = useState("");
   const [schoolId, setSchoolId] = useState("");
-  const [includeDeleted, setIncludeDeleted] = useState(false);
   const [schools, setSchools] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -131,6 +131,8 @@ export default function PlatformUsers() {
   const [form, setForm] = useState(emptyForm());
   const [busy, setBusy] = useState(false);
   const [createdCredential, setCreatedCredential] = useState(null);
+  const [confirmModal, setConfirmModal] = useState(null);
+  const [userTab, setUserTab] = useState("active");
 
   useEffect(() => {
     api.schools
@@ -149,7 +151,7 @@ export default function PlatformUsers() {
     if (debouncedQ.trim()) params.set("q", debouncedQ.trim());
     if (role) params.set("role", role);
     if (schoolId) params.set("schoolId", schoolId);
-    if (includeDeleted) params.set("includeDeleted", "true");
+    if (userTab === "removed") params.set("includeDeleted", "true");
     params.set("page", String(page));
     params.set("limit", "20");
 
@@ -162,7 +164,7 @@ export default function PlatformUsers() {
         setLoading(false);
       })
       .catch(() => setLoading(false));
-  }, [debouncedQ, role, schoolId, includeDeleted, page, refreshKey]);
+  }, [debouncedQ, role, schoolId, userTab, page, refreshKey]);
 
   const schoolNameOf = (id) => schools.find((s) => String(s._id || s.id) === String(id))?.name || "—";
 
@@ -184,33 +186,43 @@ export default function PlatformUsers() {
   };
 
   const toggleActive = async (user) => {
-    if (window.confirm(`${user.isActive ? "Deactivate" : "Activate"} ${user.name}?`)) {
-      try {
-        await api.platform.users.setStatus(user._id, !user.isActive);
-        toast(user.isActive ? "User deactivated" : "User activated");
-        refresh();
-        if (selected?.user?._id === user._id) open360(user._id);
-      } catch (err) {
-        toast(err.message, "error");
-      }
-    }
+    setConfirmModal({
+      type: "toggle",
+      title: user.isActive ? "Deactivate User" : "Activate User",
+      message: `${user.isActive ? "Deactivate" : "Activate"} ${user.name}?`,
+      confirmLabel: user.isActive ? "Deactivate" : "Activate",
+      variant: user.isActive ? "danger" : "success",
+      onConfirm: async () => {
+        try {
+          await api.platform.users.setStatus(user._id, !user.isActive);
+          toast(user.isActive ? "User deactivated" : "User activated");
+          refresh();
+          if (selected?.user?._id === user._id) open360(user._id);
+        } catch (err) {
+          toast(err.message, "error");
+        }
+      },
+    });
   };
 
   const removeUser = async (user) => {
-    if (
-      window.confirm(
-        `Remove ${user.name} (${user.email})? Access is revoked and history is preserved — it can be restored later.`,
-      )
-    ) {
-      try {
-        await api.platform.users.remove(user._id);
-        toast("User removed");
-        refresh();
-        if (selected?.user?._id === user._id) setSelected(null);
-      } catch (err) {
-        toast(err.message, "error");
-      }
-    }
+    setConfirmModal({
+      type: "remove",
+      title: "Remove User",
+      message: `Remove ${user.name} (${user.email})? Access is revoked and history is preserved — it can be restored later.`,
+      confirmLabel: "Remove",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          await api.platform.users.remove(user._id);
+          toast("User removed");
+          refresh();
+          if (selected?.user?._id === user._id) setSelected(null);
+        } catch (err) {
+          toast(err.message, "error");
+        }
+      },
+    });
   };
 
   const restoreUser = async (user) => {
@@ -221,6 +233,25 @@ export default function PlatformUsers() {
     } catch (err) {
       toast(err.message, "error");
     }
+  };
+
+  const hardDeleteUser = async (user) => {
+    setConfirmModal({
+      type: "hardDelete",
+      title: "Permanently Delete User",
+      message: `Permanently delete ${user.name} (${user.email})? This action cannot be undone. All data will be lost.`,
+      confirmLabel: "Delete Permanently",
+      variant: "danger",
+      onConfirm: async () => {
+        try {
+          await api.platform.users.hardDelete(user._id);
+          toast("User permanently deleted");
+          refresh();
+        } catch (err) {
+          toast(err.message, "error");
+        }
+      },
+    });
   };
 
   const sendOtp = async (user) => {
@@ -357,6 +388,29 @@ export default function PlatformUsers() {
       )}
 
       <Card bodyClassName="p-5">
+        <div className="flex items-center gap-1 mb-4 border-b border-black/[0.06]">
+          <button
+            onClick={() => { setUserTab("active"); setPage(1); }}
+            className={`px-4 py-2.5 text-[13px] font-semibold border-b-2 transition-colors ${
+              userTab === "active"
+                ? "border-ink text-ink"
+                : "border-transparent text-slate-text/60 hover:text-ink"
+            }`}
+          >
+            Active Users
+          </button>
+          <button
+            onClick={() => { setUserTab("removed"); setPage(1); }}
+            className={`px-4 py-2.5 text-[13px] font-semibold border-b-2 transition-colors ${
+              userTab === "removed"
+                ? "border-alert text-alert"
+                : "border-transparent text-slate-text/60 hover:text-ink"
+            }`}
+          >
+            Removed Users
+          </button>
+        </div>
+
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="relative flex-1 min-w-[200px]">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/50" />
@@ -384,18 +438,9 @@ export default function PlatformUsers() {
               ))}
             </Select>
           </div>
-          <label className="flex items-center gap-2 text-[13px] text-slate-text cursor-pointer select-none">
-            <input
-              type="checkbox"
-              checked={includeDeleted}
-              onChange={(event) => { setIncludeDeleted(event.target.checked); setPage(1); }}
-              className="accent-ink"
-            />
-            Include removed users
-          </label>
-          {(q.trim() || role || schoolId || includeDeleted) && (
+          {(q.trim() || role || schoolId) && (
             <button
-              onClick={() => { setQ(""); setRole(""); setSchoolId(""); setIncludeDeleted(false); setPage(1); }}
+              onClick={() => { setQ(""); setRole(""); setSchoolId(""); setUserTab("active"); setPage(1); }}
               className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink bg-paper px-3 py-2 rounded-lg border border-black/[0.06] hover:bg-alert/10 hover:text-alert transition-colors"
             >
               <FilterX size={13} /> Reset filters
@@ -408,7 +453,7 @@ export default function PlatformUsers() {
             Showing {rows.length} of {total} user{total === 1 ? "" : "s"}
             {schoolId ? ` · ${schoolNameOf(schoolId)}` : ""}
             {role ? ` · ${(ROLE_LABELS[role] || role).toLowerCase()}` : ""}
-            {includeDeleted ? " · incl. removed" : ""}
+            {userTab === "removed" ? " · removed" : ""}
           </p>
         )}
 
@@ -466,12 +511,21 @@ export default function PlatformUsers() {
                           <Eye size={13} /> 360°
                         </button>
                         {user.deletedAt ? (
-                          <button
-                            onClick={() => restoreUser(user)}
-                            className="inline-flex items-center text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5"
-                          >
-                            <RotateCcw size={13} /> Restore
-                          </button>
+                          <>
+                            <button
+                              onClick={() => restoreUser(user)}
+                              className="inline-flex items-center text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5"
+                            >
+                              <RotateCcw size={13} /> Restore
+                            </button>
+                            <button
+                              onClick={() => hardDeleteUser(user)}
+                              className="inline-flex items-center text-[12px] font-semibold text-alert bg-alert/10 px-2.5 py-1.5 rounded-lg hover:bg-alert/20"
+                              title="Permanently delete"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          </>
                         ) : (
                           <>
                             <button
@@ -592,6 +646,37 @@ export default function PlatformUsers() {
               onRestore={restoreUser}
               busy={busy}
             />
+          </div>
+        </div>
+      )}
+
+      {confirmModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40" onClick={() => setConfirmModal(null)}>
+          <div
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-md p-6 mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3 mb-4">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                confirmModal.variant === "danger" ? "bg-red-100" : "bg-green-100"
+              }`}>
+                <AlertTriangle size={20} className={confirmModal.variant === "danger" ? "text-red-600" : "text-green-600"} />
+              </div>
+              <h3 className="font-display font-bold text-ink text-lg">{confirmModal.title}</h3>
+            </div>
+            <p className="text-[13.5px] text-slate-text/80 mb-6">{confirmModal.message}</p>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setConfirmModal(null)}>Cancel</Button>
+              <Button
+                variant={confirmModal.variant === "danger" ? "danger" : "amber"}
+                onClick={async () => {
+                  await confirmModal.onConfirm();
+                  setConfirmModal(null);
+                }}
+              >
+                {confirmModal.confirmLabel}
+              </Button>
+            </div>
           </div>
         </div>
       )}

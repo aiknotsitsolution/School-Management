@@ -1172,6 +1172,9 @@ const toSchoolJson = (raw) => ({
   website: raw.website || null,
   status: raw.status,
   plan: raw.plan,
+  isDeleted: Boolean(raw.isDeleted),
+  deletedAt: raw.deletedAt || null,
+  deletedBy: raw.deletedBy || null,
   onboarding: raw.onboarding || { status: "created", appliedAt: null, completedAt: null },
   createdAt: raw.createdAt,
   updatedAt: raw.updatedAt,
@@ -1180,8 +1183,14 @@ const toSchoolJson = (raw) => ({
 const listPlatformSchools = async (req, res) => {
   try {
     const { page, limit, skip } = paginate(req, 25);
-    const { q, status, plan, onboarding } = req.query;
+    const { q, status, plan, onboarding, deleted } = req.query;
     const filter = {};
+    // By default exclude deleted schools; pass deleted=true to show only deleted
+    if (deleted === "true") {
+      filter.isDeleted = true;
+    } else {
+      filter.isDeleted = { $ne: true };
+    }
     if (status) filter.status = status;
     if (plan) filter.plan = plan;
     if (onboarding) filter["onboarding.status"] = onboarding;
@@ -1287,6 +1296,78 @@ const updateSchoolStatus = async (req, res) => {
       reason: reasonText || null,
     });
     res.json({ success: true, message: `School ${status === "active" ? "activated" : "suspended"}`, data: toSchoolJson(school) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const softDeleteSchool = async (req, res) => {
+  try {
+    const { reason } = req.body || {};
+    const school = await School.findById(req.params.id);
+    if (!school) return res.status(404).json({ success: false, message: "School not found" });
+    if (school.isDeleted) return res.status(400).json({ success: false, message: "School is already deleted" });
+
+    school.isDeleted = true;
+    school.deletedAt = new Date();
+    school.deletedBy = req.user?.email || "platform";
+    if (!["trial", "basic", "standard", "premium"].includes(school.plan)) {
+      school.plan = "trial";
+    }
+    const reasonText = (reason || "").toString().trim();
+    if (reasonText) school.settings = { ...(school.settings || {}), lastDeleteReason: reasonText };
+    await school.save();
+
+    await writeAudit({
+      req, user: req.user,
+      action: "school.soft_deleted",
+      targetType: "school", targetId: school._id,
+      message: `School ${school.name} soft deleted`,
+      reason: reasonText || null,
+    });
+    res.json({ success: true, message: "School moved to trash", data: toSchoolJson(school) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const restoreSchool = async (req, res) => {
+  try {
+    const school = await School.findById(req.params.id);
+    if (!school) return res.status(404).json({ success: false, message: "School not found" });
+    if (!school.isDeleted) return res.status(400).json({ success: false, message: "School is not deleted" });
+
+    school.isDeleted = false;
+    school.deletedAt = null;
+    school.deletedBy = null;
+    await school.save();
+
+    await writeAudit({
+      req, user: req.user,
+      action: "school.restored",
+      targetType: "school", targetId: school._id,
+      message: `School ${school.name} restored from trash`,
+    });
+    res.json({ success: true, message: "School restored", data: toSchoolJson(school) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const hardDeleteSchool = async (req, res) => {
+  try {
+    const school = await School.findById(req.params.id);
+    if (!school) return res.status(404).json({ success: false, message: "School not found" });
+
+    await writeAudit({
+      req, user: req.user,
+      action: "school.hard_deleted",
+      targetType: "school", targetId: school._id,
+      message: `School ${school.name} permanently deleted`,
+    });
+
+    await School.findByIdAndDelete(req.params.id);
+    res.json({ success: true, message: "School permanently deleted" });
   } catch (err) {
     rawError(res, err);
   }
@@ -1775,6 +1856,9 @@ module.exports = {
   listPlatformSchools,
   getSchool360,
   updateSchoolStatus,
+  softDeleteSchool,
+  restoreSchool,
+  hardDeleteSchool,
   updateSchoolOnboarding,
   updateSchoolProfile,
   sendSchoolWelcomeEmail,

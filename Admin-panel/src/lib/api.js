@@ -297,6 +297,12 @@ export const api = {
       update: (id, payload) => request(`/platform/schools/${id}`, json("PATCH", payload)),
       setStatus: (id, status, reason) =>
         request(`/platform/schools/${id}/status`, json("PATCH", { status, reason })),
+      softDelete: (id, reason) =>
+        request(`/platform/schools/${id}/soft-delete`, json("PATCH", { reason })),
+      restore: (id) =>
+        request(`/platform/schools/${id}/restore`, json("PATCH", {})),
+      hardDelete: (id) =>
+        request(`/platform/schools/${id}`, { method: "DELETE" }),
       updateOnboarding: (id, status, notes) =>
         request(`/platform/schools/${id}/onboarding`, json("PATCH", { status, notes })),
       sendWelcomeEmail: (id) =>
@@ -309,6 +315,7 @@ export const api = {
       setStatus: (id, isActive) =>
         request(`/auth/users/${id}/status`, json("PATCH", { isActive })),
       remove: (id) => request(`/auth/users/${id}`, { method: "DELETE" }),
+      hardDelete: (id) => request(`/auth/users/${id}/permanent`, { method: "DELETE" }),
       restore: (id) =>
         request(`/auth/users/${id}/restore`, { method: "POST" }),
     },

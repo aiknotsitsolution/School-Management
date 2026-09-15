@@ -31,7 +31,7 @@ const verifyToken = async (req, res, next) => {
 };
 
 const requireTenant = (req, res, next) => {
-  if (!req.tenantId) {
+  if (!req.tenantId && req.user?.role !== "super_admin") {
     return res.status(400).json({ success: false, message: "No school context for this request" });
   }
   next();
