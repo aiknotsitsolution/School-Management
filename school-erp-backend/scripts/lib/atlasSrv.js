@@ -1,13 +1,3 @@
-// Atlas SRV fallback resolver.
-//
-// On this development machine Node.js cannot complete DNS SRV lookups
-// (c-ares gets ECONNREFUSED from the corporate resolver even though the OS
-// resolver answers fine). When that happens we resolve the SRV/TXT records
-// through the Windows built-in resolver (Resolve-DnsName) and rebuild a plain
-// mongodb:// URI with explicit shard hosts, TLS, authSource and replicaSet.
-//
-// Only used when the driver's own SRV query fails; otherwise the original
-// mongodb+srv:// URI is returned untouched.
 
 const { execFileSync } = require("child_process");
 const dns = require("node:dns");
