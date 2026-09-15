@@ -2,7 +2,7 @@ import { store } from "../store";
 import { setTokens, logout } from "../store/authSlice";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "https://school-management-1-mmwh.onrender.com/api";
+  import.meta.env.VITE_API_URL || "https://zipschool-backend.onrender.com/api";
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
 

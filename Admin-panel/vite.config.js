@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      "/api": "https://school-management-1-mmwh.onrender.com",
+      "/api": "https://zipschool-backend.onrender.com",
     },
   },
 });
