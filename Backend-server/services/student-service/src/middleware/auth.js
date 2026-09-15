@@ -4,6 +4,7 @@ const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions"
 const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const { scopeClassTeacher } = require("@school-erp/shared/src/middleware/teacherScopeAuth");
 const { resolveTenant } = require("@school-erp/shared/src/middleware/tenant");
+const { requireSchoolActive } = require("@school-erp/shared/src/middleware/requireSchoolActive");
 const JWT_SECRET = getJwtSecret();
 
 // Decodes the JWT and attaches the tenant + role payload to req.user.
@@ -37,13 +38,14 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
-// Guards that a school-scoped resource actually has a tenant. Super_admin
-// without X-School-Id cannot hit school-scoped domain routes.
-const requireTenant = (req, res, next) => {
+// Guards that a school-scoped resource actually has a tenant AND the school
+// is active (not suspended). Super_admin without X-School-Id cannot hit
+// school-scoped domain routes.
+const requireTenant = async (req, res, next) => {
   if (!req.tenantId) {
     return res.status(400).json({ success: false, message: "No school context for this request" });
   }
-  next();
+  return requireSchoolActive(req, res, next);
 };
 
 // Role-scoped guard. More granular than authorizeRoles.

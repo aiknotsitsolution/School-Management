@@ -10,5 +10,6 @@ router.post("/generate/confirm", requirePermission("fees:collect"), ctrl.confirm
 
 router.post("/", requirePermission("fees:collect"), ctrl.createInvoice);
 router.get("/", requirePermission("fees:read"), scopeStudentQuery, ctrl.getInvoices);
+router.get("/:id/pdf", requirePermission("fees:read"), ctrl.downloadInvoicePdf);
 
 module.exports = router;

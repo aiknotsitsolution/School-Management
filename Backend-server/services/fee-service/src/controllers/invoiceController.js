@@ -3,6 +3,8 @@ const FeeStructure = require("../models/FeeStructure");
 const { getStudentModel } = require("../db/studentDb");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
+const { generateFeeInvoicePdf } = require("../utils/feeInvoicePdf");
+const mongoose = require("mongoose");
 
 // Mass-assignment guard: only these fields may be set from the request body.
 // status / paidAmount / receiptNo are exclusively derived by the payments
@@ -223,4 +225,34 @@ const confirmGenerate = async (req, res) => {
   }
 };
 
-module.exports = { createInvoice, getInvoices, generatePreview, confirmGenerate };
+const downloadInvoicePdf = async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!id) return res.status(400).json({ success: false, message: "Invoice ID is required" });
+
+    const invoice = await FeeInvoice.findOne({ _id: id, schoolId: req.tenantId }).lean();
+    if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
+
+    // Load school info for the PDF header
+    let school = {};
+    const SchoolModel = mongoose.models.School;
+    if (SchoolModel) {
+      const doc = await SchoolModel.findById(req.tenantId).select({ name: 1, code: 1, address: 1, city: 1, state: 1, phone: 1, email: 1 }).lean();
+      if (doc) school = doc;
+    }
+
+    const pdfBuffer = await generateFeeInvoicePdf(invoice, school);
+    const filename = `fee-invoice-${invoice.invoiceNumber || invoice._id?.toString()?.slice(-8) || "invoice"}.pdf`;
+
+    res.set({
+      "Content-Type": "application/pdf",
+      "Content-Disposition": `attachment; filename="${filename}"`,
+      "Content-Length": pdfBuffer.length,
+    });
+    res.send(pdfBuffer);
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { createInvoice, getInvoices, generatePreview, confirmGenerate, downloadInvoicePdf };

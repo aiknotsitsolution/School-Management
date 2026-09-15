@@ -2,14 +2,16 @@ import { store } from "../store";
 import { setTokens, logout } from "../store/authSlice";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+  import.meta.env.VITE_API_URL || "https://school-management-1-mmwh.onrender.com/api";
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
 
 let refreshPromise = null;
-function doRefresh(refreshToken) {
+function doRefresh(refreshToken)
+{
   if (!refreshToken) return Promise.resolve({ ok: false, body: { success: false, message: "No refresh token" } });
-  if (!refreshPromise) {
+  if (!refreshPromise)
+  {
     refreshPromise = fetch(`${API_BASE_URL}/auth/refresh-token`, json("POST", { refreshToken }))
       .then((r) => r.json().then((body) => ({ ok: r.ok, body })))
       .finally(() => { refreshPromise = null; });
@@ -18,50 +20,62 @@ function doRefresh(refreshToken) {
 }
 
 let refreshTimer = null;
-function scheduleRefresh() {
+function scheduleRefresh()
+{
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = null;
   const { auth } = store.getState();
   const token = auth.accessToken;
   if (!token) return;
-  try {
+  try
+  {
     const payload = JSON.parse(atob(token.split(".")[1]));
     const msUntilExpiry = payload.exp * 1000 - Date.now();
-    if (msUntilExpiry <= 0) {
+    if (msUntilExpiry <= 0)
+    {
       const rt = auth.refreshToken || localStorage.getItem("erp_refresh_token");
-      if (rt) {
-        doRefresh(rt).then(({ ok, body }) => {
-          if (ok && body.data?.accessToken) {
+      if (rt)
+      {
+        doRefresh(rt).then(({ ok, body }) =>
+        {
+          if (ok && body.data?.accessToken)
+          {
             store.dispatch(setTokens({
               accessToken: body.data.accessToken,
               refreshToken: body.data.refreshToken,
             }));
             scheduleRefresh();
           }
-        }).catch(() => {});
+        }).catch(() => { });
       }
       return;
     }
     const refreshIn = Math.max(msUntilExpiry - 5 * 60 * 1000, 10_000);
-    refreshTimer = setTimeout(async () => {
+    refreshTimer = setTimeout(async () =>
+    {
       const rt = store.getState().auth.refreshToken;
       if (!rt) return;
-      try {
+      try
+      {
         const { ok, body } = await doRefresh(rt);
-        if (ok && body.data?.accessToken) {
+        if (ok && body.data?.accessToken)
+        {
           store.dispatch(setTokens({
             accessToken: body.data.accessToken,
             refreshToken: body.data.refreshToken,
           }));
           scheduleRefresh();
-        } else {
+        } else
+        {
           setTimeout(() => scheduleRefresh(), 30_000);
         }
-      } catch {
+      } catch
+      {
         setTimeout(() => scheduleRefresh(), 30_000);
       }
     }, refreshIn);
-  } catch {
+  } catch
+  {
     // malformed token — will be caught by 401 handler
   }
 }
@@ -69,14 +83,17 @@ scheduleRefresh();
 
 // SSE subscriber built on fetch + ReadableStream so the Authorization header is
 // sent (EventSource cannot set headers). Auto-reconnects on error/timeout.
-function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
+function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {})
+{
   const controller = new AbortController();
   let running = true;
   let timer = null;
 
-  const connect = async () => {
+  const connect = async () =>
+  {
     if (controller.signal.aborted) return;
-    try {
+    try
+    {
       let { auth } = store.getState();
       let token = auth.accessToken || localStorage.getItem("erp_access_token");
       const user =
@@ -91,13 +108,17 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
         },
         signal: controller.signal,
       });
-      if (response.status === 401) {
+      if (response.status === 401)
+      {
         const refreshToken =
           auth?.refreshToken || localStorage.getItem("erp_refresh_token");
-        if (refreshToken) {
-          try {
+        if (refreshToken)
+        {
+          try
+          {
             const { ok, body } = await doRefresh(refreshToken);
-            if (ok && body.data?.accessToken) {
+            if (ok && body.data?.accessToken)
+            {
               store.dispatch(
                 setTokens({
                   accessToken: body.data.accessToken,
@@ -109,7 +130,8 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
               if (running) timer = setTimeout(connect, delay);
               return;
             }
-          } catch {
+          } catch
+          {
             // fall through
           }
         }
@@ -117,7 +139,8 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
         if (running) timer = setTimeout(connect, delay);
         return;
       }
-      if (response.status === 400) {
+      if (response.status === 400)
+      {
         onStatus?.("error");
         return;
       }
@@ -126,21 +149,26 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      for (;;) {
+      for (; ;)
+      {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         let idx;
-        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+        while ((idx = buffer.indexOf("\n\n")) !== -1)
+        {
           const block = buffer.slice(0, idx);
           buffer = buffer.slice(idx + 2);
           const dataLine = block
             .split("\n")
             .find((l) => l.startsWith("data: "));
-          if (dataLine) {
-            try {
+          if (dataLine)
+          {
+            try
+            {
               onData?.(JSON.parse(dataLine.slice(6)));
-            } catch {
+            } catch
+            {
               /* ignore malformed frame */
             }
           }
@@ -148,7 +176,8 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
       }
       onStatus?.("reconnecting");
       if (running) timer = setTimeout(connect, delay);
-    } catch (err) {
+    } catch (err)
+    {
       if (controller.signal.aborted) return;
       onStatus?.("reconnecting");
       if (running) timer = setTimeout(connect, delay);
@@ -156,14 +185,16 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
   };
 
   connect();
-  return () => {
+  return () =>
+  {
     running = false;
     if (timer) clearTimeout(timer);
     controller.abort();
   };
 }
 
-async function request(path, options = {}) {
+async function request(path, options = {})
+{
   const isFormData = options.body instanceof FormData;
   const { auth } = store.getState();
   const token = auth.accessToken || localStorage.getItem("erp_access_token");
@@ -184,15 +215,19 @@ async function request(path, options = {}) {
       ...options.headers,
     },
   });
-  if (response.status === 401 && !options._retry) {
+  if (response.status === 401 && !options._retry)
+  {
     const refreshToken =
       (auth &&
         (auth.refreshToken || localStorage.getItem("erp_refresh_token"))) ||
       localStorage.getItem("erp_refresh_token");
-    if (refreshToken) {
-      try {
+    if (refreshToken)
+    {
+      try
+      {
         const { ok, body: refreshBody } = await doRefresh(refreshToken);
-        if (ok && refreshBody.data?.accessToken) {
+        if (ok && refreshBody.data?.accessToken)
+        {
           store.dispatch(
             setTokens({
               accessToken: refreshBody.data.accessToken,
@@ -202,14 +237,16 @@ async function request(path, options = {}) {
           scheduleRefresh();
           return request(path, { ...options, _retry: true });
         }
-      } catch {
+      } catch
+      {
         // network error during refresh — fall through to logout
       }
     }
     store.dispatch(logout());
   }
   const body = await response.json().catch(() => ({}));
-  if (!response.ok || body.success === false) {
+  if (!response.ok || body.success === false)
+  {
     const err = new Error(body.message || "Request failed");
     err.data = body.data || null;
     err.status = response.status;
@@ -250,7 +287,8 @@ export const api = {
     sendResetOtp: (id) =>
       request(`/auth/users/${id}/send-reset-otp`, { method: "POST" }),
     updateMe: (patch) => request("/auth/me", json("PATCH", patch)),
-    uploadPhoto: (file) => {
+    uploadPhoto: (file) =>
+    {
       const formData = new FormData();
       formData.append("photo", file);
       return request("/auth/upload-photo", { method: "POST", body: formData });
@@ -302,6 +340,11 @@ export const api = {
       sendWelcomeEmail: (id) =>
         request(`/platform/schools/${id}/welcome-email`, { method: "POST" }),
     },
+    referenceData: {
+      list: (category) => request(`/platform/reference-data/${category}`),
+      add: (category, value) =>
+        request(`/platform/reference-data/${category}`, json("POST", { value })),
+    },
     users: {
       list: (params = "") => request(`/platform/users${params ? `?${params}` : ""}`),
       get360: (id) => request(`/platform/users/${id}`),
@@ -349,13 +392,15 @@ export const api = {
     list: (params = "") => request(`/auth/school/me/invoices${params ? `?${params}` : ""}`),
     get: (id) => request(`/auth/school/me/invoices/${id}`),
     pdfUrl: (id) => `${API_BASE_URL}/auth/school/me/invoices/${id}/pdf`,
-    downloadPdf: async (id) => {
+    downloadPdf: async (id) =>
+    {
       const { auth } = store.getState();
       const token = auth.accessToken || localStorage.getItem("erp_access_token");
       const response = await fetch(`${API_BASE_URL}/auth/school/me/invoices/${id}/pdf`, {
         headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
       });
-      if (!response.ok) {
+      if (!response.ok)
+      {
         const body = await response.json().catch(() => ({}));
         const err = new Error(body.message || "Download failed");
         err.status = response.status;
@@ -387,7 +432,8 @@ export const api = {
       request(`/students/pending-registrations${params ? `?${params}` : ""}`),
     completeProfile: (id) =>
       request(`/students/${id}/complete-profile`, { method: "POST" }),
-    uploadPhoto: (file) => {
+    uploadPhoto: (file) =>
+    {
       const formData = new FormData();
       formData.append("photo", file);
       return request("/students/upload-photo", {
@@ -411,7 +457,8 @@ export const api = {
   },
   documents: {
     list: (params = "") => request(`/documents${params ? `?${params}` : ""}`),
-    upload: (file, item) => {
+    upload: (file, item) =>
+    {
       const formData = new FormData();
       formData.append("file", file);
       if (item?.title) formData.append("title", item.title);
@@ -467,14 +514,17 @@ export const api = {
     submissions: {
       myList: (params = "") =>
         request(`/homework/submissions${params ? `?${params}` : ""}`),
-      submit: (homeworkId, { content = "", file = null, attachments = [] } = {}) => {
+      submit: (homeworkId, { content = "", file = null, attachments = [] } = {}) =>
+      {
         const hasContent = typeof content === "string" && content.trim().length > 0;
         const hasFile = typeof File !== "undefined" && file instanceof File;
-        if (hasFile) {
+        if (hasFile)
+        {
           const formData = new FormData();
           formData.append("file", file);
           if (hasContent) formData.append("content", content);
-          if (attachments.length > 0) {
+          if (attachments.length > 0)
+          {
             formData.append("attachments", JSON.stringify(attachments));
           }
           return request(`/homework/submissions/${homeworkId}`, {
@@ -552,6 +602,34 @@ export const api = {
         request("/fees/generate/preview", json("POST", item)),
       generateConfirm: (item) =>
         request("/fees/generate/confirm", json("POST", item)),
+      pdfUrl: (id) => `${API_BASE_URL}/fees/${id}/pdf`,
+      downloadPdf: async (id) =>
+      {
+        const { auth } = store.getState();
+        const token = auth.accessToken || localStorage.getItem("erp_access_token");
+        const response = await fetch(`${API_BASE_URL}/fees/${id}/pdf`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        });
+        if (!response.ok)
+        {
+          const body = await response.json().catch(() => ({}));
+          const err = new Error(body.message || "Download failed");
+          err.status = response.status;
+          throw err;
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = match ? match[1] : `fee-invoice-${id}.pdf`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
     },
     payments: {
       list: (params = "") => request(`/payments${params ? `?${params}` : ""}`),
@@ -585,20 +663,21 @@ export const api = {
     markAllRead: () => request("/notifications/read-all", json("PATCH", {})),
     subscribe: (handlers) => sseSubscribe("/notifications/stream", handlers),
   },
-events: {
-      list: () => request("/events"),
-      create: (item) => request("/events", json("POST", item)),
-      update: (id, item) => request(`/events/${id}`, json("PUT", item)),
-      remove: (id) => request(`/events/${id}`, { method: "DELETE" }),
-      uploadImage: (file) => {
-        const formData = new FormData();
-        formData.append("image", file);
-        return request("/events/upload-image", {
-          method: "POST",
-          body: formData,
-        });
-      },
+  events: {
+    list: () => request("/events"),
+    create: (item) => request("/events", json("POST", item)),
+    update: (id, item) => request(`/events/${id}`, json("PUT", item)),
+    remove: (id) => request(`/events/${id}`, { method: "DELETE" }),
+    uploadImage: (file) =>
+    {
+      const formData = new FormData();
+      formData.append("image", file);
+      return request("/events/upload-image", {
+        method: "POST",
+        body: formData,
+      });
     },
+  },
   staff: {
     list: (params = "") => request(`/staff${params ? `?${params}` : ""}`),
     create: (item) => request("/staff", json("POST", item)),
@@ -606,7 +685,8 @@ events: {
     remove: (id) => request(`/staff/${id}`, { method: "DELETE" }),
     // Own person record for a Staff/Teacher/Class Teacher account (refId scoped).
     me: () => request("/staff/me"),
-    uploadPhoto: (file) => {
+    uploadPhoto: (file) =>
+    {
       const formData = new FormData();
       formData.append("photo", file);
       return request("/staff/upload-photo", { method: "POST", body: formData });
