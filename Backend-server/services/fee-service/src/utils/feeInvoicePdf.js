@@ -1,5 +1,3 @@
-const PDFDocument = require("pdfkit");
-
 const C = {
   navy:       "#0f172a",
   navyLight:  "#1e293b",
@@ -49,6 +47,7 @@ const statusColor = (status) => {
  */
 const generateFeeInvoicePdf = (invoice, school = {}) =>
   new Promise((resolve, reject) => {
+    const PDFDocument = require("pdfkit");
     const doc = new PDFDocument({ size: "A4", margin: 50 });
     const chunks = [];
     doc.on("data", (c) => chunks.push(c));

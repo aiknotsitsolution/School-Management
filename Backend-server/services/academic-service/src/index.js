@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 const dns = require("node:dns");
-dns.setServers(["8.8.8.8", "1.1.1.1", "0.0.0.0"]);
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 const express = require("express");
 const cors = require("cors");
@@ -41,7 +41,7 @@ app.use(morgan("dev"));
 app.use(express.json({ limit: "100kb" }));
 
 mongoose
-  .connect(process.env.ACADEMIC_MONGODB_URI)
+  .connect(process.env.ACADEMIC_MONGODB_URI, { maxPoolSize: 5 })
   .then(() =>
   {
     console.log("✅ MongoDB Connected Successfully");

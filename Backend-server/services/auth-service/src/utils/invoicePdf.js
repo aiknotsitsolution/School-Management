@@ -1,5 +1,3 @@
-const PDFDocument = require("pdfkit");
-
 // ── Color palette ──
 const C = {
   navy:       "#0f172a",
@@ -98,6 +96,7 @@ function drawStatusBadge(doc, x, y, status) {
  */
 const generateInvoicePdf = (invoice) => {
   return new Promise((resolve, reject) => {
+    const PDFDocument = require("pdfkit");
     const doc = new PDFDocument({
       size: "A4",
       margins: { top: 0, bottom: 0, left: 0, right: 0 },

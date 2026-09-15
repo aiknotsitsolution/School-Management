@@ -1,5 +1,3 @@
-const nodemailer = require("nodemailer");
-
 let transporter = null;
 
 const getTransporter = () => {
@@ -9,6 +7,7 @@ const getTransporter = () => {
     console.warn("[email] SMTP not configured — emails will be logged to console");
     return null;
   }
+  const nodemailer = require("nodemailer");
   transporter = nodemailer.createTransport({
     host: SMTP_HOST,
     port: parseInt(SMTP_PORT, 10) || 587,

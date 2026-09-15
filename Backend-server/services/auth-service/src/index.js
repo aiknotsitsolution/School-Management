@@ -1,7 +1,7 @@
 require("dotenv").config();
 
 const dns = require("node:dns");
-dns.setServers(["8.8.8.8", "1.1.1.1", "0.0.0.0"]);
+dns.setServers(["8.8.8.8", "1.1.1.1"]);
 
 const express = require("express");
 const cors = require("cors");
@@ -20,7 +20,7 @@ const { startTrialExpiryScheduler } = require("./services/trialExpiry");
 const app = express();
 const PORT = process.env.AUTH_SERVICE_PORT || 5001;
 
-const connectDB = () => mongoose.connect(process.env.AUTH_MONGODB_URI);
+const connectDB = () => mongoose.connect(process.env.AUTH_MONGODB_URI, { maxPoolSize: 5 });
 
 const start = async () =>
 {

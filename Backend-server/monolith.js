@@ -41,12 +41,36 @@ const services = [
 // Gateway runs last; its port is $PORT (Render) or GATEWAY_PORT fallback.
 const gateway = ["gateway", "api-gateway", GATEWAY_PORT, "npm start"];
 
-const allServices = [...services, gateway];
-
 const VERBOSE = process.argv.includes("--verbose");
 const HEALTH_TIMEOUT_MS = 3000;
 const STARTUP_POLL_MS = 2000;
 const STARTUP_BUDGET_MS = 90_000;
+
+/* ── Service selection via MONOLITH_SERVICES env var ─────────────────────── */
+
+const ALL_SERVICE_NAMES = [...services.map((s) => s[0]), gateway[0]]; // all valid names
+
+const rawFilter = process.env.MONOLITH_SERVICES;
+let activeServices;
+
+if (rawFilter) {
+  const requested = rawFilter.split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+  const invalid = requested.filter((name) => !ALL_SERVICE_NAMES.includes(name));
+  if (invalid.length) {
+    console.error(`[monolith] Unknown service name(s): ${invalid.join(", ")}`);
+    console.error(`[monolith] Valid names: ${ALL_SERVICE_NAMES.join(", ")}`);
+    process.exit(1);
+  }
+  // Always include gateway when any service is selected
+  const unique = [...new Set([...requested, gateway[0]])];
+  const nameMap = Object.fromEntries([...services, gateway].map((s) => [s[0], s]));
+  activeServices = unique.map((name) => nameMap[name]);
+  console.log(`[monolith] MONOLITH_SERVICES="${rawFilter}" → starting: ${activeServices.map((s) => s[0]).join(", ")}`);
+} else {
+  activeServices = [...services, gateway];
+}
+
+const allServices = activeServices;
 
 /* ── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -156,11 +180,14 @@ process.on("SIGTERM", () => shutdown("SIGTERM"));
 async function main() {
   console.log("[monolith] Starting all services…\n");
 
-  // 1. Spawn backend services (gateway first on the port list so its health
-  //    endpoint is the one Render probes).
+  // Separate gateway from backend services in the active set
+  const activeBackends = activeServices.filter((s) => s[0] !== "gateway");
+  const activeGateway = activeServices.find((s) => s[0] === "gateway");
+
+  // 1. Spawn backend services.
   //    Spawn in reverse order so the gateway starts last and proxies are ready
   //    by the time it begins accepting traffic.
-  for (const [name, dir, port, cmd] of [...services].reverse()) {
+  for (const [name, dir, port, cmd] of [...activeBackends].reverse()) {
     if (await isPortOpen(port)) {
       console.log(`[monolith] ${name} already running on :${port}`);
       continue;
@@ -170,14 +197,17 @@ async function main() {
   }
 
   // Give backend services a moment to bind their ports before starting gateway
-  await new Promise((r) => setTimeout(r, 1500));
+  if (activeBackends.length) await new Promise((r) => setTimeout(r, 1500));
 
   // 2. Spawn gateway on the externally-visible port
-  if (await isPortOpen(GATEWAY_PORT)) {
-    console.log(`[monolith] gateway already running on :${GATEWAY_PORT}`);
-  } else {
-    console.log(`[monolith] starting gateway on :${GATEWAY_PORT}`);
-    spawnService(...gateway);
+  if (activeGateway) {
+    const [, gwDir, gwPort, gwCmd] = activeGateway;
+    if (await isPortOpen(gwPort)) {
+      console.log(`[monolith] gateway already running on :${gwPort}`);
+    } else {
+      console.log(`[monolith] starting gateway on :${gwPort}`);
+      spawnService("gateway", gwDir, gwPort, gwCmd);
+    }
   }
 
   // 3. Health-check polling

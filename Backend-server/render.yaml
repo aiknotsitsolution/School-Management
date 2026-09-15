@@ -13,6 +13,8 @@ services:
     envVars:
       - key: NODE_ENV
         value: production
+      - key: MONOLITH_SERVICES
+        value: auth,student,staff,academic,fee,gateway
 
       # ── Secrets (set these in Render Dashboard, NOT here) ──────
       - key: JWT_SECRET
