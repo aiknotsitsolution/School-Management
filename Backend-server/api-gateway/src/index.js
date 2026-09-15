@@ -7,7 +7,7 @@ const rateLimit = require("express-rate-limit");
 const { createProxyMiddleware } = require("http-proxy-middleware");
 
 const app = express();
-const PORT = process.env.GATEWAY_PORT || 5000;
+const PORT = process.env.PORT || 5000;
 const PROXY_TIMEOUT_MS = Number(process.env.PROXY_TIMEOUT_MS || 300000);
 
 app.use(helmet());
