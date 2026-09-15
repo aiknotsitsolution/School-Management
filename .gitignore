@@ -3,7 +3,7 @@ test-results/
 playwright-report/
 DemoTestingUserGuide/
 docs/
-.env
+
 .env.*
 !.env.example
 *.log
