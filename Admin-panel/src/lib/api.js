@@ -83,12 +83,11 @@ scheduleRefresh();
 
 // SSE subscriber built on fetch + ReadableStream so the Authorization header is
 // sent (EventSource cannot set headers). Auto-reconnects on error/timeout.
-function sseSubscribe(path, { onData, onStatus, delay = 3000, maxRetries = 10 } = {})
+function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {})
 {
   const controller = new AbortController();
   let running = true;
   let timer = null;
-  let retries = 0;
 
   const connect = async () =>
   {
@@ -127,7 +126,6 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000, maxRetries = 10 } 
                 }),
               );
               scheduleRefresh();
-              retries = 0;
               onStatus?.("reconnecting");
               if (running) timer = setTimeout(connect, delay);
               return;
@@ -147,7 +145,6 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000, maxRetries = 10 } 
         return;
       }
       if (!response.ok || !response.body) throw new Error(`SSE ${response.status}`);
-      retries = 0;
       onStatus?.("connected");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
@@ -177,21 +174,13 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000, maxRetries = 10 } 
           }
         }
       }
-      retries = 0;
       onStatus?.("reconnecting");
       if (running) timer = setTimeout(connect, delay);
     } catch (err)
     {
       if (controller.signal.aborted) return;
-      retries++;
-      if (retries >= maxRetries)
-      {
-        onStatus?.("error");
-        return;
-      }
-      const backoff = Math.min(delay * Math.pow(2, retries - 1), 60000);
       onStatus?.("reconnecting");
-      if (running) timer = setTimeout(connect, backoff);
+      if (running) timer = setTimeout(connect, delay);
     }
   };
 
