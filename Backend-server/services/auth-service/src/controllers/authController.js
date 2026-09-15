@@ -387,6 +387,14 @@ const login = async (req, res) => {
       if (!school || school.status !== "active") {
         return res.status(403).json({ success: false, message: "Your school account is inactive" });
       }
+      // Block school_admin login if onboarding is not complete
+      if (user.role === "school_admin" && school.onboarding?.status !== "live") {
+        return res.status(403).json({
+          success: false,
+          message: "School onboarding is not complete. Please complete the setup process.",
+          code: "ONBOARDING_INCOMPLETE",
+        });
+      }
     }
 
     user.lastLogin = new Date();
@@ -404,7 +412,7 @@ const login = async (req, res) => {
         refreshToken,
         user: toPublicUser(user),
         school: school
-          ? { id: school._id, name: school.name, code: school.code, shortName: school.shortName, logo: school.logo, session: school.session, currentSession, academicConfigConfirmed: Boolean(school.academicConfigConfirmed), plan: school.plan, status: school.status, city: school.city, state: school.state, pincode: school.pincode, board: school.board || "", recognitionNumber: school.recognitionNumber || "", recognitionAuthority: school.recognitionAuthority || "", recognitionVerified: Boolean(school.recognitionVerified), settings: school.settings || {} }
+          ? { id: school._id, name: school.name, code: school.code, shortName: school.shortName, logo: school.logo, session: school.session, currentSession, academicConfigConfirmed: Boolean(school.academicConfigConfirmed), plan: school.plan, status: school.status, onboarding: school.onboarding?.status || "live", city: school.city, state: school.state, pincode: school.pincode, board: school.board || "", recognitionNumber: school.recognitionNumber || "", recognitionAuthority: school.recognitionAuthority || "", recognitionVerified: Boolean(school.recognitionVerified), settings: school.settings || {} }
           : null,
       },
     });

@@ -5,7 +5,8 @@
   "description": "Scalable MERN microservices backend for School Management ERP System",
   "scripts": {
     "install:all": "npm install --prefix shared && npm install --prefix api-gateway && npm install --prefix services/auth-service && npm install --prefix services/student-service && npm install --prefix services/staff-service && npm install --prefix services/academic-service && npm install --prefix services/fee-service && npm install --prefix services/communication-service && npm install --prefix services/library-service && npm install --prefix services/facility-service",
-    "start": "npm --prefix api-gateway start",
+    "start": "node monolith.js",
+    "start:gateway": "npm --prefix api-gateway start",
     "dev:all": "node scripts/dev-all.js",
     "docker:up": "docker-compose up --build",
     "docker:down": "docker-compose down",

@@ -1,4 +1,4 @@
-const COMM_URL = `http://localhost:${process.env.COMMUNICATION_SERVICE_PORT || 5006}`;
+const COMM_URL = process.env.COMMUNICATION_SERVICE_URL || `http://localhost:${process.env.COMMUNICATION_SERVICE_PORT || 5006}`;
 const INTERNAL_KEY = process.env.INTERNAL_NOTIFY_KEY;
 
 async function notifyByRefIds({ schoolId, refIds, title, message, kind = "system", link = null }) {

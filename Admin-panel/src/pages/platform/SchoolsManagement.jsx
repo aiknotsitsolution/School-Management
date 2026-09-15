@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Building2, Plus, Search, ChevronLeft, ChevronRight, FileText, Trash2, RotateCcw, AlertTriangle, X } from "lucide-react";
+import { Building2, Plus, Search, ChevronLeft, ChevronRight, FileText, Trash2, RotateCcw, AlertTriangle, Pencil, X } from "lucide-react";
 import { api } from "../../lib/api";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../../components/UI";
+import SearchableDropdown from "../../components/SearchableDropdown";
 
 const statusTone = (status) =>
   status === "active" ? "success" : status === "suspended" ? "alert" : "neutral";
@@ -54,6 +55,45 @@ export default function SchoolsManagement() {
   const [deleteReason, setDeleteReason] = useState("");
   const [hardDeleteModal, setHardDeleteModal] = useState({ open: false, school: null });
   const [hardDeleteConfirm, setHardDeleteConfirm] = useState("");
+  const [editing, setEditing] = useState(null);
+  const [form, setForm] = useState({});
+  const [saving, setSaving] = useState(false);
+
+  const openEdit = (school) => {
+    setForm({
+      name: school.name || "",
+      shortName: school.shortName || "",
+      email: school.email || "",
+      phone: school.phone || "",
+      website: school.website || "",
+      board: school.board || "",
+      recognitionNumber: school.recognitionNumber || "",
+      recognitionAuthority: school.recognitionAuthority || "",
+      address: school.address || "",
+      city: school.city || "",
+      state: school.state || "",
+      pincode: school.pincode || "",
+    });
+    setEditing(school);
+  };
+
+  const saveEdit = async () => {
+    if (!form.name.trim()) {
+      toast("School name is required", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      await api.platform.schools.update(editing._id, form);
+      toast("School updated");
+      setEditing(null);
+      setRefreshKey((key) => key + 1);
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   useEffect(() => {
     const params = new URLSearchParams();
@@ -293,6 +333,13 @@ export default function SchoolsManagement() {
                               <FileText size={13} /> 360°
                             </Link>
                             <button
+                              onClick={() => openEdit(school)}
+                              disabled={busyId === school._id}
+                              className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5 disabled:opacity-50"
+                            >
+                              <Pencil size={13} /> Edit
+                            </button>
+                            <button
                               onClick={() => setSuspendModal({ open: true, school })}
                               disabled={busyId === school._id}
                               className="inline-flex items-center text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5 disabled:opacity-50"
@@ -454,6 +501,86 @@ export default function SchoolsManagement() {
           </Button>
         </div>
       </Modal>
+
+      {/* Edit School Modal */}
+      {editing && (
+        <div className="fixed inset-0 z-50 bg-black/30 flex items-center justify-center p-4">
+          <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-6 max-h-[92vh] overflow-y-auto">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-lg bg-amber/15 text-amber-dark flex items-center justify-center">
+                  <Building2 size={16} />
+                </div>
+                <div>
+                  <h3 className="font-display font-bold text-ink">Edit school</h3>
+                  <p className="text-[11.5px] text-slate-text/60">{editing.code}</p>
+                </div>
+              </div>
+              <button onClick={() => setEditing(null)} className="p-1.5 rounded-lg hover:bg-black/5 text-slate-text/70">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="mt-5 grid sm:grid-cols-2 gap-3.5">
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">School name</label>
+                <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Short name</label>
+                <Input value={form.shortName} onChange={(e) => setForm({ ...form, shortName: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Email</label>
+                <Input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Phone</label>
+                <Input value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Website</label>
+                <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Board</label>
+                <SearchableDropdown category="board" label="" value={form.board} onChange={(v) => setForm({ ...form, board: v })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Address</label>
+                <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">City</label>
+                <SearchableDropdown category="city" label="" value={form.city} onChange={(v) => setForm({ ...form, city: v })} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">State</label>
+                <SearchableDropdown category="state" label="" value={form.state} onChange={(v) => setForm({ ...form, state: v })} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Pincode</label>
+                <Input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
+              </div>
+              <div>
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Recognition no.</label>
+                <Input value={form.recognitionNumber} onChange={(e) => setForm({ ...form, recognitionNumber: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Recognition authority</label>
+                <SearchableDropdown category="recognition_authority" label="" value={form.recognitionAuthority} onChange={(v) => setForm({ ...form, recognitionAuthority: v })} />
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
+              <Button variant="amber" onClick={saveEdit} disabled={saving}>
+                {saving ? "Saving…" : "Save changes"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

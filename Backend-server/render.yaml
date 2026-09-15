@@ -1,226 +1,89 @@
-```yaml
 services:
-
-  # ==========================================
-  # API GATEWAY
-  # ==========================================
-  - type: pserv
-    name: school-api-gateway
+  # ============================================================
+  # MONOLITH BACKEND — all 8 microservices + API gateway
+  # in a single Render Web Service ($7/mo Starter plan)
+  # ============================================================
+  - type: web
+    name: zipschool-backend
     runtime: node
-    rootDir: school-erp-backend/api-gateway
-    buildCommand: npm install
-    startCommand: npm start
+    rootDir: Backend-server
+    buildCommand: npm run install:all
+    startCommand: node monolith.js
     healthCheckPath: /health
     envVars:
       - key: NODE_ENV
         value: production
-      - key: PORT
-        value: 10000
 
-      # MongoDB / common configuration
-      - key: MONGODB_URI
-        sync: false
-
-      # Service URLs
-      - key: AUTH_SERVICE_URL
-        fromService:
-          type: pserv
-          name: school-auth-service
-          property: hostport
-
-      - key: STUDENT_SERVICE_URL
-        fromService:
-          type: pserv
-          name: school-student-service
-          property: hostport
-
-      - key: STAFF_SERVICE_URL
-        fromService:
-          type: pserv
-          name: school-staff-service
-          property: hostport
-
-      - key: ACADEMIC_SERVICE_URL
-        fromService:
-          type: pserv
-          name: school-academic-service
-          property: hostport
-
-      - key: FEE_SERVICE_URL
-        fromService:
-          type: pserv
-          name: school-fee-service
-          property: hostport
-
-      - key: COMMUNICATION_SERVICE_URL
-        fromService:
-          type: pserv
-          name: school-communication-service
-          property: hostport
-
-      - key: LIBRARY_SERVICE_URL
-        fromService:
-          type: pserv
-          name: school-library-service
-          property: hostport
-
-      - key: FACILITY_SERVICE_URL
-        fromService:
-          type: pserv
-          name: school-facility-service
-          property: hostport
-
-
-  # ==========================================
-  # AUTH SERVICE
-  # ==========================================
-  - type: pserv
-    name: school-auth-service
-    runtime: node
-    rootDir: school-erp-backend/services/auth-service
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: MONGODB_URI
-        sync: false
+      # ── Secrets (set these in Render Dashboard, NOT here) ──────
       - key: JWT_SECRET
         sync: false
-
-
-  # ==========================================
-  # STUDENT SERVICE
-  # ==========================================
-  - type: pserv
-    name: school-student-service
-    runtime: node
-    rootDir: school-erp-backend/services/student-service
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: MONGODB_URI
+      - key: CORS_ORIGIN
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: INTERNAL_NOTIFY_KEY
+        sync: false
+      - key: GATEWAY_KEYS_ENC_KEY
         sync: false
 
-
-  # ==========================================
-  # STAFF SERVICE
-  # ==========================================
-  - type: pserv
-    name: school-staff-service
-    runtime: node
-    rootDir: school-erp-backend/services/staff-service
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: MONGODB_URI
+      # ── MongoDB (one per service — all on the same Atlas cluster) ─
+      - key: AUTH_MONGODB_URI
+        sync: false
+      - key: STUDENT_MONGODB_URI
+        sync: false
+      - key: STAFF_MONGODB_URI
+        sync: false
+      - key: ACADEMIC_MONGODB_URI
+        sync: false
+      - key: FEE_MONGODB_URI
+        sync: false
+      - key: COMMUNICATION_MONGODB_URI
+        sync: false
+      - key: LIBRARY_MONGODB_URI
+        sync: false
+      - key: FACILITY_MONGODB_URI
         sync: false
 
-
-  # ==========================================
-  # ACADEMIC SERVICE
-  # ==========================================
-  - type: pserv
-    name: school-academic-service
-    runtime: node
-    rootDir: school-erp-backend/services/academic-service
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: MONGODB_URI
+      # ── ImageKit (file uploads) ────────────────────────────────
+      - key: IMAGEKIT_PUBLIC_KEY
+        sync: false
+      - key: IMAGEKIT_PRIVATE_KEY
+        sync: false
+      - key: IMAGEKIT_URL_ENDPOINT
         sync: false
 
-
-  # ==========================================
-  # FEE SERVICE
-  # ==========================================
-  - type: pserv
-    name: school-fee-service
-    runtime: node
-    rootDir: school-erp-backend/services/fee-service
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: MONGODB_URI
+      # ── SMTP / email ──────────────────────────────────────────
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
         sync: false
 
-
-  # ==========================================
-  # COMMUNICATION SERVICE
-  # ==========================================
-  - type: pserv
-    name: school-communication-service
-    runtime: node
-    rootDir: school-erp-backend/services/communication-service
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: MONGODB_URI
+      # ── Payment provider (optional) ───────────────────────────
+      - key: PAYMENT_PROVIDER_ENABLED
+        value: "false"
+      - key: PAYMENT_PROVIDER_NAME
+        sync: false
+      - key: PAYMENT_PROVIDER_KEY_ID
+        sync: false
+      - key: PAYMENT_PROVIDER_KEY_SECRET
+        sync: false
+      - key: PAYMENT_PROVIDER_WEBHOOK_SECRET
         sync: false
 
-
-  # ==========================================
-  # LIBRARY SERVICE
-  # ==========================================
-  - type: pserv
-    name: school-library-service
-    runtime: node
-    rootDir: school-erp-backend/services/library-service
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
+  # ============================================================
+  # FRONTEND — React/Vite static site (free tier)
+  # ============================================================
+  - type: static_site
+    name: zipschool-frontend
+    rootDir: Admin-panel
+    buildCommand: npm install && npm run build
+    staticPublishPath: dist
     envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: MONGODB_URI
+      - key: VITE_API_URL
         sync: false
-
-
-  # ==========================================
-  # FACILITY SERVICE
-  # ==========================================
-  - type: pserv
-    name: school-facility-service
-    runtime: node
-    rootDir: school-erp-backend/services/facility-service
-    buildCommand: npm install
-    startCommand: npm start
-    healthCheckPath: /health
-    envVars:
-      - key: NODE_ENV
-        value: production
-      - key: PORT
-        value: 10000
-      - key: MONGODB_URI
-        sync: false
-```

@@ -1831,6 +1831,56 @@ const updatePlatformSettings = async (req, res) => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// Reference data (boards, cities, states, recognition authorities)
+// ---------------------------------------------------------------------------
+const VALID_CATEGORIES = ["board", "recognition_authority", "city", "state"];
+
+const listReferenceData = async (req, res) => {
+  try {
+    const { category } = req.params;
+    if (!VALID_CATEGORIES.includes(category)) {
+      return res.status(400).json({ success: false, message: "Invalid category" });
+    }
+    const ReferenceData = require("../models/ReferenceData");
+    const items = await ReferenceData.find({ category }).sort({ value: 1 }).lean();
+    res.json({ success: true, data: items.map((i) => i.value) });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
+const addReferenceData = async (req, res) => {
+  try {
+    const { category } = req.params;
+    if (!VALID_CATEGORIES.includes(category)) {
+      return res.status(400).json({ success: false, message: "Invalid category" });
+    }
+    const value = String(req.body.value || "").trim();
+    if (!value) {
+      return res.status(400).json({ success: false, message: "Value is required" });
+    }
+    const ReferenceData = require("../models/ReferenceData");
+    let doc;
+    try {
+      doc = await ReferenceData.findOneAndUpdate(
+        { category, value },
+        { $setOnInsert: { category, value } },
+        { upsert: true, new: true, runValidators: true },
+      );
+    } catch (err) {
+      if (err.code === 11000) {
+        doc = await ReferenceData.findOne({ category, value }).lean();
+      } else {
+        throw err;
+      }
+    }
+    res.status(201).json({ success: true, data: doc.value });
+  } catch (err) {
+    rawError(res, err);
+  }
+};
+
 module.exports = {
   listPlans,
   getPlan,
@@ -1862,6 +1912,8 @@ module.exports = {
   updateSchoolOnboarding,
   updateSchoolProfile,
   sendSchoolWelcomeEmail,
+  listReferenceData,
+  addReferenceData,
   formatMoney,
   // shared helpers reused by tenantController (school self-service).
   toSubscriptionJson,

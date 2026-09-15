@@ -99,6 +99,7 @@ import {
   selectIsAuthenticated,
   selectRole,
   selectUser,
+  selectSchool,
 } from "./store/selectors";
 import { hasPermission } from "./lib/permissions";
 import { resolvePersona } from "./lib/persona";
@@ -106,8 +107,18 @@ import SplashScreen from "./components/SplashScreen";
 
 function ProtectedLayout() {
   const isAuth = useSelector(selectIsAuthenticated);
+  const school = useSelector(selectSchool);
+  const role = useSelector(selectRole);
   if (!isAuth) {
     return <Navigate to="/login" replace />;
+  }
+  // Block suspended schools from accessing the app (except super_admin and
+  // the subscription page itself so they can view/upgrade their plan).
+  if (
+    school?.status === "suspended" &&
+    role !== "super_admin"
+  ) {
+    return <Navigate to="/subscription" replace />;
   }
   return <Layout />;
 }
@@ -171,8 +182,13 @@ function RequireNotTeacher({ children, fallback = "/teacher-dashboard" }) {
 
 function HomeRedirect() {
   const user = useSelector(selectUser);
+  const school = useSelector(selectSchool);
   const role = user?.role || "admin";
   if (role === "super_admin") return <Navigate to="/platform" replace />;
+  // Suspended school admins land on the subscription page
+  if (role === "school_admin" && school?.status === "suspended") {
+    return <Navigate to="/subscription" replace />;
+  }
   if (role === "teacher") return <Navigate to="/teacher-dashboard" replace />;
   if (role === "student") return <Navigate to="/student-dashboard" replace />;
   if (role === "staff") {

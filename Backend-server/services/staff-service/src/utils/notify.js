@@ -1,7 +1,7 @@
 // Pushes inbox notifications to the communication service using the acting
 // admin's JWT. Failure is non-fatal: the originating admin action still
 // completes if the notification push fails.
-const COMM_URL = `http://localhost:${process.env.COMMUNICATION_SERVICE_PORT || 5006}`;
+const COMM_URL = process.env.COMMUNICATION_SERVICE_URL || `http://localhost:${process.env.COMMUNICATION_SERVICE_PORT || 5006}`;
 
 async function pushNotifications({ token, schoolId, userIds, title, message, kind = "system", link = null }) {
   const targets = [...new Set((userIds || []).map((u) => String(u)).filter(Boolean))];

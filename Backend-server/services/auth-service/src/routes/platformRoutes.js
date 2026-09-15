@@ -58,4 +58,8 @@ router.get("/reports/:type", ctrl.generateReport);
 router.get("/settings", ctrl.getPlatformSettings);
 router.patch("/settings", ctrl.updatePlatformSettings);
 
+// Reference data (boards, cities, states, recognition authorities)
+router.get("/reference-data/:category", ctrl.listReferenceData);
+router.post("/reference-data/:category", ctrl.addReferenceData);
+
 module.exports = router;

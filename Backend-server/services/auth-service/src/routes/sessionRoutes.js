@@ -5,14 +5,15 @@ router.param("id", validateObjectIdParam);
 
 const ctrl = require("../controllers/academicSessionController");
 const { verifyToken, resolveTenant, requirePermission } = require("../middleware/auth");
+const { requireSchoolActive } = require("@school-erp/shared/src/middleware/requireSchoolActive");
 
 // Sessions are tenant-scoped. Regular users inherit the tenant from the token;
 // platform (super_admin) must select a school via X-School-Id.
-const requireTenant = (req, res, next) => {
+const requireTenant = async (req, res, next) => {
   if (!req.tenantId) {
     return res.status(400).json({ success: false, message: "No school context (X-School-Id required)" });
   }
-  next();
+  return requireSchoolActive(req, res, next);
 };
 
 // /api/auth/sessions

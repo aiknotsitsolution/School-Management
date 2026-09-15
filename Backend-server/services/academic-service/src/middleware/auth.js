@@ -7,6 +7,7 @@ const {
   guardClassBody,
 } = require("@school-erp/shared/src/middleware/teacherScopeAuth");
 const { resolveTenant } = require("@school-erp/shared/src/middleware/tenant");
+const { requireSchoolActive } = require("@school-erp/shared/src/middleware/requireSchoolActive");
 const JWT_SECRET = getJwtSecret();
 
 const verifyToken = async (req, res, next) => {
@@ -34,11 +35,11 @@ const verifyToken = async (req, res, next) => {
   }
 };
 
-const requireTenant = (req, res, next) => {
+const requireTenant = async (req, res, next) => {
   if (!req.tenantId) {
     return res.status(400).json({ success: false, message: "No school context for this request" });
   }
-  next();
+  return requireSchoolActive(req, res, next);
 };
 
 const requirePermission = (permission) => (req, res, next) => {

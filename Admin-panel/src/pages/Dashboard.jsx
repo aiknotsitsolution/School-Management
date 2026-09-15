@@ -441,8 +441,7 @@ export default function Dashboard() {
         />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-5">
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {(() => {
           const todayStr = new Date().toISOString().slice(0, 10);
           const todayStaffAtt = staffAttendance.filter((r) => r.date === todayStr);
@@ -456,7 +455,7 @@ export default function Dashboard() {
           const teacherNotMarked = teachers.length - todayStaffAtt.filter((r) => teachers.some((t) => String(t._id) === String(r.staffId))).length;
           return (
             <>
-              <StatCard icon={UserRound} label="Teachers" value={String(teacherPresent)} sub={`${teachers.length - teacherPresent} other`} accent="success" />
+              <StatCard icon={UserRound} label="Teachers Present" value={String(teacherPresent)} sub={`${teacherNotMarked} not marked`} accent="success" />
               <StatCard icon={XCircle} label="Absent Today" value={String(absentToday)} sub={`of ${totalStaff} staff`} accent="alert" />
               <StatCard icon={Clock} label="Not Marked" value={String(Math.max(0, notMarked))} sub="Pending check-in" accent="amber" />
               <StatCard icon={CheckCircle2} label="Total Present" value={String(presentToday)} sub={`${totalStaff > 0 ? ((presentToday / totalStaff) * 100).toFixed(0) : 0}% of staff`} accent="success" />
@@ -471,7 +470,6 @@ export default function Dashboard() {
           error={attendanceFailed ? "Attendance data could not be loaded." : ""}
           onRetry={retryAttendance}
           title="Attendance Trend"
-          className="lg:col-span-2"
           defaultRange="thisYear"
         />
 
@@ -534,7 +532,6 @@ export default function Dashboard() {
             </>
           )}
         </Card>
-      </div>
 
       <AttendanceTrendChart
         records={staffAttendance}

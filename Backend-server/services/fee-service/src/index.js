@@ -15,6 +15,7 @@ const paymentRoutes = require("./routes/paymentRoutes");
 const paymentOrderRoutes = require("./routes/paymentOrderRoutes");
 const webhookRoutes = require("./routes/webhookRoutes");
 const internalPaymentRoutes = require("./routes/internalPaymentRoutes");
+const { startOverdueInvoiceScheduler } = require("./services/overdueInvoices");
 
 const app = express();
 const PORT = process.env.FEE_SERVICE_PORT || 5005;
@@ -45,6 +46,7 @@ mongoose
   .then(() =>
   {
     console.log("✅ MongoDB Connected Successfully");
+    startOverdueInvoiceScheduler();
   })
   .catch((err) =>
   {
