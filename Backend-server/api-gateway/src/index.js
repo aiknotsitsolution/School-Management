@@ -62,20 +62,29 @@ sensitiveLimiters.forEach(({ path, window, max }) => {
   );
 });
 
-// Internal-only endpoints must NOT be reachable through the public gateway:
-//  - /api/notifications/internal/*  (service-to-service key, no user JWT)
-//  - /api/students/internal/*       (service-to-service roster resolution)
-//  - /api/auth/internal/*           (service-to-service payment engine lookups)
-//  - /api/payments/internal/*       (payment engine internal order creation)
-// Note: /api/payments/orders/:id/confirm IS public now — it requires a valid
-// provider payment signature (HMAC-keyed), so a forged confirm is impossible.
+// Internal-only endpoints are NOT reachable by public clients: the gateway
+// requires the shared x-internal-key header on them. Service-to-service calls
+// (which supply that header) pass through so the split-deployment instances
+// can reach each other; everyone else gets a 404.
+const INTERNAL_PREFIXES = [
+  "/api/notifications/internal",
+  "/api/students/internal",
+  "/api/auth/internal",
+  "/api/payments/internal",
+];
 app.use((req, res, next) => {
-  if (
-    req.path.startsWith("/api/notifications/internal") ||
-    req.path.startsWith("/api/students/internal") ||
-    req.path.startsWith("/api/auth/internal") ||
-    req.path.startsWith("/api/payments/internal")
-  ) {
+  const isInternal = INTERNAL_PREFIXES.some((p) => req.path.startsWith(p));
+  if (!isInternal) return next();
+  const presented = req.headers["x-internal-key"];
+  const expected = process.env.INTERNAL_NOTIFY_KEY;
+  const valid =
+    presented &&
+    expected &&
+    presented.length === expected.length &&
+    Buffer.from(String(presented), "utf8").equals(
+      Buffer.from(String(expected), "utf8"),
+    );
+  if (!valid) {
     return res
       .status(404)
       .json({ success: false, message: "Route not found on API Gateway" });
