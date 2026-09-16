@@ -179,10 +179,17 @@ export default function PlatformDashboard() {
         />
         <StatCard
           icon={Sparkles}
-          label="Free Trial vs Paid"
-          value={`${freeTrialCount} / ${paidCount}`}
-          sub={`${freeTrialCount} free trial · ${paidCount} paid`}
-          accent="amber"
+          label="Current Free Trial Subscriptions"
+          value={freeTrialCount}
+          sub={`${freeTrialCount} schools on free trial`}
+          accent="info"
+        />
+        <StatCard
+          icon={TrendingUp}
+          label="Current Paid Subscriptions"
+          value={paidCount}
+          sub={`${paidCount} paying schools`}
+          accent="success"
         />
         <StatCard
           icon={TrendingUp}
