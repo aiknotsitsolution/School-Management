@@ -20,6 +20,9 @@ function doRefresh(refreshToken)
 }
 
 let refreshTimer = null;
+let refreshRetries = 0;
+const MAX_REFRESH_RETRIES = 3;
+
 function scheduleRefresh()
 {
   if (refreshTimer) clearTimeout(refreshTimer);
@@ -44,9 +47,24 @@ function scheduleRefresh()
               accessToken: body.data.accessToken,
               refreshToken: body.data.refreshToken,
             }));
+            refreshRetries = 0;
             scheduleRefresh();
+          } else
+          {
+            refreshRetries++;
+            if (refreshRetries < MAX_REFRESH_RETRIES)
+            {
+              setTimeout(() => scheduleRefresh(), 5000 * refreshRetries);
+            }
           }
-        }).catch(() => { });
+        }).catch(() =>
+        {
+          refreshRetries++;
+          if (refreshRetries < MAX_REFRESH_RETRIES)
+          {
+            setTimeout(() => scheduleRefresh(), 5000 * refreshRetries);
+          }
+        });
       }
       return;
     }
@@ -64,14 +82,23 @@ function scheduleRefresh()
             accessToken: body.data.accessToken,
             refreshToken: body.data.refreshToken,
           }));
+          refreshRetries = 0;
           scheduleRefresh();
         } else
         {
-          setTimeout(() => scheduleRefresh(), 30_000);
+          refreshRetries++;
+          if (refreshRetries < MAX_REFRESH_RETRIES)
+          {
+            setTimeout(() => scheduleRefresh(), 5000 * refreshRetries);
+          }
         }
       } catch
       {
-        setTimeout(() => scheduleRefresh(), 30_000);
+        refreshRetries++;
+        if (refreshRetries < MAX_REFRESH_RETRIES)
+        {
+          setTimeout(() => scheduleRefresh(), 5000 * refreshRetries);
+        }
       }
     }, refreshIn);
   } catch
@@ -223,23 +250,27 @@ async function request(path, options = {})
       localStorage.getItem("erp_refresh_token");
     if (refreshToken)
     {
-      try
+      for (let attempt = 0; attempt < 2; attempt++)
       {
-        const { ok, body: refreshBody } = await doRefresh(refreshToken);
-        if (ok && refreshBody.data?.accessToken)
+        try
         {
-          store.dispatch(
-            setTokens({
-              accessToken: refreshBody.data.accessToken,
-              refreshToken: refreshBody.data.refreshToken,
-            }),
-          );
-          scheduleRefresh();
-          return request(path, { ...options, _retry: true });
+          const { ok, body: refreshBody } = await doRefresh(refreshToken);
+          if (ok && refreshBody.data?.accessToken)
+          {
+            store.dispatch(
+              setTokens({
+                accessToken: refreshBody.data.accessToken,
+                refreshToken: refreshBody.data.refreshToken,
+              }),
+            );
+            scheduleRefresh();
+            return request(path, { ...options, _retry: true });
+          }
+          if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
+        } catch
+        {
+          if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
         }
-      } catch
-      {
-        // network error during refresh — fall through to logout
       }
     }
     store.dispatch(logout());
