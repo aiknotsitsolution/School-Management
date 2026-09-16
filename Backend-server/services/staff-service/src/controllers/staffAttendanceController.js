@@ -2,7 +2,7 @@ const mongoose = require("mongoose");
 const StaffAttendance = require("../models/StaffAttendance");
 const Staff = require("../models/Staff");
 
-const VALID_STATUSES = ["Present", "Absent", "Late", "Half Day"];
+const VALID_STATUSES = ["Present", "Absent", "Leave", "Late", "Half Day"];
 
 const markAttendance = async (req, res) => {
   try {

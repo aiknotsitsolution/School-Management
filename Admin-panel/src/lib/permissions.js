@@ -23,7 +23,7 @@ const STAFF_PERMISSIONS = {
   admission_counsellor: [
     "dashboard:view", "staff:read", "students:read", "students:write",
     "admissions:read", "admissions:write", "enquiries:read", "enquiries:write",
-    "notices:read", "leaves:apply", "payroll:view",
+    "notices:read", "attendance:read", "attendance:mark", "leaves:apply", "payroll:view",
   ],
   accountant: [
     "dashboard:view", "staff:read", "students:read", "fees:read", "fees:collect",

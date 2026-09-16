@@ -27,11 +27,19 @@ function greeting() {
   return "Good evening";
 }
 
+const STATUSES = [
+  { key: "Present", label: "P", full: "Present", color: "bg-success text-white border-success" },
+  { key: "Absent", label: "A", full: "Absent", color: "bg-alert text-white border-alert" },
+  { key: "Leave", label: "L", full: "Leave", color: "bg-info text-white border-info" },
+  { key: "Half Day", label: "HD", full: "Half Day", color: "bg-amber text-ink border-amber" },
+];
+
 export default function AttendanceCheckinModal({ userName, onDone }) {
   const [state, setState] = useState("loading");
   const [record, setRecord] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState(null);
+  const [selectedStatus, setSelectedStatus] = useState("Present");
 
   const checkToday = useCallback(async () => {
     setState("loading");
@@ -67,7 +75,7 @@ export default function AttendanceCheckinModal({ userName, onDone }) {
 
       const res = await api.staff.attendance.mark({
         date: today,
-        status: "Present",
+        status: selectedStatus,
         checkIn: checkInTime,
         source: "self",
       });
@@ -167,12 +175,25 @@ export default function AttendanceCheckinModal({ userName, onDone }) {
             </div>
           </div>
 
-          <div className="flex items-center justify-between bg-paper rounded-xl p-4">
-            <div>
-              <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/50">Status</p>
-              <p className="text-[14px] font-semibold text-ink mt-0.5">Present</p>
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/50 mb-2">Status</p>
+            <div className="grid grid-cols-4 gap-2">
+              {STATUSES.map((s) => (
+                <button
+                  key={s.key}
+                  type="button"
+                  onClick={() => setSelectedStatus(s.key)}
+                  className={`py-2.5 rounded-lg text-[13px] font-bold border transition-all ${
+                    selectedStatus === s.key
+                      ? s.color
+                      : "bg-white text-slate-text border-slate-200 hover:border-slate-300"
+                  }`}
+                  title={s.full}
+                >
+                  {s.label}
+                </button>
+              ))}
             </div>
-            <CheckCircle2 size={22} className="text-success" />
           </div>
 
           {error && (
