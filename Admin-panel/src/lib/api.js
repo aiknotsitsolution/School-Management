@@ -6,12 +6,19 @@ const API_BASE_URL =
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
 
+// ── Centralised token refresh ──────────────────────────────────────────────
+// Render cold-starts can take 30-60 s.  We retry with exponential back-off
+// and coalesce concurrent callers so only ONE network request is in flight.
+
 let refreshPromise = null;
-function doRefresh(refreshToken)
-{
-  if (!refreshToken) return Promise.resolve({ ok: false, body: { success: false, message: "No refresh token" } });
-  if (!refreshPromise)
-  {
+let refreshTimer = null;
+let refreshRetries = 0;
+const MAX_REFRESH_RETRIES = 6;
+
+function doRefresh(refreshToken) {
+  if (!refreshToken)
+    return Promise.resolve({ ok: false, body: { success: false, message: "No refresh token" } });
+  if (!refreshPromise) {
     refreshPromise = fetch(`${API_BASE_URL}/auth/refresh-token`, json("POST", { refreshToken }))
       .then((r) => r.json().then((body) => ({ ok: r.ok, body })))
       .finally(() => { refreshPromise = null; });
@@ -19,90 +26,59 @@ function doRefresh(refreshToken)
   return refreshPromise;
 }
 
-let refreshTimer = null;
-let refreshRetries = 0;
-const MAX_REFRESH_RETRIES = 3;
+async function refreshAccessToken() {
+  const rt = store.getState().auth.refreshToken || localStorage.getItem("erp_refresh_token");
+  if (!rt) return false;
+  try {
+    const { ok, body } = await doRefresh(rt);
+    if (ok && body.data?.accessToken) {
+      store.dispatch(setTokens({
+        accessToken: body.data.accessToken,
+        refreshToken: body.data.refreshToken,
+      }));
+      refreshRetries = 0;
+      scheduleRefresh();
+      return true;
+    }
+  } catch {
+    // network / timeout — fall through to retry
+  }
+  return false;
+}
 
-function scheduleRefresh()
-{
+function scheduleRefresh() {
   if (refreshTimer) clearTimeout(refreshTimer);
   refreshTimer = null;
   const { auth } = store.getState();
   const token = auth.accessToken;
   if (!token) return;
-  try
-  {
+  try {
     const payload = JSON.parse(atob(token.split(".")[1]));
     const msUntilExpiry = payload.exp * 1000 - Date.now();
-    if (msUntilExpiry <= 0)
-    {
-      const rt = auth.refreshToken || localStorage.getItem("erp_refresh_token");
-      if (rt)
-      {
-        doRefresh(rt).then(({ ok, body }) =>
-        {
-          if (ok && body.data?.accessToken)
-          {
-            store.dispatch(setTokens({
-              accessToken: body.data.accessToken,
-              refreshToken: body.data.refreshToken,
-            }));
-            refreshRetries = 0;
-            scheduleRefresh();
-          } else
-          {
-            refreshRetries++;
-            if (refreshRetries < MAX_REFRESH_RETRIES)
-            {
-              setTimeout(() => scheduleRefresh(), 5000 * refreshRetries);
-            }
-          }
-        }).catch(() =>
-        {
+    if (msUntilExpiry <= 0) {
+      refreshAccessToken().then((ok) => {
+        if (!ok) {
           refreshRetries++;
-          if (refreshRetries < MAX_REFRESH_RETRIES)
-          {
-            setTimeout(() => scheduleRefresh(), 5000 * refreshRetries);
+          if (refreshRetries < MAX_REFRESH_RETRIES) {
+            const delay = Math.min(5000 * Math.pow(1.5, refreshRetries - 1), 60_000);
+            setTimeout(() => scheduleRefresh(), delay);
           }
-        });
-      }
+        }
+      });
       return;
     }
     const refreshIn = Math.max(msUntilExpiry - 5 * 60 * 1000, 10_000);
-    refreshTimer = setTimeout(async () =>
-    {
-      const rt = store.getState().auth.refreshToken;
-      if (!rt) return;
-      try
-      {
-        const { ok, body } = await doRefresh(rt);
-        if (ok && body.data?.accessToken)
-        {
-          store.dispatch(setTokens({
-            accessToken: body.data.accessToken,
-            refreshToken: body.data.refreshToken,
-          }));
-          refreshRetries = 0;
-          scheduleRefresh();
-        } else
-        {
-          refreshRetries++;
-          if (refreshRetries < MAX_REFRESH_RETRIES)
-          {
-            setTimeout(() => scheduleRefresh(), 5000 * refreshRetries);
-          }
-        }
-      } catch
-      {
+    refreshTimer = setTimeout(async () => {
+      const ok = await refreshAccessToken();
+      if (!ok) {
         refreshRetries++;
-        if (refreshRetries < MAX_REFRESH_RETRIES)
-        {
-          setTimeout(() => scheduleRefresh(), 5000 * refreshRetries);
+        if (refreshRetries < MAX_REFRESH_RETRIES) {
+          const delay = Math.min(5000 * Math.pow(1.5, refreshRetries - 1), 60_000);
+          setTimeout(() => scheduleRefresh(), delay);
         }
       }
     }, refreshIn);
-  } catch
-  {
+  } catch {
     // malformed token — will be caught by 401 handler
   }
 }
@@ -137,30 +113,12 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {})
       });
       if (response.status === 401)
       {
-        const refreshToken =
-          auth?.refreshToken || localStorage.getItem("erp_refresh_token");
-        if (refreshToken)
+        const ok = await refreshAccessToken();
+        if (ok)
         {
-          try
-          {
-            const { ok, body } = await doRefresh(refreshToken);
-            if (ok && body.data?.accessToken)
-            {
-              store.dispatch(
-                setTokens({
-                  accessToken: body.data.accessToken,
-                  refreshToken: body.data.refreshToken,
-                }),
-              );
-              scheduleRefresh();
-              onStatus?.("reconnecting");
-              if (running) timer = setTimeout(connect, delay);
-              return;
-            }
-          } catch
-          {
-            // fall through
-          }
+          onStatus?.("reconnecting");
+          if (running) timer = setTimeout(connect, delay);
+          return;
         }
         onStatus?.("reconnecting");
         if (running) timer = setTimeout(connect, delay);
@@ -230,6 +188,20 @@ async function request(path, options = {})
   const passiveSchoolId =
     auth.activeSchoolId || localStorage.getItem("erp_active_school");
 
+  // Public auth endpoints return 401 for bad credentials / expired reset tokens —
+  // never try to refresh for those.
+  const PUBLIC_PATHS = [
+    "/auth/login",
+    "/auth/refresh-token",
+    "/auth/forgot-password",
+    "/auth/verify-reset-otp",
+    "/auth/reset-password",
+    "/auth/reset-password-otp",
+  ];
+  const isPublicPath = PUBLIC_PATHS.some(
+    (p) => path === p || path.startsWith(`${p}?`),
+  );
+
   // super_admin impersonates a school via X-School-Id; everyone else's tenant
   // comes from their JWT.
   const includeSchoolHeader = user?.role === "super_admin" && passiveSchoolId;
@@ -242,36 +214,15 @@ async function request(path, options = {})
       ...options.headers,
     },
   });
-  if (response.status === 401 && !options._retry)
+  if (response.status === 401 && !options._retry && !isPublicPath)
   {
-    const refreshToken =
-      (auth &&
-        (auth.refreshToken || localStorage.getItem("erp_refresh_token"))) ||
-      localStorage.getItem("erp_refresh_token");
-    if (refreshToken)
+    // Wait for any in-flight refresh first (doRefresh deduplicates).
+    for (let attempt = 0; attempt < 5; attempt++)
     {
-      for (let attempt = 0; attempt < 2; attempt++)
-      {
-        try
-        {
-          const { ok, body: refreshBody } = await doRefresh(refreshToken);
-          if (ok && refreshBody.data?.accessToken)
-          {
-            store.dispatch(
-              setTokens({
-                accessToken: refreshBody.data.accessToken,
-                refreshToken: refreshBody.data.refreshToken,
-              }),
-            );
-            scheduleRefresh();
-            return request(path, { ...options, _retry: true });
-          }
-          if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
-        } catch
-        {
-          if (attempt === 0) await new Promise((r) => setTimeout(r, 1000));
-        }
-      }
+      const ok = await refreshAccessToken();
+      if (ok) return request(path, { ...options, _retry: true });
+      const delay = Math.min(2000 * Math.pow(1.5, attempt), 15_000);
+      await new Promise((r) => setTimeout(r, delay));
     }
     store.dispatch(logout());
   }
