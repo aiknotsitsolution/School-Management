@@ -7,7 +7,6 @@ import {
   AlertTriangle,
   Activity,
   CalendarClock,
-  Layers,
   Sparkles,
 } from "lucide-react";
 import {
@@ -169,13 +168,6 @@ export default function PlatformDashboard() {
           value={(ov.users?.total ?? data.users ?? 0).toLocaleString("en-IN")}
           sub="excl. platform owner"
           accent="info"
-        />
-        <StatCard
-          icon={Layers}
-          label="Current Subscriptions"
-          value={subs.current ?? data.subscriptions?.current ?? 0}
-          sub={`trialing ${subs.byStatus?.trialing ?? 0} · past due ${subs.byStatus?.past_due ?? 0}`}
-          accent="success"
         />
         <StatCard
           icon={Sparkles}
