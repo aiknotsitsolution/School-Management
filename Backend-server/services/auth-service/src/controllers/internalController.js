@@ -157,7 +157,12 @@ const subscriptionPaid = async (req, res) => {
         durationPeriods,
         metadata: { paymentOrderId: orderId || null, providerOrderId: providerOrderId || null, switchMode: "advance" },
       });
-      await createInvoiceForSubscription(next);
+      const invoice = await createInvoiceForSubscription(next, { paymentOrderId: orderId || null });
+      if (invoice) {
+        invoice.status = "paid";
+        invoice.paidAt = new Date();
+        await invoice.save();
+      }
       const loaded = await loadSubscription(next._id);
       return res.json({ success: true, data: { ...toSubscriptionJson(loaded), scheduledActivation: serverStartDate.toISOString() } });
     }
@@ -183,7 +188,12 @@ const subscriptionPaid = async (req, res) => {
       metadata: { paymentOrderId: orderId || null, providerOrderId: providerOrderId || null, switchMode: "immediate" },
     });
     await School.updateOne({ _id: schoolId }, { $set: { plan: plan.code } });
-    await createInvoiceForSubscription(next);
+    const invoice = await createInvoiceForSubscription(next, { paymentOrderId: orderId || null });
+    if (invoice) {
+      invoice.status = "paid";
+      invoice.paidAt = new Date();
+      await invoice.save();
+    }
 
     const loaded = await loadSubscription(next._id);
     res.json({ success: true, data: toSubscriptionJson(loaded) });

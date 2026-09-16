@@ -176,7 +176,12 @@ const upgradeMyPlan = async (req, res) => {
         durationPeriods,
       });
       await School.updateOne({ _id: schoolId }, { $set: { plan: plan.code } });
-      await createInvoiceForSubscription(next);
+      const invoice = await createInvoiceForSubscription(next);
+      if (invoice) {
+        invoice.status = "paid";
+        invoice.paidAt = new Date();
+        await invoice.save();
+      }
       await writeAudit({ req, user: req.user, action: "subscription.changed", targetType: "subscription", targetId: next._id, message: `School upgraded to plan ${plan.code}` });
       const loaded = await loadSubscription(next._id);
       return res.status(201).json({ success: true, message: "Plan upgraded", data: toSubscriptionJson(loaded) });

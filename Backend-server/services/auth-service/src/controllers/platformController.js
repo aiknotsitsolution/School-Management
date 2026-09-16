@@ -75,8 +75,12 @@ const buildSubscriptionDates = (plan, startDate, durationPeriods = 1) => {
 
 // Atomically close any current subscription for a school so the partial unique
 // index never allows two current subscriptions to coexist.
-const closeCurrentSubscriptions = (schoolId, { reason = "superseded", extra = {} } = {}) =>
-  Subscription.updateMany(
+const closeCurrentSubscriptions = async (schoolId, { reason = "superseded", extra = {} } = {}) => {
+  const cancelled = await Subscription.find(
+    { schoolId, status: { $in: CURRENT_SUBSCRIPTION_STATUSES } },
+    { _id: 1 }
+  ).lean();
+  await Subscription.updateMany(
     { schoolId, status: { $in: CURRENT_SUBSCRIPTION_STATUSES } },
     {
       $set: {
@@ -89,6 +93,14 @@ const closeCurrentSubscriptions = (schoolId, { reason = "superseded", extra = {}
       },
     }
   );
+  if (cancelled.length) {
+    const subIds = cancelled.map((s) => s._id);
+    await BillingInvoice.updateMany(
+      { subscriptionId: { $in: subIds }, status: "issued" },
+      { $set: { status: "paid", paidAt: new Date() } }
+    );
+  }
+};
 
 const formatMoney = (planOrSub) => ({
   amount: planOrSub.price,
