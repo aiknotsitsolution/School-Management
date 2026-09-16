@@ -20,7 +20,7 @@ const path = require("path");
 /* ── Configuration ──────────────────────────────────────────────────────── */
 
 const root = path.resolve(__dirname);
-dotenv.config({ path: path.join(root, ".env"), override: true });
+dotenv.config({ path: path.join(root, ".env"), override: false });
 
 // Render injects $PORT; gateway listens on it.  Internal services keep their
 // own fixed ports so the gateway proxy targets stay stable.
