@@ -16,6 +16,7 @@ const internalRoutes = require("./routes/internalRoutes");
 const ensureBillingDefaults = require("./init/ensureBillingDefaults");
 const ensureGatewayDefaults = require("./init/ensureGatewayDefaults");
 const { startTrialExpiryScheduler } = require("./services/trialExpiry");
+const { startScheduledActivationScheduler } = require("./services/scheduledActivation");
 
 const app = express();
 const PORT = process.env.AUTH_SERVICE_PORT || 5001;
@@ -30,6 +31,7 @@ const start = async () =>
     await ensureBillingDefaults();
     await ensureGatewayDefaults();
     startTrialExpiryScheduler();
+    startScheduledActivationScheduler();
     app.listen(PORT, () => console.log(`Auth Service running on port ${PORT}`));
   } catch (err)
   {
