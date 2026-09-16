@@ -8,6 +8,7 @@ import {
   Activity,
   CalendarClock,
   Layers,
+  Sparkles,
 } from "lucide-react";
 import {
   AreaChart,
@@ -125,6 +126,9 @@ export default function PlatformDashboard() {
   const activityTotal = data.recentActivityTotal ?? activity.length;
   const growth = data.schoolGrowth || [];
 
+  const freeTrialCount = planBars.find((p) => p.name === "TRIAL")?.count ?? 0;
+  const paidCount = planBars.reduce((sum, p) => sum + (p.name !== "TRIAL" ? p.count : 0), 0);
+
   return (
     <div className="w-full">
       <PageIntro
@@ -151,7 +155,7 @@ export default function PlatformDashboard() {
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-5">
+      <div className="grid grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4 mb-5">
         <StatCard
           icon={Building2}
           label="Schools"
@@ -172,6 +176,13 @@ export default function PlatformDashboard() {
           value={subs.current ?? data.subscriptions?.current ?? 0}
           sub={`trialing ${subs.byStatus?.trialing ?? 0} · past due ${subs.byStatus?.past_due ?? 0}`}
           accent="success"
+        />
+        <StatCard
+          icon={Sparkles}
+          label="Free Trial vs Paid"
+          value={`${freeTrialCount} / ${paidCount}`}
+          sub={`${freeTrialCount} free trial · ${paidCount} paid`}
+          accent="amber"
         />
         <StatCard
           icon={TrendingUp}
