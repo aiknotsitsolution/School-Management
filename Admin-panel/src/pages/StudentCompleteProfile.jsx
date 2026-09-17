@@ -39,6 +39,7 @@ const BLOOD_OPTIONS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 const MEDIUM_OPTIONS = ["English", "Hindi"];
 
 const REQUIRED_FIELDS = [
+  "name",
   "class",
   "section",
   "dob",
@@ -50,6 +51,7 @@ const REQUIRED_FIELDS = [
 ];
 
 const FIELD_LABELS = {
+  name: "Full name",
   class: "Class",
   section: "Section",
   dob: "Date of birth",
@@ -103,6 +105,11 @@ export default function StudentCompleteProfile() {
   );
 
   const save = async (complete) => {
+    if (missing.length > 0) {
+      const labels = missing.map((field) => FIELD_LABELS[field]);
+      toast(`Please fill all required fields: ${labels.join(", ")}`, "error");
+      return;
+    }
     setBusy(true);
     try {
       const updated = await api.students.update(id, {

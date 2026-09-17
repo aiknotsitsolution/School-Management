@@ -212,16 +212,29 @@ export default function AddStudent() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!form.name.trim()) {
-      setError("Student name is required.");
-      return;
-    }
-    if (!form.admissionNo.trim()) {
-      setError("Admission ID is required.");
-      return;
-    }
-    if (!form.phone.trim()) {
-      setError("Parent/Guardian phone number is required.");
+    const MISSING_LABELS = [
+      ["name", "Full Name"],
+      ["admissionNo", "Admission ID"],
+      ["rollNo", "Roll Number"],
+      ["class", "Class"],
+      ["section", "Section"],
+      ["gender", "Gender"],
+      ["dob", "Date of Birth"],
+      ["house", "House"],
+      ["bloodGroup", "Blood Group"],
+      ["medium", "Medium"],
+      ["fatherName", "Father's Name"],
+      ["motherName", "Mother's Name"],
+      ["phone", "Phone Number"],
+      ["email", "Email"],
+      ["address", "Address"],
+    ].filter(([key]) => !String(form[key] || "").trim());
+
+    if (MISSING_LABELS.length > 0) {
+      const labels = MISSING_LABELS.map(([, label]) => label);
+      const msg = `Please fill all required fields: ${labels.join(", ")}`;
+      toast(msg, "error");
+      setError(msg);
       return;
     }
 
@@ -370,7 +383,7 @@ export default function AddStudent() {
               />
             </Field>
 
-            <Field label="Roll Number" hint="Optional — you can assign it later.">
+            <Field label="Roll Number" required>
               <Input
                 placeholder="e.g. 15"
                 value={form.rollNo}
@@ -391,7 +404,7 @@ export default function AddStudent() {
               />
             </Field>
 
-            <Field label="Class">
+            <Field label="Class" required>
               <SearchableSelect
                 options={CLASS_OPTIONS}
                 value={form.class}
@@ -401,7 +414,7 @@ export default function AddStudent() {
               />
             </Field>
 
-            <Field label="Section">
+            <Field label="Section" required>
               <SearchableSelect
                 options={filteredSections}
                 value={form.section}
@@ -411,7 +424,7 @@ export default function AddStudent() {
               />
             </Field>
 
-            <Field label="Gender">
+            <Field label="Gender" required>
               <Select
                 value={form.gender}
                 onChange={(e) => update("gender", e.target.value)}
@@ -424,7 +437,7 @@ export default function AddStudent() {
               </Select>
             </Field>
 
-            <Field label="Date of Birth">
+            <Field label="Date of Birth" required>
               <Input
                 type="date"
                 value={form.dob}
@@ -432,7 +445,7 @@ export default function AddStudent() {
               />
             </Field>
 
-            <Field label="House">
+            <Field label="House" required>
               <Input
                 list="house-options"
                 placeholder="e.g. Red, Blue, or custom"
@@ -446,7 +459,7 @@ export default function AddStudent() {
               </datalist>
             </Field>
 
-            <Field label="Blood Group">
+            <Field label="Blood Group" required>
               <Select
                 value={form.bloodGroup}
                 onChange={(e) => update("bloodGroup", e.target.value)}
@@ -459,7 +472,7 @@ export default function AddStudent() {
               </Select>
             </Field>
 
-            <Field label="Medium">
+            <Field label="Medium" required>
               <Select
                 value={form.medium}
                 onChange={(e) => update("medium", e.target.value)}
@@ -480,7 +493,7 @@ export default function AddStudent() {
           bodyClassName="p-5 sm:p-6"
         >
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-4 gap-y-4">
-            <Field label="Father's Name">
+            <Field label="Father's Name" required>
               <Input
                 placeholder="e.g. Rajesh Sharma"
                 value={form.fatherName}
@@ -488,7 +501,7 @@ export default function AddStudent() {
               />
             </Field>
 
-            <Field label="Mother's Name">
+            <Field label="Mother's Name" required>
               <Input
                 placeholder="e.g. Priya Sharma"
                 value={form.motherName}
@@ -505,7 +518,7 @@ export default function AddStudent() {
               />
             </Field>
 
-            <Field label="Email">
+            <Field label="Email" required>
               <Input
                 type="email"
                 placeholder="parent@email.com"
@@ -514,7 +527,7 @@ export default function AddStudent() {
               />
             </Field>
 
-            <Field label="Address" className="lg:col-span-2">
+            <Field label="Address" required className="lg:col-span-2">
               <Input
                 placeholder="House no., Street, Area, City..."
                 value={form.address}
@@ -617,8 +630,7 @@ export default function AddStudent() {
       <div className="flex items-start gap-2.5 rounded-xl bg-ink/[0.04] border border-ink/10 px-4 py-3.5 text-[13px] text-slate-text">
         <Info size={16} className="text-amber-dark shrink-0 mt-0.5" />
         <p>
-          <strong className="text-ink">Tip:</strong> Fields marked with{" "}
-          <span className="text-alert font-semibold">*</span> are required.
+          <strong className="text-ink">Tip:</strong> All fields are required before saving. 
           {onboardingStudent
             ? " These fields are pre-filled from the Users & Access profile. Saving completes the student onboarding."
             : " After adding, the student will appear in the attendance register for their class & section."}
