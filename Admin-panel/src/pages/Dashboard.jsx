@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useMemo, useState, useRef, useCallback } from "react";
+import { Link, useLocation } from "react-router-dom";
 import {
   Users,
   Wallet,
@@ -85,48 +85,66 @@ export default function Dashboard() {
   const [error, setError] = useState("");
   const [attendanceFailed, setAttendanceFailed] = useState(false);
   const [staffAttendanceFailed, setStaffAttendanceFailed] = useState(false);
+  const location = useLocation();
+  const fetchCount = useRef(0);
 
-  useEffect(() => {
-    Promise.allSettled([
-      api.students.stats(),
-      api.students.list("limit=1000"),
-      api.attendance.list(),
-      api.fees.invoices.list(),
-      api.fees.payments.list(),
-      api.admissions.list(),
-      api.notices.list(),
-      api.transport.list(),
-      api.staff.list(),
-      api.events.list(),
-      api.staff.attendance.list("limit=5000"),
-    ])
-      .then((results) => {
-        const value = (index) =>
-          results[index].status === "fulfilled" ? results[index].value : {};
-        const failed = results.filter((result) => result.status === "rejected");
-        setAttendanceFailed(results[2].status === "rejected");
-        setStaffAttendanceFailed(results[10].status === "rejected");
-        setData({
-          studentStats: value(0).data || { total: 0, active: 0, byClass: [] },
-          students: value(1).data || [],
-          attendance: value(2).data || [],
-          staffAttendance: value(10).data || [],
-          invoices: value(3).data || [],
-          payments: value(4).data || [],
-          admissions: value(5).data || [],
-          notices: value(6).data || [],
-          busRoutes: value(7).data || [],
-          staff: value(8).data || [],
-          events: value(9).data || [],
-        });
-        if (failed.length === results.length) {
-          setError("Dashboard data could not be loaded. Please try again.");
-        } else if (failed.length > 0) {
-          setError("Some dashboard data is temporarily unavailable.");
-        }
-      })
-      .finally(() => setLoading(false));
+  const fetchDashboardData = useCallback(async () => {
+    try {
+      const results = await Promise.allSettled([
+        api.students.stats(),
+        api.students.list("limit=1000"),
+        api.attendance.list(),
+        api.fees.invoices.list(),
+        api.fees.payments.list(),
+        api.admissions.list(),
+        api.notices.list(),
+        api.transport.list(),
+        api.staff.list(),
+        api.events.list(),
+        api.staff.attendance.list("limit=5000"),
+      ]);
+      const value = (index) =>
+        results[index].status === "fulfilled" ? results[index].value : {};
+      const failed = results.filter((result) => result.status === "rejected");
+      setAttendanceFailed(results[2].status === "rejected");
+      setStaffAttendanceFailed(results[10].status === "rejected");
+      setData({
+        studentStats: value(0).data || { total: 0, active: 0, byClass: [] },
+        students: value(1).data || [],
+        attendance: value(2).data || [],
+        staffAttendance: value(10).data || [],
+        invoices: value(3).data || [],
+        payments: value(4).data || [],
+        admissions: value(5).data || [],
+        notices: value(6).data || [],
+        busRoutes: value(7).data || [],
+        staff: value(8).data || [],
+        events: value(9).data || [],
+      });
+      if (failed.length === results.length) {
+        setError("Dashboard data could not be loaded. Please try again.");
+      } else if (failed.length > 0) {
+        setError("Some dashboard data is temporarily unavailable.");
+      }
+    } catch {
+      // network error
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  // Initial load
+  useEffect(() => {
+    fetchDashboardData();
+  }, [fetchDashboardData]);
+
+  // Refresh data when user navigates back to dashboard
+  useEffect(() => {
+    if (fetchCount.current > 0) {
+      fetchDashboardData();
+    }
+    fetchCount.current++;
+  }, [location.pathname, fetchDashboardData]);
 
   // Refresh attendance data when user switches back to this tab
   useEffect(() => {
@@ -151,7 +169,7 @@ export default function Dashboard() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
-  // Auto-refresh attendance every 45 seconds so teacher-marked updates appear
+  // Auto-refresh attendance every 30 seconds so teacher-marked updates appear
   useEffect(() => {
     const interval = setInterval(() => {
       if (document.visibilityState !== "visible") return;
@@ -168,7 +186,7 @@ export default function Dashboard() {
           setStaffAttendanceFailed(false);
         }
       });
-    }, 45_000);
+    }, 30_000);
     return () => clearInterval(interval);
   }, []);
 
