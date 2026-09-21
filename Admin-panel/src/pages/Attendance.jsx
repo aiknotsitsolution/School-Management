@@ -272,13 +272,17 @@ export default function Attendance() {
   // Update marks when date changes
   useEffect(() => {
     const existing = {};
+    // Build admissionNo → _id map for matching teacher-saved records
+    const admToId = {};
+    students.forEach((s) => { if (s.admissionNo) admToId[s.admissionNo] = s.id; });
     attendanceRecords
       .filter(
         (record) =>
           new Date(record.date).toISOString().slice(0, 10) === selectedDate,
       )
       .forEach((record) => {
-        existing[record.studentId] =
+        const key = admToId[record.studentId] || record.studentId;
+        existing[key] =
           record.status === "Present"
             ? "present"
             : record.status === "Absent"
@@ -289,7 +293,7 @@ export default function Attendance() {
       });
     setMarks(existing);
     setSaved(false);
-  }, [selectedDate, attendanceRecords]);
+  }, [selectedDate, attendanceRecords, students]);
 
   // Fetch all staff attendance for trend chart (runs once on mount)
   useEffect(() => {
@@ -407,7 +411,7 @@ export default function Attendance() {
     try {
       await api.attendance.mark(
         list.map((student) => ({
-          studentId: student.id,
+          studentId: student.admissionNo || student.id,
           class: student.class,
           section: student.section,
           date: selectedDate,
