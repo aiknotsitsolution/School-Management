@@ -15,7 +15,8 @@ const TEACHING_PERMISSIONS = [
   "dashboard:view", "staff:read", "students:read", "attendance:read",
   "attendance:mark",
   "timetable:read", "timetable:write", "homework:read", "homework:write",
-  "exams:read", "marks:read", "notices:read", "leaves:apply", "payroll:view",
+  "exams:read", "marks:read", "notices:read", "notices:publish",
+  "leaves:apply", "payroll:view",
   "promotion:read", "transfer:read", "rollover:read",
   "health:read", "health:write", "conduct:read", "conduct:write",
   "achievements:read", "achievements:write",
@@ -25,25 +26,32 @@ const STAFF_PERMISSIONS = {
   admission_counsellor: [
     "dashboard:view", "staff:read", "students:read", "students:write",
     "admissions:read", "admissions:write", "enquiries:read", "enquiries:write",
-    "notices:read", "attendance:read", "attendance:mark", "leaves:apply", "payroll:view",
+    "notices:read", "notices:publish", "attendance:read", "attendance:mark",
+    "leaves:apply", "payroll:view",
   ],
   accountant: [
     "dashboard:view", "staff:read", "students:read", "fees:read", "fees:collect",
     "fees:structure", "fees:reports", "reports:view", "attendance:read",
+    "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
   ],
   librarian: [
     "dashboard:view", "staff:read", "students:read", "library:read",
-    "library:manage", "library:notify", "leaves:apply", "payroll:view",
+    "library:manage", "library:notify",
+    "notices:read", "notices:publish",
+    "leaves:apply", "payroll:view",
   ],
   receptionist: [
     "dashboard:view", "staff:read", "students:read", "admissions:read",
-    "admissions:write", "enquiries:read", "enquiries:write", "notices:read",
+    "admissions:write", "enquiries:read", "enquiries:write",
+    "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
   ],
   transport: [
     "dashboard:view", "staff:read", "students:read", "transport:read",
-    "transport:update", "leaves:apply", "payroll:view",
+    "transport:update",
+    "notices:read", "notices:publish",
+    "leaves:apply", "payroll:view",
   ],
 };
 
@@ -71,7 +79,11 @@ const ROLE_PERMISSIONS = {
   // User role in the final architecture and users must re-login to obtain a
   // teacher token.
   teacher: [...TEACHING_PERMISSIONS],
-  staff: ["staff:read", "attendance:read", "attendance:mark", "leaves:apply", "payroll:view"],
+  staff: [
+    "staff:read", "attendance:read", "attendance:mark",
+    "notices:read", "notices:publish",
+    "leaves:apply", "payroll:view",
+  ],
   student: [
     "dashboard:view", "attendance:read", "homework:read", "exams:read",
     "marks:read", "fees:read", "library:read", "notices:read", "events:read",

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSelector } from "react-redux";
 import { Pin, Plus, X, Save, Pencil, Bell, Search, PinOff, ChevronDown } from "lucide-react";
 import {
   PageIntro,
@@ -11,6 +12,7 @@ import {
 } from "../components/UI";
 import { api } from "../lib/api";
 import { invalidateMasterCache } from "../lib/masterCache";
+import { selectUser } from "../store/selectors";
 
 const initialNotices = [];
 
@@ -88,11 +90,18 @@ const audienceValues = {
   "Classes 9–12 Parents": ["parent"],
   "Classes 3–10": ["all"],
   "Transport Users": ["all"],
+  "All Students (My Classes)": ["all"],
 };
 
 // Preset audiences map to backend role tags; custom ones are stored verbatim so
 // each card keeps showing the label the admin chose.
-const resolveAudience = (label) => audienceValues[label] || [String(label).trim()];
+const resolveAudience = (label) => {
+  // Handle teacher-scoped class audiences (e.g., "5-A", "5-A Parents")
+  if (/^\d+-[A-Z]$/.test(label) || /^\d+-[A-Z] Parents$/.test(label)) {
+    return [label];
+  }
+  return audienceValues[label] || [String(label).trim()];
+};
 
 // Searchable dropdown with an "add custom" action. Falls back to a simple
 // combination of the preset list plus any custom values already picked.
@@ -246,6 +255,8 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
 }
 
 export default function NoticeBoard() {
+  const user = useSelector(selectUser);
+  const isTeacher = user?.role === "teacher";
   const [notices, setNotices] = useState(initialNotices);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("All");
@@ -255,6 +266,7 @@ export default function NoticeBoard() {
   const [editId, setEditId] = useState(null);
   const [masterCategories, setMasterCategories] = useState([]);
   const [masterAudiences, setMasterAudiences] = useState([]);
+  const [teacherClasses, setTeacherClasses] = useState([]);
 
   useEffect(() => {
     Promise.allSettled([
@@ -270,15 +282,38 @@ export default function NoticeBoard() {
       .catch(() => {});
   }, []);
 
+  // Fetch teacher's assigned classes for scoped audience options
+  useEffect(() => {
+    if (!isTeacher) return;
+    api.assignments
+      .me()
+      .then(({ data }) => {
+        const assignments = Array.isArray(data) ? data : [];
+        const classes = assignments
+          .filter((a) => a.status === "active")
+          .map((a) => ({ class: a.class, section: a.section }));
+        setTeacherClasses(classes);
+      })
+      .catch(() => {});
+  }, [isTeacher]);
+
   const categoryOptions = useMemo(
     () => [...new Set([...CATEGORIES, ...masterCategories.map((m) => m.name)])],
     [masterCategories],
   );
 
-  const audienceOptions = useMemo(
-    () => [...new Set([...AUDIENCE_OPTIONS, ...masterAudiences.map((m) => m.name)])],
-    [masterAudiences],
-  );
+  // For teachers: scope audience to their assigned classes only
+  // For admin: show all audience options
+  const audienceOptions = useMemo(() => {
+    if (isTeacher && teacherClasses.length > 0) {
+      const classAudiences = teacherClasses.flatMap((c) => [
+        `${c.class}-${c.section}`,
+        `${c.class}-${c.section} Parents`,
+      ]);
+      return [...new Set([...classAudiences, "All Students (My Classes)"])];
+    }
+    return [...new Set([...AUDIENCE_OPTIONS, ...masterAudiences.map((m) => m.name)])];
+  }, [isTeacher, teacherClasses, masterAudiences]);
 
   const addMasterCategory = async (value) => {
     try {

@@ -223,9 +223,10 @@ const groups = [
         roles: ["teacher"],
       },
       {
-        to: "/teacher/notices",
+        to: "/notice-board",
         icon: Bell,
         label: "Notices",
+        perm: "notices:publish",
         roles: ["teacher"],
       },
     ],

@@ -36,6 +36,11 @@ const notifications = {
   icon: Bell,
   label: "Notifications",
 };
+const notices = {
+  to: "/notice-board",
+  icon: ClipboardList,
+  label: "Notices",
+};
 
 function group(label, items) {
   return { label, items };
@@ -47,7 +52,7 @@ export const PERSONA_NAV = {
       { to: "/accountant", icon: LayoutDashboard, label: "Dashboard", end: true },
       { to: "/accountant/fees", icon: Wallet, label: "Manage Fees" },
     ]),
-    group("Staff Tools", [attendance, leave, notifications]),
+    group("Staff Tools", [attendance, leave, notices, notifications]),
   ],
   librarian: [
     group("Librarian Workspace", [
@@ -55,7 +60,7 @@ export const PERSONA_NAV = {
       { to: "/librarian/books", icon: BookOpen, label: "Books" },
       { to: "/librarian/circulation", icon: ArrowDownToLine, label: "Circulation" },
     ]),
-    group("Staff Tools", [attendance, leave, notifications]),
+    group("Staff Tools", [attendance, leave, notices, notifications]),
   ],
   transport: [
     group("Transport Workspace", [
@@ -63,15 +68,14 @@ export const PERSONA_NAV = {
       { to: "/transport/routes", icon: MapPin, label: "Bus Routes" },
       { to: "/transport/allocations", icon: Gauge, label: "Allocations" },
     ]),
-    group("Staff Tools", [attendance, leave]),
+    group("Staff Tools", [attendance, leave, notices, notifications]),
   ],
   receptionist: [
     group("Reception Workspace", [
       { to: "/reception", icon: LayoutDashboard, label: "Dashboard", end: true },
       { to: "/reception/enquiries", icon: ClipboardList, label: "Enquiries" },
       { to: "/reception/student-lookup", icon: UserSearch, label: "Student Lookup" },
-      { to: "/reception/notices", icon: Bell, label: "Notices" },
     ]),
-    group("Staff Tools", [attendance, leave, notifications]),
+    group("Staff Tools", [attendance, leave, notices, notifications]),
   ],
 };
