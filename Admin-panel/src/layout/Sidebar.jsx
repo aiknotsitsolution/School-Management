@@ -173,12 +173,6 @@ const groups = [
         label: "Notifications",
         roles: ["staff"],
       },
-      {
-        to: "/staff/profile",
-        icon: UserRound,
-        label: "My Profile",
-        roles: ["staff"],
-      },
     ],
   },
   {
@@ -274,12 +268,6 @@ const groups = [
         to: "/payroll",
         icon: Banknote,
         label: "Payroll",
-        roles: ["teacher"],
-      },
-      {
-        to: "/teacher/profile",
-        icon: UserCog,
-        label: "My Profile",
         roles: ["teacher"],
       },
     ],
@@ -510,12 +498,6 @@ const STUDENT_NAV = [
         icon: LayoutDashboard,
         label: "Dashboard",
         end: true,
-        roles: ["student"],
-      },
-      {
-        to: "/student/profile",
-        icon: UserRound,
-        label: "My Profile",
         roles: ["student"],
       },
       {

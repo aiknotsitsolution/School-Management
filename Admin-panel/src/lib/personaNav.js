@@ -19,7 +19,6 @@ import {
   ClipboardList,
   CalendarCheck,
   FileBarChart2,
-  UserRound,
 } from "lucide-react";
 
 const attendance = {
@@ -37,11 +36,6 @@ const notifications = {
   icon: Bell,
   label: "Notifications",
 };
-const profile = {
-  to: "/staff/profile",
-  icon: UserRound,
-  label: "My Profile",
-};
 
 function group(label, items) {
   return { label, items };
@@ -53,7 +47,7 @@ export const PERSONA_NAV = {
       { to: "/accountant", icon: LayoutDashboard, label: "Dashboard", end: true },
       { to: "/accountant/fees", icon: Wallet, label: "Manage Fees" },
     ]),
-    group("Staff Tools", [attendance, leave, notifications, profile]),
+    group("Staff Tools", [attendance, leave, notifications]),
   ],
   librarian: [
     group("Librarian Workspace", [
@@ -61,7 +55,7 @@ export const PERSONA_NAV = {
       { to: "/librarian/books", icon: BookOpen, label: "Books" },
       { to: "/librarian/circulation", icon: ArrowDownToLine, label: "Circulation" },
     ]),
-    group("Staff Tools", [attendance, leave, notifications, profile]),
+    group("Staff Tools", [attendance, leave, notifications]),
   ],
   transport: [
     group("Transport Workspace", [
@@ -78,6 +72,6 @@ export const PERSONA_NAV = {
       { to: "/reception/student-lookup", icon: UserSearch, label: "Student Lookup" },
       { to: "/reception/notices", icon: Bell, label: "Notices" },
     ]),
-    group("Staff Tools", [attendance, leave, notifications, profile]),
+    group("Staff Tools", [attendance, leave, notifications]),
   ],
 };
