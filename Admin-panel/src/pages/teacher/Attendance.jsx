@@ -69,7 +69,7 @@ export default function Attendance() {
   useEffect(() => {
     const map = {};
     (students || []).forEach((s) => {
-      if (todayRecords[s.admissionNo]) map[s._id] = todayRecords[s.admissionNo];
+      if (todayRecords[s._id]) map[s._id] = todayRecords[s._id];
     });
     setMarks(map);
   }, [todayRecords, students]);
@@ -139,7 +139,7 @@ export default function Attendance() {
     const marked = (students || [])
       .filter((s) => marks[s._id])
       .map((s) => ({
-        studentId: s.admissionNo,
+        studentId: s._id,
         class: cls,
         section,
         date: todayISO(),
