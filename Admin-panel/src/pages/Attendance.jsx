@@ -423,6 +423,9 @@ export default function Attendance() {
           }[getStatus(student.id)],
         })),
       );
+      // Refresh attendance records so the useEffect picks up saved data
+      const { data } = await api.attendance.list();
+      setAttendanceRecords(data || []);
       setError("");
       setSaved(true);
       setTimeout(() => setSaved(false), 3500);
