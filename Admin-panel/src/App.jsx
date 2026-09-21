@@ -93,6 +93,7 @@ import Plans from "./pages/Plans";
 import Subscriptions from "./pages/Subscriptions";
 import CounsellorWorkspace from "./pages/CounsellorWorkspace";
 import StudentCompleteProfile from "./pages/StudentCompleteProfile";
+import StaffCompleteProfile from "./pages/StaffCompleteProfile";
 import BehaviorLog from "./pages/BehaviorLog";
 import Achievements from "./pages/Achievements";
 import {
@@ -935,6 +936,14 @@ export default function App() {
             element={
               <RequirePermission permission="students:write">
                 <StudentCompleteProfile />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/staff/complete/:id"
+            element={
+              <RequirePermission permission="staff:write">
+                <StaffCompleteProfile />
               </RequirePermission>
             }
           />

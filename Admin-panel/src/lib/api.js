@@ -669,6 +669,7 @@ export const api = {
   },
   staff: {
     list: (params = "") => request(`/staff${params ? `?${params}` : ""}`),
+    get: (id) => request(`/staff/${id}`),
     create: (item) => request("/staff", json("POST", item)),
     update: (id, item) => request(`/staff/${id}`, json("PUT", item)),
     remove: (id) => request(`/staff/${id}`, { method: "DELETE" }),

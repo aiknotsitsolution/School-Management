@@ -734,6 +734,14 @@ export default function Users() {
                           >
                             <Eye size={13} /> View
                           </button>
+                          {teacher.profileStatus !== "complete" && (
+                            <a
+                              href={`/staff/complete/${teacher._id || teacher.id}`}
+                              className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg hover:bg-amber-100"
+                            >
+                              <Pencil size={13} /> Complete Profile
+                            </a>
+                          )}
                           <button
                             onClick={() => registerPendingStaff(teacher)}
                             className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5"
