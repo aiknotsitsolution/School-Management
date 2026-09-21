@@ -288,7 +288,7 @@ export default function Achievements() {
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-slate-text/60 uppercase">Year</label>
-                <Input type="number" value={form.year} onChange={set("year")} className="mt-1" placeholder="e.g. 2026" />
+                <Input type="number" value={form.year} onChange={set("year")} className="mt-1" placeholder="e.g. 2026" min="2000" max="2099" />
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-slate-text/60 uppercase">Description</label>

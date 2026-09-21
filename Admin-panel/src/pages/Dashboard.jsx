@@ -128,6 +128,29 @@ export default function Dashboard() {
       .finally(() => setLoading(false));
   }, []);
 
+  // Refresh attendance data when user switches back to this tab
+  useEffect(() => {
+    const onVisible = () => {
+      if (document.visibilityState === "visible") {
+        Promise.allSettled([
+          api.attendance.list(),
+          api.staff.attendance.list("limit=5000"),
+        ]).then(([attResult, staffAttResult]) => {
+          if (attResult.status === "fulfilled") {
+            setData((prev) => ({ ...prev, attendance: attResult.value.data || [] }));
+            setAttendanceFailed(false);
+          }
+          if (staffAttResult.status === "fulfilled") {
+            setData((prev) => ({ ...prev, staffAttendance: staffAttResult.value.data || [] }));
+            setStaffAttendanceFailed(false);
+          }
+        });
+      }
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
+  }, []);
+
   const retryAttendance = () => {
     setAttendanceFailed(false);
     setData((prev) => ({ ...prev, attendance: [] }));

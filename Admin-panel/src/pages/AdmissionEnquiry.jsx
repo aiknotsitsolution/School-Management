@@ -37,6 +37,7 @@ const STATUS_OPTIONS = [
   "New",
   "Contacted",
   "Campus Visit Scheduled",
+  "Follow Up",
   "Admission Confirmed",
   "Declined",
 ];
@@ -45,6 +46,7 @@ const PROGRESS_STAGES = [
   "New",
   "Contacted",
   "Campus Visit Scheduled",
+  "Follow Up",
   "Admission Confirmed",
 ];
 
@@ -52,6 +54,7 @@ const STAGES = [
   { key: "New", label: "New Leads", color: "bg-sky-500", dot: "bg-sky-500" },
   { key: "Contacted", label: "Contacted", color: "bg-amber-500", dot: "bg-amber-500" },
   { key: "Campus Visit Scheduled", label: "Campus Visit", color: "bg-violet-500", dot: "bg-violet-500" },
+  { key: "Follow Up", label: "Follow Up", color: "bg-cyan-500", dot: "bg-cyan-500" },
   { key: "Admission Confirmed", label: "Confirmed", color: "bg-emerald-500", dot: "bg-emerald-500" },
   { key: "Declined", label: "Rejected", color: "bg-rose-500", dot: "bg-rose-500" },
 ];

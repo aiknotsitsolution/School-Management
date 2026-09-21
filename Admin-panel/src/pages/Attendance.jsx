@@ -190,6 +190,7 @@ export default function Attendance() {
   const [marks, setMarks] = useState({});
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState("");
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [date] = useState(todayLabel());
   const [classTeacherMap, setClassTeacherMap] = useState({});
   const [staffAssignmentsMap, setStaffAssignmentsMap] = useState({});
@@ -219,9 +220,10 @@ export default function Attendance() {
     });
     return cfg;
   }, [attendanceStatusOptions]);
+  const CLASS_OPTIONS_WITH_ALL = useMemo(() => ["All", ...CLASS_OPTIONS], [CLASS_OPTIONS]);
   const filteredSections = useMemo(() => {
-    if (!cls || cls === "All") return SECTION_OPTIONS;
-    return [...new Set(rawSections.filter((s) => s.className === cls).map((s) => s.name))];
+    if (!cls || cls === "All") return ["All", ...SECTION_OPTIONS];
+    return ["All", ...new Set(rawSections.filter((s) => s.className === cls).map((s) => s.name))];
   }, [cls, SECTION_OPTIONS, rawSections]);
 
   useEffect(() => {
@@ -259,25 +261,6 @@ export default function Attendance() {
         });
         setClassTeacherMap(ctMap);
         setStaffAssignmentsMap(sMap);
-
-        const today = new Date().toISOString().slice(0, 10);
-        const existing = {};
-        records
-          .filter(
-            (record) =>
-              new Date(record.date).toISOString().slice(0, 10) === today,
-          )
-          .forEach((record) => {
-            existing[record.studentId] =
-              record.status === "Present"
-                ? "present"
-                : record.status === "Absent"
-                  ? "absent"
-                  : record.status === "Leave"
-                    ? "leave"
-                    : "late";
-          });
-        setMarks(existing);
       })
       .catch((requestError) => {
         setError(requestError.message);
@@ -285,6 +268,28 @@ export default function Attendance() {
       })
       .finally(() => setTrendLoading(false));
   }, []);
+
+  // Update marks when date changes
+  useEffect(() => {
+    const existing = {};
+    attendanceRecords
+      .filter(
+        (record) =>
+          new Date(record.date).toISOString().slice(0, 10) === selectedDate,
+      )
+      .forEach((record) => {
+        existing[record.studentId] =
+          record.status === "Present"
+            ? "present"
+            : record.status === "Absent"
+              ? "absent"
+              : record.status === "Leave"
+                ? "leave"
+                : "late";
+      });
+    setMarks(existing);
+    setSaved(false);
+  }, [selectedDate, attendanceRecords]);
 
   // Fetch all staff attendance for trend chart (runs once on mount)
   useEffect(() => {
@@ -350,7 +355,7 @@ export default function Attendance() {
 
   const list = useMemo(() => {
     return students
-      .filter((s) => s.class === cls && s.section === section)
+      .filter((s) => (cls === "All" || s.class === cls) && (section === "All" || s.section === section))
       .filter(
         (s) =>
           !query ||
@@ -382,15 +387,6 @@ export default function Attendance() {
     setSaved(false);
   };
 
-  const markAll = (status) => {
-    const next = {};
-    list.forEach((s) => {
-      next[s.id] = status;
-    });
-    setMarks(next);
-    setSaved(false);
-  };
-
   const getStatus = (id) => marks[id] || "present";
 
   const counts = useMemo(() => {
@@ -414,7 +410,7 @@ export default function Attendance() {
           studentId: student.id,
           class: student.class,
           section: student.section,
-          date: new Date().toISOString().slice(0, 10),
+          date: selectedDate,
           status: {
             present: "Present",
             absent: "Absent",
@@ -525,13 +521,6 @@ export default function Attendance() {
 
   const setStaffMark = (id, val) => {
     setStaffMarks((m) => ({ ...m, [id]: val }));
-    setStaffSaved(false);
-  };
-
-  const markAllStaff = (status) => {
-    const next = {};
-    filteredStaff.forEach((s) => { next[s.id] = status; });
-    setStaffMarks(next);
     setStaffSaved(false);
   };
 
@@ -656,10 +645,10 @@ export default function Attendance() {
               />
             </div>
             <SearchableSelect
-              options={CLASS_OPTIONS}
+              options={CLASS_OPTIONS_WITH_ALL}
               value={cls}
-              onChange={(v) => { setCls(v); setSection(filteredSections[0] || ""); }}
-              renderLabel={(c) => formatClassLabel(c)}
+              onChange={(v) => { setCls(v); setSection(filteredSections[0] || "All"); }}
+              renderLabel={(c) => c === "All" ? "All Classes" : formatClassLabel(c)}
               placeholder="Select class"
               className="min-w-[140px]"
             />
@@ -667,29 +656,21 @@ export default function Attendance() {
               options={filteredSections}
               value={section}
               onChange={setSection}
-              renderLabel={(s) => `Section ${s}`}
+              renderLabel={(s) => s === "All" ? "All Sections" : `Section ${s}`}
               placeholder="Section"
               className="min-w-[120px]"
+            />
+            <Input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="w-[160px]"
             />
           </div>
         }
       >
         {/* Quick actions + legend */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-black/6">
-          <div className="flex flex-wrap gap-1.5">
-            <button
-              onClick={() => markAll("present")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-success/10 text-success hover:bg-success/20 transition-colors"
-            >
-              <Check size={13} /> Mark All Present
-            </button>
-            <button
-              onClick={() => markAll("absent")}
-              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-alert/10 text-alert hover:bg-alert/20 transition-colors"
-            >
-              <X size={13} /> Mark All Absent
-            </button>
-          </div>
           <div className="flex flex-wrap gap-2 text-[11.5px] text-slate-text/70">
             <span className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-full bg-success" /> Present
@@ -903,14 +884,6 @@ export default function Attendance() {
           >
             {/* Quick actions + legend */}
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-black/6">
-              <div className="flex flex-wrap gap-1.5">
-                <button onClick={() => markAllStaff("present")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-success/10 text-success hover:bg-success/20 transition-colors">
-                  <Check size={13} /> Mark All Present
-                </button>
-                <button onClick={() => markAllStaff("absent")} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-alert/10 text-alert hover:bg-alert/20 transition-colors">
-                  <X size={13} /> Mark All Absent
-                </button>
-              </div>
               <div className="flex flex-wrap gap-2 text-[11.5px] text-slate-text/70">
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-success" /> Present</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-alert" /> Absent</span>
@@ -1029,7 +1002,7 @@ export default function Attendance() {
 
           <div className="rounded-xl bg-ink/5 border border-ink/10 px-4 py-3.5 text-[13px] text-slate-text">
             <strong className="text-ink">Tip:</strong> Staff attendance is saved per individual.
-            Use <strong>Mark All Present / Absent</strong> for quick bulk actions, then fine-tune before saving.
+            Use the status buttons to mark attendance, then save when ready.
           </div>
         </>
       )}

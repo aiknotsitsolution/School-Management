@@ -133,14 +133,18 @@ export function Button({ children, variant = "primary", className = "", ...props
   );
 }
 
-export function Input({ className = "", type = "text", wrapperClassName = "", ...props }) {
+export function Input({ className = "", type = "text", wrapperClassName = "", min, max, ...props }) {
   const [show, setShow] = useState(false);
   const isPassword = type === "password";
   const visibleType = isPassword ? (show ? "text" : "password") : type;
+  const dateMin = type === "date" ? (min || "1900-01-01") : min;
+  const dateMax = type === "date" ? (max || "2100-12-31") : max;
   if (!isPassword) {
     return (
       <input
         type={visibleType}
+        min={dateMin}
+        max={dateMax}
         className={`w-full px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all placeholder:text-slate-text/40 hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15 ${className}`}
         {...props}
       />
