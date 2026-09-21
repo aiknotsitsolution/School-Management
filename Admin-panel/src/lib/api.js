@@ -19,9 +19,17 @@ function doRefresh(refreshToken) {
   if (!refreshToken)
     return Promise.resolve({ ok: false, body: { success: false, message: "No refresh token" } });
   if (!refreshPromise) {
-    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh-token`, json("POST", { refreshToken }))
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh-token`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refreshToken }),
+      signal: controller.signal,
+    })
       .then((r) => r.json().then((body) => ({ ok: r.ok, body })))
-      .finally(() => { refreshPromise = null; });
+      .catch(() => ({ ok: false, body: { success: false, message: "Refresh timeout" } }))
+      .finally(() => { clearTimeout(timeout); refreshPromise = null; });
   }
   return refreshPromise;
 }

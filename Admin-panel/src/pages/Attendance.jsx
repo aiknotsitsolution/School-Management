@@ -184,8 +184,8 @@ export default function Attendance() {
   const [attendanceRecords, setAttendanceRecords] = useState([]);
   const [trendLoading, setTrendLoading] = useState(true);
   const [trendError, setTrendError] = useState("");
-  const [cls, setCls] = useState("8");
-  const [section, setSection] = useState("A");
+  const [cls, setCls] = useState("All");
+  const [section, setSection] = useState("All");
   const [query, setQuery] = useState("");
   const [marks, setMarks] = useState({});
   const [saved, setSaved] = useState(false);
@@ -364,7 +364,7 @@ export default function Attendance() {
           s.id.toLowerCase().includes(query.toLowerCase()),
       )
       .sort((a, b) => String(a.roll).localeCompare(String(b.roll)));
-  }, [cls, section, query]);
+  }, [cls, section, query, students]);
 
   const [attPage, setAttPage] = useState(1);
   const [attPageSize, setAttPageSize] = useState(20);
@@ -631,7 +631,7 @@ export default function Attendance() {
           </div>
         }
         action={
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-1.5 shrink-0">
             <div className="relative">
               <Search
                 size={14}
@@ -641,16 +641,16 @@ export default function Attendance() {
                 placeholder="Search name / roll..."
                 value={query}
                 onChange={(e) => setQuery(e.target.value)}
-                className="pl-8 w-44 sm:w-52"
+                className="pl-8 w-44 text-[12px] py-1.5"
               />
             </div>
             <SearchableSelect
               options={CLASS_OPTIONS_WITH_ALL}
               value={cls}
-              onChange={(v) => { setCls(v); setSection(filteredSections[0] || "All"); }}
+              onChange={(v) => { setCls(v); setSection(v === "All" ? "All" : filteredSections[0] || "All"); }}
               renderLabel={(c) => c === "All" ? "All Classes" : formatClassLabel(c)}
-              placeholder="Select class"
-              className="min-w-[140px]"
+              placeholder="Class"
+              className="min-w-[150px] whitespace-nowrap"
             />
             <SearchableSelect
               options={filteredSections}
@@ -658,13 +658,13 @@ export default function Attendance() {
               onChange={setSection}
               renderLabel={(s) => s === "All" ? "All Sections" : `Section ${s}`}
               placeholder="Section"
-              className="min-w-[120px]"
+              className="min-w-[130px]"
             />
             <Input
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="w-[160px]"
+              className="w-[110px] py-1.5 text-[12px]"
             />
           </div>
         }

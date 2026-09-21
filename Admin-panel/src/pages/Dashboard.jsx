@@ -151,6 +151,27 @@ export default function Dashboard() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
+  // Auto-refresh attendance every 45 seconds so teacher-marked updates appear
+  useEffect(() => {
+    const interval = setInterval(() => {
+      if (document.visibilityState !== "visible") return;
+      Promise.allSettled([
+        api.attendance.list(),
+        api.staff.attendance.list("limit=5000"),
+      ]).then(([attResult, staffAttResult]) => {
+        if (attResult.status === "fulfilled") {
+          setData((prev) => ({ ...prev, attendance: attResult.value.data || [] }));
+          setAttendanceFailed(false);
+        }
+        if (staffAttResult.status === "fulfilled") {
+          setData((prev) => ({ ...prev, staffAttendance: staffAttResult.value.data || [] }));
+          setStaffAttendanceFailed(false);
+        }
+      });
+    }, 45_000);
+    return () => clearInterval(interval);
+  }, []);
+
   const retryAttendance = () => {
     setAttendanceFailed(false);
     setData((prev) => ({ ...prev, attendance: [] }));
