@@ -13,6 +13,8 @@ const noticeRoutes = require("./routes/noticeRoutes");
 const eventRoutes = require("./routes/eventRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const internalNotificationRoutes = require("./routes/internalNotificationRoutes");
+const internalAttendanceRoutes = require("./routes/internalAttendanceRoutes");
+const attendanceStreamRoutes = require("./routes/attendanceStreamRoutes");
 
 const app = express();
 const PORT = process.env.COMMUNICATION_SERVICE_PORT || 5006;
@@ -48,6 +50,8 @@ app.use("/api/notices", noticeRoutes);
 app.use("/api/events", eventRoutes);
 app.use("/api/notifications/internal", internalNotificationRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/attendance-stream/internal", internalAttendanceRoutes);
+app.use("/api/attendance-stream", attendanceStreamRoutes);
 
 app.use((err, req, res, next) =>
 {

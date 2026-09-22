@@ -56,6 +56,19 @@ export default function Attendance() {
     });
   }, [query]);
 
+  // Real-time attendance updates — if admin edits attendance for this class, teacher sees it
+  useEffect(() => {
+    const unsubscribe = api.attendanceStream.subscribe({
+      onData: () => {
+        if (document.visibilityState !== "visible" || !query) return;
+        api.attendance.list(query).then((res) => {
+          setRecords(Array.isArray(res.data) ? res.data : []);
+        }).catch(() => {});
+      },
+    });
+    return unsubscribe;
+  }, [query]);
+
   const todayRecords = useMemo(() => {
     const byStudent = {};
     (records || []).forEach((r) => {

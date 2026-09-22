@@ -660,6 +660,9 @@ export const api = {
     markAllRead: () => request("/notifications/read-all", json("PATCH", {})),
     subscribe: (handlers) => sseSubscribe("/notifications/stream", handlers),
   },
+  attendanceStream: {
+    subscribe: (handlers) => sseSubscribe("/attendance-stream/stream", handlers),
+  },
   events: {
     list: () => request("/events"),
     create: (item) => request("/events", json("POST", item)),

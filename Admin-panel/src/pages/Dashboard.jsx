@@ -146,7 +146,7 @@ export default function Dashboard() {
     fetchCount.current++;
   }, [location.pathname, fetchDashboardData]);
 
-  // Refresh attendance data when user switches back to this tab
+  // Refresh attendance data when user switches back to this tab (SSE fallback)
   useEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === "visible") {
@@ -169,25 +169,28 @@ export default function Dashboard() {
     return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
 
-  // Auto-refresh attendance every 30 seconds so teacher-marked updates appear
+  // Real-time attendance updates via SSE — replaces 30s polling
   useEffect(() => {
-    const interval = setInterval(() => {
-      if (document.visibilityState !== "visible") return;
-      Promise.allSettled([
-        api.attendance.list(),
-        api.staff.attendance.list("limit=5000"),
-      ]).then(([attResult, staffAttResult]) => {
-        if (attResult.status === "fulfilled") {
-          setData((prev) => ({ ...prev, attendance: attResult.value.data || [] }));
-          setAttendanceFailed(false);
-        }
-        if (staffAttResult.status === "fulfilled") {
-          setData((prev) => ({ ...prev, staffAttendance: staffAttResult.value.data || [] }));
-          setStaffAttendanceFailed(false);
-        }
-      });
-    }, 30_000);
-    return () => clearInterval(interval);
+    const unsubscribe = api.attendanceStream.subscribe({
+      onData: () => {
+        if (document.visibilityState !== "visible") return;
+        Promise.allSettled([
+          api.attendance.list(),
+          api.staff.attendance.list("limit=5000"),
+        ]).then(([attResult, staffAttResult]) => {
+          if (attResult.status === "fulfilled") {
+            setData((prev) => ({ ...prev, attendance: attResult.value.data || [] }));
+            setAttendanceFailed(false);
+          }
+          if (staffAttResult.status === "fulfilled") {
+            setData((prev) => ({ ...prev, staffAttendance: staffAttResult.value.data || [] }));
+            setStaffAttendanceFailed(false);
+          }
+        });
+      },
+      onStatus: () => {},
+    });
+    return unsubscribe;
   }, []);
 
   const retryAttendance = () => {

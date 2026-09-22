@@ -103,6 +103,37 @@ const markAttendance = async (req, res) => {
       };
     });
     await Attendance.bulkWrite(ops);
+
+    // Push attendance event to communication-service for SSE broadcast.
+    // Non-blocking — if the push fails, the attendance save still succeeds.
+    const internalKey = process.env.INTERNAL_NOTIFY_KEY;
+    if (internalKey) {
+      const first = records[0] || {};
+      const classLabel = String(first.class || "").trim();
+      const section = String(first.section || "").trim();
+      const dateStr = first.date ? new Date(first.date).toISOString().split("T")[0] : null;
+      const pushPayload = {
+        schoolId: req.tenantId,
+        class: classLabel,
+        section: section || null,
+        date: dateStr,
+        records: records.map((r) => ({
+          studentId: String(r.studentId || "").trim(),
+          status: String(r.status || "").trim(),
+        })),
+        markedBy: req.user.name,
+      };
+      const commUrl = process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006";
+      fetch(`${commUrl}/api/attendance-stream/internal/push-attendance`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-internal-key": internalKey,
+        },
+        body: JSON.stringify(pushPayload),
+      }).catch(() => {}); // fire-and-forget
+    }
+
     res.json({ success: true, message: `Attendance marked for ${records.length} student(s)` });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });

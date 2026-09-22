@@ -71,6 +71,7 @@ const INTERNAL_PREFIXES = [
   "/api/students/internal",
   "/api/auth/internal",
   "/api/payments/internal",
+  "/api/attendance-stream/internal",
 ];
 app.use((req, res, next) => {
   const isInternal = INTERNAL_PREFIXES.some((p) => req.path.startsWith(p));
@@ -217,6 +218,10 @@ const routes = [
   },
   {
     path: "/api/notifications",
+    target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
+  },
+  {
+    path: "/api/attendance-stream",
     target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
   },
   {

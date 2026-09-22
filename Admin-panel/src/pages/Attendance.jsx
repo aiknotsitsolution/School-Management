@@ -269,6 +269,20 @@ export default function Attendance() {
       .finally(() => setTrendLoading(false));
   }, []);
 
+  // Real-time attendance updates via SSE — other users' changes appear instantly
+  useEffect(() => {
+    const unsubscribe = api.attendanceStream.subscribe({
+      onData: () => {
+        if (document.visibilityState !== "visible") return;
+        api.attendance.list().then((res) => {
+          setAttendanceRecords(res.data || []);
+          setTrendError("");
+        }).catch(() => {});
+      },
+    });
+    return unsubscribe;
+  }, []);
+
   // Update marks when date changes
   useEffect(() => {
     const existing = {};
