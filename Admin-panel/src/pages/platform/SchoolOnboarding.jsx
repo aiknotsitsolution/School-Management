@@ -86,8 +86,8 @@ export default function SchoolOnboarding() {
       toast("Name, email and password are required", "error");
       return;
     }
-    if (admin.password.length < 6) {
-      toast("Password must be at least 6 characters", "error");
+    if (admin.password.length < 8) {
+      toast("Password must be at least 8 characters", "error");
       return;
     }
     setStepIndex(2);
@@ -281,8 +281,8 @@ export default function SchoolOnboarding() {
             />
             <Input
               type="password"
-              placeholder="Password (min 6 chars)"
-              minLength={6}
+              placeholder="Password (min 8 chars)"
+              minLength={8}
               autoComplete="new-password"
               value={admin.password}
               onChange={(e) => setAdmin({ ...admin, password: e.target.value })}

@@ -465,9 +465,9 @@ export default function Users() {
               <Input
                 required
                 type="password"
-                placeholder="Password (min 6 chars)"
+                placeholder="Password (min 8 chars)"
                 autoComplete="new-password"
-                minLength={6}
+                minLength={8}
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
               />

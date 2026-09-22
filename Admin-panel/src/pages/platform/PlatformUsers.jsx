@@ -340,7 +340,7 @@ export default function PlatformUsers() {
             <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
               <Input required placeholder="Full name" autoComplete="off" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
               <Input required type="email" placeholder="Email (login)" autoComplete="off" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
-              <Input required type="password" placeholder="Password (min 6 chars)" autoComplete="new-password" minLength={6} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
+              <Input required type="password" placeholder="Password (min 8 chars)" autoComplete="new-password" minLength={8} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} />
               <Select required value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}>
                 {Object.entries(ROLE_LABELS).map(([value, label]) => (
                   <option key={value} value={value}>{label}</option>
