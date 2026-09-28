@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   Menu,
   Search,
@@ -16,8 +16,9 @@ import {
   Users,
   GraduationCap,
   Briefcase,
+  LayoutDashboard,
 } from "lucide-react";
-import { selectRole, selectUser, selectSchool } from "../store/selectors";
+import { selectRole, selectUser } from "../store/selectors";
 import { logout } from "../store/authSlice";
 import { api } from "../lib/api";
 
@@ -30,6 +31,58 @@ const roleLabel = (role, designation) => {
   return "User";
 };
 
+const TITLE_OVERRIDES = {
+  "student-dashboard": "Dashboard",
+  "teacher-dashboard": "Dashboard",
+  "staff-dashboard": "Dashboard",
+  "parent-dashboard": "Dashboard",
+  "admission-counsellor": "Counsellor Workspace",
+  platform: "Platform",
+  accountant: "Accountant Dashboard",
+  librarian: "Library Dashboard",
+  transport: "Transport Dashboard",
+  reception: "Reception Dashboard",
+  "study-materials": "Study Materials",
+  "report-card": "Report Card",
+  diary: "Class Diary",
+  users: "Students & Users",
+  teachers: "Staff & Teachers",
+};
+
+function prettify(segment) {
+  if (!segment) return "Dashboard";
+  if (TITLE_OVERRIDES[segment]) return TITLE_OVERRIDES[segment];
+  return segment
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function routeTitle(path) {
+  if (path === "/") return "Dashboard";
+  const segments = path.split("/").filter(Boolean);
+  let last = segments[segments.length - 1];
+  if (/^[0-9a-f]{24}$/i.test(last) || /^\d+$/.test(last)) {
+    last = segments[segments.length - 2];
+  }
+  return prettify(last);
+}
+
+function routeIcon(path) {
+  if (path.startsWith("/student")) return <GraduationCap size={17} />;
+  if (path.startsWith("/teacher")) return <Users size={17} />;
+  if (path.startsWith("/platform")) return <ShieldCheck size={17} />;
+  if (
+    path.startsWith("/staff") ||
+    path.startsWith("/accountant") ||
+    path.startsWith("/librarian") ||
+    path.startsWith("/transport") ||
+    path.startsWith("/reception")
+  ) {
+    return <Briefcase size={17} />;
+  }
+  return <LayoutDashboard size={17} />;
+}
+
 function InitialsAvatar({ name }) {
   const initials = (name || "U")
     .split(" ")
@@ -39,7 +92,7 @@ function InitialsAvatar({ name }) {
     .join("")
     .toUpperCase();
   return (
-    <div className="w-9 h-9 rounded-full bg-ink text-amber flex items-center justify-center font-semibold text-[13px] shrink-0">
+    <div className="w-9 h-9 rounded-full bg-primary text-white flex items-center justify-center font-semibold text-[13px] shrink-0">
       {initials}
     </div>
   );
@@ -48,9 +101,9 @@ function InitialsAvatar({ name }) {
 export default function Topbar({ onMenuClick }) {
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
   const user = useSelector(selectUser);
   const role = useSelector(selectRole);
-  const school = useSelector(selectSchool);
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -206,25 +259,28 @@ export default function Topbar({ onMenuClick }) {
     navigate(path);
   };
 
+  const pageTitle = routeTitle(pathname);
+
   return (
-    <header className="h-16 bg-white border-b border-black/[0.06] flex items-center justify-between px-4 sm:px-6 shrink-0 sticky top-0 z-20">
-      <div className="flex items-center gap-3">
-        <button onClick={onMenuClick} className="lg:hidden text-ink p-1 -ml-1">
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 shrink-0 sticky top-0 z-20">
+      <div className="flex min-w-0 items-center gap-3">
+        <button onClick={onMenuClick} className="lg:hidden text-ink p-1 -ml-1" aria-label="Open navigation">
           <Menu size={22} />
         </button>
-        {school?.name && (
-          <div className="hidden lg:flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-amber/10 flex items-center justify-center shrink-0">
-              <School size={17} className="text-amber" />
-            </div>
-            <p className="text-[16px] font-bold text-ink truncate max-w-[260px]">{school.name}</p>
-          </div>
-        )}
+        <div className="flex min-w-0 items-center gap-2.5">
+          <span
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-info/15 bg-info-light text-info"
+            aria-hidden="true"
+          >
+            {routeIcon(pathname)}
+          </span>
+          <p className="truncate text-[16px] font-bold text-ink">{pageTitle}</p>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
         <div className="hidden md:block relative" ref={searchRef}>
-          <div className="flex items-center gap-2 bg-paper rounded-full px-4 py-2 w-64 border border-black/[0.06] focus-within:border-amber focus-within:ring-2 focus-within:ring-amber/15 transition-all">
+          <div className="flex items-center gap-2 bg-paper rounded-full px-4 py-2 w-64 border border-slate-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15 transition-all">
             <Search size={16} className="text-slate-text/60" />
             <input
               placeholder="Search students, staff..."
@@ -236,10 +292,10 @@ export default function Topbar({ onMenuClick }) {
           </div>
 
           {searchOpen && searchQuery.trim().length >= 2 && (
-            <div className="absolute right-0 mt-2 w-96 bg-white rounded-xl border border-black/[0.08] shadow-lg shadow-black/5 overflow-hidden z-30">
+            <div className="absolute right-0 mt-2 w-96 bg-white rounded-xl border border-slate-200 shadow-lg shadow-black/5 overflow-hidden z-30">
               {searchLoading ? (
                 <div className="px-4 py-8 text-center">
-                  <div className="w-5 h-5 border-2 border-amber border-t-transparent rounded-full animate-spin mx-auto" />
+                  <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mx-auto" />
                   <p className="text-[12px] text-slate-text/60 mt-2">Searching...</p>
                 </div>
               ) : (searchResults.students.length === 0 && searchResults.staff.length === 0) ? (
@@ -251,7 +307,7 @@ export default function Topbar({ onMenuClick }) {
                 <div className="max-h-80 overflow-y-auto">
                   {searchResults.students.length > 0 && (
                     <div>
-                      <div className="px-4 py-2 border-b border-black/[0.04] flex items-center gap-2">
+                      <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-2">
                         <GraduationCap size={13} className="text-primary" />
                         <p className="text-[11px] font-semibold text-slate-text/60 uppercase tracking-wide">Students</p>
                       </div>
@@ -274,8 +330,8 @@ export default function Topbar({ onMenuClick }) {
                   )}
                   {searchResults.staff.length > 0 && (
                     <div>
-                      <div className="px-4 py-2 border-b border-black/[0.04] flex items-center gap-2">
-                        <Briefcase size={13} className="text-amber" />
+                      <div className="px-4 py-2 border-b border-slate-100 flex items-center gap-2">
+                        <Briefcase size={13} className="text-primary" />
                         <p className="text-[11px] font-semibold text-slate-text/60 uppercase tracking-wide">Staff</p>
                       </div>
                       {searchResults.staff.map((s) => (
@@ -284,8 +340,8 @@ export default function Topbar({ onMenuClick }) {
                           onClick={() => { setSearchOpen(false); setSearchQuery(""); navigate("/teachers"); }}
                           className="w-full text-left px-4 py-2.5 hover:bg-paper transition-colors flex items-center gap-3"
                         >
-                          <div className="w-8 h-8 rounded-full bg-amber/10 flex items-center justify-center shrink-0">
-                            <Briefcase size={14} className="text-amber" />
+                          <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center shrink-0">
+                            <Briefcase size={14} className="text-primary" />
                           </div>
                           <div className="min-w-0">
                             <p className="text-[13px] font-semibold text-ink truncate">{s.name}</p>
@@ -304,7 +360,7 @@ export default function Topbar({ onMenuClick }) {
         <div className="relative" ref={dropdownRef}>
           <button
             onClick={() => setOpen((o) => !o)}
-            className="relative w-9 h-9 rounded-full bg-paper border border-black/[0.06] flex items-center justify-center hover:bg-amber/10 transition-colors"
+            className="relative w-9 h-9 rounded-full bg-paper border border-slate-200 flex items-center justify-center hover:bg-primary/10 transition-colors"
             aria-label="Notifications"
           >
             <Bell size={17} className="text-ink" />
@@ -316,8 +372,8 @@ export default function Topbar({ onMenuClick }) {
           </button>
 
           {open && (
-            <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl border border-black/[0.08] shadow-lg shadow-black/5 overflow-hidden z-30">
-              <div className="flex items-center justify-between px-4 py-3 border-b border-black/[0.06]">
+            <div className="absolute right-0 mt-2 w-80 sm:w-96 bg-white rounded-xl border border-slate-200 shadow-lg shadow-black/5 overflow-hidden z-30">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
                 <p className="text-[13px] font-semibold text-ink">Notifications</p>
                 <div className="flex items-center gap-3">
                   {unreadCount > 0 && (
@@ -333,13 +389,13 @@ export default function Topbar({ onMenuClick }) {
                       setOpen(false);
                       navigate("/notifications");
                     }}
-                    className="text-[11px] font-medium text-amber hover:text-amber/80 transition-colors"
+                    className="text-[11px] font-medium text-primary hover:text-primary/80 transition-colors"
                   >
                     View all
                   </button>
                 </div>
               </div>
-              <div className="max-h-80 overflow-y-auto divide-y divide-black/[0.04]">
+              <div className="max-h-80 overflow-y-auto divide-y divide-slate-100">
                 {items.length === 0 ? (
                   <div className="px-4 py-10 flex flex-col items-center text-center gap-2">
                     <Inbox size={22} className="text-slate-text/40" />
@@ -354,7 +410,7 @@ export default function Topbar({ onMenuClick }) {
                     >
                       <div className="flex items-start gap-2">
                         {!item.read && (
-                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-amber shrink-0"></span>
+                          <span className="mt-1.5 w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>
                         )}
                         <div className="min-w-0">
                           <p className="text-[12px] font-semibold text-ink truncate">
@@ -378,7 +434,7 @@ export default function Topbar({ onMenuClick }) {
           )}
         </div>
 
-        <div className="relative pl-2 sm:border-l sm:border-black/[0.08]" ref={profileRef}>
+        <div className="relative pl-2 sm:border-l sm:border-slate-200" ref={profileRef}>
           <button
             onClick={() => setProfileOpen((p) => !p)}
             aria-label="Account menu"
@@ -409,8 +465,8 @@ export default function Topbar({ onMenuClick }) {
           </button>
 
           {profileOpen && (
-            <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl border border-black/[0.08] shadow-lg shadow-black/5 overflow-hidden z-30">
-              <div className="flex items-center gap-3 px-4 py-3 border-b border-black/[0.06]">
+            <div className="absolute right-0 mt-2 w-60 bg-white rounded-xl border border-slate-200 shadow-lg shadow-black/5 overflow-hidden z-30">
+              <div className="flex items-center gap-3 px-4 py-3 border-b border-slate-200">
                 {user?.avatar ? (
                   <img
                     src={user.avatar}
@@ -461,7 +517,7 @@ export default function Topbar({ onMenuClick }) {
         <button
           onClick={handleLogout}
           title="Sign out"
-          className="w-9 h-9 rounded-full bg-paper border border-black/[0.06] flex items-center justify-center hover:bg-alert/10 hover:text-alert transition-colors"
+          className="w-9 h-9 rounded-full bg-paper border border-slate-200 flex items-center justify-center hover:bg-alert/10 hover:text-alert transition-colors"
         >
           <LogOut size={16} className="text-ink" />
         </button>

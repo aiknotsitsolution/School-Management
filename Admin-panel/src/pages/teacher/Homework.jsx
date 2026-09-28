@@ -201,7 +201,7 @@ export default function Homework() {
         title="Homework & Assignments"
         description={`Assignments set for ${assignment}.`}
         right={
-          <Button variant="amber" onClick={openAdd}>
+          <Button variant="primary" onClick={openAdd}>
             <Plus size={15} /> Assign Homework
           </Button>
         }
@@ -234,7 +234,7 @@ export default function Homework() {
           label="Subjects"
           value={String(new Set((items || []).map((h) => h.subject)).size)}
           sub="Active subjects"
-          accent="amber"
+          accent="primary"
         />
       </div>
 
@@ -270,9 +270,9 @@ export default function Homework() {
               return (
                 <div
                   key={h._id}
-                  className="flex items-start gap-3 p-3 rounded-xl border border-black/[0.06] hover:bg-paper/60"
+                  className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:bg-paper/60"
                 >
-                  <div className="w-9 h-9 rounded-lg bg-amber/12 text-amber-dark flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-primary/12 text-primary-dark flex items-center justify-center shrink-0">
                     <BookOpenCheck size={16} />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -321,7 +321,7 @@ export default function Homework() {
         title="Submissions to review"
         action={
           <div className="flex items-center gap-2 text-[12px] text-slate-text/70">
-            <Pill tone={pendingCount > 0 ? "amber" : "success"}>
+            <Pill tone={pendingCount > 0 ? "primary" : "success"}>
               {pendingCount} pending
             </Pill>
             <Pill tone="neutral">{reviewedCount} reviewed</Pill>
@@ -347,11 +347,11 @@ export default function Homework() {
               return (
                 <div
                   key={sub._id}
-                  className="flex items-start gap-3 p-3 rounded-xl border border-black/[0.06] hover:bg-paper/60"
+                  className="flex items-start gap-3 p-3 rounded-xl border border-slate-200 hover:bg-paper/60"
                 >
                   <div
                     className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
-                      reviewed ? "bg-emerald-500/10 text-emerald-600" : "bg-amber/12 text-amber-dark"
+                      reviewed ? "bg-emerald-500/10 text-emerald-600" : "bg-primary/12 text-primary-dark"
                     }`}
                   >
                     {reviewed ? <CheckCircle2 size={16} /> : <ClipboardCheck size={16} />}
@@ -363,7 +363,7 @@ export default function Homework() {
                       </p>
                       <Pill tone="neutral">{sub.admissionNo || sub.studentId}</Pill>
                       {hw && <Pill tone="info">{hw.title}</Pill>}
-                      {!reviewed && <Pill tone="amber">{sub.status || "Submitted"}</Pill>}
+                      {!reviewed && <Pill tone="primary">{sub.status || "Submitted"}</Pill>}
                     </div>
                     {sub.content && (
                       <p className="text-[12.5px] text-slate-text mt-1 leading-relaxed line-clamp-2">
@@ -385,7 +385,7 @@ export default function Homework() {
                     )}
                   </div>
                   <div className="shrink-0">
-                    <Button variant={reviewed ? "outline" : "amber"} onClick={() => openReview(sub)}>
+                    <Button variant={reviewed ? "outline" : "primary"} onClick={() => openReview(sub)}>
                       {reviewed ? "Re-review" : "Review"}
                     </Button>
                   </div>
@@ -403,7 +403,7 @@ export default function Homework() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   {editId ? "Edit Homework" : "Assign Homework"}
@@ -455,7 +455,7 @@ export default function Homework() {
                   placeholder="Details for students..."
                   value={form.description}
                   onChange={(e) => update("description", e.target.value)}
-                  className="w-full rounded-lg border border-black/10 p-3 text-[13px] outline-none focus:border-ink/40 resize-none"
+                  className="w-full rounded-lg border border-slate-300 p-3 text-[13px] outline-none focus:border-primary resize-none"
                 />
               </div>
               <div>
@@ -470,12 +470,12 @@ export default function Homework() {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowModal(false)}>
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={handleSave}
                 disabled={!form.title.trim() || !form.dueDate}
               >
@@ -493,7 +493,7 @@ export default function Homework() {
             onClick={() => setReviewTarget(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">Review submission</h3>
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">
@@ -551,17 +551,17 @@ export default function Homework() {
                   placeholder="e.g. Great work, watch the units column…"
                   value={rFeedback}
                   onChange={(e) => setRFeedback(e.target.value)}
-                  className="w-full rounded-lg border border-black/10 p-3 text-[13px] outline-none focus:border-ink/40 resize-none"
+                  className="w-full rounded-lg border border-slate-300 p-3 text-[13px] outline-none focus:border-primary resize-none"
                 />
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setReviewTarget(null)}>
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={saveReview}
                 disabled={savingReview || rMarks === ""}
               >

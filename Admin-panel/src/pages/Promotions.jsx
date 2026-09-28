@@ -63,7 +63,7 @@ export default function Promotions() {
 
   const runPreview = async () => {
     if (!fromSession || !toSession) {
-      toast("Both from and to session are required", "amber");
+      toast("Both from and to session are required", "primary");
       return;
     }
     setLoading(true);
@@ -123,7 +123,7 @@ export default function Promotions() {
   const handleCommit = async () => {
     if (!preview) return;
     if (!selected.length) {
-      toast("Select at least one student to promote", "amber");
+      toast("Select at least one student to promote", "primary");
       return;
     }
     const decisions = selected.map((r) => {
@@ -163,7 +163,7 @@ export default function Promotions() {
         description="Preview suggested promotion decisions and commit them to the new session."
         right={
           preview && canPromote ? (
-            <Button variant="amber" onClick={handleCommit} disabled={committing}>
+            <Button variant="primary" onClick={handleCommit} disabled={committing}>
               <GraduationCap size={15} /> {committing ? "Committing…" : `Commit ${selected.length} Promotion(s)`}
             </Button>
           ) : null
@@ -200,7 +200,7 @@ export default function Promotions() {
             onChange={(e) => setToSession(e.target.value)}
             className="flex-1 min-w-[150px]"
           />
-          <Button variant="amber" onClick={runPreview} disabled={loading}>
+          <Button variant="primary" onClick={runPreview} disabled={loading}>
             <RefreshCw size={15} className={loading ? "animate-spin" : ""} /> {loading ? "Previewing…" : "Preview"}
           </Button>
         </div>
@@ -221,7 +221,7 @@ export default function Promotions() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={GraduationCap} label="Total Students" value={String(rows.length)} sub={`${preview.fromSession} → ${preview.toSession}`} accent="info" />
             <StatCard icon={GraduationCap} label="Promoted" value={String(counts.Promoted)} sub="Clear promotion" accent="success" />
-            <StatCard icon={GraduationCap} label="With Conditions" value={String(counts["Promoted with Conditions"])} sub="Conditional promotion" accent="amber" />
+            <StatCard icon={GraduationCap} label="With Conditions" value={String(counts["Promoted with Conditions"])} sub="Conditional promotion" accent="primary" />
             <StatCard icon={GraduationCap} label="Detained" value={String(counts.Detained)} sub="Repeat the session" accent="alert" />
           </div>
 
@@ -252,7 +252,7 @@ export default function Promotions() {
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide bg-paper/80 border-b border-black/[0.06]">
+                  <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide bg-paper/80 border-b border-slate-200">
                     <th className="px-4 py-2.5 font-semibold w-8">Include</th>
                     <th className="px-4 py-2.5 font-semibold">Student</th>
                     <th className="px-4 py-2.5 font-semibold">Class</th>
@@ -263,13 +263,13 @@ export default function Promotions() {
                 </thead>
                 <tbody>
                   {rows.map((r, idx) => (
-                    <tr key={r.studentId} className={`border-b border-black/[0.04] last:border-0 ${idx % 2 === 0 ? "" : "bg-paper/40"}`}>
+                    <tr key={r.studentId} className={`border-b border-slate-100 last:border-0 ${idx % 2 === 0 ? "" : "bg-paper/40"}`}>
                       <td className="px-4 py-3">
                         <input
                           type="checkbox"
                           checked={r.include}
                           onChange={() => toggleRow(r.studentId)}
-                          className="accent-amber"
+                          className="accent-primary"
                         />
                       </td>
                       <td className="px-4 py-3">
@@ -312,7 +312,7 @@ export default function Promotions() {
           <div className="overflow-x-auto">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                   <th className="px-4 py-2.5 font-semibold">Student</th>
                   <th className="px-4 py-2.5 font-semibold">From</th>
                   <th className="px-4 py-2.5 font-semibold">To</th>
@@ -324,7 +324,7 @@ export default function Promotions() {
               </thead>
               <tbody>
                 {history.map((h) => (
-                  <tr key={h._id} className="border-b border-black/[0.04] last:border-0">
+                  <tr key={h._id} className="border-b border-slate-100 last:border-0">
                     <td className="px-4 py-3 font-semibold text-ink">{h.studentName}</td>
                     <td className="px-4 py-3 text-slate-text">{formatClass(h.fromClass)}{h.fromSection ? `-${h.fromSection}` : ""}</td>
                     <td className="px-4 py-3 text-slate-text">{h.toClass ? formatClass(h.toClass) : "—"}{h.toSection ? `-${h.toSection}` : ""}</td>
@@ -338,7 +338,7 @@ export default function Promotions() {
             </table>
           </div>
         )}
-        <div className="mt-4 pt-4 border-t border-black/[0.06] flex justify-end">
+        <div className="mt-4 pt-4 border-t border-slate-200 flex justify-end">
           <Button
             variant="outline"
             onClick={() => {

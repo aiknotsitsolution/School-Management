@@ -9,7 +9,7 @@ const statusTone = (status) =>
   status === "active" ? "success" : status === "suspended" ? "alert" : "neutral";
 
 const onboardingTone = (status) => {
-  const map = { live: "success", subscribed: "success", configured: "amber", created: "info" };
+  const map = { live: "success", subscribed: "success", configured: "primary", created: "info" };
   return map[status] || "neutral";
 };
 
@@ -196,7 +196,7 @@ export default function SchoolsManagement() {
         right={
           activeTab === "active" && (
             <Link to="/platform/onboarding">
-              <Button variant="amber">
+              <Button variant="primary">
                 <Plus size={15} /> New school
               </Button>
             </Link>
@@ -205,7 +205,7 @@ export default function SchoolsManagement() {
       />
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-4 border-b border-black/[0.06]">
+      <div className="flex gap-1 mb-4 border-b border-slate-200">
         {[
           { key: "active", label: "Active Schools" },
           { key: "deleted", label: "Deleted Schools" },
@@ -215,7 +215,7 @@ export default function SchoolsManagement() {
             onClick={() => setActiveTab(tab.key)}
             className={`px-4 py-2.5 text-[13px] font-semibold border-b-2 transition-colors ${
               activeTab === tab.key
-                ? "border-amber text-amber-dark"
+                ? "border-primary text-primary-dark"
                 : "border-transparent text-slate-text/60 hover:text-ink"
             }`}
           >
@@ -276,7 +276,7 @@ export default function SchoolsManagement() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[13px]">
               <thead>
-                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-black/[0.06]">
+                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-slate-200">
                   <th className="py-2.5 pr-4 font-semibold">School</th>
                   <th className="py-2.5 pr-4 font-semibold">Code</th>
                   <th className="py-2.5 pr-4 font-semibold">Status</th>
@@ -287,12 +287,12 @@ export default function SchoolsManagement() {
                   <th className="py-2.5 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-black/[0.05]">
+              <tbody className="divide-y divide-slate-100">
                 {rows.map((school) => (
                   <tr key={school._id} className="hover:bg-paper/60">
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-lg bg-amber/15 text-amber-dark flex items-center justify-center shrink-0">
+                        <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary-dark flex items-center justify-center shrink-0">
                           <Building2 size={15} />
                         </div>
                         <div className="min-w-0">
@@ -382,7 +382,7 @@ export default function SchoolsManagement() {
         )}
 
         {pages > 1 && (
-          <div className="flex items-center justify-between pt-4 border-t border-black/[0.06] mt-4">
+          <div className="flex items-center justify-between pt-4 border-t border-slate-200 mt-4">
             <p className="text-[12px] text-slate-text/60">
               Page {page} of {pages}
             </p>
@@ -424,7 +424,7 @@ export default function SchoolsManagement() {
             Cancel
           </Button>
           <Button
-            variant={suspendModal.school?.status === "active" ? "primary" : "amber"}
+            variant={suspendModal.school?.status === "active" ? "primary" : "primary"}
             onClick={toggleStatus}
             disabled={busyId === suspendModal.school?._id}
           >
@@ -508,7 +508,7 @@ export default function SchoolsManagement() {
           <div className="w-full max-w-2xl bg-white rounded-2xl shadow-xl p-6 max-h-[92vh] overflow-y-auto">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-amber/15 text-amber-dark flex items-center justify-center">
+                <div className="w-9 h-9 rounded-lg bg-primary/15 text-primary-dark flex items-center justify-center">
                   <Building2 size={16} />
                 </div>
                 <div>
@@ -574,7 +574,7 @@ export default function SchoolsManagement() {
 
             <div className="flex justify-end gap-2 mt-6">
               <Button variant="outline" onClick={() => setEditing(null)}>Cancel</Button>
-              <Button variant="amber" onClick={saveEdit} disabled={saving}>
+              <Button variant="primary" onClick={saveEdit} disabled={saving}>
                 {saving ? "Saving…" : "Save changes"}
               </Button>
             </div>

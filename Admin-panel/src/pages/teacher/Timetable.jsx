@@ -1,6 +1,7 @@
 import { CalendarDays } from "lucide-react";
 import { PageIntro, Card } from "../../components/UI";
 import TimetableManager from "../../components/timetable/TimetableManager";
+import MySubstitutions from "../../components/timetable/MySubstitutions";
 import { useTeacherContext } from "./useTeacherContext";
 import { usePermission } from "../../lib/permissions";
 
@@ -37,6 +38,8 @@ export default function Timetable() {
       />
 
       <TimetableManager cls={cls} section={section} canWrite={canWrite} />
+
+      <MySubstitutions />
     </div>
   );
 }

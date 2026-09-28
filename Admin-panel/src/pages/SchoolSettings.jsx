@@ -130,7 +130,7 @@ export default function SchoolSettings() {
           <Card
             title="School Settings"
             action={
-              <Button variant="amber" onClick={save} disabled={saving}>
+              <Button variant="primary" onClick={save} disabled={saving}>
                 <Save size={15} />
                 {saving ? "Saving…" : "Save"}
               </Button>
@@ -260,7 +260,7 @@ export default function SchoolSettings() {
               </div>
             </div>
 
-            <div className="border-t border-black/5 pt-4 mt-4">
+            <div className="border-t border-slate-100 pt-4 mt-4">
               <h4 className="text-[13px] font-bold text-ink mb-3">Affiliation & Recognition</h4>
               <div className="grid sm:grid-cols-3 gap-4">
                 <div>
@@ -268,7 +268,7 @@ export default function SchoolSettings() {
                   <select
                     value={form.board}
                     onChange={(e) => setForm((f) => ({ ...f, board: e.target.value }))}
-                    className="w-full h-[38px] rounded-lg border border-black/10 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                    className="w-full h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
                     <option value="">Select board</option>
                     <option value="CBSE">CBSE</option>
@@ -293,7 +293,7 @@ export default function SchoolSettings() {
                   <select
                     value={form.recognitionAuthority}
                     onChange={(e) => setForm((f) => ({ ...f, recognitionAuthority: e.target.value }))}
-                    className="w-full h-[38px] rounded-lg border border-black/10 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+                    className="w-full h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
                   >
                     <option value="">Select authority</option>
                     <option value="CBSE">CBSE, New Delhi</option>

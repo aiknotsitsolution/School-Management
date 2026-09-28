@@ -156,8 +156,20 @@ const pushByRefIds = async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid schoolId" });
     }
     const User = getUserModel();
+    // refIds are student admissionNos / staff refs. Parents have refId ===
+    // null and are linked to their children via linkedStudentIds, so a plain
+    // refId $in would never reach them — that single $or also delivers
+    // fee_reminders, exam/report pushes and any other refId-based alert to a
+    // child's parents.
     const users = await User.find(
-      { schoolId, isActive: true, refId: { $in: refIds.map((r) => String(r)) } },
+      {
+        schoolId,
+        isActive: true,
+        $or: [
+          { refId: { $in: refIds.map((r) => String(r)) } },
+          { role: "parent", linkedStudentIds: { $in: refIds.map((r) => String(r)) } },
+        ],
+      },
       { _id: 1 }
     ).lean();
     const userIds = [...new Set(users.map((u) => String(u._id)))];

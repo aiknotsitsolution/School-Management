@@ -38,7 +38,7 @@ const STATUS_STYLE = {
   Present: "bg-success/12 text-success",
   Absent: "bg-alert/12 text-alert",
   Leave: "bg-info/12 text-info",
-  "Half Day": "bg-amber/15 text-amber-dark",
+  "Half Day": "bg-primary/15 text-primary-dark",
 };
 
 function greeting() {
@@ -132,6 +132,23 @@ export default function TeacherDashboard() {
     setMarkMap(map);
   }, [todayAttendance, students]);
 
+  // Live attendance: when anyone in the school marks attendance (SSE push
+  // from academic-service via the comm-service hub), refresh this class view
+  // instead of showing stale data until a manual save/reload.
+  useEffect(() => {
+    if (!cls) return undefined;
+    const unsubscribe = api.attendanceStream.subscribe({
+      onData: () => {
+        if (document.visibilityState !== "visible") return;
+        api.attendance
+          .list(q)
+          .then(({ data }) => setAttendance(Array.isArray(data) ? data : []))
+          .catch(() => {});
+      },
+    });
+    return unsubscribe;
+  }, [cls, q]);
+
   useEffect(() => {
     api.staff.attendance.meToday()
       .then(({ data }) => {
@@ -187,7 +204,7 @@ export default function TeacherDashboard() {
         status: markMap[s._id],
       }));
     if (!records.length) {
-      toast("Select at least one status before saving", "amber");
+      toast("Select at least one status before saving", "primary");
       return;
     }
     setSaving(true);
@@ -220,7 +237,7 @@ export default function TeacherDashboard() {
           <div className="flex items-center gap-4">
             <Avatar src={staff?.photoUrl} name={user?.name || "Teacher"} size={54} />
             <div>
-              <p className="text-amber font-semibold text-[12.5px]">
+              <p className="text-primary-light font-semibold text-[12.5px]">
                 {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
               </p>
               <h2 className="font-display text-2xl sm:text-[26px] font-bold text-white mt-0.5">
@@ -295,7 +312,7 @@ export default function TeacherDashboard() {
           label="Open Homework"
           value={String(openHomework.length)}
           sub={`${overdueHomework.length} overdue`}
-          accent="amber"
+          accent="primary"
         />
       </div>
 
@@ -328,7 +345,7 @@ export default function TeacherDashboard() {
         if (overdueHomework.length > 0) {
           attentionItems.push({
             label: `${overdueHomework.length} homework assignment${overdueHomework.length === 1 ? "" : "s"} overdue`,
-            tone: "amber",
+            tone: "primary",
           });
         }
         if (attentionItems.length === 0) return null;
@@ -341,7 +358,7 @@ export default function TeacherDashboard() {
                   className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[12.5px] font-semibold ${
                     item.tone === "alert"
                       ? "bg-alert/10 text-alert"
-                      : "bg-amber/15 text-amber-dark"
+                      : "bg-primary/15 text-primary-dark"
                   }`}
                 >
                   <AlertTriangle size={14} />
@@ -379,7 +396,7 @@ export default function TeacherDashboard() {
                   </thead>
                   <tbody>
                     {students.map((s) => (
-                      <tr key={s._id} className="border-t border-black/[0.06]">
+                      <tr key={s._id} className="border-t border-slate-200">
                         <td className="px-5 py-2.5">
                           <div className="flex items-center gap-2.5 min-w-0">
                             <Avatar src={s.photoUrl} name={s.name} size={30} />
@@ -405,7 +422,7 @@ export default function TeacherDashboard() {
                   </tbody>
                 </table>
               </div>
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-black/[0.06]">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-200">
                 <span className="text-[12px] text-slate-text/60">
                   Tap a status to set it, tap again to clear. {unmarkedCount} unmarked.
                 </span>
@@ -427,7 +444,7 @@ export default function TeacherDashboard() {
             <div className="space-y-2">
               {todayPeriods.map((p, i) => (
                 <div key={i} className="flex items-center gap-3 py-2.5 px-2">
-                  <div className="w-8 h-8 rounded-lg bg-amber/12 text-amber-dark flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-primary/12 text-primary-dark flex items-center justify-center shrink-0">
                     <Timer size={15} />
                   </div>
                   <div className="flex-1 min-w-0">
@@ -466,13 +483,13 @@ export default function TeacherDashboard() {
           ) : (
             <div className="space-y-2.5">
               {homework.slice(0, 6).map((hw) => (
-                <div key={hw._id} className="flex items-center justify-between gap-3 pb-2.5 border-b border-black/[0.06] last:border-0 last:pb-0">
+                <div key={hw._id} className="flex items-center justify-between gap-3 pb-2.5 border-b border-slate-200 last:border-0 last:pb-0">
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-ink truncate">{hw.title}</p>
                     <p className="text-[11.5px] text-slate-text/60">Due {fmtDate(hw.dueDate)}</p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    <Pill tone="amber">{hw.subject}</Pill>
+                    <Pill tone="primary">{hw.subject}</Pill>
                     {new Date(hw.dueDate) < new Date() && <Pill tone="alert">Overdue</Pill>}
                   </div>
                 </div>
@@ -494,7 +511,7 @@ export default function TeacherDashboard() {
           ) : (
             <div className="space-y-2.5">
               {upcomingExams.slice(0, 6).map((ex) => (
-                <div key={ex._id} className="flex items-center justify-between gap-2 pb-2.5 border-b border-black/[0.06] last:border-0 last:pb-0">
+                <div key={ex._id} className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200 last:border-0 last:pb-0">
                   <div>
                     <p className="text-[13px] font-semibold text-ink">{ex.subject}</p>
                     <p className="text-[11.5px] text-slate-text/60">{ex.examName}</p>
@@ -523,7 +540,7 @@ export default function TeacherDashboard() {
                 return (
                   <div
                     key={`${scope.class}-${scope.section || ""}-${i}`}
-                    className="pb-2.5 border-b border-black/[0.06] last:border-0 last:pb-0"
+                    className="pb-2.5 border-b border-slate-200 last:border-0 last:pb-0"
                   >
                     <div className="flex items-center justify-between gap-2">
                       <div className="min-w-0">
@@ -572,7 +589,7 @@ export default function TeacherDashboard() {
             <div className="space-y-3">
               {notices.slice(0, 5).map((n) => (
                 <div key={n._id} className="flex items-start gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full mt-2 shrink-0 bg-amber" />
+                  <div className="w-1.5 h-1.5 rounded-full mt-2 shrink-0 bg-primary" />
                   <div className="min-w-0">
                     <p className="text-[13px] font-semibold text-ink leading-snug">{n.title}</p>
                     <p className="text-[11.5px] text-slate-text/60 mt-0.5 line-clamp-2">{n.description || n.body || ""}</p>
@@ -602,24 +619,24 @@ export default function TeacherDashboard() {
                 <div className="h-full bg-success rounded-full transition-all" style={{ width: `${attendanceRate ?? 0}%` }} />
               </div>
             </div>
-            <div className="border-t border-black/[0.06] pt-2 sm:border-t-0 sm:pt-0">
+            <div className="border-t border-slate-200 pt-2 sm:border-t-0 sm:pt-0">
               <span className="text-[12.5px] text-slate-text">Absent today</span>
               <p className="text-[14px] font-bold text-alert mt-0.5">{absentCount}</p>
             </div>
-            <div className="border-t border-black/[0.06] pt-2 sm:border-t-0 sm:pt-0">
+            <div className="border-t border-slate-200 pt-2 sm:border-t-0 sm:pt-0">
               <span className="text-[12.5px] text-slate-text">Leave / Half day</span>
               <p className="text-[14px] font-bold text-info mt-0.5">{leaveCount}</p>
             </div>
-            <div className="border-t border-black/[0.06] pt-2 sm:border-t-0 sm:pt-0">
+            <div className="border-t border-slate-200 pt-2 sm:border-t-0 sm:pt-0">
               <span className="text-[12.5px] text-slate-text">Open homework</span>
               <p className="text-[14px] font-bold text-ink mt-0.5">{openHomework.length}</p>
             </div>
-            <div className="border-t border-black/[0.06] pt-2 sm:border-t-0 sm:pt-0">
+            <div className="border-t border-slate-200 pt-2 sm:border-t-0 sm:pt-0">
               <span className="text-[12.5px] text-slate-text">My teaching scopes</span>
               <p className="text-[14px] font-bold text-info mt-0.5">{teachingScopes.length}</p>
             </div>
           </div>
-          <div className="mt-4 pt-3 border-t border-black/[0.06] text-[11.5px] text-slate-text/50">
+          <div className="mt-4 pt-3 border-t border-slate-200 text-[11.5px] text-slate-text/50">
             {school?.name || "School"} · Session {sessionLabel(school) || "—"}
           </div>
         </Card>

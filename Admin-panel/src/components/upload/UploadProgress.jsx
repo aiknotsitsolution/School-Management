@@ -11,7 +11,7 @@ export default function UploadProgress({ progress, label = "Uploading…", class
     <div className={`w-full ${className}`} role="status" aria-label={label}>
       <div className="flex items-center justify-between mb-1">
         <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink">
-          <Loader2 size={13} className="animate-spin text-amber-dark" aria-hidden="true" />
+          <Loader2 size={13} className="animate-spin text-primary-dark" aria-hidden="true" />
           {label}
         </span>
         {determinate && (
@@ -20,7 +20,7 @@ export default function UploadProgress({ progress, label = "Uploading…", class
       </div>
       <div className="h-1.5 w-full rounded-full bg-black/[0.06] overflow-hidden">
         <div
-          className={`h-full rounded-full bg-amber transition-[width] duration-300 ${
+          className={`h-full rounded-full bg-primary transition-[width] duration-300 ${
             determinate ? "" : "w-1/3 animate-upload-indeterminate"
           }`}
           style={determinate ? { width: `${Math.min(100, Math.max(0, progress))}%` } : undefined}

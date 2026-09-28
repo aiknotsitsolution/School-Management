@@ -159,10 +159,10 @@ export default function FileDropzone({
           onDrop={handleDrop}
           className={`relative rounded-xl border-2 border-dashed px-4 py-6 text-center cursor-pointer transition-colors outline-none ${
             dragging
-              ? "border-amber bg-amber/10"
-              : "border-black/[0.12] hover:border-ink/30 bg-white"
+              ? "border-primary bg-primary/10"
+              : "border-slate-300 hover:border-ink/30 bg-white"
           } ${
-            focused ? "ring-2 ring-amber/40 border-amber" : ""
+            focused ? "ring-2 ring-primary/40 border-primary" : ""
           } ${disabled || loading ? "opacity-60 cursor-not-allowed" : ""}`}
         >
           <input
@@ -184,7 +184,7 @@ export default function FileDropzone({
           </p>
           <p className="text-[12.5px] text-slate-text/60 mt-1">
             or{" "}
-            <span className="font-semibold text-amber-dark underline underline-offset-2">
+            <span className="font-semibold text-primary-dark underline underline-offset-2">
               Browse files
             </span>
           </p>
@@ -196,7 +196,7 @@ export default function FileDropzone({
 
           {loading && (
             <div className="absolute inset-0 rounded-xl bg-white/60 backdrop-blur-[1px] flex items-center justify-center">
-              <Loader2 size={20} className="animate-spin text-amber-dark" aria-hidden="true" />
+              <Loader2 size={20} className="animate-spin text-primary-dark" aria-hidden="true" />
             </div>
           )}
         </div>

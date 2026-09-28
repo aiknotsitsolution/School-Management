@@ -36,6 +36,7 @@ const services = [
   ["communication",    "services/communication-service",   5006, "npm start"],
   ["library",          "services/library-service",         5007, "npm start"],
   ["facility",         "services/facility-service",        5008, "npm start"],
+  ["accounting",       "services/accounting-service",      5009, "npm start"],
 ];
 
 // Gateway runs last; its port is $PORT (Render) or GATEWAY_PORT fallback.

@@ -31,7 +31,7 @@ const STATUSES = [
   { key: "Present", label: "P", full: "Present", color: "bg-success text-white border-success" },
   { key: "Absent", label: "A", full: "Absent", color: "bg-alert text-white border-alert" },
   { key: "Leave", label: "L", full: "Leave", color: "bg-info text-white border-info" },
-  { key: "Half Day", label: "HD", full: "Half Day", color: "bg-amber text-ink border-amber" },
+  { key: "Half Day", label: "HD", full: "Half Day", color: "bg-warning text-white border-primary" },
 ];
 
 export default function AttendanceCheckinModal({ userName, onDone }) {
@@ -95,7 +95,7 @@ export default function AttendanceCheckinModal({ userName, onDone }) {
       <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
         <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" />
         <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md p-8 text-center">
-          <Loader2 size={32} className="mx-auto text-amber animate-spin mb-4" />
+          <Loader2 size={32} className="mx-auto text-primary animate-spin mb-4" />
           <p className="text-[14px] text-slate-text">Checking today&apos;s attendance...</p>
         </div>
       </div>

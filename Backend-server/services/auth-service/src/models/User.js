@@ -24,7 +24,7 @@ const userSchema = new mongoose.Schema(
       // "teacher" is the login role for ALL teaching staff. Class Teacher is
       // NOT a User role: it is a TeacherAssignment(type="class_teacher")
       // responsibility layered on a teacher for a class/section/session.
-      enum: ["super_admin", "school_admin", "teacher", "staff", "student"],
+      enum: ["super_admin", "school_admin", "teacher", "staff", "student", "parent"],
       required: true,
     },
     designation: {

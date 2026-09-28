@@ -32,7 +32,7 @@ import {
 import { api } from "../../lib/api";
 import { useTeacherContext } from "./useTeacherContext";
 
-const SUBJECT_COLORS = ["#3B6FA0", "#3F8F5F", "#C9832A", "#9A5FB0", "#D65A4A", "#4AA3A3", "#8A7A4F"];
+const SUBJECT_COLORS = ["#2563EB", "#16A34A", "#4338CA", "#9A5FB0", "#DC2626", "#4AA3A3", "#8A7A4F"];
 
 export default function Performance() {
   const { cls, section, assignment, query } = useTeacherContext();
@@ -169,7 +169,7 @@ export default function Performance() {
               ? `${marks.students[0].pct}% · ${marks.students[0].grade}`
               : "Awaiting marks"
           }
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={AlertTriangle}
@@ -224,7 +224,7 @@ export default function Performance() {
               </p>
               <ResponsiveContainer width="100%" height={220}>
                 <BarChart data={marks.subjectAverages} margin={{ left: -18, top: 4 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEEAE0" />
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
                   <XAxis
                     dataKey="subject"
                     tick={{ fontSize: 11, fill: "#64748B" }}
@@ -284,7 +284,7 @@ export default function Performance() {
                   </thead>
                   <tbody>
                     {studentRows.map((st, i) => (
-                      <tr key={st.studentId} className="border-t border-black/[0.06] hover:bg-paper/60">
+                      <tr key={st.studentId} className="border-t border-slate-200 hover:bg-paper/60">
                         <td className="px-5 py-2.5">
                           <Pill tone="neutral">#{i + 1}</Pill>
                         </td>
@@ -303,7 +303,7 @@ export default function Performance() {
                               st.pct >= 60
                                 ? "text-success"
                                 : st.pct >= 50
-                                  ? "text-amber-dark"
+                                  ? "text-primary-dark"
                                   : "text-alert"
                             }`}
                           >
@@ -331,18 +331,18 @@ export default function Performance() {
             <AreaChart data={attendanceTrend} margin={{ top: 8, right: 12, left: -10, bottom: 0 }}>
               <defs>
                 <linearGradient id="perfGrad" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#3B6FA0" stopOpacity={0.28} />
-                  <stop offset="100%" stopColor="#3B6FA0" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#2563EB" stopOpacity={0.28} />
+                  <stop offset="100%" stopColor="#2563EB" stopOpacity={0} />
                 </linearGradient>
               </defs>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEEAE0" />
+              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
               <XAxis dataKey="month" tick={{ fontSize: 12, fill: "#64748B" }} axisLine={false} tickLine={false} />
               <YAxis domain={[0, 100]} tick={{ fontSize: 12, fill: "#64748B" }} axisLine={false} tickLine={false} tickFormatter={(v) => `${v}%`} />
               <Tooltip
                 contentStyle={{ borderRadius: 10, border: "1px solid #E5E2D9", fontSize: 13 }}
                 formatter={(value) => [`${value}%`, "Attendance"]}
               />
-              <Area type="monotone" dataKey="attendance" stroke="#3B6FA0" strokeWidth={2.5} fill="url(#perfGrad)" />
+              <Area type="monotone" dataKey="attendance" stroke="#2563EB" strokeWidth={2.5} fill="url(#perfGrad)" />
             </AreaChart>
           </ResponsiveContainer>
           <p className="text-[12px] text-slate-text/60 mt-2">

@@ -18,7 +18,7 @@ export default function Rollover() {
 
   const handlePrepare = async () => {
     if (!fromSession) {
-      toast("From session is required", "amber");
+      toast("From session is required", "primary");
       return;
     }
     setLoading(true);
@@ -49,7 +49,7 @@ export default function Rollover() {
         title="Academic Rollover"
         description="Prepare the next session: review the promotion posture of every enrolled class before committing."
         right={
-          <Button variant="amber" onClick={handlePrepare} disabled={loading || !canPrepare}>
+          <Button variant="primary" onClick={handlePrepare} disabled={loading || !canPrepare}>
             <RefreshCcw size={15} className={loading ? "animate-spin" : ""} /> {loading ? "Preparing…" : "Prepare Rollover"}
           </Button>
         }
@@ -96,7 +96,7 @@ export default function Rollover() {
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={RefreshCcw} label="Rollover" value={`${data.fromSession} → ${data.toSession}`} sub="New session target" accent="info" />
-            <StatCard icon={Users} label="Total Students" value={String(data.totalStudents)} sub="Across all enrolled classes" accent="amber" />
+            <StatCard icon={Users} label="Total Students" value={String(data.totalStudents)} sub="Across all enrolled classes" accent="primary" />
             <StatCard icon={GraduationCap} label="Promotable" value={String(promoted)} sub="Clear or conditional" accent="success" />
             <StatCard icon={Users} label="Detained" value={String(detained)} sub="Repeat the session" accent="alert" />
           </div>
@@ -107,7 +107,7 @@ export default function Rollover() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {data.classes.map((c) => (
-                  <div key={c.class} className="rounded-xl border border-black/[0.06] bg-paper/50 p-4">
+                  <div key={c.class} className="rounded-xl border border-slate-200 bg-paper/50 p-4">
                     <div className="flex items-center justify-between mb-3">
                       <p className="font-display font-semibold text-ink text-[14px]">{formatClass(c.class)}</p>
                       <Pill tone="info">{c.students} students</Pill>
@@ -123,7 +123,7 @@ export default function Rollover() {
                         </div>
                       ))}
                     </div>
-                    <div className="mt-3 pt-3 border-t border-black/[0.06] flex items-center justify-between">
+                    <div className="mt-3 pt-3 border-t border-slate-200 flex items-center justify-between">
                       <span className="text-slate-text/70">Predicted pass rate</span>
                       <b className="text-success">{c.students ? Math.round(((c.counts.Promoted || 0) / c.students) * 100) : 0}%</b>
                     </div>

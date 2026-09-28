@@ -11,6 +11,7 @@ const CHECKS = [
   { name: "fee-service",      url: "/api/fees/invoices" },
   { name: "library-service",  url: "/api/library/books" },
   { name: "facility-service", url: "/api/transport" },
+  { name: "accounting-service", url: "/api/accounting/accounts" },
 ];
 
 async function check({ name, url }) {

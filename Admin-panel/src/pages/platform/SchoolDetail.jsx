@@ -5,7 +5,7 @@ import { api } from "../../lib/api";
 import { Button, Card, Input, PageIntro, Pill, toast } from "../../components/UI";
 
 const onboardingTone = (status) => {
-  const map = { live: "success", subscribed: "success", configured: "amber", created: "info" };
+  const map = { live: "success", subscribed: "success", configured: "primary", created: "info" };
   return map[status] || "neutral";
 };
 
@@ -197,10 +197,10 @@ export default function SchoolDetail() {
 
           <Card title="School admins" bodyClassName="p-0">
             {admins.length ? (
-              <div className="divide-y divide-black/[0.05]">
+              <div className="divide-y divide-slate-100">
                 {admins.map((admin) => (
                   <div key={admin._id} className="px-5 py-3 flex items-center gap-3">
-                    <div className="w-8 h-8 rounded-full bg-ink text-amber flex items-center justify-center text-[11px] font-semibold shrink-0">
+                    <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-[11px] font-semibold shrink-0">
                       {admin.name.slice(0, 2).toUpperCase()}
                     </div>
                     <div className="min-w-0 flex-1">
@@ -222,7 +222,7 @@ export default function SchoolDetail() {
                 .
               </p>
             )}
-            <div className="px-5 py-3 border-t border-black/[0.05]">
+            <div className="px-5 py-3 border-t border-slate-100">
               <p className="text-[12.5px] text-slate-text/70">
                 <Users size={13} className="inline mr-1" />
                 {data.activeUsers || 0} active user{data.activeUsers === 1 ? "" : "s"} across roles in this school
@@ -232,7 +232,7 @@ export default function SchoolDetail() {
 
           <Card title="Recent invoices" bodyClassName="p-0">
             {data.recentInvoices?.length ? (
-              <div className="divide-y divide-black/[0.05]">
+              <div className="divide-y divide-slate-100">
                 {data.recentInvoices.map((invoice) => (
                   <div key={invoice._id} className="px-5 py-3 flex items-center justify-between gap-2">
                     <div className="min-w-0">
@@ -243,7 +243,7 @@ export default function SchoolDetail() {
                       <span className="text-[13px] font-semibold text-ink">
                         ₹{Number(invoice.amount || 0).toLocaleString("en-IN")}
                       </span>
-                      <Pill tone={invoice.status === "paid" ? "success" : invoice.status === "overdue" ? "alert" : "amber"}>
+                      <Pill tone={invoice.status === "paid" ? "success" : invoice.status === "overdue" ? "alert" : "primary"}>
                         {invoice.status}
                       </Pill>
                     </div>
@@ -340,7 +340,7 @@ export default function SchoolDetail() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/40 backdrop-blur-sm" onClick={() => !editBusy && setEditOpen(false)} />
           <div className="relative bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[85vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b border-black/[0.06] px-5 py-4 flex items-center justify-between rounded-t-xl">
+            <div className="sticky top-0 bg-white border-b border-slate-200 px-5 py-4 flex items-center justify-between rounded-t-xl">
               <h3 className="text-[15px] font-semibold text-ink">Edit School Profile</h3>
               <button
                 onClick={() => setEditOpen(false)}
@@ -365,7 +365,7 @@ export default function SchoolDetail() {
                 </div>
               ))}
             </div>
-            <div className="sticky bottom-0 bg-white border-t border-black/[0.06] px-5 py-3 flex items-center justify-end gap-2 rounded-b-xl">
+            <div className="sticky bottom-0 bg-white border-t border-slate-200 px-5 py-3 flex items-center justify-end gap-2 rounded-b-xl">
               <Button variant="ghost" onClick={() => setEditOpen(false)} disabled={editBusy}>
                 Cancel
               </Button>

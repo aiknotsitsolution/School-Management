@@ -38,7 +38,7 @@ export default function Exams() {
       />
 
       {loading ? (
-        <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-16 bg-white rounded-2xl border border-black/[0.06] animate-pulse" />)}</div>
+        <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-16 bg-white rounded-2xl border border-slate-200 animate-pulse" />)}</div>
       ) : exams.length === 0 ? (
         <Card>
           <div className="py-10 text-center">
@@ -55,7 +55,7 @@ export default function Exams() {
             ) : (
               <div className="space-y-2.5">
                 {upcoming.map((e) => (
-                  <div key={e._id} className="flex items-start justify-between gap-3 py-2.5 border-b border-black/[0.06] last:border-0">
+                  <div key={e._id} className="flex items-start justify-between gap-3 py-2.5 border-b border-slate-200 last:border-0">
                     <div className="min-w-0">
                       <p className="text-[14px] font-semibold text-ink">{e.subject}</p>
                       <p className="text-[12px] text-slate-text/70 mt-0.5">{e.examName}</p>
@@ -80,7 +80,7 @@ export default function Exams() {
             ) : (
               <div className="space-y-2.5">
                 {past.map((e) => (
-                  <div key={e._id} className="flex items-start justify-between gap-3 py-2.5 border-b border-black/[0.06] last:border-0">
+                  <div key={e._id} className="flex items-start justify-between gap-3 py-2.5 border-b border-slate-200 last:border-0">
                     <div className="min-w-0">
                       <p className="text-[13.5px] font-medium text-ink">{e.subject}</p>
                       <p className="text-[12px] text-slate-text/70 mt-0.5">{e.examName}</p>

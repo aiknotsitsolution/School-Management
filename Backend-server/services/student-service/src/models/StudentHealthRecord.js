@@ -6,6 +6,9 @@ const studentHealthRecordSchema = new mongoose.Schema(
     studentId: { type: String, required: true, index: true },
     allergies: [{ type: String, trim: true }],
     chronicConditions: [{ type: String, trim: true }],
+    // Vaccination records entered by the school (free-text entries like
+    // "MMR — 2021-05-10"), same comma-list pattern as allergies.
+    immunizations: [{ type: String, trim: true }],
     medications: [{
       name: { type: String, trim: true },
       dosage: { type: String, trim: true },

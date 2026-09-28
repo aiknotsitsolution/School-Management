@@ -112,7 +112,7 @@ export default function MyClass() {
           label="Profiles Complete"
           value={`${(students || []).filter((s) => s.profileStatus === "complete").length}/${(students || []).length}`}
           sub="Full record on file"
-          accent="amber"
+          accent="primary"
         />
       </div>
 
@@ -159,7 +159,7 @@ export default function MyClass() {
                 {list.map((s) => (
                   <tr
                     key={s._id}
-                    className="border-t border-black/[0.06] hover:bg-paper/60"
+                    className="border-t border-slate-200 hover:bg-paper/60"
                   >
                     <td className="px-5 py-2.5">
                       <div className="flex items-center gap-2.5 min-w-0">

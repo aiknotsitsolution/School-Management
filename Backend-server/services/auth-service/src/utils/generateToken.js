@@ -4,9 +4,12 @@ const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 // JWT v2 payload carries tenant + role data so every downstream service can
 // enforce scoping without a DB round trip. Access tokens are short-lived on
 // purpose so role/isActive/school-status changes take effect quickly.
+// `typ` separates access vs refresh so a refresh token can never be used as
+// an access token (and vice versa) at any verifyToken.
 const generateAccessToken = (user) =>
   jwt.sign(
     {
+      typ: "access",
       id: user._id,
       name: user.name || null,
       email: user.email || null,
@@ -23,7 +26,7 @@ const generateAccessToken = (user) =>
   );
 
 const generateRefreshToken = (user) =>
-  jwt.sign({ id: user._id }, getJwtSecret(), {
+  jwt.sign({ typ: "refresh", id: user._id }, getJwtSecret(), {
     expiresIn: process.env.JWT_REFRESH_EXPIRES_IN || "7d",
   });
 

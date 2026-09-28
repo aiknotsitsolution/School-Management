@@ -21,9 +21,13 @@ const SERVICES = [
   ["COMMUNICATION_MONGODB_URI", "erp_communication"],
   ["LIBRARY_MONGODB_URI", "erp_library"],
   ["FACILITY_MONGODB_URI", "erp_facility"],
+  // accounting-service falls back to the fee cluster when its own URI is
+  // unset — mirror that here and pin the database name explicitly so a
+  // fallback never wipes erp_fee a second time.
+  ["ACCOUNTING_MONGODB_URI", "erp_accounting", "FEE_MONGODB_URI"],
 ];
 
-async function cleanDatabase(name, uri) {
+async function cleanDatabase(name, uri, dbName) {
   if (!uri || !String(uri).trim()) {
     console.log(`[${name}] no URI configured — skipped`);
     return { removed: 0, collections: [] };
@@ -32,7 +36,7 @@ async function cleanDatabase(name, uri) {
   const report = { collections: [], removed: 0 };
   try {
     await client.connect();
-    const db = client.db();
+    const db = client.db(dbName || undefined);
     const collections = await db.listCollections({}, { nameOnly: true }).toArray();
     for (const { name } of collections) {
       if (name.startsWith("system.")) continue;
@@ -50,8 +54,9 @@ async function cleanDatabase(name, uri) {
 
 (async () => {
   const totals = { removed: 0, collections: 0 };
-  for (const [envKey, label] of SERVICES) {
-    const report = await cleanDatabase(label, process.env[envKey]);
+  for (const [envKey, label, fallbackKey] of SERVICES) {
+    const uri = process.env[envKey] || (fallbackKey ? process.env[fallbackKey] : null);
+    const report = await cleanDatabase(label, uri, label);
     totals.removed += report.removed;
     totals.collections += report.collections.length;
   }

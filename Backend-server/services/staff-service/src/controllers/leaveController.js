@@ -1,6 +1,7 @@
+const mongoose = require("mongoose");
 const Leave = require("../models/Leave");
 const Staff = require("../models/Staff");
-const { pushNotifications } = require("../utils/notify");
+const { pushNotifications, notifyByRefIds } = require("../utils/notify");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
 // Annual leave entitlements per type
@@ -15,16 +16,37 @@ const LEAVE_ENTITLEMENTS = {
 // Mass-assignment guard: only these fields may be set from the request body.
 // status / staffId / approvedBy are always server-controlled.
 const LEAVE_FIELDS = ["leaveType", "fromDate", "toDate", "reason", "remarks"];
+
+// Type perms: students may only apply for Sick / Casual / Other leave —
+// Earned and Maternity are staff entitlements.
+const STUDENT_LEAVE_TYPES = ["Sick", "Casual", "Other"];
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
 const applyLeave = async (req, res) => {
   try {
-    const staffId = ["teacher", "staff"].includes(req.user.role) ? req.user.refId : req.body.staffId;
-    const studentId = req.user.role === "student" ? req.user.refId : undefined;
+    const isStudent = req.user.role === "student";
+    // staffId is for Staff documents only. Student leaves go on studentId —
+    // never write an admissionNo/refId into staffId (causes CastError later).
+    const staffId = isStudent
+      ? undefined
+      : ["teacher", "staff"].includes(req.user.role)
+        ? req.user.refId
+        : req.body.staffId;
+    const studentId = isStudent ? req.user.refId : undefined;
+    const payload = pick(req.body, LEAVE_FIELDS);
+    if (isStudent) {
+      delete payload.remarks; // admin review note — never applicant-settable
+      if (payload.leaveType !== undefined && !STUDENT_LEAVE_TYPES.includes(payload.leaveType)) {
+        return res.status(400).json({
+          success: false,
+          message: "Students may only apply for Sick, Casual or Other leave",
+        });
+      }
+    }
     const leave = await Leave.create({
-      ...pick(req.body, LEAVE_FIELDS),
-      staffId: staffId || studentId,
+      ...payload,
+      staffId,
       studentId,
       schoolId: req.tenantId,
     });
@@ -71,17 +93,35 @@ const updateLeaveStatus = async (req, res) => {
     if (!leave) return res.status(404).json({ success: false, message: "Leave not found" });
 
     if (["Approved", "Rejected"].includes(status)) {
-      const staff = await Staff.findById(leave.staffId).select("userId employeeId name").lean();
-      if (staff?.userId) {
-        pushNotifications({
-          token: req.token,
+      // Staff leaves notify the Staff user; student leaves are keyed by
+      // admissionNo (string) — never Staff.findById those.
+      if (leave.studentId) {
+        // studentId is the admissionNo, which is also the student's
+        // User.refId — the internal push-by-refs channel resolves it to the
+        // active student account inside this school (no admin JWT required;
+        // the old guarded Student-model lookup never ran because that model
+        // is not registered in staff-service).
+        await notifyByRefIds({
           schoolId: req.tenantId,
-          userIds: [staff.userId],
+          refIds: [leave.studentId],
           title: `Leave ${status}`,
-          message: `Your ${leave.leaveType || "leave"} request (${staff.employeeId || "—"}) was ${status.toLowerCase()}.`,
+          message: `Your ${leave.leaveType || "leave"} request (${leave.studentId}) was ${status.toLowerCase()}.`,
           kind: "leave",
-          link: "/leave",
+          link: "/student/leave",
         });
+      } else if (leave.staffId && mongoose.isValidObjectId(leave.staffId)) {
+        const staff = await Staff.findById(leave.staffId).select("userId employeeId name").lean();
+        if (staff?.userId) {
+          pushNotifications({
+            token: req.token,
+            schoolId: req.tenantId,
+            userIds: [staff.userId],
+            title: `Leave ${status}`,
+            message: `Your ${leave.leaveType || "leave"} request (${staff.employeeId || "—"}) was ${status.toLowerCase()}.`,
+            kind: "leave",
+            link: "/leave",
+          });
+        }
       }
     }
     return res.json({ success: true, data: leave });

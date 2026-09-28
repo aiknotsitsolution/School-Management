@@ -24,10 +24,10 @@ import { LoadingBlock, EmptyBlock, ErrorBlock } from "../components/StateViews";
 const TYPES = ["All", "incident", "positive", "warning", "detention", "suspension", "other"];
 const SEVERITIES = ["All", "low", "medium", "high", "critical"];
 const TYPE_TONES = {
-  incident: "alert", positive: "success", warning: "amber",
+  incident: "alert", positive: "success", warning: "primary",
   detention: "alert", suspension: "alert", other: "neutral",
 };
-const SEV_TONES = { low: "info", medium: "amber", high: "alert", critical: "alert" };
+const SEV_TONES = { low: "info", medium: "primary", high: "alert", critical: "alert" };
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -198,7 +198,7 @@ export default function BehaviorLog() {
         <StatCard icon={ShieldAlert} label="Total Records" value={String(counts.total)} accent="info" />
         <StatCard icon={ShieldAlert} label="Incidents" value={String(counts.incident)} accent="alert" />
         <StatCard icon={ShieldAlert} label="Positive" value={String(counts.positive)} accent="success" />
-        <StatCard icon={ShieldAlert} label="Unresolved" value={String(counts.unresolved)} accent="amber" />
+        <StatCard icon={ShieldAlert} label="Unresolved" value={String(counts.unresolved)} accent="primary" />
       </div>
 
       <Card
@@ -238,14 +238,14 @@ export default function BehaviorLog() {
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r._id} className="border-t border-black/[0.06] hover:bg-paper/60">
+                  <tr key={r._id} className="border-t border-slate-200 hover:bg-paper/60">
                     <td className="px-5 py-2.5 font-semibold text-ink">{r.studentId}</td>
                     <td className="px-3 py-2.5 text-slate-text/80 max-w-[200px] truncate">{r.title}</td>
                     <td className="px-3 py-2.5"><Pill tone={TYPE_TONES[r.type] || "neutral"}>{r.type}</Pill></td>
                     <td className="px-3 py-2.5"><Pill tone={SEV_TONES[r.severity] || "neutral"}>{r.severity}</Pill></td>
                     <td className="px-3 py-2.5 text-slate-text/80">{fmtDate(r.date)}</td>
                     <td className="px-3 py-2.5">
-                      <Pill tone={r.resolved ? "success" : "amber"}>{r.resolved ? "Resolved" : "Open"}</Pill>
+                      <Pill tone={r.resolved ? "success" : "primary"}>{r.resolved ? "Resolved" : "Open"}</Pill>
                     </td>
                     <td className="px-3 py-2.5 text-right">
                       <div className="flex items-center justify-end gap-2">
@@ -268,7 +268,7 @@ export default function BehaviorLog() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setShowModal(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <h3 className="font-display font-semibold text-ink text-[16px]">{editId ? "Edit Record" : "New Behavior Record"}</h3>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-paper"><X size={18} /></button>
             </div>
@@ -335,20 +335,20 @@ export default function BehaviorLog() {
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-slate-text/60 uppercase">Description</label>
-                <textarea value={form.description} onChange={set("description")} rows={3} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info" placeholder="What happened..." />
+                <textarea value={form.description} onChange={set("description")} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info" placeholder="What happened..." />
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-slate-text/60 uppercase">Action Taken</label>
-                <textarea value={form.actionTaken} onChange={set("actionTaken")} rows={2} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info" placeholder="What action was taken..." />
+                <textarea value={form.actionTaken} onChange={set("actionTaken")} rows={2} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info" placeholder="What action was taken..." />
               </div>
               {form.followUpRequired && (
                 <div>
                   <label className="text-[11px] font-semibold text-slate-text/60 uppercase">Follow-up Notes</label>
-                  <textarea value={form.followUpNotes} onChange={set("followUpNotes")} rows={2} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info" placeholder="Follow-up plan..." />
+                  <textarea value={form.followUpNotes} onChange={set("followUpNotes")} rows={2} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info" placeholder="Follow-up plan..." />
                 </div>
               )}
             </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-black/[0.06]">
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200">
               <Button variant="ghost" onClick={() => setShowModal(false)}>Cancel</Button>
               <Button onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Record"}</Button>
             </div>

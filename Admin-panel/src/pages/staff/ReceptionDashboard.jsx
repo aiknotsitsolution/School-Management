@@ -56,7 +56,7 @@ export default function ReceptionDashboard() {
         title="Front Desk"
         description={`Welcome desk overview at ${school?.name || "your school"}.`}
         right={
-          <Button variant="amber" onClick={() => navigate("/reception/enquiries")}>
+          <Button variant="primary" onClick={() => navigate("/reception/enquiries")}>
             Manage Enquiries <ArrowRight size={15} />
           </Button>
         }
@@ -64,7 +64,7 @@ export default function ReceptionDashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Inbox} label="Total Enquiries" value={String(stats.total)} sub="All admission leads" accent="info" />
-        <StatCard icon={Users} label="New (to follow up)" value={String(stats.new)} sub="Uncontacted leads" accent="amber" />
+        <StatCard icon={Users} label="New (to follow up)" value={String(stats.new)} sub="Uncontacted leads" accent="primary" />
         <StatCard icon={Users} label="Admitted" value={String(stats.admitted)} sub="Converted" accent="success" />
         <StatCard icon={Megaphone} label="Active Notices" value={String(notices.length)} sub="Currently published" accent="alert" />
       </div>
@@ -96,9 +96,9 @@ export default function ReceptionDashboard() {
           <div className="grid gap-3">
             <button
               onClick={() => navigate("/reception/enquiries")}
-              className="flex items-center gap-3 bg-white rounded-xl border border-black/[0.06] p-4 hover:border-amber/40 transition-colors text-left"
+              className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 p-4 hover:border-primary/40 transition-colors text-left"
             >
-              <div className="w-9 h-9 rounded-lg bg-amber/10 text-amber flex items-center justify-center"><ClipboardList size={17} /></div>
+              <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center"><ClipboardList size={17} /></div>
               <div className="flex-1">
                 <p className="text-[13.5px] font-semibold text-ink">Admission Enquiries</p>
                 <p className="text-[12px] text-slate-text/70">Log walk-ins, follow up and update stages</p>
@@ -107,7 +107,7 @@ export default function ReceptionDashboard() {
             </button>
             <button
               onClick={() => navigate("/reception/student-lookup")}
-              className="flex items-center gap-3 bg-white rounded-xl border border-black/[0.06] p-4 hover:border-success/40 transition-colors text-left"
+              className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 p-4 hover:border-success/40 transition-colors text-left"
             >
               <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center"><UserSearch size={17} /></div>
               <div className="flex-1">
@@ -118,7 +118,7 @@ export default function ReceptionDashboard() {
             </button>
             <button
               onClick={() => navigate("/reception/notices")}
-              className="flex items-center gap-3 bg-white rounded-xl border border-black/[0.06] p-4 hover:border-info/40 transition-colors text-left"
+              className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 p-4 hover:border-info/40 transition-colors text-left"
             >
               <div className="w-9 h-9 rounded-lg bg-info/10 text-info flex items-center justify-center"><Megaphone size={17} /></div>
               <div className="flex-1">

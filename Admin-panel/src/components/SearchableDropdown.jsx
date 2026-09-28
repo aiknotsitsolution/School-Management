@@ -66,7 +66,7 @@ export default function SearchableDropdown({
         {label}
       </label>
       <div
-        className="flex items-center border border-black/10 rounded-lg bg-white hover:border-ink/30 transition-colors cursor-text"
+        className="flex items-center border border-slate-300 rounded-lg bg-white hover:border-ink/30 transition-colors cursor-text"
         onClick={() => { setOpen(true); inputRef.current?.focus(); }}
       >
         <input
@@ -88,14 +88,14 @@ export default function SearchableDropdown({
       </div>
 
       {open && (
-        <div className="absolute z-50 mt-1 w-full bg-white border border-black/10 rounded-xl shadow-lg max-h-48 overflow-y-auto">
+        <div className="absolute z-50 mt-1 w-full bg-white border border-slate-300 rounded-xl shadow-lg max-h-48 overflow-y-auto">
           {filtered.length > 0 ? (
             filtered.map((opt) => (
               <button
                 key={opt}
                 type="button"
-                className={`w-full text-left px-3 py-2 text-[13px] hover:bg-amber/10 transition-colors ${
-                  opt === value ? "bg-amber/15 font-semibold text-ink" : "text-ink"
+                className={`w-full text-left px-3 py-2 text-[13px] hover:bg-primary/10 transition-colors ${
+                  opt === value ? "bg-primary/15 font-semibold text-ink" : "text-ink"
                 }`}
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -116,7 +116,7 @@ export default function SearchableDropdown({
               type="button"
               disabled={adding}
               onMouseDown={(e) => { e.preventDefault(); handleAdd(); }}
-              className="w-full text-left px-3 py-2 text-[13px] font-semibold text-amber-dark bg-amber/10 border-t border-black/[0.06] hover:bg-amber/20 transition-colors flex items-center gap-2"
+              className="w-full text-left px-3 py-2 text-[13px] font-semibold text-primary-dark bg-primary/10 border-t border-slate-200 hover:bg-primary/20 transition-colors flex items-center gap-2"
             >
               <Plus size={13} />
               {adding ? "Adding…" : `Add "${query.trim()}"`}

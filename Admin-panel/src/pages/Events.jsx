@@ -39,7 +39,7 @@ const categoryTone = {
   Sports: "success",
   National: "alert",
   Academic: "info",
-  Cultural: "amber",
+  Cultural: "primary",
   Holiday: "neutral",
   Meeting: "info",
   Other: "neutral",
@@ -165,7 +165,7 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15"
+        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-slate-400 focus:border-primary focus:ring-4 focus:ring-primary/15"
       >
         <span className={value ? "" : "text-slate-text/60"}>
           {value || placeholder || "Select an option"}
@@ -177,8 +177,8 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl border border-black/10 shadow-lg shadow-black/5 overflow-hidden">
-          <div className="relative p-2 border-b border-black/[0.06]">
+        <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl border border-slate-300 shadow-lg shadow-black/5 overflow-hidden">
+          <div className="relative p-2 border-b border-slate-200">
             <Search
               size={14}
               className="absolute left-4.5 top-1/2 -translate-y-1/2 text-slate-text/40"
@@ -188,7 +188,7 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search or type a new value…"
-              className="w-full pl-9 pr-3 py-2 rounded-lg bg-paper border border-black/[0.06] text-[13px] outline-none focus:border-amber/50"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-paper border border-slate-200 text-[13px] outline-none focus:border-primary/50"
             />
           </div>
 
@@ -199,12 +199,12 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
                   type="button"
                   onClick={() => commit(opt)}
                   className={`w-full text-left px-3.5 py-2 text-[13px] transition-colors ${
-                    i === activeIndex ? "bg-amber/10 text-ink" : "text-ink hover:bg-paper"
+                    i === activeIndex ? "bg-primary/10 text-ink" : "text-ink hover:bg-paper"
                   }`}
                 >
                   {String(opt)}
                   {String(opt).toLowerCase() === q && (
-                    <span className="ml-1.5 text-[11px] text-amber-dark font-medium">(custom)</span>
+                    <span className="ml-1.5 text-[11px] text-primary-dark font-medium">(custom)</span>
                   )}
                 </button>
               </li>
@@ -215,8 +215,8 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
                 <button
                   type="button"
                   onClick={() => commit(query.trim(), true)}
-                  className={`w-full text-left px-3.5 py-2 text-[13px] text-amber-dark font-medium hover:bg-amber/10 transition-colors ${
-                    activeIndex === matches.length ? "bg-amber/10" : ""
+                  className={`w-full text-left px-3.5 py-2 text-[13px] text-primary-dark font-medium hover:bg-primary/10 transition-colors ${
+                    activeIndex === matches.length ? "bg-primary/10" : ""
                   }`}
                 >
                   + Add "{query.trim()}"
@@ -423,7 +423,7 @@ export default function Events() {
         title="Events"
         description="Upcoming school events, celebrations and important dates."
         right={
-          <Button variant="amber" onClick={openAdd}>
+          <Button variant="primary" onClick={openAdd}>
             <Plus size={15} /> Create Event
           </Button>
         }
@@ -450,7 +450,7 @@ export default function Events() {
           label="This Month"
           value={String(stats.thisMonth)}
           sub="Current month"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={CalendarDays}
@@ -487,8 +487,8 @@ export default function Events() {
               onClick={() => setView(v.key)}
               className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
                 view === v.key
-                  ? "bg-ink text-white border-ink"
-                  : "bg-white text-slate-text border-black/10 hover:border-ink/30"
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-slate-text border-slate-300 hover:border-ink/30"
               }`}
             >
               {v.label}
@@ -503,8 +503,8 @@ export default function Events() {
               onClick={() => setFilter(c)}
               className={`px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors ${
                 filter === c
-                  ? "bg-amber/20 text-amber-dark border-amber/40"
-                  : "bg-white text-slate-text border-black/10 hover:border-ink/20"
+                  ? "bg-primary/20 text-primary-dark border-primary/40"
+                  : "bg-white text-slate-text border-slate-300 hover:border-ink/20"
               }`}
             >
               {c}
@@ -525,7 +525,7 @@ export default function Events() {
             <p className="text-[13px] text-slate-text/60 mt-1">
               Try different filters or create a new event.
             </p>
-            <Button variant="amber" className="mt-4" onClick={openAdd}>
+            <Button variant="primary" className="mt-4" onClick={openAdd}>
               <Plus size={15} /> Create Event
             </Button>
           </div>
@@ -592,7 +592,7 @@ export default function Events() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   {editId ? "Edit Event" : "Create Event"}
@@ -679,7 +679,7 @@ export default function Events() {
                     helperText="JPG, JPEG, PNG, GIF, WEBP · Max 5 MB · Leave empty for a default category image"
                   />
                 ) : (
-                  <div className="rounded-xl border border-black/10 overflow-hidden">
+                  <div className="rounded-xl border border-slate-300 overflow-hidden">
                     <img
                       src={form.image}
                       alt=""
@@ -692,7 +692,7 @@ export default function Events() {
                       <button
                         type="button"
                         onClick={() => updateForm("image", "")}
-                        className="shrink-0 text-[12px] font-semibold text-amber-dark hover:underline"
+                        className="shrink-0 text-[12px] font-semibold text-primary-dark hover:underline"
                       >
                         Upload a new image
                       </button>
@@ -702,7 +702,7 @@ export default function Events() {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-between gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-between gap-2">
               <div>
                 {editId && (
                   <Button
@@ -722,7 +722,7 @@ export default function Events() {
                   Cancel
                 </Button>
                 <Button
-                  variant="amber"
+                  variant="primary"
                   onClick={handleSave}
                   disabled={!form.title.trim() || !form.date}
                 >
@@ -747,7 +747,7 @@ export default function Events() {
 //         eyebrow="Admissions & Outreach"
 //         title="Events"
 //         description="Upcoming school events, celebrations and important dates."
-//         right={<Button variant="amber"><Plus size={15} /> Create Event</Button>}
+//         right={<Button variant="primary"><Plus size={15} /> Create Event</Button>}
 //       />
 
 //       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
@@ -755,7 +755,7 @@ export default function Events() {
 //           <Card key={e.id} className="overflow-hidden" bodyClassName="p-0">
 //             <img src={e.image} alt={e.title} className="w-full h-40 object-cover" />
 //             <div className="p-4">
-//               <Pill tone="amber">{e.category}</Pill>
+//               <Pill tone="primary">{e.category}</Pill>
 //               <h3 className="font-display font-bold text-ink text-[15.5px] mt-2 leading-snug">{e.title}</h3>
 //               <div className="mt-3 space-y-1.5 text-[12.5px] text-slate-text">
 //                 <p className="flex items-center gap-1.5"><Clock size={13} /> {e.date} · {e.time}</p>

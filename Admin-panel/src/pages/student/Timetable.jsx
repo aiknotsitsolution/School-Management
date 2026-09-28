@@ -42,7 +42,7 @@ export default function Timetable() {
 
       {loading ? (
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="h-40 bg-white rounded-2xl border border-black/[0.06] animate-pulse" />)}
+          {[0, 1, 2, 3, 4, 5].map((i) => <div key={i} className="h-40 bg-white rounded-2xl border border-slate-200 animate-pulse" />)}
         </div>
       ) : !anyData ? (
         <Card>
@@ -60,8 +60,8 @@ export default function Timetable() {
               <Card
                 key={day}
                 title={day}
-                className={isToday(day) ? "ring-1 ring-amber/50" : ""}
-                action={isToday(day) ? <Pill tone="amber">Today</Pill> : undefined}
+                className={isToday(day) ? "ring-1 ring-primary/50" : ""}
+                action={isToday(day) ? <Pill tone="primary">Today</Pill> : undefined}
               >
                 {periods.length === 0 ? (
                   <p className="text-[12.5px] text-slate-text/60 py-4 text-center">No classes</p>

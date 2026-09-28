@@ -10,6 +10,11 @@ const payrollSchema = new mongoose.Schema(
     allowances: { type: Number, default: 0 },
     deductions: { type: Number, default: 0 },
     deductionReason: { type: String, default: "" },
+    // Opt-in attendance linkage: when generatePayroll/generateAllPayroll run
+    // with adjustForAttendance, the unauthorised-absence deduction folded
+    // into `deductions` is recorded here for transparency.
+    attendanceDeduction: { type: Number, default: 0 },
+    attendancePct: { type: Number, default: null },
     netPay: { type: Number, required: true },
     status: { type: String, enum: ["Pending", "Paid"], default: "Pending" },
     paidOn: { type: Date },

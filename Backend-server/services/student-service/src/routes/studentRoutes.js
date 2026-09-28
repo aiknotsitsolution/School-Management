@@ -16,14 +16,30 @@ const {
 
 router.use(verifyToken, resolveTenant, requireTenant);
 
-// Own-profile lookup is self-scoped (token refId) and only served to
-// student/parent accounts; the gate mirrors that intent instead of requiring
-// students:read.
+// Own-profile lookup is self-scoped (token refId / linked children) and only
+// served to student/parent accounts; the gate mirrors that intent instead of
+// requiring students:read.
 const gateOwnProfile = (req, res, next) => {
-  const perm = ["student", "parent"].includes(req.user.role)
-    ? "profile:read"
-    : "students:read";
-  return requirePermission(perm)(req, res, next);
+  if (["student", "parent"].includes(req.user.role)) return next();
+  return requirePermission("students:read")(req, res, next);
+};
+
+// List gate: parents pass through to the controller's linkedStudentIds branch
+// (they deliberately lack students:read); everyone else needs students:read and
+// assignment scoping.
+const gateStudentList = (req, res, next) => {
+  if (req.user && req.user.role === "parent") return next();
+  return requirePermission("students:read")(req, res, (err) => {
+    if (err) return next(err);
+    return scopeClassTeacher(req, res, next);
+  });
+};
+
+// Single-record gate: parents pass through (restrictToOwnStudent narrows them
+// to a linked child); non-parents need students:read.
+const gateStudentRead = (req, res, next) => {
+  if (req.user && req.user.role === "parent") return next();
+  return requirePermission("students:read")(req, res, next);
 };
 
 router.post("/", requirePermission("students:write"), ctrl.createStudent);
@@ -41,7 +57,7 @@ router.get(
   scopeClassTeacher,
   ctrl.counsellorStats,
 );
-router.get("/", requirePermission("students:read"), scopeClassTeacher, ctrl.getStudents);
+router.get("/", gateStudentList, ctrl.getStudents);
 // Pending registrations (student shells awaiting an account) is an admin
 // surface: gated by users:manage so a counsellor/teacher/student can never
 // enumerate un-linked student profiles. Must be declared before /:id.
@@ -50,9 +66,33 @@ router.get(
   requirePermission("users:manage"),
   ctrl.getPendingRegistrations,
 );
+// Transfer Certificates (Phase 2) — literal prefix, must be declared before
+// the parameterized /:id routes below so "transfer-certificates" is never
+// parsed as an ObjectId. Issue = transfer:write, read/pdf = transfer:read.
+const tcCtrl = require("../controllers/tcController");
+router.post(
+  "/transfer-certificates",
+  requirePermission("transfer:write"),
+  tcCtrl.issueTc,
+);
+router.get(
+  "/transfer-certificates",
+  requirePermission("transfer:read"),
+  tcCtrl.getTcs,
+);
+router.get(
+  "/transfer-certificates/:id",
+  requirePermission("transfer:read"),
+  tcCtrl.getTc,
+);
+router.get(
+  "/transfer-certificates/:id/pdf",
+  requirePermission("transfer:read"),
+  tcCtrl.downloadTcPdf,
+);
 router.get(
   "/:id",
-  requirePermission("students:read"),
+  gateStudentRead,
   restrictToOwnStudent((req) => req.params.id),
   ctrl.getStudentById,
 );
@@ -73,6 +113,12 @@ router.delete(
   requirePermission("students:write"),
   restrictToOwnStudent((req) => req.params.id),
   ctrl.deleteStudent,
+);
+// Undo a soft-delete (before the purge retention window elapses).
+router.post(
+  "/:id/restore",
+  requirePermission("students:write"),
+  ctrl.restoreStudent,
 );
 router.post(
   "/:id/issue-id-card",

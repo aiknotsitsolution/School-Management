@@ -82,7 +82,7 @@ const SUBJECT_SUGGESTIONS_FALLBACK = [
 function statusTone(status) {
   if (status === "Active") return "success";
   if (status === "Resigned") return "alert";
-  return "amber";
+  return "primary";
 }
 
 function emptyStaffForm() {
@@ -438,7 +438,7 @@ export default function Teachers() {
         description={loading ? "Loading staff records..." : `${stats.total} staff members across all departments.`}
         right={
           <PermissionGate permission="staff:write">
-            <Button variant="amber" onClick={openAdd}>
+            <Button variant="primary" onClick={openAdd}>
               <Plus size={15} /> Add Staff
             </Button>
           </PermissionGate>
@@ -451,7 +451,7 @@ export default function Teachers() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Users} label="Total Staff" value={String(stats.total)} sub="All departments" accent="info" />
-        <StatCard icon={GraduationCap} label="Teachers" value={String(stats.teachers)} sub="Teaching role" accent="amber" />
+        <StatCard icon={GraduationCap} label="Teachers" value={String(stats.teachers)} sub="Teaching role" accent="primary" />
         <StatCard icon={ClipboardList} label="Class Teachers" value={String(stats.activeClassTeachers)} sub="Homeroom assignments" accent="success" />
         <StatCard icon={UserCog} label="Admin / Support" value={String(stats.adminSupport)} sub="Non-teaching staff" accent="info" />
       </div>
@@ -488,7 +488,7 @@ export default function Teachers() {
           <p className="text-[14px] font-medium text-ink">No staff found</p>
           <p className="text-[13px] text-slate-text/60 mt-1">Try different filters or add a new staff member.</p>
           <PermissionGate permission="staff:write">
-            <Button variant="amber" className="mt-4" onClick={openAdd}>
+            <Button variant="primary" className="mt-4" onClick={openAdd}>
               <Plus size={15} /> Add Staff
             </Button>
           </PermissionGate>
@@ -501,7 +501,7 @@ export default function Teachers() {
             const activeOnes = mine.filter((a) => a.status === "active");
             const isExpanded = expandedCard === s.id;
             return (
-              <div key={s.id} className="rounded-xl border border-black/[0.06] hover:border-black/10 bg-white transition-colors">
+              <div key={s.id} className="rounded-xl border border-slate-200 hover:border-slate-300 bg-white transition-colors">
                 {/* Card Header */}
                 <div className="flex items-start gap-4 p-4">
                   <Avatar src={s.avatar} name={s.name} size={44} />
@@ -513,7 +513,7 @@ export default function Teachers() {
                       {s.userId ? (
                         <Pill tone="success">Account linked</Pill>
                       ) : (
-                        <Pill tone="amber">Awaiting account</Pill>
+                        <Pill tone="primary">Awaiting account</Pill>
                       )}
                       {s.profileStatus === "complete" ? (
                         <Pill tone="success">Profile ✓</Pill>
@@ -563,7 +563,7 @@ export default function Teachers() {
                           <span
                             key={a._id}
                             className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold ${
-                              a.type === "class_teacher" ? "bg-amber/15 text-amber-dark" : "bg-success/10 text-success"
+                              a.type === "class_teacher" ? "bg-primary/15 text-primary-dark" : "bg-success/10 text-success"
                             }`}
                           >
                             {a.type === "class_teacher" && <Check size={10} />}
@@ -596,7 +596,7 @@ export default function Teachers() {
                       {s.role === "teacher" && (
                         <button
                           onClick={() => openAssign(s)}
-                          className="p-2 rounded-lg hover:bg-paper text-slate-text/60 hover:text-amber-dark transition-colors"
+                          className="p-2 rounded-lg hover:bg-paper text-slate-text/60 hover:text-primary-dark transition-colors"
                           title="Assign"
                         >
                           <Link2 size={16} />
@@ -624,7 +624,7 @@ export default function Teachers() {
 
                 {/* Expanded Details */}
                 {isExpanded && (
-                  <div className="px-4 pb-4 pt-0 border-t border-black/[0.04]">
+                  <div className="px-4 pb-4 pt-0 border-t border-slate-100">
                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 text-[12.5px]">
                       {s.qualification && (
                         <div><span className="text-slate-text/50">Qualification:</span> <span className="text-ink">{s.qualification}</span></div>
@@ -645,7 +645,7 @@ export default function Teachers() {
                         {mine.map((a) => (
                           <div key={a._id} className="flex items-center justify-between text-[12px] rounded-lg bg-paper/60 px-3 py-2">
                             <div className="flex items-center gap-2">
-                              <Pill tone={a.type === "class_teacher" ? "amber" : "info"}>
+                              <Pill tone={a.type === "class_teacher" ? "primary" : "info"}>
                                 {a.type === "class_teacher" ? "Class Teacher" : "Teaching"}
                               </Pill>
                               <span className="text-ink">
@@ -707,7 +707,7 @@ export default function Teachers() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setViewStaff(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[90vh] overflow-y-auto scrollbar-hidden">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06] sticky top-0 bg-white">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
               <h3 className="font-display font-semibold text-ink text-[17px]">Staff Profile</h3>
               <button onClick={() => setViewStaff(null)} className="p-2 rounded-lg hover:bg-paper text-slate-text">
                 <X size={20} />
@@ -728,7 +728,7 @@ export default function Teachers() {
                     {viewStaff.userId ? (
                       <Pill tone="success">Account linked</Pill>
                     ) : (
-                      <Pill tone="amber">Awaiting account</Pill>
+                      <Pill tone="primary">Awaiting account</Pill>
                     )}
                     {viewStaff.profileStatus === "complete" ? (
                       <Pill tone="success">Profile ✓</Pill>
@@ -799,9 +799,9 @@ export default function Teachers() {
                   <p className="text-[11px] font-semibold text-slate-text/50 uppercase tracking-wide mb-2">Assignments</p>
                   <div className="space-y-2">
                     {assignmentsFor(viewStaff.id).map((a) => (
-                      <div key={a._id} className="flex items-center justify-between rounded-xl border border-black/[0.06] px-4 py-3 text-[13px]">
+                      <div key={a._id} className="flex items-center justify-between rounded-xl border border-slate-200 px-4 py-3 text-[13px]">
                         <div className="flex items-center gap-2">
-                          <Pill tone={a.type === "class_teacher" ? "amber" : "info"}>
+                          <Pill tone={a.type === "class_teacher" ? "primary" : "info"}>
                             {a.type === "class_teacher" ? "Class Teacher" : "Teaching"}
                           </Pill>
                           <span className="text-ink">
@@ -822,11 +822,11 @@ export default function Teachers() {
 
             {/* Right: ID Card panel */}
             <div className="space-y-3">
-              <div className="rounded-xl border border-black/[0.06] p-4 space-y-3 xl:sticky xl:top-20">
+              <div className="rounded-xl border border-slate-200 p-4 space-y-3 xl:sticky xl:top-20">
                 <p className="text-[11px] font-semibold text-slate-text/50 uppercase tracking-wide">Onboarding · ID Card</p>
                 <div className="flex flex-wrap items-center gap-2 text-[12.5px] text-slate-text/70">
                   <span className="inline-flex items-center gap-1.5">
-                    <UserCheck size={13} className={viewStaff.userId ? "text-success" : "text-amber-dark"} />
+                    <UserCheck size={13} className={viewStaff.userId ? "text-success" : "text-primary-dark"} />
                     {viewStaff.userId ? "Account created — profile completion is two-way" : "No account yet — register in Users & Access"}
                   </span>
                 </div>
@@ -852,7 +852,7 @@ export default function Teachers() {
                 <PermissionGate permission="staff:write">
                   <div className="flex flex-wrap gap-2">
                     {viewStaff.profileStatus !== "complete" ? (
-                      <Button variant="amber" onClick={() => openComplete(viewStaff)}>
+                      <Button variant="primary" onClick={() => openComplete(viewStaff)}>
                         <AlertCircle size={15} /> Complete Profile (Admin)
                       </Button>
                     ) : (
@@ -874,10 +874,10 @@ export default function Teachers() {
             </div>
           </div>
         </div>
-        <div className="px-6 py-4 border-t border-black/[0.06] flex justify-end gap-2 sticky bottom-0 bg-white">
+        <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2 sticky bottom-0 bg-white">
               <Button variant="outline" onClick={() => setViewStaff(null)}>Close</Button>
               <PermissionGate permission="staff:write">
-                <Button variant="amber" onClick={() => { setViewStaff(null); openEdit(viewStaff); }}>
+                <Button variant="primary" onClick={() => { setViewStaff(null); openEdit(viewStaff); }}>
                   <Pencil size={15} /> Edit
                 </Button>
               </PermissionGate>
@@ -891,7 +891,7 @@ export default function Teachers() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setShowStaffModal(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06] sticky top-0 bg-white z-10">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
               <h3 className="font-display font-semibold text-ink text-[17px]">
                 {editId ? "Edit Staff Record" : "Add Staff"}
               </h3>
@@ -901,7 +901,7 @@ export default function Teachers() {
             </div>
 
             {/* Form Steps */}
-            <div className="px-6 pt-4 pb-3 border-b border-black/[0.06] sticky top-[65px] bg-white z-10">
+            <div className="px-6 pt-4 pb-3 border-b border-slate-200 sticky top-[65px] bg-white z-10">
               <SegmentedTabs
                 tabs={[
                   { id: "personal", label: "1 · Basics", icon: Users },
@@ -1043,7 +1043,7 @@ export default function Teachers() {
               )}
             </div>
 
-            <div className="px-6 py-4 border-t border-black/[0.06] flex items-center justify-between gap-2 sticky bottom-0 bg-white">
+            <div className="px-6 py-4 border-t border-slate-200 flex items-center justify-between gap-2 sticky bottom-0 bg-white">
               <div className="flex items-center gap-2">
                 <Button variant="outline" onClick={() => setShowStaffModal(false)}>Cancel</Button>
                 {stepIndex > 0 && (
@@ -1053,11 +1053,11 @@ export default function Teachers() {
                 )}
               </div>
               {stepIndex < stepOrder.length - 1 ? (
-                <Button variant="amber" onClick={handleNextStep}>
+                <Button variant="primary" onClick={handleNextStep}>
                   Next <ChevronRight size={15} />
                 </Button>
               ) : (
-                <Button variant="amber" onClick={handleSaveStaff}>
+                <Button variant="primary" onClick={handleSaveStaff}>
                   <Save size={15} /> {editId ? "Save Changes" : "Add Staff"}
                 </Button>
               )}
@@ -1071,7 +1071,7 @@ export default function Teachers() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setCompleteTarget(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06] sticky top-0 bg-white">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
               <h3 className="font-display font-semibold text-ink text-[17px]">
                 Complete Profile · {completeTarget.name}
               </h3>
@@ -1115,9 +1115,9 @@ export default function Teachers() {
                 </div>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-black/[0.06] flex justify-end gap-2 sticky bottom-0 bg-white">
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2 sticky bottom-0 bg-white">
               <Button variant="outline" onClick={() => setCompleteTarget(null)}>Cancel</Button>
-              <Button variant="amber" onClick={handleCompleteProfile} disabled={completing}>
+              <Button variant="primary" onClick={handleCompleteProfile} disabled={completing}>
                 <Save size={15} /> {completing ? "Completing…" : "Complete & Issue Card"}
               </Button>
             </div>
@@ -1130,7 +1130,7 @@ export default function Teachers() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setAssignStaff(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06] sticky top-0 bg-white">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
               <h3 className="font-display font-semibold text-ink text-[17px]">Assignments · {assignStaff.name}</h3>
               <button onClick={() => setAssignStaff(null)} className="p-2 rounded-lg hover:bg-paper text-slate-text">
                 <X size={20} />
@@ -1146,10 +1146,10 @@ export default function Teachers() {
               ) : (
                 <div className="space-y-2 mb-5">
                   {assignmentsFor(assignStaff.id).map((a) => (
-                    <div key={a._id} className="flex items-center justify-between gap-3 rounded-xl border border-black/[0.06] px-4 py-3">
+                    <div key={a._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3">
                       <div>
                         <div className="flex items-center gap-2">
-                          <Pill tone={a.type === "class_teacher" ? "amber" : "info"}>
+                          <Pill tone={a.type === "class_teacher" ? "primary" : "info"}>
                             {a.type === "class_teacher" ? "Class Teacher" : "Teaching"}
                           </Pill>
                           <span className="font-medium text-ink text-[13px]">
@@ -1172,7 +1172,7 @@ export default function Teachers() {
                 </div>
               )}
 
-              <div className="border-t border-black/[0.06] pt-5">
+              <div className="border-t border-slate-200 pt-5">
                 <p className="font-display font-semibold text-ink text-[15px] mb-4">Add Assignment</p>
                 <div className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
@@ -1207,7 +1207,7 @@ export default function Teachers() {
                   </div>
                   <div className="flex justify-end gap-2">
                     <Button variant="outline" onClick={() => setAssignStaff(null)}>Close</Button>
-                    <Button variant="amber" onClick={handleCreateAssignment}>
+                    <Button variant="primary" onClick={handleCreateAssignment}>
                       <Plus size={15} /> Add Assignment
                     </Button>
                   </div>

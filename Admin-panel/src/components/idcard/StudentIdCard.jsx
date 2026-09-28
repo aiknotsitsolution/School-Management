@@ -7,7 +7,7 @@ export const ID_CARD_W = 470;
 export const ID_CARD_H = 296;
 
 export const ID_CARD_DEFAULT = {
-  accent: "#1E2A44",
+  accent: "#172033",
   headerTitle: "STUDENT ID CARD",
   footerNote:
     "This card is the property of the school. Please carry it at all times and report loss immediately.",

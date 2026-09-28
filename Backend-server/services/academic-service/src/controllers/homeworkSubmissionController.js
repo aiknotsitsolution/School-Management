@@ -37,6 +37,22 @@ const submitHomework = async (req, res) => {
       return res.status(403).json({ success: false, message: "This homework is not assigned to your class" });
     }
 
+    // A reviewed submission is final: re-submitting would flip it back to
+    // "Submitted" while silently keeping the teacher's marks/feedback.
+    const prior = await HomeworkSubmission.findOne({
+      schoolId: req.tenantId,
+      homeworkId: homework._id,
+      admissionNo,
+    })
+      .select("status")
+      .lean();
+    if (prior && prior.status === "Reviewed") {
+      return res.status(409).json({
+        success: false,
+        message: "This submission has already been reviewed by your teacher. Ask your teacher if you need to resubmit.",
+      });
+    }
+
     const { content = "", attachments = [] } = req.body || {};
     let parsedAttachments = [];
     if (Array.isArray(attachments)) {
@@ -189,27 +205,46 @@ const reviewSubmission = async (req, res) => {
   }
 };
 
-// Teacher lists submissions for their class/section, optionally filtered by homework.
+// Teacher lists submissions for their class/section, optionally filtered by
+// homework. Scoping rules (fail-secure — this endpoint exposes student work):
+//   - students/parents: always rejected (own submissions live on GET /);
+//   - teachers: forced to their assignment scope by scopeClassTeacher;
+//   - any other role: must pass ?class= (or a single ?homeworkId=, which is
+//     itself bounded), otherwise they'd get a school-wide list.
 const listSubmissionsForClass = async (req, res) => {
   try {
-    if (req.user.role === "student") {
-      return res.status(403).json({ success: false, message: "Students cannot list class submissions" });
+    if (["student", "parent"].includes(req.user.role)) {
+      return res.status(403).json({ success: false, message: "Only school staff can list class submissions" });
     }
     const filter = { schoolId: req.tenantId };
-    if (req.query.homeworkId) filter.homeworkId = req.query.homeworkId;
     if (req.query.status) filter.status = req.query.status;
 
-    const homeworkFilter = { schoolId: req.tenantId };
-    if (req.teacherScope) {
-      homeworkFilter.class = req.teacherScope.class;
-      if (req.teacherScope.section) homeworkFilter.section = req.teacherScope.section;
-    } else if (req.query.class) {
-      homeworkFilter.class = req.query.class;
-      if (req.query.section) homeworkFilter.section = req.query.section;
+    if (req.query.homeworkId) {
+      // Honor ?homeworkId= (previously it was silently overwritten below) and
+      // verify the target homework is inside the caller's scope.
+      const target = await Homework.findOne({ _id: req.query.homeworkId, schoolId: req.tenantId })
+        .select("_id class section")
+        .lean();
+      if (!target) return res.json({ success: true, count: 0, total: 0, data: [] });
+      if (req.teacherScope && !req.teacherScope.has(target.class, target.section)) {
+        return res.status(403).json({ success: false, message: "Not authorized to view this submission" });
+      }
+      filter.homeworkId = target._id;
+    } else {
+      const homeworkFilter = { schoolId: req.tenantId };
+      if (req.teacherScope) {
+        homeworkFilter.class = req.teacherScope.class;
+        if (req.teacherScope.section) homeworkFilter.section = req.teacherScope.section;
+      } else if (req.query.class) {
+        homeworkFilter.class = req.query.class;
+        if (req.query.section) homeworkFilter.section = req.query.section;
+      } else {
+        return res.status(400).json({ success: false, message: "class is required for this request" });
+      }
+      const homeworks = await Homework.find(homeworkFilter).select("_id").lean();
+      if (!homeworks.length) return res.json({ success: true, count: 0, total: 0, data: [] });
+      filter.homeworkId = { $in: homeworks.map((h) => h._id) };
     }
-    const homeworks = await Homework.find(homeworkFilter).select("_id").lean();
-    if (!homeworks.length) return res.json({ success: true, count: 0, data: [] });
-    filter.homeworkId = { $in: homeworks.map((h) => h._id) };
 
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([

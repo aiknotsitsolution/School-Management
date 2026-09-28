@@ -194,7 +194,7 @@ export default function AvatarEditor({
         }}
         className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md max-h-[92vh] overflow-y-auto"
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06] sticky top-0 bg-white z-10">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200 sticky top-0 bg-white z-10">
           <div>
             <h3 className="font-display font-semibold text-ink text-[17px]">{title}</h3>
             <p className="text-[12.5px] text-slate-text/70 mt-0.5">
@@ -217,7 +217,7 @@ export default function AvatarEditor({
             onPointerMove={handlePointerMove}
             onPointerUp={endDrag}
             onPointerCancel={endDrag}
-            className="relative w-full max-w-[280px] mx-auto aspect-square rounded-xl overflow-hidden bg-paper border border-black/[0.08] select-none"
+            className="relative w-full max-w-[280px] mx-auto aspect-square rounded-xl overflow-hidden bg-paper border border-slate-200 select-none"
             style={{ touchAction: "none" }}
           >
             {file && natural.w ? (
@@ -242,7 +242,7 @@ export default function AvatarEditor({
                     className="w-24 h-24 rounded-full object-cover border-4 border-white shadow-sm"
                   />
                 ) : (
-                  <div className="w-24 h-24 rounded-full bg-amber/20 text-amber-dark flex items-center justify-center font-display text-4xl font-bold">
+                  <div className="w-24 h-24 rounded-full bg-primary/20 text-primary-dark flex items-center justify-center font-display text-4xl font-bold">
                     {initialsOf(name)}
                   </div>
                 )}
@@ -263,7 +263,7 @@ export default function AvatarEditor({
                   <button
                     type="button"
                     onClick={resetAdjustments}
-                    className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-slate-text/60 hover:text-amber-dark"
+                    className="inline-flex items-center gap-1 text-[11.5px] font-semibold text-slate-text/60 hover:text-primary-dark"
                   >
                     <RefreshCw size={12} /> Reset
                   </button>
@@ -277,7 +277,7 @@ export default function AvatarEditor({
                   value={zoom}
                   disabled={busy}
                   onChange={(e) => setZoom(Number(e.target.value))}
-                  className="w-full accent-[#E8A33D]"
+                  className="w-full accent-[#4F46E5]"
                 />
                 <p className="text-[11px] text-slate-text/55 mt-1">
                   Drag the image to reposition. The final photo is cropped to a square.
@@ -302,12 +302,12 @@ export default function AvatarEditor({
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-black/[0.06] flex flex-wrap justify-end gap-2">
+        <div className="px-5 py-4 border-t border-slate-200 flex flex-wrap justify-end gap-2">
           <Button variant="outline" onClick={() => onClose?.()} disabled={busy}>
             Cancel
           </Button>
           <Button
-            variant="amber"
+            variant="primary"
             onClick={handleSave}
             disabled={!file || !natural.w || busy}
           >

@@ -1,28 +1,42 @@
 // ---------------------------------------------------------------------------
-// Canonical grading scale. Single source of truth for the academic-service:
-// the Marks pre-save hook, API mark entry, report cards, class summaries and
-// promotion previews all derive grades/percentages/pass-fail here so the rules
-// are never re-implemented per controller.
+// Canonical grading utilities.
 //
-// The scale is preserved from the original implems (A+/A/B+/B/C/D/F by
-// percentage) and the pass threshold is a PASS PERCENTAGE (default 33), which
-// is how the legacy report card expressed "PASS iff pct >= 33".
+// Grades/pass thresholds are CONFIGURABLE per school via the GradingScale
+// model (bands + passPct, one isDefault row per tenant). resolveScale(schoolId)
+// returns the active scale, falling back to the built-in default preset when
+// the school has none yet — so behaviour before any scale is configured is
+// byte-identical to the legacy hardcoded scale (A+/A/B+/B/C/D/F, pass 33).
+//
+// Legacy sync helpers (computeGrade/computeResult) are kept as thin wrappers
+// over the DEFAULT preset for call sites that cannot await; async call sites
+// should use resolveScale + computeGradeWith/computeResultWith.
+//
+// The pass threshold is a PASS PERCENTAGE (default 33), which is how the
+// legacy report card expressed "PASS iff pct >= 33". An exam's explicit
+// passingMarks still wins over the scale when set.
 // ---------------------------------------------------------------------------
 
-const GRADE_THRESHOLDS = [
-  { grade: "A+", minPct: 90 },
-  { grade: "A", minPct: 80 },
-  { grade: "B+", minPct: 70 },
-  { grade: "B", minPct: 60 },
-  { grade: "C", minPct: 50 },
-  { grade: "D", minPct: 33 },
-  { grade: "F", minPct: 0 },
-];
+const GradingScale = require("../models/GradingScale");
+const { GRADING_PRESETS, validateScaleBands } = require("./gradingPresets");
 
-function computeGrade(obtained, max) {
+const DEFAULT_PRESET = GRADING_PRESETS.find((p) => p.key === "default");
+
+// The legacy hardcoded scale — kept exported for back-compat.
+const GRADE_THRESHOLDS = DEFAULT_PRESET.bands;
+
+const DEFAULT_SCALE = {
+  name: DEFAULT_PRESET.name,
+  system: "default",
+  bands: DEFAULT_PRESET.bands,
+  passPct: DEFAULT_PRESET.passPct,
+};
+
+function gradeFromBands(bands, obtained, max) {
   if (!max || max <= 0 || obtained == null) return "N/A";
   const pct = (obtained / max) * 100;
-  return GRADE_THRESHOLDS.find((t) => pct >= t.minPct).grade;
+  const list = Array.isArray(bands) && bands.length ? bands : DEFAULT_SCALE.bands;
+  const band = list.find((t) => pct >= t.minPct) || list[list.length - 1];
+  return band.grade;
 }
 
 function computePercentage(obtained, max) {
@@ -30,16 +44,45 @@ function computePercentage(obtained, max) {
   return (obtained / max) * 100;
 }
 
-// passingMarks is the pass-threshold percentage (default 33).
+// Legacy sync helpers — always use the built-in default preset.
+function computeGrade(obtained, max) {
+  return gradeFromBands(DEFAULT_SCALE.bands, obtained, max);
+}
+
 function computeResult(obtained, max, passingMarks = 33) {
   const pct = computePercentage(obtained, max);
   return { pct, grade: computeGrade(obtained, max), passed: pct >= passingMarks };
 }
 
+// Scale-aware helpers.
+function computeGradeWith(scale, obtained, max) {
+  return gradeFromBands((scale && scale.bands) || DEFAULT_SCALE.bands, obtained, max);
+}
+
+// passOverride wins (exam-level explicit passingMarks); otherwise the scale's
+// passPct applies; legacy default 33 last.
+function computeResultWith(scale, obtained, max, passOverride = null) {
+  const pct = computePercentage(obtained, max);
+  const passPct =
+    passOverride == null ? ((scale && scale.passPct) != null ? scale.passPct : 33) : passOverride;
+  return { pct, grade: computeGradeWith(scale, obtained, max), passed: pct >= passPct };
+}
+
+// Resolves the tenant's ACTIVE (isDefault) scale. Never throws: any failure
+// degrades to the built-in default so grade computation can't break writes.
+async function resolveScale(schoolId) {
+  try {
+    if (!schoolId) return DEFAULT_SCALE;
+    const row = await GradingScale.findOne({ schoolId, isDefault: true, active: true }).lean();
+    if (row && Array.isArray(row.bands) && row.bands.length) return row;
+    return DEFAULT_SCALE;
+  } catch {
+    return DEFAULT_SCALE;
+  }
+}
+
 // Promotion health-check. A student with no published marks for the session
 // has no evidence to be detained, so the suggestion stays "Promoted".
-// Accepts either { totalSubjects, failedSubjects } or the shape returned by
-// computeStudentSummary ({ subjects: [], failedSubjects }).
 function suggestPromotionStatus({ subjects, totalSubjects = 0, failedSubjects = 0 } = {}) {
   const total = Array.isArray(subjects) ? subjects.length : totalSubjects;
   if (total === 0) return "Promoted";
@@ -50,8 +93,13 @@ function suggestPromotionStatus({ subjects, totalSubjects = 0, failedSubjects = 
 
 module.exports = {
   GRADE_THRESHOLDS,
+  DEFAULT_SCALE,
   computeGrade,
   computePercentage,
   computeResult,
+  computeGradeWith,
+  computeResultWith,
+  resolveScale,
+  validateScaleBands,
   suggestPromotionStatus,
 };

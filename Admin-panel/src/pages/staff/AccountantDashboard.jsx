@@ -71,7 +71,7 @@ export default function AccountantDashboard() {
         title="Fees & Collections"
         description={`Track fee collections at ${school?.name || "your school"}.`}
         right={
-          <Button variant="amber" onClick={() => navigate("/accountant/fees")}>
+          <Button variant="primary" onClick={() => navigate("/accountant/fees")}>
             Manage Fees <ArrowRight size={15} />
           </Button>
         }
@@ -79,7 +79,7 @@ export default function AccountantDashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={TrendingUp} label="Today's Collection" value={fmtMoney(stats.todayPaid)} sub="Payments logged today" accent="success" />
-        <StatCard icon={CircleDollarSign} label="This Month" value={fmtMoney(stats.monthPaid)} sub={`${monthPrefix.slice(5, 7)}/${monthPrefix.slice(0, 4)} period`} accent="amber" />
+        <StatCard icon={CircleDollarSign} label="This Month" value={fmtMoney(stats.monthPaid)} sub={`${monthPrefix.slice(5, 7)}/${monthPrefix.slice(0, 4)} period`} accent="primary" />
         <StatCard icon={Wallet} label="Lifetime Collected" value={fmtMoney(stats.totalCollected)} sub={`${payments.length} transactions`} accent="info" />
         <StatCard icon={AlertCircle} label="Outstanding" value={fmtMoney(stats.outstanding)} sub={`${stats.dueCount} unpaid invoices`} accent="alert" />
       </div>
@@ -102,7 +102,7 @@ export default function AccountantDashboard() {
                 </thead>
                 <tbody>
                   {payments.slice(0, 7).map((p) => (
-                    <tr key={p._id} className="border-t border-black/[0.06]">
+                    <tr key={p._id} className="border-t border-slate-200">
                       <td className="px-5 py-2.5 font-semibold text-ink">{p.studentId || "—"}</td>
                       <td className="px-3 py-2.5 text-success font-semibold">{fmtMoney(p.amount)}</td>
                       <td className="px-3 py-2.5"><Pill tone="neutral">{p.mode || "—"}</Pill></td>
@@ -121,7 +121,7 @@ export default function AccountantDashboard() {
             <div className="space-y-3">
               {["Paid", "Partial", "Unpaid", "Overdue"].map((s) => (
                 <div key={s} className="flex items-center justify-between">
-                  <Pill tone={s === "Paid" ? "success" : s === "Overdue" ? "alert" : s === "Partial" ? "amber" : "neutral"}>{s}</Pill>
+                  <Pill tone={s === "Paid" ? "success" : s === "Overdue" ? "alert" : s === "Partial" ? "primary" : "neutral"}>{s}</Pill>
                   <span className="text-[13px] font-semibold text-ink">{stats.byStatus[s] || 0}</span>
                 </div>
               ))}
@@ -147,7 +147,7 @@ export default function AccountantDashboard() {
       <div className="grid sm:grid-cols-2 gap-4">
         <button
           onClick={() => navigate("/accountant/fees")}
-          className="flex items-center justify-between bg-white rounded-2xl border border-black/[0.06] shadow-sm p-5 hover:border-info/40 transition-colors text-left"
+          className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:border-info/40 transition-colors text-left"
         >
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-info/10 text-info flex items-center justify-center"><Receipt size={19} /></div>
@@ -160,10 +160,10 @@ export default function AccountantDashboard() {
         </button>
         <button
           onClick={() => navigate("/accountant/fees")}
-          className="flex items-center justify-between bg-white rounded-2xl border border-black/[0.06] shadow-sm p-5 hover:border-amber/40 transition-colors text-left"
+          className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:border-primary/40 transition-colors text-left"
         >
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber/10 text-amber flex items-center justify-center"><Wallet size={19} /></div>
+            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center"><Wallet size={19} /></div>
             <div>
               <p className="font-display font-semibold text-ink text-[15px]">Fee Structure</p>
               <p className="text-[12.5px] text-slate-text/70">Define or update fee types per class</p>

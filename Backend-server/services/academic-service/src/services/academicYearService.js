@@ -2,7 +2,7 @@ const Exam = require("../models/Exam");
 const Marks = require("../models/Marks");
 const StudentAcademicRecord = require("../models/StudentAcademicRecord");
 const { getStudentModel } = require("../db/studentDb");
-const { computeResult } = require("../utils/grading");
+const { computeResultWith, resolveScale } = require("../utils/grading");
 const ObjectId = require("mongoose").Types.ObjectId;
 
 // ---------------------------------------------------------------------------
@@ -77,9 +77,10 @@ async function computeStudentSummary({ schoolId, studentId, session, class: cls,
     return { totalObtained: 0, totalMax: 0, percentage: null, failedSubjects: 0, subjects: [] };
   }
   const marks = await Marks.find({ schoolId, studentId, examId: { $in: examIds } }).lean();
+  const scale = await resolveScale(schoolId);
   const bySubject = {};
   for (const mark of marks) {
-    const result = computeResult(mark.marksObtained, mark.maxMarks, mark.passingMarks ?? 33);
+    const result = computeResultWith(scale, mark.marksObtained, mark.maxMarks, mark.passingMarks ?? null);
     const prev = bySubject[mark.subject];
     if (!prev || mark.marksObtained > prev.marksObtained) {
       bySubject[mark.subject] = {

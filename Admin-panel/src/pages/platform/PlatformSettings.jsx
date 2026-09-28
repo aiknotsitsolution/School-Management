@@ -17,7 +17,7 @@ function Toggle({ checked, onChange }) {
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className={`relative w-10 h-6 rounded-full transition-colors ${checked ? "bg-amber" : "bg-black/15"}`}
+      className={`relative w-10 h-6 rounded-full transition-colors ${checked ? "bg-primary" : "bg-black/15"}`}
     >
       <span
         className={`absolute top-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${checked ? "translate-x-[18px]" : "translate-x-0.5"}`}
@@ -28,13 +28,13 @@ function Toggle({ checked, onChange }) {
 
 function SettingRow({ setting, value, onChange, onReset }) {
   return (
-    <div className="py-3 border-b border-black/[0.04] last:border-0">
+    <div className="py-3 border-b border-slate-100 last:border-0">
       <div className="flex items-start gap-4">
         <div className="flex-1 min-w-0">
           <p className="text-[13px] font-semibold text-ink flex items-center gap-1.5">
             {setting.label}
             {setting.value !== setting.default && (
-              <span className="text-[10px] font-bold uppercase tracking-wide bg-amber/15 text-amber-dark px-1.5 py-0.5 rounded">
+              <span className="text-[10px] font-bold uppercase tracking-wide bg-primary/15 text-primary-dark px-1.5 py-0.5 rounded">
                 changed
               </span>
             )}
@@ -135,7 +135,7 @@ export default function PlatformSettings() {
         title="Platform Settings"
         description="Secrets-free configuration for the whole platform. Environment credentials (database URI, JWT secret, provider keys) are intentionally never exposed here."
         right={
-          <Button variant="amber" onClick={save} disabled={saving || dirty.size === 0}>
+          <Button variant="primary" onClick={save} disabled={saving || dirty.size === 0}>
             <Save size={15} /> {saving ? "Saving…" : dirty.size ? `Save ${dirty.size} change${dirty.size > 1 ? "s" : ""}` : "No changes"} 
           </Button>
         }

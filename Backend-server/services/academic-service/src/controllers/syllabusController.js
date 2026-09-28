@@ -29,11 +29,18 @@ const createSyllabus = async (req, res) => {
   }
 };
 
+// Mass-assignment guard: only these fields may be set from the request body.
+// schoolId (tenant) and _id are deliberately excluded so a client can never
+// move a syllabus to another school.
+const SYLLABUS_FIELDS = ["class", "subject", "term", "topics", "totalHours"];
+const pick = (obj, keys) =>
+  Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
 const updateSyllabus = async (req, res) => {
   try {
     const syllabus = await Syllabus.findOneAndUpdate(
       { _id: req.params.id, schoolId: req.tenantId },
-      req.body,
+      pick(req.body, SYLLABUS_FIELDS),
       { new: true }
     );
     if (!syllabus) return res.status(404).json({ success: false, message: "Not found" });

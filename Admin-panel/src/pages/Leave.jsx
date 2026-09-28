@@ -211,7 +211,7 @@ export default function Leave() {
         title="Leave Management"
         description="Apply for and manage leaves for staff and students."
         right={
-          <Button variant="amber" onClick={() => setShowModal(true)}>
+          <Button variant="primary" onClick={() => setShowModal(true)}>
             <Plus size={15} /> Apply Leave
           </Button>
         }
@@ -230,7 +230,7 @@ export default function Leave() {
           label="Pending"
           value={String(stats.pending)}
           sub="Awaiting approval"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={CheckCircle2}
@@ -259,8 +259,8 @@ export default function Leave() {
               onClick={() => setTab(t.key)}
               className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
                 tab === t.key
-                  ? "bg-ink text-white border-ink"
-                  : "bg-white text-slate-text border-black/10 hover:border-ink/30"
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-slate-text border-slate-300 hover:border-ink/30"
               }`}
             >
               {t.label}
@@ -320,7 +320,7 @@ export default function Leave() {
                 return (
                   <div
                     key={l.id}
-                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border border-black/[0.06] hover:border-black/10 hover:bg-paper/40 transition-colors"
+                    className="flex flex-col sm:flex-row sm:items-center gap-3 p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-paper/40 transition-colors"
                   >
                     <div className="w-11 h-11 rounded-xl bg-info/10 text-info flex items-center justify-center shrink-0">
                       <CalendarDays size={20} />
@@ -330,7 +330,7 @@ export default function Leave() {
                         <p className="text-[14px] font-semibold text-ink">
                           {l.applicant}
                         </p>
-                        <Pill tone={isStudent ? "info" : "amber"}>
+                        <Pill tone={isStudent ? "info" : "primary"}>
                           {l.role}
                         </Pill>
                         <Pill tone={statusTone(l.status)}>{l.status}</Pill>
@@ -370,7 +370,7 @@ export default function Leave() {
         <Card title="My Leave Balance">
           {balanceLoading ? (
             <div className="py-10 text-center">
-              <div className="inline-block w-6 h-6 border-2 border-amber/30 border-t-amber rounded-full animate-spin" />
+              <div className="inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full animate-spin" />
               <p className="text-[12.5px] text-slate-text/50 mt-2">Loading balance...</p>
             </div>
           ) : (
@@ -378,7 +378,7 @@ export default function Leave() {
               <div className="overflow-x-auto -mx-5">
                 <table className="w-full text-[13px]">
                   <thead>
-                    <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                    <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                       <th className="px-5 py-2.5 font-semibold">Leave Type</th>
                       <th className="px-5 py-2.5 font-semibold">Entitled</th>
                       <th className="px-5 py-2.5 font-semibold">Used</th>
@@ -391,7 +391,7 @@ export default function Leave() {
                       return (
                         <tr
                           key={b.id}
-                          className="border-b border-black/[0.04] hover:bg-paper/60"
+                          className="border-b border-slate-100 hover:bg-paper/60"
                         >
                           <td className="px-5 py-3 font-semibold text-ink">
                             {b.name}
@@ -436,7 +436,7 @@ export default function Leave() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <h3 className="font-display font-semibold text-ink text-[17px]">
                 Apply Leave
               </h3>
@@ -448,7 +448,7 @@ export default function Leave() {
               </button>
             </div>
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              <p className="rounded-lg bg-paper border border-black/[0.06] px-3.5 py-3 text-[12.5px] text-slate-text">
+              <p className="rounded-lg bg-paper border border-slate-200 px-3.5 py-3 text-[12.5px] text-slate-text">
                 The leave is submitted under your account and will be reviewed
                 by the school administrator.
               </p>
@@ -494,16 +494,16 @@ export default function Leave() {
                   onChange={(e) =>
                     setForm((f) => ({ ...f, reason: e.target.value }))
                   }
-                  className="w-full rounded-lg border border-black/10 p-3 text-[13px] outline-none focus:border-ink/40 resize-none"
+                  className="w-full rounded-lg border border-slate-300 p-3 text-[13px] outline-none focus:border-primary resize-none"
                 />
               </LeaveField>
             </div>
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowModal(false)}>
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={apply}
                 disabled={!form.from || !form.to}
               >

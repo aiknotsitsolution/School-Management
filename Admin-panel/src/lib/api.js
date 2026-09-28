@@ -17,10 +17,7 @@ const MAX_REFRESH_RETRIES = 6;
 
 function doRefresh(refreshToken) {
   if (!refreshToken)
-    return Promise.resolve({
-      ok: false,
-      body: { success: false, message: "No refresh token" },
-    });
+    return Promise.resolve({ ok: false, body: { success: false, message: "No refresh token" } });
   if (!refreshPromise) {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
@@ -30,45 +27,31 @@ function doRefresh(refreshToken) {
       body: JSON.stringify({ refreshToken }),
       signal: controller.signal,
     })
-      .then((r) =>
-        r.json().then((body) => ({ ok: r.ok, status: r.status, body })),
-      )
-      .catch(() => ({
-        ok: false,
-        status: 0,
-        body: { success: false, message: "Refresh timeout" },
-      }))
-      .finally(() => {
-        clearTimeout(timeout);
-        refreshPromise = null;
-      });
+      .then((r) => r.json().then((body) => ({ ok: r.ok, body })))
+      .catch(() => ({ ok: false, body: { success: false, message: "Refresh timeout" } }))
+      .finally(() => { clearTimeout(timeout); refreshPromise = null; });
   }
   return refreshPromise;
 }
 
 async function refreshAccessToken() {
-  const rt =
-    store.getState().auth.refreshToken ||
-    localStorage.getItem("erp_refresh_token");
-  if (!rt) return { ok: false, definitive: true };
+  const rt = store.getState().auth.refreshToken || localStorage.getItem("erp_refresh_token");
+  if (!rt) return false;
   try {
-    const { ok, status, body } = await doRefresh(rt);
+    const { ok, body } = await doRefresh(rt);
     if (ok && body.data?.accessToken) {
-      store.dispatch(
-        setTokens({
-          accessToken: body.data.accessToken,
-          refreshToken: body.data.refreshToken,
-        }),
-      );
+      store.dispatch(setTokens({
+        accessToken: body.data.accessToken,
+        refreshToken: body.data.refreshToken,
+      }));
       refreshRetries = 0;
       scheduleRefresh();
-      return { ok: true, definitive: false };
+      return true;
     }
-    return { ok: false, definitive: status === 400 || status === 401 };
   } catch {
     // network / timeout — fall through to retry
-    return { ok: false, definitive: false };
   }
+  return false;
 }
 
 function scheduleRefresh() {
@@ -81,14 +64,11 @@ function scheduleRefresh() {
     const payload = JSON.parse(atob(token.split(".")[1]));
     const msUntilExpiry = payload.exp * 1000 - Date.now();
     if (msUntilExpiry <= 0) {
-      refreshAccessToken().then(({ ok }) => {
+      refreshAccessToken().then((ok) => {
         if (!ok) {
           refreshRetries++;
           if (refreshRetries < MAX_REFRESH_RETRIES) {
-            const delay = Math.min(
-              5000 * Math.pow(1.5, refreshRetries - 1),
-              60_000,
-            );
+            const delay = Math.min(5000 * Math.pow(1.5, refreshRetries - 1), 60_000);
             setTimeout(() => scheduleRefresh(), delay);
           }
         }
@@ -97,14 +77,11 @@ function scheduleRefresh() {
     }
     const refreshIn = Math.max(msUntilExpiry - 5 * 60 * 1000, 10_000);
     refreshTimer = setTimeout(async () => {
-      const { ok } = await refreshAccessToken();
+      const ok = await refreshAccessToken();
       if (!ok) {
         refreshRetries++;
         if (refreshRetries < MAX_REFRESH_RETRIES) {
-          const delay = Math.min(
-            5000 * Math.pow(1.5, refreshRetries - 1),
-            60_000,
-          );
+          const delay = Math.min(5000 * Math.pow(1.5, refreshRetries - 1), 60_000);
           setTimeout(() => scheduleRefresh(), delay);
         }
       }
@@ -117,22 +94,24 @@ scheduleRefresh();
 
 // SSE subscriber built on fetch + ReadableStream so the Authorization header is
 // sent (EventSource cannot set headers). Auto-reconnects on error/timeout.
-function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
+function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {})
+{
   const controller = new AbortController();
   let running = true;
   let timer = null;
 
-  const connect = async () => {
+  const connect = async () =>
+  {
     if (controller.signal.aborted) return;
-    try {
+    try
+    {
       let { auth } = store.getState();
       let token = auth.accessToken || localStorage.getItem("erp_access_token");
       const user =
         auth.user || JSON.parse(localStorage.getItem("erp_user") || "null");
       const passiveSchoolId =
         auth.activeSchoolId || localStorage.getItem("erp_active_school");
-      const includeSchoolHeader =
-        user?.role === "super_admin" && passiveSchoolId;
+      const includeSchoolHeader = user?.role === "super_admin" && passiveSchoolId;
       const response = await fetch(`${API_BASE_URL}${path}`, {
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
@@ -140,47 +119,49 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
         },
         signal: controller.signal,
       });
-      if (response.status === 401) {
-        const refresh = await refreshAccessToken();
-        if (refresh.ok) {
+      if (response.status === 401)
+      {
+        const ok = await refreshAccessToken();
+        if (ok)
+        {
           onStatus?.("reconnecting");
           if (running) timer = setTimeout(connect, delay);
-          return;
-        }
-        if (refresh.definitive) {
-          store.dispatch(logout());
-          onStatus?.("error");
           return;
         }
         onStatus?.("reconnecting");
         if (running) timer = setTimeout(connect, delay);
         return;
       }
-      if (response.status === 400) {
+      if (response.status === 400)
+      {
         onStatus?.("error");
         return;
       }
-      if (!response.ok || !response.body)
-        throw new Error(`SSE ${response.status}`);
+      if (!response.ok || !response.body) throw new Error(`SSE ${response.status}`);
       onStatus?.("connected");
       const reader = response.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      for (;;) {
+      for (; ;)
+      {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
         let idx;
-        while ((idx = buffer.indexOf("\n\n")) !== -1) {
+        while ((idx = buffer.indexOf("\n\n")) !== -1)
+        {
           const block = buffer.slice(0, idx);
           buffer = buffer.slice(idx + 2);
           const dataLine = block
             .split("\n")
             .find((l) => l.startsWith("data: "));
-          if (dataLine) {
-            try {
+          if (dataLine)
+          {
+            try
+            {
               onData?.(JSON.parse(dataLine.slice(6)));
-            } catch {
+            } catch
+            {
               /* ignore malformed frame */
             }
           }
@@ -188,7 +169,8 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
       }
       onStatus?.("reconnecting");
       if (running) timer = setTimeout(connect, delay);
-    } catch (err) {
+    } catch (err)
+    {
       if (controller.signal.aborted) return;
       onStatus?.("reconnecting");
       if (running) timer = setTimeout(connect, delay);
@@ -196,14 +178,16 @@ function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {}) {
   };
 
   connect();
-  return () => {
+  return () =>
+  {
     running = false;
     if (timer) clearTimeout(timer);
     controller.abort();
   };
 }
 
-async function request(path, options = {}) {
+async function request(path, options = {})
+{
   const isFormData = options.body instanceof FormData;
   const { auth } = store.getState();
   const token = auth.accessToken || localStorage.getItem("erp_access_token");
@@ -238,26 +222,25 @@ async function request(path, options = {}) {
       ...options.headers,
     },
   });
-  if (response.status === 401 && !options._retry && !isPublicPath) {
+  if (response.status === 401 && !options._retry && !isPublicPath)
+  {
     // Wait for any in-flight refresh first (doRefresh deduplicates).
-    let refreshRejected = false;
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const refresh = await refreshAccessToken();
-      if (refresh.ok) return request(path, { ...options, _retry: true });
-      if (refresh.definitive) {
-        refreshRejected = true;
-        break;
-      }
+    for (let attempt = 0; attempt < 5; attempt++)
+    {
+      const ok = await refreshAccessToken();
+      if (ok) return request(path, { ...options, _retry: true });
       const delay = Math.min(2000 * Math.pow(1.5, attempt), 15_000);
       await new Promise((r) => setTimeout(r, delay));
     }
-    if (refreshRejected) store.dispatch(logout());
+    store.dispatch(logout());
   }
   const body = await response.json().catch(() => ({}));
-  if (!response.ok || body.success === false) {
+  if (!response.ok || body.success === false)
+  {
     const err = new Error(body.message || "Request failed");
     err.data = body.data || null;
     err.status = response.status;
+    if (Array.isArray(body.conflicts)) err.conflicts = body.conflicts;
     throw err;
   }
   return body;
@@ -271,7 +254,16 @@ export const api = {
   school: {
     me: () => request("/auth/school/me"),
     update: (payload) => request("/auth/school/me", json("PATCH", payload)),
+    paymentGateway: {
+      get: () => request("/auth/school/me/payment-gateway"),
+      update: (payload) =>
+        request("/auth/school/me/payment-gateway", json("PATCH", payload)),
+      test: (payload) =>
+        request("/auth/school/me/payment-gateway/test", json("POST", payload)),
+    },
   },
+  changePassword: (payload) =>
+    request("/auth/change-password", json("POST", payload)),
   resetPassword: (token, newPassword) =>
     request("/auth/reset-password", json("POST", { token, newPassword })),
   forgotPassword: (email) =>
@@ -281,19 +273,22 @@ export const api = {
   resetPasswordOtp: (token, newPassword) =>
     request("/auth/reset-password-otp", json("POST", { token, newPassword })),
   users: {
-    list: (params = "") => request(`/auth/users${params ? `?${params}` : ""}`),
+    list: (params = "") =>
+      request(`/auth/users${params ? `?${params}` : ""}`),
     create: (user) => request("/auth/users", json("POST", user)),
     update: (id, user) => request(`/auth/users/${id}`, json("PATCH", user)),
     updateStatus: (id, isActive) =>
       request(`/auth/users/${id}/status`, json("PATCH", { isActive })),
     remove: (id) => request(`/auth/users/${id}`, { method: "DELETE" }),
-    restore: (id) => request(`/auth/users/${id}/restore`, { method: "POST" }),
+    restore: (id) =>
+      request(`/auth/users/${id}/restore`, { method: "POST" }),
     resetPassword: (id) =>
       request(`/auth/users/${id}/reset-password`, { method: "POST" }),
     sendResetOtp: (id) =>
       request(`/auth/users/${id}/send-reset-otp`, { method: "POST" }),
     updateMe: (patch) => request("/auth/me", json("PATCH", patch)),
-    uploadPhoto: (file) => {
+    uploadPhoto: (file) =>
+    {
       const formData = new FormData();
       formData.append("photo", file);
       return request("/auth/upload-photo", { method: "POST", body: formData });
@@ -315,85 +310,61 @@ export const api = {
     remove: (id) => request(`/auth/sessions/${id}`, { method: "DELETE" }),
   },
   plans: {
-    list: (params = "") =>
-      request(`/platform/plans${params ? `?${params}` : ""}`),
+    list: (params = "") => request(`/platform/plans${params ? `?${params}` : ""}`),
     get: (id) => request(`/platform/plans/${id}`),
     create: (plan) => request("/platform/plans", json("POST", plan)),
     update: (id, plan) => request(`/platform/plans/${id}`, json("PATCH", plan)),
     remove: (id) => request(`/platform/plans/${id}`, { method: "DELETE" }),
   },
   analytics: {
-    summary: (query = "") =>
-      request(`/platform/analytics${query ? `?${query}` : ""}`),
+    summary: (query = "") => request(`/platform/analytics${query ? `?${query}` : ""}`),
   },
   platform: {
     settings: {
       get: () => request("/platform/settings"),
-      update: (payload) =>
-        request("/platform/settings", {
-          method: "PATCH",
-          body: JSON.stringify(payload),
-        }),
+      update: (payload) => request("/platform/settings", { method: "PATCH", body: JSON.stringify(payload) }),
     },
     reports: {
       catalog: () => request("/platform/reports"),
-      generate: (type, params = "") =>
-        request(`/platform/reports/${type}${params ? `?${params}` : ""}`),
+      generate: (type, params = "") => request(`/platform/reports/${type}${params ? `?${params}` : ""}`),
     },
-    auditLogs: (params = "") =>
-      request(`/platform/audit-logs${params ? `?${params}` : ""}`),
+    auditLogs: (params = "") => request(`/platform/audit-logs${params ? `?${params}` : ""}`),
     schools: {
-      list: (params = "") =>
-        request(`/platform/schools${params ? `?${params}` : ""}`),
+      list: (params = "") => request(`/platform/schools${params ? `?${params}` : ""}`),
       get360: (id) => request(`/platform/schools/${id}`),
-      update: (id, payload) =>
-        request(`/platform/schools/${id}`, json("PATCH", payload)),
+      update: (id, payload) => request(`/platform/schools/${id}`, json("PATCH", payload)),
       setStatus: (id, status, reason) =>
-        request(
-          `/platform/schools/${id}/status`,
-          json("PATCH", { status, reason }),
-        ),
+        request(`/platform/schools/${id}/status`, json("PATCH", { status, reason })),
       softDelete: (id, reason) =>
-        request(
-          `/platform/schools/${id}/soft-delete`,
-          json("PATCH", { reason }),
-        ),
+        request(`/platform/schools/${id}/soft-delete`, json("PATCH", { reason })),
       restore: (id) =>
         request(`/platform/schools/${id}/restore`, json("PATCH", {})),
       hardDelete: (id) =>
         request(`/platform/schools/${id}`, { method: "DELETE" }),
       updateOnboarding: (id, status, notes) =>
-        request(
-          `/platform/schools/${id}/onboarding`,
-          json("PATCH", { status, notes }),
-        ),
+        request(`/platform/schools/${id}/onboarding`, json("PATCH", { status, notes })),
       sendWelcomeEmail: (id) =>
         request(`/platform/schools/${id}/welcome-email`, { method: "POST" }),
     },
     referenceData: {
       list: (category) => request(`/platform/reference-data/${category}`),
       add: (category, value) =>
-        request(
-          `/platform/reference-data/${category}`,
-          json("POST", { value }),
-        ),
+        request(`/platform/reference-data/${category}`, json("POST", { value })),
     },
     users: {
-      list: (params = "") =>
-        request(`/platform/users${params ? `?${params}` : ""}`),
+      list: (params = "") => request(`/platform/users${params ? `?${params}` : ""}`),
       get360: (id) => request(`/platform/users/${id}`),
       update: (id, user) => request(`/auth/users/${id}`, json("PATCH", user)),
       setStatus: (id, isActive) =>
         request(`/auth/users/${id}/status`, json("PATCH", { isActive })),
       remove: (id) => request(`/auth/users/${id}`, { method: "DELETE" }),
-      hardDelete: (id) =>
-        request(`/auth/users/${id}/permanent`, { method: "DELETE" }),
-      restore: (id) => request(`/auth/users/${id}/restore`, { method: "POST" }),
+      hardDelete: (id) => request(`/auth/users/${id}/permanent`, { method: "DELETE" }),
+      restore: (id) =>
+        request(`/auth/users/${id}/restore`, { method: "POST" }),
     },
   },
   subscriptions: {
-    list: (params = "") =>
-      request(`/platform/subscriptions${params ? `?${params}` : ""}`),
+    list: (params = "") => request(`/platform/subscriptions${params ? `?${params}` : ""}`),
     get: (id) => request(`/platform/subscriptions/${id}`),
     assign: (schoolId, planId, effectiveDate) =>
       request(
@@ -401,15 +372,11 @@ export const api = {
         json("POST", { schoolId, planId, effectiveDate }),
       ),
     act: (id, action, extra = {}) =>
-      request(
-        `/platform/subscriptions/${id}`,
-        json("PATCH", { action, ...extra }),
-      ),
+      request(`/platform/subscriptions/${id}`, json("PATCH", { action, ...extra })),
   },
   billing: {
     invoices: {
-      list: (params = "") =>
-        request(`/platform/invoices${params ? `?${params}` : ""}`),
+      list: (params = "") => request(`/platform/invoices${params ? `?${params}` : ""}`),
       get: (id) => request(`/platform/invoices/${id}`),
       generate: (subscriptionId, period = {}) =>
         request(
@@ -426,28 +393,21 @@ export const api = {
     scheduled: () => request("/auth/school/me/subscription/scheduled"),
     plans: () => request("/auth/school/me/plans"),
     usage: () => request("/auth/school/me/usage"),
-    upgrade: (planId, durationPeriods = 1, switchMode = "immediate") =>
-      request(
-        "/auth/school/me/upgrade",
-        json("POST", { planId, durationPeriods, switchMode }),
-      ),
+    upgrade: (planId, durationPeriods = 1, switchMode = "immediate") => request("/auth/school/me/upgrade", json("POST", { planId, durationPeriods, switchMode })),
   },
   invoices: {
-    list: (params = "") =>
-      request(`/auth/school/me/invoices${params ? `?${params}` : ""}`),
+    list: (params = "") => request(`/auth/school/me/invoices${params ? `?${params}` : ""}`),
     get: (id) => request(`/auth/school/me/invoices/${id}`),
     pdfUrl: (id) => `${API_BASE_URL}/auth/school/me/invoices/${id}/pdf`,
-    downloadPdf: async (id) => {
+    downloadPdf: async (id) =>
+    {
       const { auth } = store.getState();
-      const token =
-        auth.accessToken || localStorage.getItem("erp_access_token");
-      const response = await fetch(
-        `${API_BASE_URL}/auth/school/me/invoices/${id}/pdf`,
-        {
-          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-        },
-      );
-      if (!response.ok) {
+      const token = auth.accessToken || localStorage.getItem("erp_access_token");
+      const response = await fetch(`${API_BASE_URL}/auth/school/me/invoices/${id}/pdf`, {
+        headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!response.ok)
+      {
         const body = await response.json().catch(() => ({}));
         const err = new Error(body.message || "Download failed");
         err.status = response.status;
@@ -479,7 +439,8 @@ export const api = {
       request(`/students/pending-registrations${params ? `?${params}` : ""}`),
     completeProfile: (id) =>
       request(`/students/${id}/complete-profile`, { method: "POST" }),
-    uploadPhoto: (file) => {
+    uploadPhoto: (file) =>
+    {
       const formData = new FormData();
       formData.append("photo", file);
       return request("/students/upload-photo", {
@@ -488,9 +449,10 @@ export const api = {
       });
     },
     update: (id, student) => request(`/students/${id}`, json("PUT", student)),
-    issueIdCard: (id) =>
-      request(`/students/${id}/issue-id-card`, { method: "POST" }),
+    issueIdCard: (id) => request(`/students/${id}/issue-id-card`, { method: "POST" }),
     remove: (id) => request(`/students/${id}`, { method: "DELETE" }),
+    // Undo a soft-delete (Phase 2) within the purge retention window.
+    restore: (id) => request(`/students/${id}/restore`, { method: "POST" }),
     stats: () => request("/students/stats/summary"),
   },
   admissions: {
@@ -504,7 +466,8 @@ export const api = {
   },
   documents: {
     list: (params = "") => request(`/documents${params ? `?${params}` : ""}`),
-    upload: (file, item) => {
+    upload: (file, item) =>
+    {
       const formData = new FormData();
       formData.append("file", file);
       if (item?.title) formData.append("title", item.title);
@@ -525,15 +488,13 @@ export const api = {
     remove: (id) => request(`/behavior/${id}`, { method: "DELETE" }),
   },
   achievements: {
-    list: (params = "") =>
-      request(`/achievements${params ? `?${params}` : ""}`),
+    list: (params = "") => request(`/achievements${params ? `?${params}` : ""}`),
     create: (item) => request("/achievements", json("POST", item)),
     update: (id, item) => request(`/achievements/${id}`, json("PUT", item)),
     remove: (id) => request(`/achievements/${id}`, { method: "DELETE" }),
   },
   studyMaterials: {
-    list: (params = "") =>
-      request(`/study-materials${params ? `?${params}` : ""}`),
+    list: (params = "") => request(`/study-materials${params ? `?${params}` : ""}`),
     create: (item) => request("/study-materials", json("POST", item)),
     remove: (id) => request(`/study-materials/${id}`, { method: "DELETE" }),
   },
@@ -553,6 +514,16 @@ export const api = {
     list: (params = "") => request(`/timetable${params ? `?${params}` : ""}`),
     save: (item) => request("/timetable", json("POST", item)),
     remove: (id) => request(`/timetable/${id}`, { method: "DELETE" }),
+    generate: (payload) => request("/timetable/generate", json("POST", payload)),
+    substitutions: {
+      list: (params = "") =>
+        request(`/timetable/substitutions${params ? `?${params}` : ""}`),
+      create: (payload) =>
+        request("/timetable/substitutions", json("POST", payload)),
+      setStatus: (id, status) =>
+        request(`/timetable/substitutions/${id}/status`, json("PATCH", { status })),
+      remove: (id) => request(`/timetable/substitutions/${id}`, { method: "DELETE" }),
+    },
   },
   homework: {
     list: (params = "") => request(`/homework${params ? `?${params}` : ""}`),
@@ -562,18 +533,17 @@ export const api = {
     submissions: {
       myList: (params = "") =>
         request(`/homework/submissions${params ? `?${params}` : ""}`),
-      submit: (
-        homeworkId,
-        { content = "", file = null, attachments = [] } = {},
-      ) => {
-        const hasContent =
-          typeof content === "string" && content.trim().length > 0;
+      submit: (homeworkId, { content = "", file = null, attachments = [] } = {}) =>
+      {
+        const hasContent = typeof content === "string" && content.trim().length > 0;
         const hasFile = typeof File !== "undefined" && file instanceof File;
-        if (hasFile) {
+        if (hasFile)
+        {
           const formData = new FormData();
           formData.append("file", file);
           if (hasContent) formData.append("content", content);
-          if (attachments.length > 0) {
+          if (attachments.length > 0)
+          {
             formData.append("attachments", JSON.stringify(attachments));
           }
           return request(`/homework/submissions/${homeworkId}`, {
@@ -589,9 +559,7 @@ export const api = {
       review: (id, item) =>
         request(`/homework/submissions/review/${id}`, json("PATCH", item)),
       classList: (params = "") =>
-        request(
-          `/homework/submissions/class/list${params ? `?${params}` : ""}`,
-        ),
+        request(`/homework/submissions/class/list${params ? `?${params}` : ""}`),
     },
   },
   exams: {
@@ -600,24 +568,30 @@ export const api = {
     update: (id, item) => request(`/exams/${id}`, json("PUT", item)),
     updateStatus: (id, status) =>
       request(`/exams/${id}/status`, json("PATCH", { status })),
+    termRollup: (params = "") => request(`/exams/term-rollup${params ? `?${params}` : ""}`),
     remove: (id) => request(`/exams/${id}`, { method: "DELETE" }),
+  },
+  gradingScales: {
+    list: () => request("/grading-scales"),
+    active: () => request("/grading-scales/active"),
+    create: (item) => request("/grading-scales", json("POST", item)),
+    update: (id, item) => request(`/grading-scales/${id}`, json("PATCH", item)),
+    activate: (id) => request(`/grading-scales/${id}/activate`, json("POST", {})),
+    remove: (id) => request(`/grading-scales/${id}`, { method: "DELETE" }),
+  },
+  cce: {
+    getCoScholastic: (params = "") => request(`/cce/co-scholastic${params ? `?${params}` : ""}`),
+    saveCoScholastic: (body) => request("/cce/co-scholastic", json("PUT", body)),
   },
   examMasters: {
     list: (kind) => request(`/exam-masters/${kind}`),
-    create: (kind, item) =>
-      request(`/exam-masters/${kind}`, json("POST", item)),
+    create: (kind, item) => request(`/exam-masters/${kind}`, json("POST", item)),
     update: (kind, id, item) =>
       request(`/exam-masters/${kind}/${id}`, json("PATCH", item)),
     deactivate: (kind, id) =>
-      request(`/exam-masters/${kind}/${id}/deactivate`, {
-        method: "PATCH",
-        body: JSON.stringify({ active: false }),
-      }),
+      request(`/exam-masters/${kind}/${id}/deactivate`, { method: "PATCH", body: JSON.stringify({ active: false }) }),
     restore: (kind, id) =>
-      request(`/exam-masters/${kind}/${id}/restore`, {
-        method: "PATCH",
-        body: JSON.stringify({}),
-      }),
+      request(`/exam-masters/${kind}/${id}/restore`, { method: "PATCH", body: JSON.stringify({}) }),
     validate: (item) =>
       request("/exam-masters/validate-refs", json("POST", item)),
   },
@@ -626,6 +600,32 @@ export const api = {
     list: (params = "") => request(`/marks${params ? `?${params}` : ""}`),
     reportCard: (params = "") =>
       request(`/marks/report-card${params ? `?${params}` : ""}`),
+    downloadReportCardPdf: async (params = "") => {
+      const { auth } = store.getState();
+      const token = auth.accessToken || localStorage.getItem("erp_access_token");
+      const response = await fetch(
+        `${API_BASE_URL}/marks/report-card/pdf${params ? `?${params}` : ""}`,
+        { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } },
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const err = new Error(body.message || "Download failed");
+        err.status = response.status;
+        throw err;
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      const filename = match ? match[1] : "report-card.pdf";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    },
     classSummary: (params = "") =>
       request(`/marks/class-summary${params ? `?${params}` : ""}`),
   },
@@ -640,14 +640,47 @@ export const api = {
     create: (item) => request("/transfers", json("POST", item)),
     history: (params = "") =>
       request(`/transfers/history${params ? `?${params}` : ""}`),
+    // Transfer Certificates (Phase 2) — served under /students so they share
+    // the student-service prefix.
+    tcs: {
+      list: (params = "") =>
+        request(`/students/transfer-certificates${params ? `?${params}` : ""}`),
+      issue: (item) => request("/students/transfer-certificates", json("POST", item)),
+      downloadPdf: async (id) =>
+      {
+        const { auth } = store.getState();
+        const token = auth.accessToken || localStorage.getItem("erp_access_token");
+        const response = await fetch(`${API_BASE_URL}/students/transfer-certificates/${id}/pdf`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        });
+        if (!response.ok)
+        {
+          const body = await response.json().catch(() => ({}));
+          const err = new Error(body.message || "Download failed");
+          err.status = response.status;
+          throw err;
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = match ? match[1] : `transfer-certificate-${id}.pdf`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
+    },
   },
   rollover: {
     prepare: (item) => request("/rollover/prepare", json("POST", item)),
   },
   fees: {
     structures: {
-      list: (params = "") =>
-        request(`/fees/structure${params ? `?${params}` : ""}`),
+      list: (params = "") => request(`/fees/structure${params ? `?${params}` : ""}`),
       create: (item) => request("/fees/structure", json("POST", item)),
       update: (id, item) => request(`/fees/structure/${id}`, json("PUT", item)),
       toggleActive: (id, active) =>
@@ -662,14 +695,15 @@ export const api = {
       generateConfirm: (item) =>
         request("/fees/generate/confirm", json("POST", item)),
       pdfUrl: (id) => `${API_BASE_URL}/fees/${id}/pdf`,
-      downloadPdf: async (id) => {
+      downloadPdf: async (id) =>
+      {
         const { auth } = store.getState();
-        const token =
-          auth.accessToken || localStorage.getItem("erp_access_token");
+        const token = auth.accessToken || localStorage.getItem("erp_access_token");
         const response = await fetch(`${API_BASE_URL}/fees/${id}/pdf`, {
           headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
         });
-        if (!response.ok) {
+        if (!response.ok)
+        {
           const body = await response.json().catch(() => ({}));
           const err = new Error(body.message || "Download failed");
           err.status = response.status;
@@ -694,21 +728,59 @@ export const api = {
       create: (item) => request("/payments", json("POST", item)),
       receipt: (receiptNo) =>
         request(`/payments/receipt/${encodeURIComponent(receiptNo)}`),
+      downloadReceiptPdf: async (receiptNo) =>
+      {
+        const { auth } = store.getState();
+        const token = auth.accessToken || localStorage.getItem("erp_access_token");
+        const response = await fetch(
+          `${API_BASE_URL}/payments/receipt/${encodeURIComponent(receiptNo)}/pdf`,
+          { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } },
+        );
+        if (!response.ok)
+        {
+          const body = await response.json().catch(() => ({}));
+          const err = new Error(body.message || "Download failed");
+          err.status = response.status;
+          throw err;
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = match ? match[1] : `receipt-${receiptNo}.pdf`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
+      setClearance: (id, payload) =>
+        request(`/payments/${id}/clearance`, json("POST", payload)),
     },
     reports: {
       get: (params = "") =>
         request(`/payments/reports${params ? `?${params}` : ""}`),
+      reconciliation: (params = "") =>
+        request(`/payments/reconciliation${params ? `?${params}` : ""}`),
+    },
+    concessions: {
+      list: (params = "") =>
+        request(`/fees/concessions${params ? `?${params}` : ""}`),
+      create: (item) => request("/fees/concessions", json("POST", item)),
+      approve: (id) => request(`/fees/concessions/${id}/approve`, { method: "PATCH" }),
+      reject: (id, reason) =>
+        request(`/fees/concessions/${id}/reject`, json("PATCH", { reason })),
+      remove: (id) => request(`/fees/concessions/${id}`, { method: "DELETE" }),
     },
     orders: {
-      list: (params = "") =>
-        request(`/payments/orders${params ? `?${params}` : ""}`),
+      list: (params = "") => request(`/payments/orders${params ? `?${params}` : ""}`),
       create: (item) => request("/payments/orders", json("POST", item)),
-      initiate: (id) =>
-        request(`/payments/orders/${id}/initiate`, { method: "POST" }),
-      confirm: (id, payload) =>
-        request(`/payments/orders/${id}/confirm`, json("POST", payload)),
-      cancel: (id) =>
-        request(`/payments/orders/${id}/cancel`, { method: "PATCH" }),
+      initiate: (id) => request(`/payments/orders/${id}/initiate`, { method: "POST" }),
+      confirm: (id, payload) => request(`/payments/orders/${id}/confirm`, json("POST", payload)),
+      manualConfirm: (id, payload) => request(`/payments/orders/${id}/manual-confirm`, json("POST", payload)),
+      cancel: (id) => request(`/payments/orders/${id}/cancel`, { method: "PATCH" }),
     },
   },
   notices: {
@@ -716,6 +788,24 @@ export const api = {
     create: (item) => request("/notices", json("POST", item)),
     update: (id, item) => request(`/notices/${id}`, json("PUT", item)),
     remove: (id) => request(`/notices/${id}`, { method: "DELETE" }),
+  },
+  diary: {
+    list: (params = "") => request(`/diary${params ? `?${params}` : ""}`),
+    create: (item) => request("/diary", json("POST", item)),
+    update: (id, item) => request(`/diary/${id}`, json("PUT", item)),
+    remove: (id) => request(`/diary/${id}`, { method: "DELETE" }),
+  },
+  messages: {
+    list: (params = "") => request(`/messages${params ? `?${params}` : ""}`),
+    create: (item) => request("/messages", json("POST", item)),
+    get: (id) => request(`/messages/${id}`),
+    reply: (id, body) => request(`/messages/${id}/reply`, json("POST", { body })),
+  },
+  broadcast: {
+    sms: (item) => request("/broadcast/sms", json("POST", item)),
+    email: (item) => request("/broadcast/email", json("POST", item)),
+    logs: (params = "") =>
+      request(`/broadcast/logs${params ? `?${params}` : ""}`),
   },
   notifications: {
     list: (params = "") =>
@@ -726,15 +816,15 @@ export const api = {
     subscribe: (handlers) => sseSubscribe("/notifications/stream", handlers),
   },
   attendanceStream: {
-    subscribe: (handlers) =>
-      sseSubscribe("/attendance-stream/stream", handlers),
+    subscribe: (handlers) => sseSubscribe("/attendance-stream/stream", handlers),
   },
   events: {
     list: () => request("/events"),
     create: (item) => request("/events", json("POST", item)),
     update: (id, item) => request(`/events/${id}`, json("PUT", item)),
     remove: (id) => request(`/events/${id}`, { method: "DELETE" }),
-    uploadImage: (file) => {
+    uploadImage: (file) =>
+    {
       const formData = new FormData();
       formData.append("image", file);
       return request("/events/upload-image", {
@@ -751,7 +841,8 @@ export const api = {
     remove: (id) => request(`/staff/${id}`, { method: "DELETE" }),
     // Own person record for a Staff/Teacher/Class Teacher account (refId scoped).
     me: () => request("/staff/me"),
-    uploadPhoto: (file) => {
+    uploadPhoto: (file) =>
+    {
       const formData = new FormData();
       formData.append("photo", file);
       return request("/staff/upload-photo", { method: "POST", body: formData });
@@ -780,7 +871,8 @@ export const api = {
   },
   assignments: {
     me: () => request("/assignments/me"),
-    list: (params = "") => request(`/assignments${params ? `?${params}` : ""}`),
+    list: (params = "") =>
+      request(`/assignments${params ? `?${params}` : ""}`),
     create: (item) => request("/assignments", json("POST", item)),
     update: (id, item) => request(`/assignments/${id}`, json("PATCH", item)),
     end: (id) => request(`/assignments/${id}/end`, json("POST", {})),
@@ -797,8 +889,8 @@ export const api = {
     list: () => request("/payroll"),
     create: (item) => request("/payroll", json("POST", item)),
     update: (id, data) => request(`/payroll/${id}`, json("PATCH", data)),
-    generateAll: (month, year) =>
-      request("/payroll/generate-all", json("POST", { month, year })),
+    generateAll: (month, year, opts) =>
+      request("/payroll/generate-all", json("POST", { month, year, adjustForAttendance: !!opts?.adjustForAttendance })),
     markPaid: (id) => request(`/payroll/${id}/pay`, json("PATCH", {})),
   },
   books: {
@@ -835,5 +927,26 @@ export const api = {
     create: (item) => request("/inventory", json("POST", item)),
     update: (id, item) => request(`/inventory/${id}`, json("PUT", item)),
     remove: (id) => request(`/inventory/${id}`, { method: "DELETE" }),
+  },
+  accounting: {
+    accounts: {
+      list: (params = "") => request(`/accounting/accounts${params ? `?${params}` : ""}`),
+      create: (item) => request("/accounting/accounts", json("POST", item)),
+      update: (id, item) => request(`/accounting/accounts/${id}`, json("PATCH", item)),
+      remove: (id) => request(`/accounting/accounts/${id}`, { method: "DELETE" }),
+    },
+    journal: {
+      list: (params = "") => request(`/accounting/journal${params ? `?${params}` : ""}`),
+      create: (entry) => request("/accounting/journal", json("POST", entry)),
+      remove: (id) => request(`/accounting/journal/${id}`, { method: "DELETE" }),
+    },
+    reports: {
+      trialBalance: (params = "") =>
+        request(`/accounting/reports/trial-balance${params ? `?${params}` : ""}`),
+      incomeExpense: (params = "") =>
+        request(`/accounting/reports/income-expense${params ? `?${params}` : ""}`),
+      balanceSheet: (params = "") =>
+        request(`/accounting/reports/balance-sheet${params ? `?${params}` : ""}`),
+    },
   },
 };

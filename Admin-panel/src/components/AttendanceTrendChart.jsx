@@ -42,7 +42,7 @@ const GRANULARITY_OPTIONS = [
   { id: "weekly", label: "Weekly" },
 ];
 
-const ATT_GREEN = "#3F8F5F";
+const ATT_GREEN = "#16A34A";
 
 /**
  * Compact styled dropdown with an icon tile on the left and a chevron on the
@@ -81,7 +81,7 @@ function ChartSelect({ options = [], value, onChange, icon: Icon, ariaLabel }) {
         className={`flex w-full items-center gap-2 rounded-xl border px-2.5 py-2 text-[12.5px] font-medium transition-all ${
           open
             ? "border-success ring-4 ring-success/15"
-            : "border-black/10 hover:border-black/20"
+            : "border-slate-300 hover:border-slate-400"
         }`}
       >
         {Icon && (
@@ -102,7 +102,7 @@ function ChartSelect({ options = [], value, onChange, icon: Icon, ariaLabel }) {
         <div
           role="listbox"
           aria-label={ariaLabel}
-          className="absolute left-0 top-full z-30 mt-1.5 w-full overflow-hidden rounded-xl border border-black/10 bg-white p-1 shadow-lg shadow-black/5"
+          className="absolute left-0 top-full z-30 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-300 bg-white p-1 shadow-lg shadow-black/5"
           style={{ minWidth: 168 }}
         >
           {options.map((option) => {
@@ -140,7 +140,7 @@ function TrendTooltip({ active, payload }) {
   if (!active || !payload || payload.length === 0) return null;
   const point = payload[0].payload;
   return (
-    <div className="rounded-xl border border-black/[0.06] bg-white px-4 py-3.5 shadow-xl shadow-black/8">
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3.5 shadow-xl shadow-black/8">
       <p className="text-[12.5px] font-bold text-ink">{point.fullLabel}</p>
       {point.missing ? (
         <p className="mt-1.5 text-[12px] text-slate-text/55">
@@ -171,7 +171,7 @@ function TrendTooltip({ active, payload }) {
               {point.absent.toLocaleString("en-IN")}
             </span>
           </div>
-          <div className="flex items-center gap-2 border-t border-black/[0.05] pt-1.5">
+          <div className="flex items-center gap-2 border-t border-slate-100 pt-1.5">
             <span className="flex-1 text-slate-text/70">Total records</span>
             <span className="font-semibold text-ink">
               {point.total.toLocaleString("en-IN")}
@@ -351,7 +351,7 @@ export default function AttendanceTrendChart({
               <stop offset="85%" stopColor={ATT_GREEN} stopOpacity={0.04} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEEAE0" />
+          <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
           <XAxis
             dataKey="label"
             tick={{ fontSize: 11.5, fill: "#64748B" }}
@@ -511,7 +511,7 @@ export default function AttendanceTrendChart({
       </div>
 
       {hasData && !loading && !error && (
-        <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-black/5 pt-3">
+        <div className="mt-3 flex flex-wrap items-center gap-4 border-t border-slate-100 pt-3">
           <div className="flex items-center gap-1.5 text-[12px]">
             <span className="flex h-5 w-5 items-center justify-center rounded-md bg-success/10">
               <UserCheck size={11} className="text-success" />

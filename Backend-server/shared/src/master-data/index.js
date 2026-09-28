@@ -78,7 +78,15 @@ function createMasterController(config) {
       schoolId,
       tenantId: schoolId,
     }));
-    if (rows.length) await ctx.model.insertMany(rows);
+    if (rows.length) {
+      try {
+        await ctx.model.insertMany(rows);
+      } catch (err) {
+        // Concurrent first-list race: another request seeded the same rows —
+        // the unique index did its job; the loser just re-reads below.
+        if (!err || err.code !== 11000) throw err;
+      }
+    }
     return true;
   }
 

@@ -21,7 +21,7 @@ import { LoadingBlock, EmptyBlock, ErrorBlock } from "../components/StateViews";
 
 const CATEGORIES = ["All", "academic", "sports", "arts", "citizenship", "attendance", "other"];
 const CAT_TONES = {
-  academic: "info", sports: "success", arts: "amber",
+  academic: "info", sports: "success", arts: "primary",
   citizenship: "success", attendance: "info", other: "neutral",
 };
 
@@ -170,10 +170,10 @@ export default function Achievements() {
       />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Trophy} label="Total Achievements" value={String(counts.total)} accent="amber" />
+        <StatCard icon={Trophy} label="Total Achievements" value={String(counts.total)} accent="primary" />
         <StatCard icon={Trophy} label="Academic" value={String(counts.academic || 0)} accent="info" />
         <StatCard icon={Trophy} label="Sports" value={String(counts.sports || 0)} accent="success" />
-        <StatCard icon={Trophy} label="Arts & Culture" value={String(counts.arts || 0)} accent="amber" />
+        <StatCard icon={Trophy} label="Arts & Culture" value={String(counts.arts || 0)} accent="primary" />
       </div>
 
       <Card
@@ -209,7 +209,7 @@ export default function Achievements() {
               </thead>
               <tbody>
                 {filtered.map((r) => (
-                  <tr key={r._id} className="border-t border-black/[0.06] hover:bg-paper/60">
+                  <tr key={r._id} className="border-t border-slate-200 hover:bg-paper/60">
                     <td className="px-5 py-2.5 font-semibold text-ink">{r.studentId}</td>
                     <td className="px-3 py-2.5 text-slate-text/80 max-w-[250px] truncate">{r.title}</td>
                     <td className="px-3 py-2.5"><Pill tone={CAT_TONES[r.category] || "neutral"}>{r.category}</Pill></td>
@@ -233,7 +233,7 @@ export default function Achievements() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setShowModal(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <h3 className="font-display font-semibold text-ink text-[16px]">{editId ? "Edit Achievement" : "Record Achievement"}</h3>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-paper"><X size={18} /></button>
             </div>
@@ -292,10 +292,10 @@ export default function Achievements() {
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-slate-text/60 uppercase">Description</label>
-                <textarea value={form.description} onChange={set("description")} rows={3} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info" placeholder="Details about the achievement..." />
+                <textarea value={form.description} onChange={set("description")} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info" placeholder="Details about the achievement..." />
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-black/[0.06]">
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200">
               <Button variant="ghost" onClick={() => setShowModal(false)}>Cancel</Button>
               <Button onClick={handleSave} disabled={saving}>{saving ? "Saving…" : "Save Achievement"}</Button>
             </div>

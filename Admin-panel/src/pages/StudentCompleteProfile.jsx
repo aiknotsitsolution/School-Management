@@ -183,7 +183,7 @@ export default function StudentCompleteProfile() {
               <CheckCircle2 size={11} className="inline mr-1" /> complete
             </Pill>
           ) : (
-            <Pill tone="amber">incomplete</Pill>
+            <Pill tone="primary">incomplete</Pill>
           )
         }
       />
@@ -310,7 +310,7 @@ export default function StudentCompleteProfile() {
           <Save size={15} /> Save changes
         </Button>
         <Button
-          variant="amber"
+          variant="primary"
           disabled={busy || missing.length > 0}
           onClick={() => save(true)}
           title={missing.length ? "Fill all required details first" : undefined}

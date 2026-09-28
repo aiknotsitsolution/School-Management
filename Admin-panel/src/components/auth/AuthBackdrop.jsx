@@ -77,7 +77,7 @@ function Dots({ className }) {
         position: "absolute",
         inset: 0,
         backgroundImage:
-          "radial-gradient(circle, rgba(232,163,61,0.35) 1px, transparent 1.2px)",
+          "radial-gradient(circle, rgba(79,70,229,0.35) 1px, transparent 1.2px)",
         backgroundSize: "26px 26px",
         maskImage: "radial-gradient(120% 100% at 30% 0%, black 30%, transparent 75%)",
         WebkitMaskImage:
@@ -92,24 +92,24 @@ export function HeroDecor() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
       <Dots className="opacity-[0.12]" />
-      <div className="absolute -top-44 -left-40 w-[560px] h-[560px] rounded-full bg-amber/10 blur-3xl" />
-      <div className="absolute top-1/3 -right-32 w-[440px] h-[440px] rounded-full bg-amber/[0.06] blur-3xl" />
-      <div className="absolute -bottom-40 left-1/4 w-[480px] h-[480px] rounded-full bg-amber/[0.07] blur-3xl" />
+      <div className="absolute -top-44 -left-40 w-[560px] h-[560px] rounded-full bg-primary/10 blur-3xl" />
+      <div className="absolute top-1/3 -right-32 w-[440px] h-[440px] rounded-full bg-primary/[0.06] blur-3xl" />
+      <div className="absolute -bottom-40 left-1/4 w-[480px] h-[480px] rounded-full bg-primary/[0.07] blur-3xl" />
       <div className="absolute top-[30%] left-[14%]">
         <Sparkles
-          className="text-amber/30"
+          className="text-primary/30"
           style={{ width: 34, height: 34, animation: "auth-twinkle 3.5s ease-in-out 0.6s infinite", willChange: "transform" }}
           strokeWidth={1.4}
         />
       </div>
       <div className="absolute bottom-[18%] right-[26%]">
         <Sparkles
-          className="text-amber/25"
+          className="text-primary/25"
           style={{ width: 22, height: 22, animation: "auth-twinkle 4.2s ease-in-out 2s infinite", willChange: "transform" }}
           strokeWidth={1.4}
         />
       </div>
-      {HERO_ICONS.map(([Icon, style], i) => PLACED(Icon, style, i, { className: "text-amber" }))}
+      {HERO_ICONS.map(([Icon, style], i) => PLACED(Icon, style, i, { className: "text-primary" }))}
     </div>
   );
 }
@@ -118,9 +118,9 @@ export function HeroDecor() {
 export function FormDecor() {
   return (
     <div aria-hidden="true" className="pointer-events-none absolute inset-0 overflow-hidden">
-      <div className="absolute -top-24 -right-24 w-[420px] h-[420px] rounded-full bg-amber/15 blur-3xl" />
-      <div className="absolute -bottom-32 -left-28 w-[380px] h-[380px] rounded-full bg-amber/10 blur-3xl" />
-      {FORM_ICONS.map(([Icon, style], i) => PLACED(Icon, style, i, { className: "text-amber" }))}
+      <div className="absolute -top-24 -right-24 w-[420px] h-[420px] rounded-full bg-primary/15 blur-3xl" />
+      <div className="absolute -bottom-32 -left-28 w-[380px] h-[380px] rounded-full bg-primary/10 blur-3xl" />
+      {FORM_ICONS.map(([Icon, style], i) => PLACED(Icon, style, i, { className: "text-primary" }))}
     </div>
   );
 }

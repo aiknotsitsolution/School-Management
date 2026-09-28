@@ -18,7 +18,7 @@ import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../componen
 const STATUS_TONES = {
   trialing: "info",
   active: "success",
-  past_due: "amber",
+  past_due: "primary",
   suspended: "neutral",
   cancelled: "alert",
   expired: "neutral",
@@ -158,7 +158,7 @@ export default function Subscriptions() {
               className={`inline-flex items-center px-3 py-1.5 rounded-lg text-[12.5px] font-semibold transition-colors ${
                 active
                   ? "bg-alert text-white"
-                  : "bg-white text-ink border border-black/10 hover:bg-paper"
+                  : "bg-white text-ink border border-slate-300 hover:bg-paper"
               }`}
             >
               {bucket.label}
@@ -222,7 +222,7 @@ export default function Subscriptions() {
               <option key={p._id} value={p._id}>{p.name}</option>
             ))}
           </Select>
-          <Button variant="amber" type="submit">Apply</Button>
+          <Button variant="primary" type="submit">Apply</Button>
         </form>
       </Card>
 
@@ -233,16 +233,16 @@ export default function Subscriptions() {
           ) : rows.length === 0 ? (
             <p className="p-6 text-[13px] text-slate-text/70">No subscriptions match.</p>
           ) : (
-            <div className="divide-y divide-black/[0.05]">
+            <div className="divide-y divide-slate-100">
               {rows.map((sub) => (
                 <button
                   key={sub._id}
                   onClick={() => openDetail(sub._id)}
                   className={`w-full text-left px-5 py-4 flex items-center gap-3 hover:bg-paper transition-colors ${
-                    selected === sub._id ? "bg-amber/10" : ""
+                    selected === sub._id ? "bg-primary/10" : ""
                   }`}
                 >
-                  <div className="w-9 h-9 rounded-lg bg-ink text-amber flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-lg bg-primary text-white flex items-center justify-center shrink-0">
                     <CreditCard size={16} />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -262,7 +262,7 @@ export default function Subscriptions() {
             </div>
           )}
           {pages > 1 && (
-            <div className="flex items-center justify-between px-5 py-3 border-t border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-3 border-t border-slate-200">
               <Button variant="outline" disabled={page <= 1} onClick={() => setPage(page - 1)}>
                 <ChevronLeft size={15} /> Prev
               </Button>
@@ -318,7 +318,7 @@ export default function Subscriptions() {
                 ))}
               </div>
 
-              <div className="space-y-3 border-t border-black/[0.06] pt-4">
+              <div className="space-y-3 border-t border-slate-200 pt-4">
                 <p className="text-[12px] font-semibold text-slate-text">Actions</p>
                 <div className="flex items-center gap-2">
                   <Select
@@ -373,7 +373,7 @@ export default function Subscriptions() {
                 )}
 
                 {(detail.status === "suspended" || detail.status === "cancelled" || detail.status === "expired") && (
-                  <Button variant="amber" className="w-full justify-center" disabled={busy} onClick={() => runAction("reactivate")}>
+                  <Button variant="primary" className="w-full justify-center" disabled={busy} onClick={() => runAction("reactivate")}>
                     <Play size={14} /> Reactivate
                   </Button>
                 )}
@@ -392,7 +392,7 @@ export default function Subscriptions() {
                 </Button>
               </div>
 
-              <div className="border-t border-black/[0.06] pt-4">
+              <div className="border-t border-slate-200 pt-4">
                 <p className="text-[12px] font-semibold text-slate-text mb-2">
                   Invoices ({detail.invoices?.length || 0})
                 </p>
@@ -411,7 +411,7 @@ export default function Subscriptions() {
                 )}
               </div>
 
-              <div className="border-t border-black/[0.06] pt-4">
+              <div className="border-t border-slate-200 pt-4">
                 <p className="text-[12px] font-semibold text-slate-text mb-2">
                   History ({detail.history?.length || 0})
                 </p>

@@ -55,7 +55,7 @@ export default function Library() {
         ) : (
           <div className="space-y-2.5">
             {active.map((i) => (
-              <div key={i._id} className="flex items-start justify-between gap-3 py-2.5 border-b border-black/[0.06] last:border-0">
+              <div key={i._id} className="flex items-start justify-between gap-3 py-2.5 border-b border-slate-200 last:border-0">
                 <div className="min-w-0">
                   <p className="text-[14px] font-semibold text-ink">{i.bookTitle || i.bookId?.title || "Book"}</p>
                   <p className="text-[12px] text-slate-text/70 mt-0.5">{i.bookId?.author || i.bookTitle || ""}{i.bookId?.isbn ? ` · ${i.bookId.isbn}` : ""}</p>
@@ -77,7 +77,7 @@ export default function Library() {
         ) : (
           <div className="schema space-y-2.5">
             {history.map((i) => (
-              <div key={i._id} className="flex items-start justify-between gap-3 py-2.5 border-b border-black/[0.06] last:border-0">
+              <div key={i._id} className="flex items-start justify-between gap-3 py-2.5 border-b border-slate-200 last:border-0">
                 <p className="text-[13.5px] font-medium text-ink">{i.bookTitle || i.bookId?.title || "Book"}</p>
                 <div className="text-right shrink-0 text-[12px] text-slate-text/70">
                   <p>Returned {fmtDate(i.returnDate)}</p>

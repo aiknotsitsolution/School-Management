@@ -338,6 +338,34 @@ module.exports = {
   listSessions,
   getCurrentSession,
   getSessionById,
+  // [internal] Resolve a session label to its calendar window (report-card
+  // attendance scoping in the academic service). Guarded by the internal key
+  // via /api/auth/internal; schoolId comes from the query, not a token.
+  getSessionWindow: async (req, res) => {
+    try {
+      const { schoolId, name } = req.query;
+      if (!schoolId || !String(name || "").trim()) {
+        return res.status(400).json({ success: false, message: "schoolId and name are required" });
+      }
+      const session = await AcademicSession.findOne({
+        schoolId,
+        name: String(name).trim(),
+      }).lean();
+      if (!session) return res.status(404).json({ success: false, message: "Academic session not found" });
+      res.json({
+        success: true,
+        data: {
+          name: session.name,
+          startDate: session.startDate,
+          endDate: session.endDate,
+          isCurrent: !!session.isCurrent,
+          status: session.status,
+        },
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, message: err.message });
+    }
+  },
   resolveCurrentSessionInfo,
   deriveSessionName,
   createSession,

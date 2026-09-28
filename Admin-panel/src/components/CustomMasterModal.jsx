@@ -70,7 +70,7 @@ export default function CustomMasterModal({
         onClick={onClose}
       />
       <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
           <h3 className="font-display font-semibold text-ink text-[17px]">
             {title || `${editing ? "Edit" : "Add Custom"} ${label}`}
           </h3>
@@ -104,19 +104,19 @@ export default function CustomMasterModal({
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 rows={3}
-                className="w-full px-3.5 py-2.5 rounded-lg border border-black/10 text-[13px] outline-none focus:border-ink/40 bg-white placeholder:text-slate-text/50 resize-none"
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-300 text-[13px] outline-none focus:border-primary bg-white placeholder:text-slate-text/50 resize-none"
                 placeholder="Optional description"
               />
             </div>
           )}
         </div>
 
-        <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+        <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
           <Button variant="outline" onClick={onClose}>
             Cancel
           </Button>
           <Button
-            variant="amber"
+            variant="primary"
             onClick={submit}
             disabled={saving || !name.trim()}
           >

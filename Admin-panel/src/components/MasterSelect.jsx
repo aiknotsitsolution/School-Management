@@ -114,7 +114,7 @@ export default function MasterSelect({
       <button
         type="button"
         onClick={toggle}
-        className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-black/10 text-[13px] outline-none focus:border-ink/40 bg-white text-left"
+        className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-slate-300 text-[13px] outline-none focus:border-primary bg-white text-left"
       >
         <span className={selected ? "text-ink" : "text-slate-text/60"}>
           {selected ? renderLabel(selected) : fallbackLabel || placeholder}
@@ -123,9 +123,9 @@ export default function MasterSelect({
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1 w-full bg-white rounded-xl border border-black/10 shadow-lg overflow-hidden">
+        <div className="absolute z-30 mt-1 w-full bg-white rounded-xl border border-slate-300 shadow-lg overflow-hidden">
           {/* Search box */}
-          <div className="p-2 border-b border-black/[0.06] relative">
+          <div className="p-2 border-b border-slate-200 relative">
             <Search
               size={14}
               className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-text/40"
@@ -136,7 +136,7 @@ export default function MasterSelect({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder={searchLabel}
-              className="w-full pl-8 pr-7 py-2 rounded-lg border border-black/10 text-[13px] outline-none focus:border-ink/40 bg-paper/50 placeholder:text-slate-text/50"
+              className="w-full pl-8 pr-7 py-2 rounded-lg border border-slate-300 text-[13px] outline-none focus:border-primary bg-paper/50 placeholder:text-slate-text/50"
             />
             {query && (
               <button
@@ -186,7 +186,7 @@ export default function MasterSelect({
                   onClick={() => select(item)}
                   className={`w-full text-left px-4 py-2 text-[13px] hover:bg-paper transition-colors ${
                     selected && String(selected._id) === String(item._id)
-                      ? "bg-amber/10 text-ink font-medium"
+                      ? "bg-primary/10 text-ink font-medium"
                       : "text-ink"
                   }`}
                 >
@@ -204,7 +204,7 @@ export default function MasterSelect({
                 setOpen(false);
                 onAdd();
               }}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold text-amber-dark border-t border-black/[0.06] hover:bg-amber/5 transition-colors"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold text-primary-dark border-t border-slate-200 hover:bg-primary/5 transition-colors"
             >
               <Plus size={14} /> Add Custom {label}
             </button>

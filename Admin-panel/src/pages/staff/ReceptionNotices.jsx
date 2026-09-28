@@ -41,10 +41,10 @@ export default function ReceptionNotices() {
       ) : (
         <div className="grid lg:grid-cols-2 gap-4">
           {sorted.map((n) => (
-            <Card key={n._id} className={n.pinned ? "border-amber" : ""}>
+            <Card key={n._id} className={n.pinned ? "border-primary" : ""}>
               <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-2.5 min-w-0">
-                  {n.pinned && <Pin size={16} className="text-amber shrink-0" />}
+                  {n.pinned && <Pin size={16} className="text-primary shrink-0" />}
                   <h3 className="font-display font-semibold text-ink text-[15px] truncate">{n.title}</h3>
                 </div>
                 <div className="flex gap-2 shrink-0">

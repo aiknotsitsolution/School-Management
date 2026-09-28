@@ -124,8 +124,16 @@ const getStaff = async (req, res) => {
   try {
     const { department, role, status, search } = req.query;
     const filter = { schoolId: req.tenantId };
+    const { page, limit, skip } = paginate(req.query);
+    const isAdminRole = ["school_admin", "super_admin"].includes(req.user.role);
 
     if (["teacher", "staff"].includes(req.user.role)) {
+      // Guard: an unlinked account (refId missing) must not degrade into an
+      // unscoped find() — mongoose silently drops undefined filters, which
+      // would enumerate every staff record (incl. salaries).
+      if (!req.user.refId) {
+        return res.json({ success: true, count: 0, total: 0, ...pageInfo(0, page, limit), data: [] });
+      }
       filter._id = req.user.refId;
     }
 
@@ -134,9 +142,15 @@ const getStaff = async (req, res) => {
     if (status) filter.status = status;
     if (search) filter.name = { $regex: escapeRegex(search), $options: "i" };
 
-    const { page, limit, skip } = paginate(req.query);
+    // Salary PII: only school/super admins receive salary in list responses.
+    // Staff/teachers read their OWN salary via /me (getMyStaff) and the
+    // StaffDashboard profile card.
     const [staff, total] = await Promise.all([
-      Staff.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Staff.find(filter)
+        .select(isAdminRole ? undefined : "-salary")
+        .sort({ createdAt: -1 })
+        .skip(skip)
+        .limit(limit),
       Staff.countDocuments(filter),
     ]);
     res.json({ success: true, count: staff.length, total, ...pageInfo(total, page, limit), data: staff });

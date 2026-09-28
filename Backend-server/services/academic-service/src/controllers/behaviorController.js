@@ -87,6 +87,9 @@ const getRecord = async (req, res) => {
     const record = await BehaviorRecord.findOne({
       _id: req.params.id,
       schoolId: req.tenantId,
+      // Students may only read their own conduct history — ownership guard
+      // for the :id route (the list route is scoped by scopeStudentQuery).
+      ...(req.user.role === "student" ? { studentId: req.user.refId } : {}),
     }).lean();
     if (!record) {
       return res.status(404).json({ success: false, message: "Record not found" });

@@ -61,7 +61,7 @@ export default function LibrarianDashboard() {
             <Button variant="outline" onClick={() => navigate("/librarian/circulation")}>
               Circulation <ArrowRight size={15} />
             </Button>
-            <Button variant="amber" onClick={() => navigate("/librarian/books")}>
+            <Button variant="primary" onClick={() => navigate("/librarian/books")}>
               Manage Books <ArrowRight size={15} />
             </Button>
           </div>
@@ -71,7 +71,7 @@ export default function LibrarianDashboard() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={BookOpen} label="Titles" value={String(stats.titles)} sub={`${stats.copies} total copies`} accent="info" />
         <StatCard icon={Library} label="Available" value={String(stats.available)} sub="Copy on shelf" accent="success" />
-        <StatCard icon={BookMarked} label="Issued" value={String(stats.issued)} sub="Currently out" accent="amber" />
+        <StatCard icon={BookMarked} label="Issued" value={String(stats.issued)} sub="Currently out" accent="primary" />
         <StatCard icon={AlertTriangle} label="Overdue" value={String(stats.overdue)} sub={`${stats.returnedToday} returned today`} accent="alert" />
       </div>
 
@@ -94,7 +94,7 @@ export default function LibrarianDashboard() {
                     .filter((r) => r.status === "Issued")
                     .slice(0, 6)
                     .map((r) => (
-                      <tr key={r._id} className="border-t border-black/[0.06]">
+                      <tr key={r._id} className="border-t border-slate-200">
                         <td className="px-5 py-2.5 font-semibold text-ink">{r.bookId?.title || "—"}</td>
                         <td className="px-3 py-2.5">{r.borrowerId || "—"} <Pill tone="neutral">{r.borrowerType}</Pill></td>
                         <td className="px-3 py-2.5">
@@ -125,7 +125,7 @@ export default function LibrarianDashboard() {
                       <p className="text-[13px] font-semibold text-ink truncate">{b.title}</p>
                       <p className="text-[12px] text-slate-text/60">{b.author}</p>
                     </div>
-                    <Pill tone={Number(b.availableCopies || 0) === 0 ? "alert" : "amber"}>
+                    <Pill tone={Number(b.availableCopies || 0) === 0 ? "alert" : "primary"}>
                       {b.availableCopies || 0} left
                     </Pill>
                   </div>

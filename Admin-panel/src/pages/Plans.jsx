@@ -168,7 +168,7 @@ export default function Plans() {
         title="Plans & Pricing"
         description="Manage the SaaS catalog. Prices are snapshotted onto subscriptions, so later edits never rewrite existing billing."
         right={
-          <Button variant="amber" onClick={openCreate}>
+          <Button variant="primary" onClick={openCreate}>
             <Plus size={15} /> New plan
           </Button>
         }
@@ -244,7 +244,7 @@ export default function Plans() {
               </label>
               <textarea
                 rows={4}
-                className="w-full rounded-lg border border-black/10 px-3.5 py-2.5 text-[13px] outline-none focus:border-ink/40"
+                className="w-full rounded-lg border border-slate-300 px-3.5 py-2.5 text-[13px] outline-none focus:border-primary"
                 placeholder={"Up to 1000 students\nAll core modules\nPriority support"}
                 value={form.features}
                 onChange={(e) => setForm({ ...form, features: e.target.value })}
@@ -267,7 +267,7 @@ export default function Plans() {
             </div>
 
             <div className="flex gap-2">
-              <Button type="submit" variant="amber">{editing === "new" ? "Create plan" : "Save changes"}</Button>
+              <Button type="submit" variant="primary">{editing === "new" ? "Create plan" : "Save changes"}</Button>
               <Button type="button" onClick={() => setEditing(null)}>Cancel</Button>
             </div>
           </form>
@@ -329,7 +329,7 @@ export default function Plans() {
                   <Pencil size={14} /> Edit
                 </Button>
 <Button variant="outline" onClick={() => toggleActive(plan)} title={plan.isActive ? "Deactivate (archive) — no longer assignable" : "Activate (un-archive)"}
-          style={plan.isActive ? { color: "#3F8F5F", borderColor: "rgba(63,143,95,0.3)" } : { color: "#D65A4A", borderColor: "rgba(214,90,74,0.3)" }}>
+          style={plan.isActive ? { color: "#16A34A", borderColor: "rgba(63,143,95,0.3)" } : { color: "#DC2626", borderColor: "rgba(214,90,74,0.3)" }}>
           <Power size={14} />
         </Button>
         <Button variant="outline" onClick={() => setConfirmDelete(plan)} title="Delete (only if never used)"> 
@@ -367,7 +367,7 @@ export default function Plans() {
                 </p>
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={() => setConfirmDelete(null)}

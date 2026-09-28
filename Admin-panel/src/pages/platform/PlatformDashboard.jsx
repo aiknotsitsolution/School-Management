@@ -27,7 +27,7 @@ import { api } from "../../lib/api";
 import { Card, PageIntro, Pill, StatCard } from "../../components/UI";
 import { DashboardPagination } from "../../components/DashboardPagination";
 
-const PIE_COLORS = ["#16213E", "#E8A33D", "#3F8F5F", "#3B6FA0", "#D65A4A"];
+const PIE_COLORS = ["#172033", "#4F46E5", "#16A34A", "#2563EB", "#DC2626"];
 const SUB_LABELS = {
   trialing: "Trialing",
   active: "Active",
@@ -160,7 +160,7 @@ export default function PlatformDashboard() {
           label="Schools"
           value={schools.total ?? data.schools ?? 0}
           sub={`${schools.active ?? data.activeSchools ?? 0} active`}
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={Users}
@@ -206,15 +206,15 @@ export default function PlatformDashboard() {
               <AreaChart data={growth} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
                 <defs>
                   <linearGradient id="growthFill" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#E8A33D" stopOpacity={0.35} />
-                    <stop offset="100%" stopColor="#E8A33D" stopOpacity={0} />
+                    <stop offset="0%" stopColor="#4F46E5" stopOpacity={0.35} />
+                    <stop offset="100%" stopColor="#4F46E5" stopOpacity={0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid strokeDasharray="3 3" stroke="#EAE8E2" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6B6B6B" }} interval={1} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#6B6B6B" }} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)" }} />
-                <Area type="monotone" dataKey="count" name="Schools" fill="url(#growthFill)" stroke="#E8A33D" strokeWidth={2} />
+                <Area type="monotone" dataKey="count" name="Schools" fill="url(#growthFill)" stroke="#4F46E5" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
@@ -274,7 +274,7 @@ export default function PlatformDashboard() {
                 <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#6B6B6B" }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#6B6B6B" }} />
                 <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)" }} />
-                <Bar dataKey="count" name="Schools" fill="#16213E" radius={[6, 6, 0, 0]} />
+                <Bar dataKey="count" name="Schools" fill="#172033" radius={[6, 6, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
@@ -318,7 +318,7 @@ export default function PlatformDashboard() {
           </div>
           <div className="flex flex-wrap gap-2">
             <Pill tone="success">{invoiceCounts.paid || 0} paid</Pill>
-            <Pill tone="amber">{invoiceCounts.issued || 0} issued</Pill>
+            <Pill tone="primary">{invoiceCounts.issued || 0} issued</Pill>
             <Pill tone="alert">{invoiceCounts.overdue || 0} overdue</Pill>
             <Pill>{invoiceCounts.draft || 0} draft</Pill>
           </div>
@@ -327,7 +327,7 @@ export default function PlatformDashboard() {
 
       {refreshing && (
         <div className="flex items-center gap-2 mb-3 text-[12px] text-slate-text/70 animate-pulse">
-          <span className="w-2.5 h-2.5 rounded-full bg-amber/60" />
+          <span className="w-2.5 h-2.5 rounded-full bg-primary/60" />
           Updating…
         </div>
       )}
@@ -338,17 +338,17 @@ export default function PlatformDashboard() {
           action={
             <div className="flex gap-1.5">
               <Pill tone={exp.in7 > 0 ? "alert" : "success"}>{exp.in7 || 0} in 7d</Pill>
-              <Pill tone={exp.in15 > 0 ? "amber" : "neutral"}>{exp.in15} in 15d</Pill>
+              <Pill tone={exp.in15 > 0 ? "primary" : "neutral"}>{exp.in15} in 15d</Pill>
               <Pill tone="info">{exp.in30} in 30d</Pill>
             </div>
           }
           bodyClassName="p-0"
         >
           {exp.items?.length ? (
-            <div className="divide-y divide-black/[0.05]">
+            <div className="divide-y divide-slate-100">
               {exp.items.map((item) => (
                 <div key={item._id} className="px-5 py-3 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-amber/15 text-amber-dark flex items-center justify-center shrink-0">
+                  <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary-dark flex items-center justify-center shrink-0">
                     <CalendarClock size={15} />
                   </div>
                   <div className="min-w-0 flex-1">
@@ -383,10 +383,10 @@ export default function PlatformDashboard() {
 
         <Card title="Recent platform activity" bodyClassName="p-0">
           {activity.length ? (
-            <div className="divide-y divide-black/[0.05]">
+            <div className="divide-y divide-slate-100">
               {activity.map((entry) => (
                 <div key={entry._id} className="px-5 py-3 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-ink text-amber flex items-center justify-center mt-0.5 shrink-0">
+                  <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center mt-0.5 shrink-0">
                     <Activity size={14} />
                   </div>
                   <div className="min-w-0 flex-1">

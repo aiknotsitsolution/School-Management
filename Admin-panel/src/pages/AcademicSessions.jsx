@@ -12,7 +12,7 @@ function fmt(iso) {
 }
 
 const toneFor = (status) =>
-  status === "active" ? "success" : status === "ended" ? "neutral" : "amber";
+  status === "active" ? "success" : status === "ended" ? "neutral" : "primary";
 
 const validate = (form) => {
   if (!form.startDate || !form.endDate) return "Start and end dates are required";
@@ -165,7 +165,7 @@ export default function AcademicSessions() {
             )}
           </div>
         ) : (
-          <div className="divide-y divide-black/[0.06]">
+          <div className="divide-y divide-slate-200">
             {sessions.map((session) => (
               <div key={session._id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4">
                 <div className="flex-1 min-w-0">
@@ -215,7 +215,7 @@ export default function AcademicSessions() {
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30 p-4">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <h3 className="font-semibold text-[15px] text-ink">
                 {editId ? "Edit Academic Session" : "New Academic Session"}
               </h3>
@@ -262,7 +262,7 @@ export default function AcademicSessions() {
                 Sessions cannot overlap. The first live session becomes the current session automatically.
               </p>
             </div>
-            <div className="flex justify-end gap-3 px-5 py-4 border-t border-black/[0.06]">
+            <div className="flex justify-end gap-3 px-5 py-4 border-t border-slate-200">
               <Button variant="ghost" onClick={() => setShowModal(false)}>
                 Cancel
               </Button>

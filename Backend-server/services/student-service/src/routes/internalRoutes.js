@@ -37,7 +37,7 @@ router.get("/by-class", (req, res, next) => {
     if (!schoolId || !cls) {
       return res.status(400).json({ success: false, message: "schoolId and class are required" });
     }
-    const filter = { schoolId, class: cls, status: "Active" };
+    const filter = { schoolId, class: cls, status: "Active", deletedAt: null };
     if (section) filter.section = section;
     const students = await Student.find(filter).select("admissionNo").lean();
     const refIds = [...new Set(students.map((s) => String(s.admissionNo).trim()).filter(Boolean))];

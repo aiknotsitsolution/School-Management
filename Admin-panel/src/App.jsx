@@ -1,6 +1,10 @@
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useEffect } from "react";
+import { useSelector, useDispatch } from "react-redux";
+import { Ban } from "lucide-react";
 import Layout from "./layout/Layout";
+import { loadActiveGradingScale } from "./lib/grading";
+import { logout } from "./store/authSlice";
 import Login from "./pages/Login";
 import ResetPassword from "./pages/ResetPassword";
 import ForgotPassword from "./pages/ForgotPassword";
@@ -10,6 +14,9 @@ import Timetable from "./pages/Timetable";
 import Homework from "./pages/Homework";
 import Examination from "./pages/Examination";
 import AcademicSessions from "./pages/AcademicSessions";
+import GradingScales from "./pages/GradingScales";
+import StudyMaterials from "./pages/StudyMaterials";
+import SyllabusManage from "./pages/SyllabusManage";
 import ReportCard from "./pages/ReportCard";
 import MarksEntry from "./pages/MarksEntry";
 import Promotions from "./pages/Promotions";
@@ -21,7 +28,9 @@ import AdmissionEnquiry from "./pages/AdmissionEnquiry";
 import NoticeBoard from "./pages/NoticeBoard";
 import Events from "./pages/Events";
 import FeesCollection from "./pages/FeesCollection";
+import Accounting from "./pages/Accounting";
 import OnlinePayment from "./pages/OnlinePayment";
+import PaymentGateway from "./pages/PaymentGateway";
 import Inventory from "./pages/Inventory";
 import BusTracking from "./pages/BusTracking";
 import Reports from "./pages/Reports";
@@ -39,7 +48,11 @@ import TeacherExams from "./pages/teacher/Exams";
 import TeacherPerformance from "./pages/teacher/Performance";
 import TeacherNotices from "./pages/teacher/Notices";
 import TeacherProfile from "./pages/teacher/Profile";
-import StudentDashboard from "./pages/StudentDashboard";
+import ParentDashboard from "./pages/ParentDashboard";
+import Diary from "./pages/Diary";
+import Messages from "./pages/Messages";
+import Broadcast from "./pages/Broadcast";
+import StudentDashboard from "./pages/student/StudentDashboard";
 import StudentProfile from "./pages/student/Profile";
 import StudentAttendance from "./pages/student/Attendance";
 import StudentTimetable from "./pages/student/Timetable";
@@ -106,20 +119,57 @@ import { hasPermission } from "./lib/permissions";
 import { resolvePersona } from "./lib/persona";
 import SplashScreen from "./components/SplashScreen";
 
+// Shown when a non-super_admin lands in a suspended school. Never redirects
+// into /subscription (that route requires school:settings and would loop
+// teachers/staff/students back here).
+function SchoolSuspendedScreen() {
+  const dispatch = useDispatch();
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-paper px-4">
+      <div className="max-w-md w-full bg-white rounded-2xl border border-line p-8 text-center space-y-4">
+        <div className="mx-auto w-12 h-12 rounded-full bg-alert/10 flex items-center justify-center">
+          <Ban size={22} className="text-alert" />
+        </div>
+        <h1 className="text-xl font-bold text-ink">School account suspended</h1>
+        <p className="text-sm text-slate-text">
+          This school account has been suspended. Please contact support or the
+          school administrator to restore access.
+        </p>
+        <button
+          type="button"
+          onClick={() => dispatch(logout())}
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-ink text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function ProtectedLayout() {
   const isAuth = useSelector(selectIsAuthenticated);
   const school = useSelector(selectSchool);
   const role = useSelector(selectRole);
+  // Load the school's active grading scale once per auth so grade previews
+  // (marks entry, report fallbacks) use the configured bands, not defaults.
+  useEffect(() => {
+    if (isAuth) loadActiveGradingScale();
+  }, [isAuth]);
   if (!isAuth) {
     return <Navigate to="/login" replace />;
   }
-  // Block suspended schools from accessing the app (except super_admin and
-  // the subscription page itself so they can view/upgrade their plan).
+  // Block suspended schools from accessing the app (except super_admin).
+  // school_admin may reach /subscription to upgrade; everyone else gets a
+  // non-looping notice (the old blanket redirect looped via RequirePermission).
   if (
     school?.status === "suspended" &&
     role !== "super_admin"
   ) {
-    return <Navigate to="/subscription" replace />;
+    if (role === "school_admin") {
+      return <Navigate to="/subscription" replace />;
+    }
+    return <SchoolSuspendedScreen />;
   }
   return <Layout />;
 }
@@ -192,6 +242,7 @@ function HomeRedirect() {
   }
   if (role === "teacher") return <Navigate to="/teacher-dashboard" replace />;
   if (role === "student") return <Navigate to="/student-dashboard" replace />;
+  if (role === "parent") return <Navigate to="/parent-dashboard" replace />;
   if (role === "staff") {
     const persona = resolvePersona(user);
     if (persona && persona.landing !== "/staff-dashboard") {
@@ -785,6 +836,36 @@ export default function App() {
             }
           />
           <Route
+            path="/grading-scales"
+            element={
+              <RequirePermission permission="exams:read">
+                <RequireNotStudent>
+                  <GradingScales />
+                </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/study-materials"
+            element={
+              <RequirePermission permission="homework:read">
+                <RequireNotStudent>
+                  <StudyMaterials />
+                </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/syllabus"
+            element={
+              <RequirePermission permission="homework:read">
+                <RequireNotStudent>
+                  <SyllabusManage />
+                </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
             path="/students"
             element={
               <RequirePermission permission="students:read">
@@ -810,6 +891,38 @@ export default function App() {
                 <RequireNotStudent>
                   <NoticeBoard />
                 </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/parent-dashboard"
+            element={
+              <RequireRole roles={["parent"]}>
+                <ParentDashboard />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/diary"
+            element={
+              <RequirePermission permission="notices:read">
+                <Diary />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/messages"
+            element={
+              <RequireRole roles={["parent", "teacher", "school_admin", "super_admin"]}>
+                <Messages />
+              </RequireRole>
+            }
+          />
+          <Route
+            path="/broadcast"
+            element={
+              <RequirePermission permission="notices:publish">
+                <Broadcast />
               </RequirePermission>
             }
           />
@@ -842,10 +955,28 @@ export default function App() {
             }
           />
           <Route
+            path="/payment-gateway"
+            element={
+              <RequirePermission permission="payments:settings">
+                <RequireNotStudent>
+                  <PaymentGateway />
+                </RequireNotStudent>
+              </RequirePermission>
+            }
+          />
+          <Route
             path="/inventory"
             element={
               <RequirePermission permission="inventory:read">
                 <Inventory />
+              </RequirePermission>
+            }
+          />
+          <Route
+            path="/accounting"
+            element={
+              <RequirePermission permission="accounting:read">
+                <Accounting />
               </RequirePermission>
             }
           />

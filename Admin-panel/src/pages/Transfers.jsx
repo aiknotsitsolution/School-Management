@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRightLeft, Download } from "lucide-react";
+import { ArrowRightLeft, Download, FileText } from "lucide-react";
 import { PageIntro, Card, Button, Select, Input, Pill, toast } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
 import { api } from "../lib/api";
@@ -58,13 +58,71 @@ export default function Transfers() {
 
   const selectedStudent = students.find((s) => s.admissionNo === studentId || s._id === studentId);
 
+  // ── Transfer Certificates (Phase 2) ──
+  const canIssueTc = usePermission("transfer:write");
+  const [tcs, setTcs] = useState([]);
+  const [tcStudentId, setTcStudentId] = useState("");
+  const [tcReason, setTcReason] = useState("");
+  const [tcConduct, setTcConduct] = useState("Good");
+  const [tcLeaving, setTcLeaving] = useState("");
+  const [tcRemarks, setTcRemarks] = useState("");
+  const [tcIssuing, setTcIssuing] = useState(false);
+
+  const loadTcs = () =>
+    api.transfers.tcs
+      .list("limit=50")
+      .then(({ data }) => setTcs(Array.isArray(data) ? data : []))
+      .catch(() => {});
+
+  useEffect(() => { loadTcs(); }, []);
+
+  const tcSelectedStudent = students.find((s) => s.admissionNo === tcStudentId || s._id === tcStudentId);
+  const tcAlreadyIssued = tcs.find((t) => t.studentId === tcStudentId);
+
+  const studentLabelFor = (id) =>
+    id ? studentOptions.find((_, i) => (students[i]?.admissionNo === id || students[i]?._id === id)) ?? "" : "";
+  const studentIdFromLabel = (val) => {
+    const idx = studentOptions.indexOf(val);
+    return idx >= 0 && students[idx] ? (students[idx].admissionNo || students[idx]._id) : "";
+  };
+
+  const handleIssueTc = async () => {
+    if (!tcStudentId) {
+      toast("Select a student", "primary");
+      return;
+    }
+    setTcIssuing(true);
+    try {
+      const payload = {
+        studentId: tcStudentId,
+        reason: tcReason.trim() || undefined,
+        conduct: tcConduct.trim() || "Good",
+        leavingDate: tcLeaving || undefined,
+        remarks: tcRemarks.trim() || undefined,
+      };
+      const { message } = await api.transfers.tcs.issue(payload);
+      toast(message || "Transfer Certificate issued");
+      setTcStudentId("");
+      setTcReason("");
+      setTcConduct("Good");
+      setTcLeaving("");
+      setTcRemarks("");
+      loadTcs();
+    } catch (e) {
+      toast(e.message, "error");
+      loadTcs();
+    } finally {
+      setTcIssuing(false);
+    }
+  };
+
   const handleSubmit = async () => {
     if (!studentId) {
-      toast("Select a student to transfer", "amber");
+      toast("Select a student to transfer", "primary");
       return;
     }
     if (type === "class_section" && !toClass) {
-      toast("Target class is required for an in-school transfer", "amber");
+      toast("Target class is required for an in-school transfer", "primary");
       return;
     }
     setSaving(true);
@@ -101,7 +159,7 @@ export default function Transfers() {
         title="Transfers"
         description="Move a student to another class/section, or record a transfer out of the school."
         right={
-          <Button variant="amber" onClick={handleSubmit} disabled={saving}>
+          <Button variant="primary" onClick={handleSubmit} disabled={saving}>
             <ArrowRightLeft size={15} /> {saving ? "Recording…" : "Record Transfer"}
           </Button>
         }
@@ -171,12 +229,12 @@ export default function Transfers() {
             placeholder={type === "school" ? "Reason for leaving, destination school…" : "Reason for the change…"}
             value={remarks}
             onChange={(e) => setRemarks(e.target.value)}
-            className="w-full rounded-xl border border-black/[0.08] bg-paper px-3.5 py-2.5 text-[13.5px] text-ink placeholder:text-slate-text/40 focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info/50 resize-none"
+            className="w-full rounded-xl border border-slate-200 bg-paper px-3.5 py-2.5 text-[13.5px] text-ink placeholder:text-slate-text/40 focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info/50 resize-none"
           />
         </div>
 
         {selectedStudent && (
-          <div className="mt-4 rounded-xl bg-paper border border-black/[0.06] p-3 text-[12.5px] text-slate-text">
+          <div className="mt-4 rounded-xl bg-paper border border-slate-200 p-3 text-[12.5px] text-slate-text">
             Transferring <b className="text-ink">{selectedStudent.name}</b> (
             {type === "school"
               ? "status will be set to Transferred"
@@ -199,7 +257,7 @@ export default function Transfers() {
             <div className="overflow-x-auto">
               <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                  <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                     <th className="px-4 py-2.5 font-semibold">Student</th>
                     <th className="px-4 py-2.5 font-semibold">From</th>
                     <th className="px-4 py-2.5 font-semibold">To</th>
@@ -211,7 +269,7 @@ export default function Transfers() {
                 </thead>
                 <tbody>
                   {paginatedHistory.map((h) => (
-                    <tr key={h._id} className="border-b border-black/[0.04] last:border-0">
+                    <tr key={h._id} className="border-b border-slate-100 last:border-0">
                       <td className="px-4 py-3 font-semibold text-ink">{h.studentName}</td>
                       <td className="px-4 py-3 text-slate-text">{formatClass(h.fromClass)}{h.fromSection ? `-${h.fromSection}` : ""}</td>
                       <td className="px-4 py-3 text-slate-text">{h.toClass ? formatClass(h.toClass) : "Left school"}{h.toSection ? `-${h.toSection}` : ""}</td>
@@ -226,7 +284,7 @@ export default function Transfers() {
             </div>
 
             {/* Pagination */}
-            <div className="flex items-center justify-between pt-4 mt-4 border-t border-black/[0.06]">
+            <div className="flex items-center justify-between pt-4 mt-4 border-t border-slate-200">
               <p className="text-[12px] text-slate-text/55">
                 Showing {history.length === 0 ? 0 : (histSafePage - 1) * histPageSize + 1}–{Math.min(histSafePage * histPageSize, history.length)} of {history.length}
               </p>
@@ -251,7 +309,7 @@ export default function Transfers() {
             </div>
           </>
         )}
-        <div className="mt-4 pt-4 border-t border-black/[0.06] flex justify-end">
+        <div className="mt-4 pt-4 border-t border-slate-200 flex justify-end">
           <Button
             variant="outline"
             onClick={() => {
@@ -267,6 +325,111 @@ export default function Transfers() {
             <Download size={15} /> Export JSON
           </Button>
         </div>
+      </Card>
+
+      <Card title="Transfer Certificates" action={<Pill tone="info">{tcs.length} issued</Pill>}>
+        {canIssueTc ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+            <div className="lg:col-span-2">
+              <label className="text-[12px] font-semibold text-ink mb-1.5 block">Student</label>
+              <SearchableSelect
+                options={studentOptions}
+                value={studentLabelFor(tcStudentId)}
+                onChange={(val) => setTcStudentId(studentIdFromLabel(val))}
+                placeholder="Search student by name, admission no..."
+              />
+            </div>
+            <div>
+              <label className="text-[12px] font-semibold text-ink mb-1.5 block">Date of Leaving (optional)</label>
+              <Input type="date" value={tcLeaving} onChange={(e) => setTcLeaving(e.target.value)} />
+            </div>
+            <div>
+              <label className="text-[12px] font-semibold text-ink mb-1.5 block">Conduct</label>
+              <Select value={tcConduct} onChange={(e) => setTcConduct(e.target.value)} className="w-full">
+                {["Excellent", "Good", "Satisfactory", "Needs Improvement"].map((c) => (
+                  <option key={c} value={c}>{c}</option>
+                ))}
+              </Select>
+            </div>
+            <div className="sm:col-span-2 lg:col-span-4">
+              <label className="text-[12px] font-semibold text-ink mb-1.5 block">Reason for Leaving</label>
+              <Input
+                placeholder="e.g. Family relocation, transfer to another school…"
+                value={tcReason}
+                onChange={(e) => setTcReason(e.target.value)}
+              />
+            </div>
+            <div className="sm:col-span-2 lg:col-span-4">
+              <label className="text-[12px] font-semibold text-ink mb-1.5 block">Remarks (optional)</label>
+              <textarea
+                rows={2}
+                value={tcRemarks}
+                onChange={(e) => setTcRemarks(e.target.value)}
+                className="w-full rounded-xl border border-slate-200 bg-paper px-3.5 py-2.5 text-[13.5px] text-ink placeholder:text-slate-text/40 focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info/50 resize-none"
+              />
+            </div>
+            {tcAlreadyIssued && (
+              <div className="sm:col-span-2 lg:col-span-4 rounded-xl bg-paper border border-slate-200 p-3 text-[12.5px] text-slate-text">
+                <b className="text-ink">{tcSelectedStudent?.name || tcStudentId}</b> already has TC{" "}
+                <b className="text-ink">{tcAlreadyIssued.tcNumber}</b> — a second certificate cannot be issued; download the existing one below.
+              </div>
+            )}
+            <div className="sm:col-span-2 lg:col-span-4 flex justify-end">
+              <Button variant="primary" onClick={handleIssueTc} disabled={tcIssuing || Boolean(tcAlreadyIssued)}>
+                <FileText size={15} /> {tcIssuing ? "Issuing…" : "Issue Certificate"}
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <p className="text-[12px] text-slate-text/60 mb-4">
+            You have read-only access. Only school admins can issue Transfer Certificates.
+          </p>
+        )}
+
+        {tcs.length === 0 ? (
+          <p className="text-[13px] text-slate-text/60 py-6 text-center">No Transfer Certificates issued yet.</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
+                  <th className="px-4 py-2.5 font-semibold">TC No.</th>
+                  <th className="px-4 py-2.5 font-semibold">Student</th>
+                  <th className="px-4 py-2.5 font-semibold">Class</th>
+                  <th className="px-4 py-2.5 font-semibold">Conduct</th>
+                  <th className="px-4 py-2.5 font-semibold">Issue Date</th>
+                  <th className="px-4 py-2.5 font-semibold">Issued By</th>
+                  <th className="px-4 py-2.5 font-semibold text-right">PDF</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tcs.map((tc) => (
+                  <tr key={tc._id} className="border-b border-slate-100 last:border-0">
+                    <td className="px-4 py-3 font-semibold text-ink">{tc.tcNumber}</td>
+                    <td className="px-4 py-3 text-slate-text">{tc.snapshot?.name || tc.studentId}</td>
+                    <td className="px-4 py-3 text-slate-text">
+                      {tc.snapshot?.class ? `${formatClass(tc.snapshot.class)}${tc.snapshot.section ? `-${tc.snapshot.section}` : ""}` : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-slate-text">{tc.conduct || "—"}</td>
+                    <td className="px-4 py-3 text-slate-text">
+                      {tc.issueDate ? new Date(tc.issueDate).toLocaleDateString("en-IN") : "—"}
+                    </td>
+                    <td className="px-4 py-3 text-slate-text">{tc.issuedByName || "—"}</td>
+                    <td className="px-4 py-3 text-right">
+                      <Button
+                        variant="outline"
+                        className="px-3 py-1.5 text-[12px]"
+                        onClick={() => api.transfers.tcs.downloadPdf(tc._id).catch((e) => toast(e.message, "error"))}
+                      >
+                        <Download size={13} /> PDF
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </Card>
     </div>
   );

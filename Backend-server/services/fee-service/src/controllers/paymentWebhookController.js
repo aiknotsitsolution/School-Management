@@ -37,10 +37,20 @@ const handleWebhook = async (req, res) => {
       const order = await PaymentOrder.findOne({ providerOrderId: verified.orderId });
       if (!order) return res.json({ success: true, message: "order-not-found" });
 
+      // Signed failure events (e.g. payment.failed) resolve the status instead
+      // of leaving the order awaiting forever. paymentId guards against
+      // non-payment events that merely carry an order id.
+      if (verified.paymentId && !verified.captured) {
+        await markOrderFailed(order, verified.eventType);
+        return res.json({ success: true, message: "failure-recorded" });
+      }
+
       if (verified.amount != null && Math.abs(Number(verified.amount) - Number(order.amount)) >= 1) {
         console.error(
           `[fee-admin] amount mismatch order ${order._id}: expected ${order.amount} received ${verified.amount}`
         );
+        // Never record money that does not match the order (CLIENT-REQ-035).
+        return res.status(400).json({ success: false, code: "AMOUNT_MISMATCH", message: "Webhook amount does not match the order" });
       }
 
       const result = await engine.completeOrder(order, {
@@ -81,10 +91,20 @@ const handleWebhook = async (req, res) => {
     const order = await PaymentOrder.findOne({ schoolId: gateway.schoolId, providerOrderId: verified.orderId });
     if (!order) return res.json({ success: true, message: "order-not-found" });
 
+    // Signed failure events (e.g. payment.failed) resolve the status instead
+    // of leaving the order awaiting forever. paymentId guards against
+    // non-payment events that merely carry an order id.
+    if (verified.paymentId && !verified.captured) {
+      await markOrderFailed(order, verified.eventType);
+      return res.json({ success: true, message: "failure-recorded" });
+    }
+
     if (verified.amount != null && Math.abs(Number(verified.amount) - Number(order.amount)) >= 1) {
       console.error(
         `[fee-admin] amount mismatch order ${order._id}: expected ${order.amount} received ${verified.amount}`
       );
+      // Never record money that does not match the order (CLIENT-REQ-035).
+      return res.status(400).json({ success: false, code: "AMOUNT_MISMATCH", message: "Webhook amount does not match the order" });
     }
 
     const result = await engine.completeOrder(order, {
@@ -94,6 +114,16 @@ const handleWebhook = async (req, res) => {
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
+};
+
+// Flip an unresolved order to `failed` on a signed provider failure event so
+// the payer can retry or cancel — never on completed/cancelled orders.
+const markOrderFailed = async (order, eventType) => {
+  if (!["pending", "awaiting_confirmation"].includes(order.status)) return;
+  order.status = "failed";
+  order.metadata = { ...(order.metadata || {}), lastFailure: eventType || "provider-failure" };
+  await order.save();
+  console.error(`[fee-admin] order ${order._id} marked failed by webhook event ${eventType || "?"}`);
 };
 
 module.exports = { handleWebhook };

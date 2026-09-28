@@ -92,7 +92,7 @@ export default function MyAttendance() {
     status === "Present"
       ? "success"
       : status === "Late"
-        ? "amber"
+        ? "primary"
         : status === "Absent"
           ? "alert"
           : "neutral";
@@ -107,7 +107,7 @@ export default function MyAttendance() {
 
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard icon={CheckCircle2} label="Present" value={String(summary.present)} sub={`of ${summary.total} this month`} accent="success" />
-        <StatCard icon={CarFront} label="Late" value={String(summary.late)} sub="Marked in late" accent="amber" />
+        <StatCard icon={CarFront} label="Late" value={String(summary.late)} sub="Marked in late" accent="primary" />
         <StatCard icon={XCircle} label="Absent" value={String(summary.absent)} sub="Missed days" accent="alert" />
         <StatCard icon={Sun} label="Leave / Half Day" value={String(summary.leave)} sub="Approved or taken" accent="info" />
         <StatCard icon={CalendarCheck} label="Attendance %" value={`${summary.attendancePct}%`} sub={`${today.slice(5, 7)}/${today.slice(0, 4)}`} accent="info" />
@@ -136,8 +136,8 @@ export default function MyAttendance() {
                     onClick={() => setDraft((d) => ({ ...d, status: s }))}
                     className={`px-2 py-2 rounded-lg text-[12px] font-semibold border transition-colors ${
                       draft?.status === s
-                        ? "bg-ink text-white border-ink"
-                        : "bg-white text-slate-text border-black/10 hover:bg-paper"
+                        ? "bg-primary text-white border-primary"
+                        : "bg-white text-slate-text border-slate-300 hover:bg-paper"
                     }`}
                   >
                     {s}
@@ -215,7 +215,7 @@ export default function MyAttendance() {
                     .sort((a, b) => (a.date < b.date ? 1 : -1))
                     .slice(0, 30)
                     .map((r) => (
-                      <tr key={r._id} className="border-t border-black/[0.06]">
+                      <tr key={r._id} className="border-t border-slate-200">
                         <td className="px-5 py-2.5 font-medium text-ink">{fmtDate(r.date)}</td>
                         <td className="px-3 py-2.5">
                           <Pill tone={toneFor(r.status)}>{r.status}</Pill>

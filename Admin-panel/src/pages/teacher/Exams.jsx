@@ -80,7 +80,7 @@ export default function Exams() {
           label="Subjects"
           value={String(subjects)}
           sub="Subjects scheduled"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={Clock3}
@@ -99,8 +99,8 @@ export default function Exams() {
               onClick={() => setFilter(n)}
               className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
                 filter === n
-                  ? "bg-ink text-white border-ink"
-                  : "bg-white text-slate-text border-black/10 hover:border-ink/30"
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-slate-text border-slate-300 hover:border-ink/30"
               }`}
             >
               {n}
@@ -129,7 +129,7 @@ export default function Exams() {
               <Card key={ex._id} className={past ? "opacity-80" : ""}>
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-amber/12 text-amber-dark flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-xl bg-primary/12 text-primary-dark flex items-center justify-center shrink-0">
                       <Trophy size={18} />
                     </div>
                     <div>
@@ -146,7 +146,7 @@ export default function Exams() {
                   </Pill>
                 </div>
 
-                <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-4 pt-3 border-t border-black/[0.06] text-[12.5px] text-slate-text/80">
+                <div className="flex flex-wrap gap-x-5 gap-y-1.5 mt-4 pt-3 border-t border-slate-200 text-[12.5px] text-slate-text/80">
                   <span className="flex items-center gap-1.5">
                     <CalendarDays size={14} className="text-slate-text/50" />
                     {fmtDate(ex.date)}

@@ -6,7 +6,10 @@ const notificationSchema = new mongoose.Schema(
     userId: { type: String, required: true, index: true },
     title: { type: String, required: true },
     message: { type: String, default: null },
-    kind: { type: String, enum: ["notice", "leave", "payroll", "student", "staff", "homework", "exam", "profile", "event", "system", "enquiry"], default: "system" },
+    // fee_reminder MUST stay in the enum: fee-service pushes kind
+    // "fee_reminder" and mongoose insertMany validates before writing
+    // (an unknown kind silently rejects the whole batch).
+    kind: { type: String, enum: ["notice", "leave", "payroll", "student", "staff", "homework", "exam", "profile", "event", "system", "enquiry", "fee_reminder", "emergency", "diary", "message", "sms"], default: "system" },
     link: { type: String, default: null },
     read: { type: Boolean, default: false },
   },

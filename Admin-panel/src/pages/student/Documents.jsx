@@ -9,7 +9,7 @@ import { fmtDate } from "./useStudentContext";
 const CATEGORY_TONES = {
   academic: "info",
   identity: "success",
-  health: "amber",
+  health: "primary",
   transfer: "neutral",
   other: "neutral",
 };
@@ -93,7 +93,7 @@ export default function Documents() {
 
       <Card title="Your documents">
         {loading ? (
-          <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-16 bg-white rounded-2xl border border-black/[0.06] animate-pulse" />)}</div>
+          <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-16 bg-white rounded-2xl border border-slate-200 animate-pulse" />)}</div>
         ) : docs.length === 0 ? (
           <div className="py-10 text-center">
             <FileText size={40} className="mx-auto text-slate-text/30 mb-3" />
@@ -103,8 +103,8 @@ export default function Documents() {
         ) : (
           <div className="space-y-2.5">
             {docs.map((d) => (
-              <div key={d._id} className="rounded-xl border border-black/[0.06] p-3.5 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-lg bg-amber/10 text-amber flex items-center justify-center shrink-0">
+              <div key={d._id} className="rounded-xl border border-slate-200 p-3.5 flex items-center gap-3">
+                <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                   <FileText size={18} />
                 </div>
                 <div className="min-w-0 flex-1">
@@ -122,7 +122,7 @@ export default function Documents() {
                     href={d.url}
                     target="_blank"
                     rel="noreferrer noopener"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-black/10 px-2.5 py-1.5 text-[12px] font-semibold text-ink hover:border-black/20"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-slate-300 px-2.5 py-1.5 text-[12px] font-semibold text-ink hover:border-slate-400"
                   >
                     <Download size={14} /> Open
                   </a>

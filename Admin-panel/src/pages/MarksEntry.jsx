@@ -147,7 +147,7 @@ export default function MarksEntry() {
         remarks: entries[s.admissionNo].remarks || undefined,
       }));
     if (!payload.length) {
-      toast("Enter marks for at least one student before saving", "amber");
+      toast("Enter marks for at least one student before saving", "primary");
       return;
     }
     setSaving(true);
@@ -235,7 +235,7 @@ export default function MarksEntry() {
               )}
               {!isPublished ? (
                 <Button
-                  variant="amber"
+                  variant="primary"
                   onClick={publishResult}
                   disabled={publishing || stats.filled === 0}
                   title={
@@ -312,7 +312,7 @@ export default function MarksEntry() {
         <>
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard icon={Users} label="Students" value={String(stats.total)} sub={`${formatClass(exam.class)}${exam.section ? `-${exam.section}` : ""}`} accent="info" />
-            <StatCard icon={PenLine} label="Filled" value={`${stats.filled}/${stats.total}`} sub={`${stats.pct}% entered`} accent="amber" />
+            <StatCard icon={PenLine} label="Filled" value={`${stats.filled}/${stats.total}`} sub={`${stats.pct}% entered`} accent="primary" />
             <StatCard icon={ClipboardList} label="Average" value={String(stats.average)} sub={`Max ${exam.maxMarks} marks`} accent="success" />
             <StatCard icon={Lock} label="Status" value={exam.status === "published" ? "Published" : exam.status === "reviewed" ? "Reviewed" : "Draft"} sub={isPublished ? "Read-only" : "Editable"} accent={isPublished ? "alert" : "info"} />
           </div>
@@ -352,7 +352,7 @@ export default function MarksEntry() {
               <div className="overflow-x-auto">
                 <table className="w-full text-[13px]">
                   <thead>
-                    <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide bg-paper/80 border-b border-black/[0.06]">
+                    <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide bg-paper/80 border-b border-slate-200">
                       <th className="px-4 py-2.5 font-semibold">Admission No.</th>
                       <th className="px-4 py-2.5 font-semibold">Student</th>
                       <th className="px-4 py-2.5 font-semibold">Roll</th>
@@ -370,7 +370,7 @@ export default function MarksEntry() {
                       const pct = valid ? Number(computePercentage(parsed, exam.maxMarks).toFixed(2)) : null;
                       const grade = valid ? computeGrade(parsed, exam.maxMarks) : null;
                       return (
-                        <tr key={s.admissionNo || s._id} className={`border-b border-black/[0.04] last:border-0 ${idx % 2 === 0 ? "" : "bg-paper/40"}`}>
+                        <tr key={s.admissionNo || s._id} className={`border-b border-slate-100 last:border-0 ${idx % 2 === 0 ? "" : "bg-paper/40"}`}>
                           <td className="px-4 py-3 text-slate-text">{s.admissionNo}</td>
                           <td className="px-4 py-3 font-semibold text-ink">{s.name}</td>
                           <td className="px-4 py-3 text-slate-text">{s.rollNo || "—"}</td>

@@ -14,6 +14,7 @@ import {
   Users,
   UserCheck,
   Wallet,
+  Trash2,
 } from "lucide-react";
 import {
   PageIntro,
@@ -98,7 +99,7 @@ function emptyForm() {
 
 function makeAvatar(name) {
   const encoded = encodeURIComponent(name || "Student");
-  return `https://ui-avatars.com/api/?name=${encoded}&background=16213E&color=fff&bold=true`;
+  return `https://ui-avatars.com/api/?name=${encoded}&background=172033&color=fff&bold=true`;
 }
 
 function toRollText(value) {
@@ -170,6 +171,10 @@ export default function Students() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState(null);
+  // Phase 2: soft-deleted students are hidden by default; the toggle exposes
+  // the trash so an admin can restore within the retention window.
+  const [includeDeleted, setIncludeDeleted] = useState(false);
+  const [busyAction, setBusyAction] = useState(false);
   const filteredSections = useMemo(() => {
     if (cls === "All") return SECTION_OPTIONS;
     return ["All", ...[...new Set(rawSections.filter((s) => s.className === cls).map((s) => s.name))]];
@@ -182,7 +187,7 @@ export default function Students() {
   useEffect(() => {
     let active = true;
     api.students
-      .list("limit=1000")
+      .list(`limit=1000${includeDeleted ? "&includeDeleted=true" : ""}`)
       .then(({ data }) => {
         if (active && Array.isArray(data)) setList(data.map(normalizeStudent));
       })
@@ -195,7 +200,7 @@ export default function Students() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [includeDeleted]);
 
   const filtered = useMemo(() => {
     return list
@@ -224,14 +229,54 @@ export default function Students() {
   const visible = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const stats = useMemo(() => {
-    const total = list.length;
-    const paid = list.filter((s) => s.feeStatus === "Paid").length;
+    // Deleted students never count toward overview stats, even when the
+    // "show deleted" toggle is on.
+    const active = list.filter((s) => !s.deletedAt);
+    const total = active.length;
+    const paid = active.filter((s) => s.feeStatus === "Paid").length;
     const avgAtt =
       total > 0
-        ? Math.round(list.reduce((a, s) => a + (s.attendance || 0), 0) / total)
+        ? Math.round(active.reduce((a, s) => a + (s.attendance || 0), 0) / total)
         : 0;
     return { total, paid, avgAtt, pending: total - paid };
   }, [list]);
+
+  const handleDeleteStudent = async () => {
+    if (!selected) return;
+    if (!window.confirm(`Move "${selected.name}" to trash? The record (and its fee/attendance history) is kept and can be restored within the retention window.`)) return;
+    setBusyAction(true);
+    try {
+      await api.students.remove(selected.id);
+      toast("Student moved to trash");
+      setSelected(null);
+      api.students
+        .list(`limit=1000${includeDeleted ? "&includeDeleted=true" : ""}`)
+        .then(({ data }) => { if (Array.isArray(data)) setList(data.map(normalizeStudent)); })
+        .catch(() => {});
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      setBusyAction(false);
+    }
+  };
+
+  const handleRestoreStudent = async () => {
+    if (!selected) return;
+    setBusyAction(true);
+    try {
+      const { data } = await api.students.restore(selected.id);
+      toast("Student restored");
+      setSelected(data ? normalizeStudent(data) : null);
+      api.students
+        .list(`limit=1000${includeDeleted ? "&includeDeleted=true" : ""}`)
+        .then(({ data: rows }) => { if (Array.isArray(rows)) setList(rows.map(normalizeStudent)); })
+        .catch(() => {});
+    } catch (e) {
+      toast(e.message, "error");
+    } finally {
+      setBusyAction(false);
+    }
+  };
 
   const openEdit = (student) => {
     setEditId(student.id);
@@ -338,7 +383,7 @@ export default function Students() {
           label="Fees Paid"
           value={String(stats.paid)}
           sub={`${stats.pending} pending / partial`}
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={Users}
@@ -385,6 +430,15 @@ export default function Students() {
               placeholder="All Sections"
               className="min-w-[120px]"
             />
+            <PermissionGate permission="students:write">
+              <Button
+                variant={includeDeleted ? "primary" : "outline"}
+                className="px-3 py-1.5 text-[12px]"
+                onClick={() => { setIncludeDeleted((v) => !v); setLoading(true); }}
+              >
+                {includeDeleted ? "Showing deleted" : "Show deleted"}
+              </Button>
+            </PermissionGate>
           </div>
         }
       >
@@ -403,7 +457,7 @@ export default function Students() {
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-[12.5px]">
               <thead>
-                <tr className="text-left text-slate-text/60 text-[11px] uppercase tracking-wide border-b border-black/[0.06]">
+                <tr className="text-left text-slate-text/60 text-[11px] uppercase tracking-wide border-b border-slate-200">
                   <th className="px-4 py-2.5 font-semibold">Student</th>
                   <th className="px-4 py-2.5 font-semibold">Admission ID</th>
                   <th className="px-4 py-2.5 font-semibold">Class</th>
@@ -419,7 +473,7 @@ export default function Students() {
                 {visible.map((s) => (
                   <tr
                     key={s.id}
-                    className="border-b border-black/[0.04] last:border-0 hover:bg-paper/50 transition-colors cursor-pointer"
+                    className="border-b border-slate-100 last:border-0 hover:bg-paper/50 transition-colors cursor-pointer"
                     onClick={() => setSelected(s)}
                   >
                     <td className="px-4 py-2.5">
@@ -427,6 +481,11 @@ export default function Students() {
                         <Avatar src={s.avatar} name={s.name} size={32} />
                         <div>
                           <p className="font-semibold text-ink text-[12.5px] leading-tight">{s.name}</p>
+                          {s.deletedAt && (
+                            <span className="text-[10px] font-semibold uppercase tracking-wide text-alert">
+                              deleted
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -450,7 +509,7 @@ export default function Students() {
                           s.attendance >= 90
                             ? "text-success"
                             : s.attendance >= 75
-                              ? "text-amber-dark"
+                              ? "text-primary-dark"
                               : "text-alert"
                         }`}
                       >
@@ -484,7 +543,7 @@ export default function Students() {
                         </button>
                         <PermissionGate permission="students:write">
                           <button
-                            className="p-1.5 rounded text-amber-dark hover:bg-amber/10 transition-colors"
+                            className="p-1.5 rounded text-primary-dark hover:bg-primary/10 transition-colors"
                             onClick={() => openEdit(s)}
                             title="Edit student"
                           >
@@ -513,7 +572,7 @@ export default function Students() {
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[92vh] flex flex-col">
             <div className="relative overflow-hidden bg-ink px-6 pt-6 pb-6 text-white">
-              <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-amber/25 blur-2xl" />
+              <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-primary/25 blur-2xl" />
               <div className="absolute -bottom-16 -left-8 w-44 h-44 rounded-full bg-info/25 blur-2xl" />
               <button
                 onClick={() => setSelected(null)}
@@ -576,7 +635,7 @@ export default function Students() {
                 ))}
               </div>
 
-              <div className="border-t border-black/[0.06] my-5" />
+              <div className="border-t border-slate-200 my-5" />
 
               <div className="space-y-2.5 text-[13px]">
                 <p className="flex items-center gap-2 text-slate-text">
@@ -617,6 +676,27 @@ export default function Students() {
 
               <div className="flex gap-2 mt-6">
                 <PermissionGate permission="students:write">
+                  {selected.deletedAt ? (
+                    <Button
+                      variant="outline"
+                      className="flex-1 justify-center"
+                      disabled={busyAction}
+                      onClick={handleRestoreStudent}
+                    >
+                      <UserCheck size={14} /> {busyAction ? "Restoring…" : "Restore"}
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="outline"
+                      className="flex-1 justify-center text-alert hover:bg-alert/10"
+                      disabled={busyAction}
+                      onClick={handleDeleteStudent}
+                    >
+                      <Trash2 size={14} /> {busyAction ? "Deleting…" : "Delete"}
+                    </Button>
+                  )}
+                </PermissionGate>
+                <PermissionGate permission="students:write">
                   <Button
                     variant="outline"
                     className="flex-1 justify-center"
@@ -626,13 +706,18 @@ export default function Students() {
                   </Button>
                 </PermissionGate>
                 <Button
-                  variant="amber"
+                  variant="primary"
                   className="flex-1 justify-center"
                   onClick={() => setSelected(null)}
                 >
                   Done
                 </Button>
               </div>
+              {selected.deletedAt && (
+                <p className="mt-3 text-[12px] text-slate-text/60">
+                  This student is in the trash (deleted {fmtDate(selected.deletedAt)}). Restore within the retention window to bring it back — after that a purge permanently removes the record.
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -646,10 +731,10 @@ export default function Students() {
             onClick={() => setCardStudent(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden max-h-[92vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px] flex items-center gap-2">
-                  <CreditCard size={18} className="text-amber-dark" /> Student
+                  <CreditCard size={18} className="text-primary-dark" /> Student
                   ID Card
                 </h3>
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">
@@ -668,7 +753,7 @@ export default function Students() {
               <StudentIdCard student={cardStudent} school={school} />
             </div>
 
-            <div className="flex gap-2 px-5 py-4 border-t border-black/[0.06]">
+            <div className="flex gap-2 px-5 py-4 border-t border-slate-200">
               <Button
                 variant="outline"
                 className="flex-1 justify-center"
@@ -677,7 +762,7 @@ export default function Students() {
                 <Printer size={14} /> Print ID Card
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 className="flex-1 justify-center"
                 onClick={() => setCardStudent(null)}
               >
@@ -696,7 +781,7 @@ export default function Students() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[92vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   {editId ? "Edit Student" : "Add New Student"}
@@ -946,12 +1031,12 @@ export default function Students() {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowModal(false)}>
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={handleSave}
                 disabled={!form.name.trim() || !form.roll}
               >
@@ -991,7 +1076,7 @@ export default function Students() {
 //         eyebrow="Academics"
 //         title="Student Database"
 //         description={`${students.length} students enrolled across Nursery to Class 12.`}
-//         right={<Button variant="amber"><Plus size={15} /> Add Student</Button>}
+//         right={<Button variant="primary"><Plus size={15} /> Add Student</Button>}
 //       />
 
 //       <Card
@@ -1010,7 +1095,7 @@ export default function Students() {
 //         <div className="overflow-x-auto -mx-5">
 //           <table className="w-full text-[13px]">
 //             <thead>
-//               <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+//               <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
 //                 <th className="px-5 py-2.5 font-semibold">Student</th>
 //                 <th className="px-5 py-2.5 font-semibold">Class</th>
 //                 <th className="px-5 py-2.5 font-semibold">Roll No.</th>
@@ -1021,7 +1106,7 @@ export default function Students() {
 //             </thead>
 //             <tbody>
 //               {filtered.slice(0, 25).map((s) => (
-//                 <tr key={s.id} onClick={() => setSelected(s)} className="border-b border-black/[0.04] hover:bg-paper/60 cursor-pointer">
+//                 <tr key={s.id} onClick={() => setSelected(s)} className="border-b border-slate-100 hover:bg-paper/60 cursor-pointer">
 //                   <td className="px-5 py-2.5">
 //                     <div className="flex items-center gap-2.5">
 //                       <Avatar src={s.avatar} name={s.name} size={32} />
@@ -1078,12 +1163,12 @@ export default function Students() {
 //                 <p className="flex items-center gap-2 text-slate-text"><Mail size={14} className="text-slate-text/50" /> {selected.email}</p>
 //                 <p className="flex items-center gap-2 text-slate-text"><MapPin size={14} className="text-slate-text/50" /> {selected.address}</p>
 //               </div>
-//               <div className="border-t border-black/[0.06] pt-4">
+//               <div className="border-t border-slate-200 pt-4">
 //                 <p className="text-[12px] font-semibold text-slate-text/60 uppercase mb-2">Parent / Guardian</p>
 //                 <p className="text-[13px] text-ink font-medium">Father: {selected.fatherName}</p>
 //                 <p className="text-[13px] text-ink font-medium mt-1">Mother: {selected.motherName}</p>
 //               </div>
-//               <Button variant="amber" className="w-full justify-center mt-2">View Full Profile</Button>
+//               <Button variant="primary" className="w-full justify-center mt-2">View Full Profile</Button>
 //             </div>
 //           </div>
 //         </div>

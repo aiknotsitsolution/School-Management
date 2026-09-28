@@ -29,7 +29,7 @@ export default function Events() {
       />
 
       {loading ? (
-        <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 bg-white rounded-2xl border border-black/[0.06] animate-pulse" />)}</div>
+        <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 bg-white rounded-2xl border border-slate-200 animate-pulse" />)}</div>
       ) : events.length === 0 ? (
         <Card>
           <div className="py-10 text-center">
@@ -46,7 +46,7 @@ export default function Events() {
               {upcoming.map((e) => (
                 <Card key={e._id}>
                   <div className="flex items-start gap-3">
-                    <div className="w-10 h-10 rounded-lg bg-amber/10 text-amber-dark flex items-center justify-center shrink-0">
+                    <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary-dark flex items-center justify-center shrink-0">
                       <PartyPopper size={18} />
                     </div>
                     <div className="min-w-0 flex-1">

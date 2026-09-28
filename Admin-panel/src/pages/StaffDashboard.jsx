@@ -95,12 +95,12 @@ export default function StaffDashboard() {
     return (
       <Card>
         <div className="py-14 text-center">
-          <BriefcaseBusiness size={44} className="mx-auto text-amber mb-4" />
+          <BriefcaseBusiness size={44} className="mx-auto text-primary mb-4" />
           <p className="font-display text-xl font-bold text-ink">{persona.label} Workspace</p>
           <p className="text-[13px] text-slate-text/70 mt-1 mb-6">
             Your role has a dedicated workspace. Opening it now…
           </p>
-          <Button variant="amber" onClick={() => navigate(persona.landing)}>
+          <Button variant="primary" onClick={() => navigate(persona.landing)}>
             Open {persona.label} Workspace <ChevronRight size={15} />
           </Button>
         </div>
@@ -161,7 +161,7 @@ export default function StaffDashboard() {
           <div className="flex items-center gap-4">
             <Avatar name={displayName} size={54} />
             <div>
-              <p className="text-amber font-semibold text-[12.5px]">
+              <p className="text-primary-light font-semibold text-[12.5px]">
                 {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
               </p>
               <h2 className="font-display text-2xl sm:text-[26px] font-bold text-white mt-0.5">
@@ -184,7 +184,7 @@ export default function StaffDashboard() {
       {/* Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={UserRound} label="Profile" value={staff ? "Linked" : "Not linked"} sub={staff?.status || "No staff record yet"} accent="info" />
-        <StatCard icon={CalendarClock} label="My Leaves" value={`${leaveCounts.Approved}/${leaves.length}`} sub={`${leaveCounts.Pending} pending review`} accent="amber" />
+        <StatCard icon={CalendarClock} label="My Leaves" value={`${leaveCounts.Approved}/${leaves.length}`} sub={`${leaveCounts.Pending} pending review`} accent="primary" />
         <StatCard icon={Banknote} label="Payslips" value={String(payroll.length)} sub={latestPay ? `${latestPay.month} ${latestPay.year}` : "No salary records"} accent="success" />
         <StatCard icon={BadgeCheck} label="Department" value={cap(staff?.department) || "—"} sub={staff?.role ? cap(staff.role) : "—"} accent="alert" />
       </div>
@@ -243,7 +243,7 @@ export default function StaffDashboard() {
           ) : (
             <div className="space-y-2.5">
               {leaves.slice(0, 5).map((l) => (
-                <div key={l._id} className="flex items-center justify-between gap-3 py-2 border-b border-black/[0.06] last:border-0 last:pb-0">
+                <div key={l._id} className="flex items-center justify-between gap-3 py-2 border-b border-slate-200 last:border-0 last:pb-0">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-lg bg-info/10 text-info flex items-center justify-center shrink-0">
                       <CalendarCheck size={15} />
@@ -282,7 +282,7 @@ export default function StaffDashboard() {
               </thead>
               <tbody>
                 {payroll.slice(0, 8).map((p) => (
-                  <tr key={p._id} className="border-t border-black/[0.06]">
+                  <tr key={p._id} className="border-t border-slate-200">
                     <td className="px-5 py-3 font-semibold text-ink">{p.month} {p.year}</td>
                     <td className="px-5 py-3 text-slate-text">{fmtMoney(p.basic)}</td>
                     <td className="px-5 py-3 text-slate-text">{fmtMoney(p.allowances)}</td>
@@ -316,7 +316,7 @@ export default function StaffDashboard() {
           ) : (
             <div className="space-y-2.5">
               {attendance.slice(0, 5).map((a) => (
-                <div key={a._id} className="flex items-center justify-between gap-3 py-2 border-b border-black/[0.06] last:border-0 last:pb-0">
+                <div key={a._id} className="flex items-center justify-between gap-3 py-2 border-b border-slate-200 last:border-0 last:pb-0">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <div className="w-8 h-8 rounded-lg bg-info/10 text-info flex items-center justify-center shrink-0">
                       <Clock size={15} />
@@ -345,9 +345,9 @@ export default function StaffDashboard() {
               <Link
                 key={item.to}
                 to={item.to}
-                className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-amber/5 transition-colors border-b border-black/[0.06] last:border-0 last:pb-0"
+                className="flex items-center gap-3 py-2.5 px-2 rounded-lg hover:bg-primary/5 transition-colors border-b border-slate-200 last:border-0 last:pb-0"
               >
-                <div className="w-8 h-8 rounded-lg bg-amber/12 text-amber-dark flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-lg bg-primary/12 text-primary-dark flex items-center justify-center shrink-0">
                   <item.icon size={15} />
                 </div>
                 <span className="text-[13px] font-semibold text-ink">{item.label}</span>

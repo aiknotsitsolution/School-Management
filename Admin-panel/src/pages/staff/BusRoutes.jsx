@@ -85,7 +85,7 @@ export default function BusRoutes() {
         title="Bus Routes"
         description="Route numbers, stops, drivers and vehicles."
         right={
-          <Button variant="amber" onClick={() => setShowForm((v) => !v)}>
+          <Button variant="primary" onClick={() => setShowForm((v) => !v)}>
             <Plus size={15} /> Add Route
           </Button>
         }
@@ -93,7 +93,7 @@ export default function BusRoutes() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Bus} label="Routes" value={String(routes.length)} accent="info" />
-        <StatCard icon={MapPin} label="Stops" value={String(routes.reduce((s, r) => s + (r.stops?.length || 0), 0))} accent="amber" />
+        <StatCard icon={MapPin} label="Stops" value={String(routes.reduce((s, r) => s + (r.stops?.length || 0), 0))} accent="primary" />
         <StatCard icon={Phone} label="Drivers" value={String(routes.filter((r) => r.driverName).length)} accent="success" />
         <StatCard icon={Bus} label="Students" value={String(routes.reduce((s, r) => s + (r.assignedStudents?.length || 0), 0))} accent="alert" />
       </div>
@@ -140,7 +140,7 @@ export default function BusRoutes() {
               </thead>
               <tbody>
                 {routes.map((r) => (
-                  <tr key={r._id} className="border-t border-black/[0.06] hover:bg-paper/60">
+                  <tr key={r._id} className="border-t border-slate-200 hover:bg-paper/60">
                     <td className="px-5 py-2.5 font-semibold text-ink">Route {r.routeNo}</td>
                     <td className="px-3 py-2.5">{r.vehicleNo || "—"}</td>
                     <td className="px-3 py-2.5">

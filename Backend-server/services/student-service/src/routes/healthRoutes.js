@@ -5,13 +5,16 @@ const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeClass
 
 router.use(verifyToken, resolveTenant, requireTenant);
 
-// Read health record — students own-only; teachers scoped; admins any.
+// Health-record gates (Phase 2): medical data now requires the dedicated
+// health:read/health:write permissions instead of the generic students:*
+// bundle — counsellors (students:*) lose access to medical data, teachers
+// keep read-only where their role grants health:read. Students own-only.
 const gateHealthRead = (req, res, next) => {
-  const perm = req.user?.role === "student" ? "profile:read" : "students:read";
+  const perm = req.user?.role === "student" ? "profile:read" : "health:read";
   return requirePermission(perm)(req, res, next);
 };
 const gateHealthWrite = (req, res, next) => {
-  const perm = req.user?.role === "student" ? "profile:update" : "students:write";
+  const perm = req.user?.role === "student" ? "profile:update" : "health:write";
   return requirePermission(perm)(req, res, next);
 };
 

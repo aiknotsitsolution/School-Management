@@ -5,6 +5,7 @@ const {
   missingMessage,
 } = require("../utils/masterRefs");
 const { notifyByRefIds, notifyClassStudents } = require("../utils/notify");
+const { tryStudentModel } = require("../services/academicYearService");
 
 async function assertRefs(tenantId, body) {
   const missing = await findMissingMasterRefs({
@@ -24,7 +25,7 @@ async function assertRefs(tenantId, body) {
 // (schoolId / assignedBy / timestamps stay server-owned).
 const HOMEWORK_FIELDS = [
   "assignType", "class", "section", "subject", "title", "description",
-  "assignedTo", "assignedToRole", "assignedToUserId", "priority", "dueDate", "maxMarks", "attachments",
+  "assignedTo", "assignedToRole", "assignedToUserId", "priority", "status", "dueDate", "maxMarks", "attachments",
 ];
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
@@ -33,6 +34,10 @@ const createHomework = async (req, res) => {
   try {
     const assignType = req.body.assignType || "student";
     if (assignType === "student") {
+      // Class-less student homework would be invisible to every student.
+      if (!String(req.body.class || "").trim()) {
+        return res.status(400).json({ success: false, message: "Class is required for student homework" });
+      }
       await assertRefs(req.tenantId, req.body);
     }
     const homework = await Homework.create({
@@ -67,10 +72,40 @@ const createHomework = async (req, res) => {
   }
 };
 
+// Resolve the {class, section} pairs of a parent's linked children so their
+// homework list can be scoped to exactly those classes. Fail-secure: when the
+// student mirror is unavailable or no child has a class, the caller matches
+// nothing instead of falling back to a school-wide list.
+async function childClassPairs(schoolId, linkedStudentIds) {
+  const ids = (linkedStudentIds || []).map(String).filter(Boolean);
+  if (!ids.length) return [];
+  const Student = await tryStudentModel();
+  if (!Student) return [];
+  const rows = await Student.find({
+    schoolId,
+    admissionNo: { $in: ids },
+    status: { $in: ["Active", "Inactive"] },
+  })
+    .select("class section")
+    .lean();
+  return rows
+    .filter((r) => r.class)
+    .map((r) => (r.section ? { class: r.class, section: r.section } : { class: r.class }));
+}
+
 const getHomework = async (req, res) => {
   try {
     const { class: cls, section, subject, assignType } = req.query;
     const filter = { schoolId: req.tenantId };
+    // Parents are read-only but must never see the whole school's list:
+    // restrict to the classes of their linked children.
+    if (req.user.role === "parent") {
+      const pairs = await childClassPairs(req.tenantId, req.user.linkedStudentIds);
+      // Fail-secure: MongoDB rejects an empty $or, and an unscoped parent
+      // query would leak the whole school — so match nothing instead.
+      if (pairs.length) filter.$or = pairs;
+      else filter._id = { $in: [] };
+    }
     if (cls) filter.class = cls;
     if (section) filter.section = section;
     if (subject) filter.subject = subject;
@@ -112,7 +147,9 @@ const updateHomework = async (req, res) => {
       updates,
       { new: true },
     );
-    if (hw && hw.assignType === "staff" && hw.assignedToUserId) {
+    // Status-only toggles are frequent; don't notify the assignee for them.
+    const contentChanged = Object.keys(updates).some((k) => k !== "status");
+    if (hw && contentChanged && hw.assignType === "staff" && hw.assignedToUserId) {
       notifyByRefIds({
         schoolId: req.tenantId,
         refIds: [hw.assignedToUserId],

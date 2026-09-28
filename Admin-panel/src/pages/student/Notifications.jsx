@@ -67,7 +67,7 @@ export default function StudentNotifications() {
             <p className="text-[13px] text-slate-text/60">No notifications yet.</p>
           </div>
         ) : (
-          <div className="divide-y divide-black/5">
+          <div className="divide-y divide-slate-100">
             {items.map((n) => (
               <button
                 key={n._id}
@@ -75,9 +75,9 @@ export default function StudentNotifications() {
                 className={`w-full text-left px-4 py-3 hover:bg-paper transition-colors ${n.read ? "opacity-60" : ""}`}
               >
                 <div className="flex items-start gap-3">
-                  {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-amber shrink-0" />}
-                  <div className="w-9 h-9 rounded-lg bg-amber/10 flex items-center justify-center shrink-0">
-                    <Bell size={16} className="text-amber" />
+                  {!n.read && <span className="mt-1.5 w-2 h-2 rounded-full bg-primary shrink-0" />}
+                  <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+                    <Bell size={16} className="text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13px] font-semibold text-ink truncate">{n.title}</p>

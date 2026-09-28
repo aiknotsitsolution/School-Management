@@ -117,7 +117,7 @@ export default function SupportChatbot() {
         <div className="w-[calc(100vw-2rem)] max-w-[360px] h-[480px] max-h-[72vh] bg-white rounded-2xl shadow-2xl border border-ink/10 overflow-hidden flex flex-col">
           {/* Header */}
           <div className="bg-ink text-white px-4 py-3 flex items-center gap-3 shrink-0">
-            <div className="w-10 h-10 rounded-full bg-amber/90 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-primary/90 flex items-center justify-center">
               <Bot size={20} className="text-ink" />
             </div>
             <div className="flex-1 min-w-0">
@@ -197,7 +197,7 @@ export default function SupportChatbot() {
               <button
                 onClick={() => send()}
                 disabled={!input.trim()}
-                className="p-1.5 rounded-lg bg-ink text-amber disabled:opacity-40 hover:opacity-90 transition-opacity"
+                className="p-1.5 rounded-lg bg-primary text-white disabled:opacity-40 hover:opacity-90 transition-opacity"
                 aria-label="Send message"
               >
                 <Send size={15} />
@@ -210,7 +210,7 @@ export default function SupportChatbot() {
       {/* FAB */}
       <button
         onClick={() => setOpen((o) => !o)}
-        className="relative w-14 h-14 rounded-full bg-ink text-amber shadow-2xl hover:scale-105 active:scale-95 transition-transform flex items-center justify-center"
+        className="relative w-14 h-14 rounded-full bg-primary text-white shadow-2xl hover:scale-105 active:scale-95 transition-transform flex items-center justify-center"
         aria-label="Open support chat"
         title="Support helpdesk"
       >

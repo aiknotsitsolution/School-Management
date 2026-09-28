@@ -152,22 +152,22 @@ export default function ForgotPassword() {
         </div>
         <div className="relative z-10 max-w-md">
           <h2 className="font-display text-4xl font-bold leading-tight">
-            Account recovery <span className="text-amber">your way.</span>
+            Account recovery <span className="text-primary">your way.</span>
           </h2>
           <p className="text-white/60 mt-4 text-[14.5px] leading-relaxed">
             Reset your password securely using a one-time OTP sent to your email address.
           </p>
           <div className="flex gap-4 mt-8 pt-8 border-t border-white/10 text-[13px]">
             <div className="flex items-center gap-2 text-white/50">
-              <div className="w-6 h-6 rounded-full bg-amber/20 text-amber flex items-center justify-center text-[11px] font-bold">1</div>
+              <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[11px] font-bold">1</div>
               Enter email
             </div>
             <div className="flex items-center gap-2 text-white/50">
-              <div className="w-6 h-6 rounded-full bg-amber/20 text-amber flex items-center justify-center text-[11px] font-bold">2</div>
+              <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[11px] font-bold">2</div>
               Verify OTP
             </div>
             <div className="flex items-center gap-2 text-white/50">
-              <div className="w-6 h-6 rounded-full bg-amber/20 text-amber flex items-center justify-center text-[11px] font-bold">3</div>
+              <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[11px] font-bold">3</div>
               New password
             </div>
           </div>
@@ -189,7 +189,7 @@ export default function ForgotPassword() {
 
           {step === 1 && (
             <>
-              <p className="text-amber-dark font-semibold text-[12.5px] mb-1.5">Password recovery</p>
+              <p className="text-primary-dark font-semibold text-[12.5px] mb-1.5">Password recovery</p>
               <h1 className="font-display text-2xl font-bold text-ink mb-1">Forgot your password?</h1>
               <p className="text-slate-text text-[13.5px] mb-8">Enter your registered email and we'll send you an OTP</p>
               <form className="space-y-4" onSubmit={handleRequestOtp}>
@@ -204,7 +204,7 @@ export default function ForgotPassword() {
                       required
                       type="email"
                       placeholder="you@example.com"
-                      className="w-full pl-10 pr-3.5 py-3 rounded-lg border border-black/10 text-[13.5px] outline-none focus:border-ink/40 bg-white"
+                      className="w-full pl-10 pr-3.5 py-3 rounded-lg border border-slate-300 text-[13.5px] outline-none focus:border-primary bg-white"
                     />
                   </div>
                 </div>
@@ -212,7 +212,7 @@ export default function ForgotPassword() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-amber text-ink font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-amber-dark transition-colors"
+                  className="w-full bg-primary text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors"
                 >
                   {loading ? "Sending OTP..." : "Send OTP"}
                   {!loading && <ArrowRight size={16} />}
@@ -223,7 +223,7 @@ export default function ForgotPassword() {
 
           {step === 2 && (
             <>
-              <p className="text-amber-dark font-semibold text-[12.5px] mb-1.5">Verify OTP</p>
+              <p className="text-primary-dark font-semibold text-[12.5px] mb-1.5">Verify OTP</p>
               <h1 className="font-display text-2xl font-bold text-ink mb-1">Enter the OTP</h1>
               <p className="text-slate-text text-[13.5px] mb-8">
                 We sent a 6-digit code to <span className="font-semibold text-ink">{maskedEmail}</span>
@@ -242,7 +242,7 @@ export default function ForgotPassword() {
                         value={digit}
                         onChange={(e) => handleOtpChange(i, e.target.value)}
                         onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                        className="w-11 h-12 text-center text-lg font-bold rounded-lg border border-black/10 outline-none focus:border-ink/40 bg-white"
+                        className="w-11 h-12 text-center text-lg font-bold rounded-lg border border-slate-300 outline-none focus:border-primary bg-white"
                       />
                     ))}
                   </div>
@@ -262,7 +262,7 @@ export default function ForgotPassword() {
                 <button
                   type="submit"
                   disabled={loading || otp.join("").length !== 6}
-                  className="w-full bg-amber text-ink font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-amber-dark transition-colors disabled:opacity-50"
+                  className="w-full bg-primary text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors disabled:opacity-50"
                 >
                   {loading ? "Verifying..." : "Verify OTP"}
                   {!loading && <ArrowRight size={16} />}
@@ -280,7 +280,7 @@ export default function ForgotPassword() {
 
           {step === 3 && (
             <>
-              <p className="text-amber-dark font-semibold text-[12.5px] mb-1.5">Set new password</p>
+              <p className="text-primary-dark font-semibold text-[12.5px] mb-1.5">Set new password</p>
               <h1 className="font-display text-2xl font-bold text-ink mb-1">Create a new password</h1>
               <p className="text-slate-text text-[13.5px] mb-8">OTP verified. Choose a strong password for your account.</p>
               <form className="space-y-4" onSubmit={handleResetPassword}>
@@ -311,7 +311,7 @@ export default function ForgotPassword() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full bg-amber text-ink font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-amber-dark transition-colors"
+                  className="w-full bg-primary text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors"
                 >
                   {loading ? "Updating..." : "Set new password"}
                   {!loading && <ArrowRight size={16} />}
@@ -321,7 +321,7 @@ export default function ForgotPassword() {
           )}
 
           {step === 4 && (
-            <div className="rounded-xl border border-black/10 bg-white p-6">
+            <div className="rounded-xl border border-slate-300 bg-white p-6">
               <div className="flex items-center gap-2.5 mb-2">
                 <CheckCircle2 size={20} className="text-emerald-600" />
                 <p className="font-display font-bold text-ink">Password updated</p>
@@ -331,7 +331,7 @@ export default function ForgotPassword() {
               </p>
               <button
                 onClick={() => navigate("/login", { replace: true })}
-                className="w-full bg-amber text-ink font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-amber-dark transition-colors"
+                className="w-full bg-primary text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors"
               >
                 <ArrowLeft size={16} /> Go to sign in
               </button>

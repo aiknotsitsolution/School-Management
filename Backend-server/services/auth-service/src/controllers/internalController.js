@@ -3,6 +3,7 @@
 // (INTERNAL_NOTIFY_KEY, same convention as the communication/student services).
 const crypto = require("node:crypto");
 const School = require("../models/School");
+const User = require("../models/User");
 const Plan = require("../models/Plan");
 const Subscription = require("../models/Subscription");
 const { CURRENT_SUBSCRIPTION_STATUSES, SCHEDULED_STATUSES } = require("../models/Subscription");
@@ -202,4 +203,74 @@ const subscriptionPaid = async (req, res) => {
   }
 };
 
-module.exports = { internalGuard, getPaymentGateway, subscriptionPaid };
+// ---------------------------------------------------------------------------
+// Student delete-cascade hooks (called by student-service, Phase 2). Both
+// match on role="student" + refId=admissionNo within the same school so they
+// can never touch another role's account.
+// ---------------------------------------------------------------------------
+
+// Soft-delete of a Student row → deactivate the linked login (reversible via
+// the normal user activation flow; the account simply stops authenticating).
+const deactivateStudentUser = async (req, res) => {
+  try {
+    const { schoolId, admissionNo } = req.body || {};
+    if (!schoolId || !admissionNo) {
+      return res.status(400).json({ success: false, message: "schoolId and admissionNo are required" });
+    }
+    const result = await User.updateOne(
+      { schoolId, refId: String(admissionNo), role: "student", deletedAt: null },
+      { $set: { isActive: false } },
+    );
+    res.json({ success: true, data: { matched: result.matchedCount, modified: result.modifiedCount } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Final purge of a soft-deleted student → remove the linked login entirely.
+const purgeStudentUser = async (req, res) => {
+  try {
+    const { schoolId, admissionNo } = req.body || {};
+    if (!schoolId || !admissionNo) {
+      return res.status(400).json({ success: false, message: "schoolId and admissionNo are required" });
+    }
+    const result = await User.deleteOne({ schoolId, refId: String(admissionNo), role: "student" });
+    res.json({ success: true, data: { deleted: result.deletedCount } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// [INTERNAL] Transactional email relay (fee-service fee reminders, etc.).
+// The SMTP transport lives here so nodemailer + credentials stay in one place;
+// callers are other services holding the shared internal key.
+const sendInternalEmail = async (req, res) => {
+  try {
+    const { to, subject, html } = req.body || {};
+    const list = (Array.isArray(to) ? to : [to])
+      .filter((e) => typeof e === "string" && e.includes("@"))
+      .slice(0, 20);
+    if (list.length === 0 || !subject || !html) {
+      return res.status(400).json({ success: false, message: "to, subject and html are required" });
+    }
+    const { sendEmail } = require("../utils/email");
+    const results = await Promise.allSettled(
+      list.map((recipient) =>
+        sendEmail({
+          to: recipient,
+          subject: String(subject).slice(0, 200),
+          html: String(html).slice(0, 10000),
+        }),
+      ),
+    );
+    const failed = results.filter((r) => r.status === "rejected").length;
+    if (failed === results.length) {
+      return res.status(502).json({ success: false, message: "Email transport failed" });
+    }
+    res.json({ success: true, data: { sent: results.length - failed, failed } });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+module.exports = { internalGuard, getPaymentGateway, subscriptionPaid, deactivateStudentUser, purgeStudentUser, sendInternalEmail };

@@ -30,6 +30,7 @@ const AUDIENCE_OPTIONS = [
   "All",
   "All Parents",
   "All Staff",
+  "All Students",
   "Classes 1–5 Parents",
   "Classes 6–8 Parents",
   "Classes 9–12 Parents",
@@ -40,7 +41,7 @@ const AUDIENCE_OPTIONS = [
 const categoryTone = {
   Academic: "info",
   Holiday: "success",
-  Sports: "amber",
+  Sports: "primary",
   Fees: "alert",
   Event: "info",
   Transport: "neutral",
@@ -64,43 +65,70 @@ function emptyForm() {
     audience: "All",
     body: "",
     pinned: false,
+    priority: "normal",
   };
 }
 
 function normalizeNotice(notice) {
+  const audience = Array.isArray(notice.audience) ? notice.audience : [];
+  const roles = audience
+    .map((a) =>
+      a === "all"
+        ? "Everyone"
+        : String(a).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    )
+    .filter(Boolean)
+    .join(", ");
+  const tags = Array.isArray(notice.classTags) && notice.classTags.length > 0
+    ? notice.classTags.join(", ")
+    : "";
   return {
     ...notice,
     id: notice._id || notice.id,
     category: notice.category || "General",
     date: notice.expiryDate || notice.createdAt,
-    audience: Array.isArray(notice.audience)
-      ? notice.audience.join(", ")
-      : notice.audience || "All",
+    audience: Array.isArray(notice.audience) ? audience : ["all"],
+    audienceLabel: notice.audienceLabel
+      ? notice.audienceLabel
+      : [roles, tags].filter(Boolean).join(" · ") || "Everyone",
     body: notice.description || notice.body || "",
     pinned: Boolean(notice.pinned),
+    priority: notice.priority || "normal",
   };
 }
 
-const audienceValues = {
-  All: ["all"],
-  "All Parents": ["parent"],
-  "All Staff": ["admin", "teacher"],
-  "Classes 1–5 Parents": ["parent"],
-  "Classes 6–8 Parents": ["parent"],
-  "Classes 9–12 Parents": ["parent"],
-  "Classes 3–10": ["all"],
-  "Transport Users": ["all"],
-  "All Students (My Classes)": ["all"],
+const audiencePresets = {
+  All: "all",
+  "All Parents": "parent",
+  "All Staff": "staff",
+  "All Students": "student",
+  "Classes 1–5 Parents": "parent",
+  "Classes 6–8 Parents": "parent",
+  "Classes 9–12 Parents": "parent",
+  "Classes 3–10": "all",
+  "Transport Users": "all",
 };
 
-// Preset audiences map to backend role tags; custom ones are stored verbatim so
-// each card keeps showing the label the admin chose.
+// Preset audiences map to backend role tags; class-scoped labels ("5-A",
+// "5-A Parents") split into an audience role tag + classTags so the backend can
+// scope student/parent recipients to the tagged classes. Anything unrecognized
+// (custom master values) is stored verbatim so each card keeps showing the
+// label the admin chose.
 const resolveAudience = (label) => {
-  // Handle teacher-scoped class audiences (e.g., "5-A", "5-A Parents")
-  if (/^\d+-[A-Z]$/.test(label) || /^\d+-[A-Z] Parents$/.test(label)) {
-    return [label];
+  const text = String(label).trim();
+  if (text === "All Students (My Classes)") {
+    return { audience: ["student"], classTags: [] };
   }
-  return audienceValues[label] || [String(label).trim()];
+  if (/Parents$/.test(text) && /^\d+-[A-Z] Parents$/.test(text)) {
+    const tag = text.replace(" Parents", "");
+    return { audience: ["parent"], classTags: [tag] };
+  }
+  if (/^\d+-[A-Z]$/.test(text)) {
+    return { audience: ["student"], classTags: [text] };
+  }
+  const role = audiencePresets[text];
+  if (role) return { audience: [role], classTags: [] };
+  return { audience: [text], classTags: [] };
 };
 
 // Searchable dropdown with an "add custom" action. Falls back to a simple
@@ -183,7 +211,7 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15"
+        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-slate-400 focus:border-primary focus:ring-4 focus:ring-primary/15"
       >
         <span className={value ? "" : "text-slate-text/60"}>
           {value || placeholder || "Select an option"}
@@ -195,8 +223,8 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl border border-black/10 shadow-lg shadow-black/5 overflow-hidden">
-          <div className="relative p-2 border-b border-black/[0.06]">
+        <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl border border-slate-300 shadow-lg shadow-black/5 overflow-hidden">
+          <div className="relative p-2 border-b border-slate-200">
             <Search
               size={14}
               className="absolute left-4.5 top-1/2 -translate-y-1/2 text-slate-text/40"
@@ -206,7 +234,7 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search or type a new value…"
-              className="w-full pl-9 pr-3 py-2 rounded-lg bg-paper border border-black/[0.06] text-[13px] outline-none focus:border-amber/50"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-paper border border-slate-200 text-[13px] outline-none focus:border-primary/50"
             />
           </div>
 
@@ -217,12 +245,12 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
                   type="button"
                   onClick={() => commit(opt)}
                   className={`w-full text-left px-3.5 py-2 text-[13px] transition-colors ${
-                    i === activeIndex ? "bg-amber/10 text-ink" : "text-ink hover:bg-paper"
+                    i === activeIndex ? "bg-primary/10 text-ink" : "text-ink hover:bg-paper"
                   }`}
                 >
                   {String(opt)}
                   {String(opt).toLowerCase() === q && (
-                    <span className="ml-1.5 text-[11px] text-amber-dark font-medium">(custom)</span>
+                    <span className="ml-1.5 text-[11px] text-primary-dark font-medium">(custom)</span>
                   )}
                 </button>
               </li>
@@ -233,8 +261,8 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
                 <button
                   type="button"
                   onClick={() => commit(query.trim(), true)}
-                  className={`w-full text-left px-3.5 py-2 text-[13px] text-amber-dark font-medium hover:bg-amber/10 transition-colors ${
-                    activeIndex === matches.length ? "bg-amber/10" : ""
+                  className={`w-full text-left px-3.5 py-2 text-[13px] text-primary-dark font-medium hover:bg-primary/10 transition-colors ${
+                    activeIndex === matches.length ? "bg-primary/10" : ""
                   }`}
                 >
                   + Add "{query.trim()}"
@@ -257,6 +285,7 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
 export default function NoticeBoard() {
   const user = useSelector(selectUser);
   const isTeacher = user?.role === "teacher";
+  const canPublish = user?.role === "school_admin" || user?.role === "super_admin" || isTeacher;
   const [notices, setNotices] = useState(initialNotices);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("All");
@@ -368,7 +397,7 @@ export default function NoticeBoard() {
           !q ||
           n.title.toLowerCase().includes(q) ||
           n.body.toLowerCase().includes(q) ||
-          n.audience.toLowerCase().includes(q);
+          String(n.audienceLabel || "").toLowerCase().includes(q);
         return matchCat && matchQuery;
       })
       .sort((a, b) => {
@@ -404,13 +433,25 @@ export default function NoticeBoard() {
 
   const openEdit = (n) => {
     setEditId(n.id);
+    const tags = Array.isArray(n.classTags) ? n.classTags : [];
+    const tagAudience = (n.audience || []).includes("parent") ? "Parents" : "";
+    const presetMatch = Object.keys(audiencePresets).find(
+      (k) => audiencePresets[k] === (Array.isArray(n.audience) ? n.audience[0] : n.audience),
+    );
+    // Class-tagged notices round-trip to their original "5-A" / "5-A Parents"
+    // labels instead of collapsing to the generic role preset.
+    const editLabel =
+      tags.length > 0
+        ? tags.map((t) => (tagAudience ? `${t} ${tagAudience}` : t)).join(", ")
+        : presetMatch || String(n.audienceLabel || (Array.isArray(n.audience) ? n.audience.join(", ") : n.audience) || "All");
     setForm({
       title: n.title,
       category: n.category,
       date: n.date,
-      audience: n.audience,
+      audience: editLabel,
       body: n.body,
       pinned: n.pinned,
+      priority: n.priority,
     });
     setShowModal(true);
   };
@@ -422,12 +463,15 @@ export default function NoticeBoard() {
   const handleSave = async () => {
     if (!form.title.trim() || !form.body.trim()) return;
     try {
+      const resolved = resolveAudience(form.audience);
       const payload = {
         title: form.title.trim(),
         description: form.body.trim(),
         category: form.category,
         pinned: form.pinned,
-        audience: resolveAudience(form.audience),
+        priority: form.priority,
+        audience: resolved.audience,
+        classTags: resolved.classTags,
         expiryDate: form.date,
       };
       const { data } = editId
@@ -479,9 +523,11 @@ export default function NoticeBoard() {
         title="Notice Board"
         description="Official circulars and announcements for students, parents and staff."
         right={
-          <Button variant="amber" onClick={openAdd}>
-            <Plus size={15} /> Post Notice
-          </Button>
+          canPublish ? (
+            <Button variant="primary" onClick={openAdd}>
+              <Plus size={15} /> Post Notice
+            </Button>
+          ) : undefined
         }
       />
       {error && (
@@ -502,7 +548,7 @@ export default function NoticeBoard() {
           label="Pinned"
           value={String(stats.pinned)}
           sub="Shown at top"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={Bell}
@@ -541,8 +587,8 @@ export default function NoticeBoard() {
               onClick={() => setFilter(c)}
               className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
                 filter === c
-                  ? "bg-ink text-white border-ink"
-                  : "bg-white text-slate-text border-black/10 hover:border-ink/30"
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-slate-text border-slate-300 hover:border-ink/30"
               }`}
             >
               {c}
@@ -560,40 +606,54 @@ export default function NoticeBoard() {
             <p className="text-[13px] text-slate-text/60 mt-1">
               Try a different filter or post a new notice.
             </p>
-            <Button variant="amber" className="mt-4" onClick={openAdd}>
-              <Plus size={15} /> Post Notice
-            </Button>
+            {canPublish && (
+              <Button variant="primary" className="mt-4" onClick={openAdd}>
+                <Plus size={15} /> Post Notice
+              </Button>
+            )}
           </div>
         </Card>
       ) : (
         <div className="grid md:grid-cols-2 gap-4">
           {filtered.map((n) => (
-            <Card key={n.id} className={n.pinned ? "ring-1 ring-amber/30" : ""}>
+            <Card
+              key={n.id}
+              className={`${n.pinned ? "ring-1 ring-primary/30" : ""} ${n.priority === "emergency" ? "ring-2 ring-alert/40 border-alert/30" : ""}`}
+            >
               <div className="flex items-start justify-between gap-2 mb-2">
                 <div className="flex items-center gap-2">
                   <Pill tone={categoryTone[n.category] || "neutral"}>
                     {n.category}
                   </Pill>
+                  {n.priority === "emergency" && (
+                    <span className="inline-flex items-center gap-1 text-[11px] font-bold text-alert bg-alert/10 px-1.5 py-0.5 rounded uppercase tracking-wide">
+                      Emergency
+                    </span>
+                  )}
                   {n.pinned && (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-dark">
-                      <Pin size={12} fill="#E8A33D" /> Pinned
+                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary-dark">
+                      <Pin size={12} fill="#4F46E5" /> Pinned
                     </span>
                   )}
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <button
-                    onClick={() => togglePin(n.id)}
-                    title={n.pinned ? "Unpin" : "Pin"}
-                    className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-amber-dark transition-colors"
-                  >
-                    {n.pinned ? <PinOff size={14} /> : <Pin size={14} />}
-                  </button>
-                  <button
-                    onClick={() => openEdit(n)}
-                    className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-info transition-colors"
-                  >
-                    <Pencil size={14} />
-                  </button>
+                  {canPublish && (
+                    <>
+                      <button
+                        onClick={() => togglePin(n.id)}
+                        title={n.pinned ? "Unpin" : "Pin"}
+                        className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-primary-dark transition-colors"
+                      >
+                        {n.pinned ? <PinOff size={14} /> : <Pin size={14} />}
+                      </button>
+                      <button
+                        onClick={() => openEdit(n)}
+                        className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-info transition-colors"
+                      >
+                        <Pencil size={14} />
+                      </button>
+                    </>
+                  )}
                 </div>
               </div>
 
@@ -604,8 +664,8 @@ export default function NoticeBoard() {
                 {n.body}
               </p>
 
-              <div className="flex items-center justify-between mt-4 pt-3 border-t border-black/[0.06] text-[11.5px] text-slate-text/60">
-                <span>For: {n.audience}</span>
+              <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200 text-[11.5px] text-slate-text/60">
+                <span>For: {n.audienceLabel || n.audience}</span>
                 <span>{formatDate(n.date)}</span>
               </div>
             </Card>
@@ -621,7 +681,7 @@ export default function NoticeBoard() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   {editId ? "Edit Notice" : "Post Notice"}
@@ -697,7 +757,7 @@ export default function NoticeBoard() {
                   placeholder="Write the full notice..."
                   value={form.body}
                   onChange={(e) => updateForm("body", e.target.value)}
-                  className="w-full rounded-lg border border-black/10 p-3 text-[13px] outline-none focus:border-ink/40 resize-none"
+                  className="w-full rounded-lg border border-slate-300 p-3 text-[13px] outline-none focus:border-primary resize-none"
                 />
               </div>
 
@@ -706,15 +766,34 @@ export default function NoticeBoard() {
                   type="checkbox"
                   checked={form.pinned}
                   onChange={(e) => updateForm("pinned", e.target.checked)}
-                  className="accent-amber w-4 h-4"
+                  className="accent-primary w-4 h-4"
                 />
                 <span className="text-[13px] font-medium text-ink">
                   Pin this notice (show at top)
                 </span>
               </label>
+
+              <label className="flex items-center justify-between gap-2.5 py-2.5 px-3 rounded-lg bg-alert/5 border border-alert/25 cursor-pointer">
+                <div>
+                  <span className="text-[13px] font-semibold text-alert">
+                    Emergency notice
+                  </span>
+                  <p className="text-[11.5px] text-slate-text/70">
+                    Alerts as priority + sends an emergency email blast when SMTP is configured.
+                  </p>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={form.priority === "emergency"}
+                  onChange={(e) =>
+                    updateForm("priority", e.target.checked ? "emergency" : "normal")
+                  }
+                  className="accent-alert w-4 h-4 shrink-0"
+                />
+              </label>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-between gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-between gap-2">
               <div>
                 {editId && (
                   <Button
@@ -734,7 +813,7 @@ export default function NoticeBoard() {
                   Cancel
                 </Button>
                 <Button
-                  variant="amber"
+                  variant="primary"
                   onClick={handleSave}
                   disabled={!form.title.trim() || !form.body.trim()}
                 >
@@ -753,7 +832,7 @@ export default function NoticeBoard() {
 // import { Pin, Plus } from "lucide-react";
 // import { PageIntro, Card, Button, Pill } from "../components/UI";
 
-// const categoryTone = { Academic: "info", Holiday: "success", Sports: "amber", Fees: "alert", Event: "info", Transport: "neutral" };
+// const categoryTone = { Academic: "info", Holiday: "success", Sports: "primary", Fees: "alert", Event: "info", Transport: "neutral" };
 
 // export default function NoticeBoard() {
 //   const [filter, setFilter] = useState("All");
@@ -766,7 +845,7 @@ export default function NoticeBoard() {
 //         eyebrow="Admissions & Outreach"
 //         title="Notice Board"
 //         description="Official circulars and announcements for students, parents and staff."
-//         right={<Button variant="amber"><Plus size={15} /> Post Notice</Button>}
+//         right={<Button variant="primary"><Plus size={15} /> Post Notice</Button>}
 //       />
 
 //       <div className="flex gap-2 flex-wrap">
@@ -775,7 +854,7 @@ export default function NoticeBoard() {
 //             key={c}
 //             onClick={() => setFilter(c)}
 //             className={`px-4 py-2 rounded-full text-[12.5px] font-semibold border transition-colors ${
-//               filter === c ? "bg-ink text-white border-ink" : "bg-white text-slate-text border-black/10 hover:border-ink/30"
+//               filter === c ? "bg-primary text-white border-primary" : "bg-white text-slate-text border-slate-300 hover:border-ink/30"
 //             }`}
 //           >
 //             {c}
@@ -788,11 +867,11 @@ export default function NoticeBoard() {
 //           <Card key={n.id}>
 //             <div className="flex items-start justify-between mb-2">
 //               <Pill tone={categoryTone[n.category] || "neutral"}>{n.category}</Pill>
-//               {n.pinned && <Pin size={14} className="text-amber-dark" fill="#E8A33D" />}
+//               {n.pinned && <Pin size={14} className="text-primary-dark" fill="#4F46E5" />}
 //             </div>
 //             <h3 className="font-display font-bold text-ink text-[15.5px] leading-snug">{n.title}</h3>
 //             <p className="text-[13px] text-slate-text mt-2 leading-relaxed">{n.body}</p>
-//             <div className="flex items-center justify-between mt-4 pt-3 border-t border-black/[0.06] text-[11.5px] text-slate-text/60">
+//             <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200 text-[11.5px] text-slate-text/60">
 //               <span>For: {n.audience}</span>
 //               <span>{n.date}</span>
 //             </div>

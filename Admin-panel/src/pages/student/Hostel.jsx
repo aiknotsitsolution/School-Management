@@ -27,7 +27,7 @@ export default function Hostel() {
       />
 
       {loading ? (
-        <div className="space-y-3">{[0, 1].map((i) => <div key={i} className="h-24 bg-white rounded-2xl border border-black/[0.06] animate-pulse" />)}</div>
+        <div className="space-y-3">{[0, 1].map((i) => <div key={i} className="h-24 bg-white rounded-2xl border border-slate-200 animate-pulse" />)}</div>
       ) : !room ? (
         <Card>
           <div className="py-10 text-center">
