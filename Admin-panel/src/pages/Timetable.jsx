@@ -4,6 +4,7 @@ import { usePermission } from "../lib/permissions";
 import { PageIntro } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
 import TimetableManager from "../components/timetable/TimetableManager";
+import SubstitutionPanel from "../components/timetable/SubstitutionPanel";
 
 const CLASS_OPTIONS_FALLBACK = [
   "Nursery",
@@ -119,6 +120,8 @@ export default function Timetable() {
       />
 
       <TimetableManager cls={cls} section={section} canWrite={canWrite} />
+
+      <SubstitutionPanel cls={cls} section={section} canWrite={canWrite} />
     </div>
   );
 }

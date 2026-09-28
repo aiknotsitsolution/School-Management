@@ -5,6 +5,7 @@ const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const { scopeClassTeacher } = require("@school-erp/shared/src/middleware/teacherScopeAuth");
 const { resolveTenant } = require("@school-erp/shared/src/middleware/tenant");
 const { requireSchoolActive } = require("@school-erp/shared/src/middleware/requireSchoolActive");
+const { requireSubscriptionActive } = require("@school-erp/shared/src/middleware/requireSubscriptionActive");
 const JWT_SECRET = getJwtSecret();
 
 // Decodes the JWT and attaches the tenant + role payload to req.user.
@@ -16,6 +17,11 @@ const verifyToken = async (req, res, next) => {
   }
   try {
     const decoded = jwt.verify(header.split(" ")[1], JWT_SECRET);
+
+    // Reject refresh tokens used as access tokens (typ claim).
+    if (decoded.typ !== "access") {
+      return res.status(401).json({ success: false, message: "Invalid token type" });
+    }
 
     const UserModel = mongoose.models.User;
     const tokenValidationOff = process.env.TOKEN_VALIDATION === "off" && process.env.NODE_ENV !== "production";
@@ -45,7 +51,10 @@ const requireTenant = async (req, res, next) => {
   if (!req.tenantId) {
     return res.status(400).json({ success: false, message: "No school context for this request" });
   }
-  return requireSchoolActive(req, res, next);
+  return requireSchoolActive(req, res, (err) => {
+    if (err) return next(err);
+    return requireSubscriptionActive(req, res, next);
+  });
 };
 
 // Role-scoped guard. More granular than authorizeRoles.
@@ -74,11 +83,13 @@ const scopeStudentQuery = (req, res, next) => {
   next();
 };
 
-// Restrict a student to only their own record(s); staff/teachers allowed.
+// Restrict a student to only their own record(s); parents to their linked
+// children; staff/teachers allowed.
 const restrictToOwnStudent = (getStudentIdFromReq) => (req, res, next) => {
   if (["school_admin", "teacher", "staff"].includes(req.user.role)) return next();
   const targetId = getStudentIdFromReq(req);
   if (req.user.role === "student" && req.user.refId === targetId) return next();
+  if (req.user.role === "parent" && (req.user.linkedStudentIds || []).includes(targetId)) return next();
   return res.status(403).json({ success: false, message: "You can only access your own student record" });
 };
 

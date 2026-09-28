@@ -91,7 +91,7 @@ export default function Enquiries() {
         title="Admission Enquiries"
         description="Capture and track enquiries from walk-ins, calls and the website."
         right={
-          <Button variant="amber" onClick={() => setShowForm((v) => !v)}>
+          <Button variant="primary" onClick={() => setShowForm((v) => !v)}>
             <Plus size={15} /> New Enquiry
           </Button>
         }
@@ -99,7 +99,7 @@ export default function Enquiries() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={null} label="Total" value={String(enquiries.length)} accent="info" />
-        <StatCard icon={null} label="New" value={String(byStatus["New"] || 0)} accent="amber" />
+        <StatCard icon={null} label="New" value={String(byStatus["New"] || 0)} accent="primary" />
         <StatCard icon={null} label="Admitted" value={String(byStatus["Admitted"] || 0)} accent="success" />
         <StatCard icon={null} label="Rejected" value={String(byStatus["Rejected"] || 0)} accent="alert" />
       </div>
@@ -165,7 +165,7 @@ export default function Enquiries() {
                   <>
                     <tr
                       key={q._id}
-                      className="border-t border-black/[0.06] hover:bg-paper/60 cursor-pointer"
+                      className="border-t border-slate-200 hover:bg-paper/60 cursor-pointer"
                       onClick={() => setExpanded(expanded === q._id ? null : q._id)}
                     >
                       <td className="px-5 py-2.5">
@@ -186,7 +186,7 @@ export default function Enquiries() {
                       </td>
                       <td className="px-3 py-2.5"><Pill tone="neutral">{q.source}</Pill></td>
                       <td className="px-3 py-2.5">
-                        <Pill tone={q.status === "New" ? "info" : q.status === "Admitted" ? "success" : q.status === "Rejected" ? "alert" : "amber"}>{q.status}</Pill>
+                        <Pill tone={q.status === "New" ? "info" : q.status === "Admitted" ? "success" : q.status === "Rejected" ? "alert" : "primary"}>{q.status}</Pill>
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <Select value={q.status} onChange={(e) => updateStatus(q._id, e.target.value)} className="w-44 py-1.5" onClick={(e) => e.stopPropagation()}>
@@ -197,7 +197,7 @@ export default function Enquiries() {
                       </td>
                     </tr>
                     {expanded === q._id && (
-                      <tr key={`${q._id}-detail`} className="border-t border-black/[0.06] bg-paper/40">
+                      <tr key={`${q._id}-detail`} className="border-t border-slate-200 bg-paper/40">
                         <td colSpan={6} className="px-5 py-3.5">
                           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-[12.5px]">
                             <p className="text-slate-text/70 flex items-center gap-1.5"><Phone size={12} /> {q.contact || "—"}</p>

@@ -17,11 +17,15 @@ router.post("/", requirePermission("fees:read"), ctrl.createOrder);
 // Attempt provider checkout. Returns 503 when provider not configured.
 router.post("/:id/initiate", requirePermission("fees:read"), ctrl.initiateOrder);
 
+// Office verification queue for manual-mode orders (UPI/QR/bank/manual).
+// Collection-desk permission: this endpoint records real money as received.
+router.post("/:id/manual-confirm", requirePermission("fees:collect"), ctrl.manualConfirmOrder);
+
 // Master cancel (restore order to cancelled so it can be recreated).
 router.patch("/:id/cancel", requirePermission("fees:read"), ctrl.cancelOrder);
 
-// Provider webhook confirmation. NOT exposed via the public gateway proxy:
-// guarded by provider signing secret and only honored when provider is enabled.
-router.post("/:id/confirm", ctrl.confirmOrder);
+// Client-side confirmation fallback; guarded by provider payment-signature
+// HMAC (a forged confirm is cryptographically impossible) and fees:read.
+router.post("/:id/confirm", requirePermission("fees:read"), ctrl.confirmOrder);
 
 module.exports = router;

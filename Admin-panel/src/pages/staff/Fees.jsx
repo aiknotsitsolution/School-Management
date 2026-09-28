@@ -112,7 +112,7 @@ export default function Fees() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors ${
-              tab === t ? "bg-ink text-white" : "bg-white text-slate-text hover:bg-paper border border-black/[0.06]"
+              tab === t ? "bg-ink text-white" : "bg-white text-slate-text hover:bg-paper border border-slate-200"
             }`}
           >
             {t}
@@ -126,7 +126,7 @@ export default function Fees() {
             <StatCard icon={Receipt} label="Invoices" value={String(invoices.length)} accent="info" />
             <StatCard icon={Wallet} label="Collected" value={fmtMoney(payments.reduce((s, p) => s + Number(p.amount || 0), 0))} accent="success" />
             <StatCard icon={DollarSign} label="Unpaid" value={String(invoices.filter((i) => i.status !== "Paid").length)} accent="alert" />
-            <StatCard icon={Wallet} label="Outstanding ₹" value={fmtMoney(invoices.filter((i) => i.status !== "Paid").reduce((s, i) => s + (Number(i.amount || 0) - Number(i.paidAmount || 0)), 0))} accent="amber" />
+            <StatCard icon={Wallet} label="Outstanding ₹" value={fmtMoney(invoices.filter((i) => i.status !== "Paid").reduce((s, i) => s + (Number(i.amount || 0) - Number(i.paidAmount || 0)), 0))} accent="primary" />
           </div>
 
           <Card
@@ -169,7 +169,7 @@ export default function Fees() {
                     {list.map((i) => {
                       const due = Number(i.amount || 0) - Number(i.paidAmount || 0);
                       return (
-                        <tr key={i._id} className="border-t border-black/[0.06] hover:bg-paper/60">
+                        <tr key={i._id} className="border-t border-slate-200 hover:bg-paper/60">
                           <td className="px-5 py-2.5 font-semibold text-ink">{i.studentId || "—"}</td>
                           <td className="px-3 py-2.5">Class {i.class || "—"}</td>
                           <td className="px-3 py-2.5">{i.feeType || "—"}</td>
@@ -177,7 +177,7 @@ export default function Fees() {
                           <td className="px-3 py-2.5 text-success font-semibold">{fmtMoney(i.paidAmount || 0)}</td>
                           <td className="px-3 py-2.5">{fmtMoney(due)}</td>
                           <td className="px-3 py-2.5">
-                            <Pill tone={i.status === "Paid" ? "success" : i.status === "Overdue" ? "alert" : i.status === "Partial" ? "amber" : "neutral"}>{i.status}</Pill>
+                            <Pill tone={i.status === "Paid" ? "success" : i.status === "Overdue" ? "alert" : i.status === "Partial" ? "primary" : "neutral"}>{i.status}</Pill>
                           </td>
                           <td className="px-3 py-2.5 text-right">
                             {i.status !== "Paid" ? (
@@ -204,13 +204,13 @@ export default function Fees() {
           title="Fee Structures"
           bodyClassName="p-0"
           action={
-            <Button variant="amber" onClick={() => setShowStructureForm((v) => !v)}>
+            <Button variant="primary" onClick={() => setShowStructureForm((v) => !v)}>
               <Plus size={15} /> Add Structure
             </Button>
           }
         >
           {showStructureForm && (
-            <form onSubmit={handleStructure} className="p-5 border-b border-black/[0.06] grid sm:grid-cols-3 gap-3">
+            <form onSubmit={handleStructure} className="p-5 border-b border-slate-200 grid sm:grid-cols-3 gap-3">
               <Input name="class" placeholder="Class (e.g. 6)" required />
               <Input name="session" placeholder="Session (e.g. 2026-27)" required />
               <Input name="feeType" placeholder="Fee type (e.g. Tuition)" required />
@@ -241,7 +241,7 @@ export default function Fees() {
               </thead>
               <tbody>
                 {(structures || []).map((s) => (
-                  <tr key={s._id} className="border-t border-black/[0.06]">
+                  <tr key={s._id} className="border-t border-slate-200">
                     <td className="px-5 py-2.5 font-semibold text-ink">Class {s.class}</td>
                     <td className="px-3 py-2.5">{s.session}</td>
                     <td className="px-3 py-2.5">{s.feeType}</td>

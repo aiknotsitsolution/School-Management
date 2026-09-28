@@ -10,15 +10,33 @@ const morgan = require("morgan");
 const mongoose = require("mongoose");
 
 const feeStructureRoutes = require("./routes/feeStructureRoutes");
+const concessionRoutes = require("./routes/concessionRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const paymentOrderRoutes = require("./routes/paymentOrderRoutes");
 const webhookRoutes = require("./routes/webhookRoutes");
 const internalPaymentRoutes = require("./routes/internalPaymentRoutes");
 const { startOverdueInvoiceScheduler } = require("./services/overdueInvoices");
+const { startFeeReminderScheduler } = require("./services/feeReminders");
 
 const app = express();
 const PORT = process.env.FEE_SERVICE_PORT || 5005;
+
+// Fail boot in production when the payment provider is "enabled" with a
+// known placeholder webhook secret — signatures would be forgeable.
+if (
+  process.env.PAYMENT_PROVIDER_ENABLED === "true" &&
+  process.env.NODE_ENV === "production"
+) {
+  const secret = process.env.PAYMENT_PROVIDER_WEBHOOK_SECRET || "";
+  const PLACEHOLDER = /^a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4$/;
+  if (!secret || PLACEHOLDER.test(secret) || secret.length < 32) {
+    console.error(
+      "[fee-service] PAYMENT_PROVIDER_ENABLED=true but PAYMENT_PROVIDER_WEBHOOK_SECRET is missing or a placeholder. Refusing to start."
+    );
+    process.exit(1);
+  }
+}
 
 app.use(helmet());
 app.use(
@@ -47,6 +65,7 @@ mongoose
   {
     console.log("✅ MongoDB Connected Successfully");
     startOverdueInvoiceScheduler();
+    startFeeReminderScheduler();
   })
   .catch((err) =>
   {
@@ -58,6 +77,9 @@ app.get("/health", (req, res) =>
   res.json({ success: true, service: "fee-service", status: "UP" }),
 );
 app.use("/api/fees/structure", feeStructureRoutes);
+// Before the /api/fees catch-all so /api/fees/concessions never falls into
+// invoiceRoutes' parameterised paths.
+app.use("/api/fees/concessions", concessionRoutes);
 app.use("/api/fees", invoiceRoutes);
 app.use("/api/payments/internal", internalPaymentRoutes);
 app.use("/api/payments", paymentRoutes);

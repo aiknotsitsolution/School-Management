@@ -5,11 +5,11 @@ import { api } from "../../lib/api";
 import useStudentContext from "./useStudentContext";
 
 const TYPE_TONES = {
-  incident: "alert", positive: "success", warning: "amber",
+  incident: "alert", positive: "success", warning: "primary",
   detention: "alert", suspension: "alert", other: "neutral",
 };
 
-const SEV_TONES = { low: "info", medium: "amber", high: "alert", critical: "alert" };
+const SEV_TONES = { low: "info", medium: "primary", high: "alert", critical: "alert" };
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -53,7 +53,7 @@ export default function StudentBehavior() {
         <StatCard icon={ShieldAlert} label="Total Records" value={String(counts.total)} sub="All records" accent="info" />
         <StatCard icon={CheckCircle2} label="Positive" value={String(counts.positive)} sub="Good conduct" accent="success" />
         <StatCard icon={AlertTriangle} label="Incidents" value={String(counts.incident)} sub="Incidents" accent="alert" />
-        <StatCard icon={ShieldAlert} label="Warnings" value={String(counts.warning)} sub="Warnings" accent="amber" />
+        <StatCard icon={ShieldAlert} label="Warnings" value={String(counts.warning)} sub="Warnings" accent="primary" />
       </div>
 
       <Card title="Behavior Records">

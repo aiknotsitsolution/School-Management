@@ -2,17 +2,24 @@
 @import "leaflet/dist/leaflet.css";
 
 @theme {
-  --color-ink: #16213E;
-  --color-ink-light: #1F2E52;
-  --color-ink-dark: #0F172E;
-  --color-amber: #E8A33D;
-  --color-amber-light: #F4C374;
-  --color-amber-dark: #C9832A;
-  --color-paper: #F8F6F1;
-  --color-success: #3F8F5F;
-  --color-alert: #D65A4A;
-  --color-info: #3B6FA0;
-  --color-slate-text: #475467;
+  --color-ink: #172033;
+  --color-ink-light: #222D42;
+  --color-ink-dark: #0F172A;
+  --color-navy: #0B192C;
+  --color-primary: #4F46E5;
+  --color-primary-light: #EEF2FF;
+  --color-primary-dark: #4338CA;
+  --color-primary-border: #C7D2FE;
+  --color-paper: #F8FAFC;
+  --color-success: #16A34A;
+  --color-success-light: #F0FDF4;
+  --color-warning: #F59E0B;
+  --color-warning-light: #FFFBEB;
+  --color-alert: #DC2626;
+  --color-alert-light: #FEF2F2;
+  --color-info: #2563EB;
+  --color-info-light: #EFF6FF;
+  --color-slate-text: #475569;
   --font-display: "Space Grotesk", sans-serif;
   --font-body: "Inter", sans-serif;
   --animate-upload-indeterminate: upload-slide 1.3s ease-in-out infinite;
@@ -28,14 +35,14 @@
 html, body { margin: 0; padding: 0; }
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #F8F6F1;
-  color: #1F2937;
+  background-color: #F8FAFC;
+  color: #0F172A;
   -webkit-font-smoothing: antialiased;
 }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #D6D2C4; border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover { background: #C2BDAC; }
+::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
 
 .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 
@@ -67,7 +74,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   transition: transform .15s ease;
 }
-.bus-marker.is-selected .bus-marker-dot { transform: scale(1.25); box-shadow: 0 0 0 5px rgba(232,163,61,.35), 0 2px 8px rgba(0,0,0,.35); }
+.bus-marker.is-selected .bus-marker-dot { transform: scale(1.25); box-shadow: 0 0 0 5px rgba(79,70,229,.35), 0 2px 8px rgba(0,0,0,.35); }
 .bus-marker-pulse {
   position: absolute; z-index: 1; left: 50%; top: 50%;
   width: 34px; height: 34px; border-radius: 50%;
@@ -83,7 +90,7 @@ body {
 /* School marker */
 .school-marker {
   width: 32px; height: 32px; border-radius: 50%;
-  background: #16213E; border: 2.5px solid #E8A33D;
+  background: #172033; border: 2.5px solid #4F46E5;
   box-shadow: 0 2px 8px rgba(0,0,0,.35);
   display: flex; align-items: center; justify-content: center;
   transform: translate(-16px, -16px);
@@ -92,7 +99,7 @@ body {
 /* Rec dot animation */
 .rec-dot {
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-  background: #D65A4A; animation: recBlink 1s steps(1) infinite;
+  background: #DC2626; animation: recBlink 1s steps(1) infinite;
 }
 @keyframes recBlink { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
 
@@ -140,7 +147,7 @@ body {
   0% { opacity: 0; transform: scale(0.3) rotate(-360deg); filter: blur(12px); }
   60% { opacity: 1; transform: scale(1.08) rotate(12deg); filter: blur(0); }
   80% { transform: scale(0.97) rotate(-4deg); }
-  100% { opacity: 1; transform: scale(1) rotate(0deg); filter: blur(0); }
+  100% { opacity: 1; transform: rotate(0deg); filter: blur(0); }
 }
 @keyframes logo-ring-spin {
   0% { transform: rotate(0deg) scale(0.9); opacity: 0; }
@@ -171,7 +178,7 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: rgba(232,163,61,0.85);
+  background: rgba(79,70,229,0.85);
   top: 50%;
   left: 50%;
   transform-origin: 0 0;

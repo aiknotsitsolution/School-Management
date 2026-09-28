@@ -19,14 +19,19 @@ import { api } from "../lib/api";
 
 const KIND_META = {
   notice: { icon: Megaphone, tone: "info", label: "Notice" },
-  leave: { icon: FileClock, tone: "amber", label: "Leave" },
+  leave: { icon: FileClock, tone: "primary", label: "Leave" },
   payroll: { icon: Wallet, tone: "success", label: "Payroll" },
   student: { icon: UserRound, tone: "info", label: "Student" },
-  staff: { icon: Briefcase, tone: "amber", label: "Staff" },
+  staff: { icon: Briefcase, tone: "primary", label: "Staff" },
   homework: { icon: BookOpen, tone: "info", label: "Homework" },
-  exam: { icon: GraduationCap, tone: "amber", label: "Exam" },
+  exam: { icon: GraduationCap, tone: "primary", label: "Exam" },
   profile: { icon: BadgeCheck, tone: "success", label: "Profile" },
   event: { icon: CalendarDays, tone: "info", label: "Event" },
+  fee_reminder: { icon: Wallet, tone: "alert", label: "Fee Reminder" },
+  emergency: { icon: Bell, tone: "alert", label: "Emergency" },
+  diary: { icon: BookOpen, tone: "info", label: "Class Diary" },
+  message: { icon: CalendarDays, tone: "primary", label: "Message" },
+  sms: { icon: Megaphone, tone: "primary", label: "SMS" },
   system: { icon: Bell, tone: "neutral", label: "System" },
 };
 
@@ -114,8 +119,8 @@ export default function Notifications() {
               onClick={() => setFilter(f)}
               className={`px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors capitalize ${
                 filter === f
-                  ? "bg-ink text-white border-ink"
-                  : "bg-white text-slate-text border-black/10 hover:bg-paper"
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-slate-text border-slate-300 hover:bg-paper"
               }`}
             >
               {f === "unread" ? `Unread${unreadCount ? ` (${unreadCount})` : ""}` : "All"}
@@ -134,7 +139,7 @@ export default function Notifications() {
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-black/[0.04]">
+          <div className="divide-y divide-slate-100">
             {visible.map((item) => {
               const meta = KIND_META[item.kind] || KIND_META.system;
               const Icon = meta.icon;
@@ -142,14 +147,16 @@ export default function Notifications() {
                 <button
                   key={item._id}
                   onClick={() => open(item)}
-                  className={`w-full text-left flex items-start gap-3 px-1 py-3 hover:bg-paper/60 rounded-lg transition-colors ${item.read ? "opacity-60" : ""}`}
+                  className={`w-full text-left flex items-start gap-3 px-1 py-3 hover:bg-paper/60 rounded-lg transition-colors ${item.read ? "opacity-60" : ""} ${
+                    item.kind === "emergency" ? "bg-alert/5 ring-1 ring-alert/25" : ""
+                  }`}
                 >
-                  <div className="w-9 h-9 rounded-full bg-paper border border-black/[0.06] flex items-center justify-center shrink-0">
+                  <div className="w-9 h-9 rounded-full bg-paper border border-slate-200 flex items-center justify-center shrink-0">
                     <Icon size={15} className="text-ink" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2">
-                      {!item.read && <span className="w-1.5 h-1.5 rounded-full bg-amber shrink-0"></span>}
+                      {!item.read && <span className="w-1.5 h-1.5 rounded-full bg-primary shrink-0"></span>}
                       <p className="text-[13px] font-semibold text-ink truncate">{item.title}</p>
                       <Pill tone={meta.tone}>{meta.label}</Pill>
                     </div>
@@ -157,7 +164,7 @@ export default function Notifications() {
                       <p className="text-[12px] text-slate-text/70 mt-0.5 line-clamp-2">{item.message}</p>
                     )}
                     {item.link && (
-                      <p className="text-[11px] text-amber/80 mt-0.5 truncate">{item.link}</p>
+                      <p className="text-[11px] text-primary/80 mt-0.5 truncate">{item.link}</p>
                     )}
                   </div>
                   <span className="shrink-0 text-[11px] text-slate-text/50 mt-0.5">

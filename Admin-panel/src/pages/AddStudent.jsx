@@ -106,7 +106,7 @@ function Field({ label, required, hint, className = "", children }) {
 function SectionHeading({ icon: Icon, title, subtitle }) {
   return (
     <span className="flex items-center gap-2.5">
-      <span className="w-9 h-9 rounded-xl bg-amber/15 text-amber-dark flex items-center justify-center shrink-0">
+      <span className="w-9 h-9 rounded-xl bg-primary/15 text-primary-dark flex items-center justify-center shrink-0">
         <Icon size={17} />
       </span>
       <span>
@@ -360,7 +360,7 @@ export default function AddStudent() {
           title={<SectionHeading icon={User} title="Basic Details" subtitle="Student identity & academics" />}
           bodyClassName="p-5 sm:p-6"
         >
-          <div className="flex flex-col items-center gap-3 pb-6 mb-6 border-b border-black/[0.06]">
+          <div className="flex flex-col items-center gap-3 pb-6 mb-6 border-b border-slate-200">
             <ProfilePhotoPicker
               name={form.name || "New Student"}
               file={photoFile}
@@ -541,15 +541,15 @@ export default function AddStudent() {
 
         {/* Live Student Card — right column */}
         <div className="space-y-6 xl:sticky xl:top-20">
-          <div className="rounded-2xl border border-black/[0.06] shadow-sm overflow-hidden bg-white">
+          <div className="rounded-2xl border border-slate-200 shadow-sm overflow-hidden bg-white">
             <div className="relative bg-gradient-to-br from-ink via-[#33333c] to-ink text-white p-5 overflow-hidden">
-              <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-amber/25 blur-2xl" aria-hidden="true" />
+              <div className="absolute -top-10 -right-10 w-36 h-36 rounded-full bg-primary/25 blur-2xl" aria-hidden="true" />
               <div className="absolute -bottom-12 -left-8 w-32 h-32 rounded-full bg-white/10 blur-2xl" aria-hidden="true" />
               <div className="relative">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
-                      <span className="w-1.5 h-1.5 rounded-full bg-[#4CC38A] inline-block animate-pulse" />
+                      <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] inline-block animate-pulse" />
                       Student ID · Live Preview
                     </p>
                     <p className="font-display text-[19px] font-bold mt-1.5 truncate">
@@ -566,7 +566,7 @@ export default function AddStudent() {
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-4">
                   {form.class && (
-                    <Pill tone="amber">
+                    <Pill tone="primary">
                       {formatClassLabel(form.class)} · Section {form.section || "—"}
                     </Pill>
                   )}
@@ -598,10 +598,10 @@ export default function AddStudent() {
                 <PreviewRow label="Address" value={form.address} className="col-span-2" />
               </div>
 
-              <div className="mt-6 pt-5 border-t border-black/[0.06] flex flex-col gap-2.5">
+              <div className="mt-6 pt-5 border-t border-slate-200 flex flex-col gap-2.5">
                 <Button
                   type="submit"
-                  variant="amber"
+                  variant="primary"
                   disabled={saving}
                   className="w-full justify-center !py-3 !text-[13.5px]"
                 >
@@ -628,7 +628,7 @@ export default function AddStudent() {
       </form>
 
       <div className="flex items-start gap-2.5 rounded-xl bg-ink/[0.04] border border-ink/10 px-4 py-3.5 text-[13px] text-slate-text">
-        <Info size={16} className="text-amber-dark shrink-0 mt-0.5" />
+        <Info size={16} className="text-primary-dark shrink-0 mt-0.5" />
         <p>
           <strong className="text-ink">Tip:</strong> All fields are required before saving. 
           {onboardingStudent

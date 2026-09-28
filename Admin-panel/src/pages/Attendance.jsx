@@ -1,4 +1,4 @@
-﻿import { useMemo, useState, useEffect } from "react";
+import { useMemo, useState, useEffect } from "react";
 import {
   Check,
   X,
@@ -53,13 +53,13 @@ const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
 
 const DEFAULT_STATUSES = ["Present", "Absent", "Half Day", "Leave"];
 const STATUS_DISPLAY = { present: "Present", absent: "Absent", late: "Half Day", half_day: "Half Day", leave: "Leave" };
-const STATUS_TONES = { present: "success", absent: "alert", late: "amber", half_day: "amber", leave: "info" };
+const STATUS_TONES = { present: "success", absent: "alert", late: "warning", half_day: "warning", leave: "info" };
 const STATUS_LABELS = { present: "P", absent: "A", late: "HD", half_day: "HD", leave: "L" };
 const ACTIVE_STYLES = {
   present: "bg-success text-white border-success",
   absent: "bg-alert text-white border-alert",
-  late: "bg-amber text-ink border-amber",
-  half_day: "bg-amber text-ink border-amber",
+  late: "bg-warning text-white border-warning",
+  half_day: "bg-warning text-white border-warning",
   leave: "bg-info text-white border-info",
 };
 
@@ -108,7 +108,7 @@ function StaffMonthlySummary() {
           <select
             value={selMonth}
             onChange={(e) => setSelMonth(Number(e.target.value))}
-            className="text-[12px] border border-black/10 rounded-lg px-2 py-1.5 bg-white"
+            className="text-[12px] border border-slate-300 rounded-lg px-2 py-1.5 bg-white"
           >
             {months.map((m, i) => (
               <option key={i} value={i + 1}>{m}</option>
@@ -117,7 +117,7 @@ function StaffMonthlySummary() {
           <select
             value={selYear}
             onChange={(e) => setSelYear(Number(e.target.value))}
-            className="text-[12px] border border-black/10 rounded-lg px-2 py-1.5 bg-white"
+            className="text-[12px] border border-slate-300 rounded-lg px-2 py-1.5 bg-white"
           >
             {[now.getFullYear(), now.getFullYear() - 1].map((y) => (
               <option key={y} value={y}>{y}</option>
@@ -139,7 +139,7 @@ function StaffMonthlySummary() {
         <div className="overflow-x-auto -mx-5">
           <table className="w-full text-[13px]">
             <thead>
-              <tr className="text-left text-[11px] text-slate-text/50 uppercase tracking-wide border-b border-black/[0.06]">
+              <tr className="text-left text-[11px] text-slate-text/50 uppercase tracking-wide border-b border-slate-200">
                 <th className="px-5 py-2 font-semibold">Staff</th>
                 <th className="px-3 py-2 font-semibold">Designation</th>
                 <th className="px-3 py-2 text-center font-semibold">P</th>
@@ -152,16 +152,16 @@ function StaffMonthlySummary() {
             </thead>
             <tbody>
               {monthData.map((row) => (
-                <tr key={row.staffId} className="border-t border-black/[0.04] hover:bg-paper/40">
+                <tr key={row.staffId} className="border-t border-slate-100 hover:bg-paper/40">
                   <td className="px-5 py-2.5 font-medium text-ink">{row.name}</td>
                   <td className="px-3 py-2.5 text-slate-text/70">{row.designation || row.role || "—"}</td>
                   <td className="px-3 py-2.5 text-center text-success font-medium">{row.present}</td>
                   <td className="px-3 py-2.5 text-center text-alert font-medium">{row.absent}</td>
                   <td className="px-3 py-2.5 text-center text-info font-medium">{row.leave}</td>
-                  <td className="px-3 py-2.5 text-center text-amber font-medium">{row.halfDay}</td>
-                  <td className="px-3 py-2.5 text-center text-amber-dark font-medium">{row.late}</td>
+                  <td className="px-3 py-2.5 text-center text-primary font-medium">{row.halfDay}</td>
+                  <td className="px-3 py-2.5 text-center text-amber-700 font-medium">{row.late}</td>
                   <td className="px-3 py-2.5 text-right">
-                    <span className={`font-semibold ${row.attendancePct >= 90 ? "text-success" : row.attendancePct >= 75 ? "text-amber" : "text-alert"}`}>
+                    <span className={`font-semibold ${row.attendancePct >= 90 ? "text-success" : row.attendancePct >= 75 ? "text-primary" : "text-alert"}`}>
                       {row.attendancePct}%
                     </span>
                   </td>
@@ -628,7 +628,7 @@ export default function Attendance() {
                 ? `${Math.round(((counts[key] || 0) / list.length) * 100)}% of class`
                 : `${counts[key] || 0} students`
             }
-            accent={cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "amber" ? "amber" : "info"}
+            accent={cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "primary" ? "primary" : "info"}
           />
         ))}
       </div>
@@ -691,7 +691,7 @@ export default function Attendance() {
         }
       >
         {/* Quick actions + legend */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-black/6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-slate-200">
           <div className="flex flex-wrap gap-2 text-[11.5px] text-slate-text/70">
             <span className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-full bg-success" /> Present
@@ -700,7 +700,7 @@ export default function Attendance() {
               <span className="w-2.5 h-2.5 rounded-full bg-alert" /> Absent
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber" /> Half Day
+              <span className="w-2.5 h-2.5 rounded-full bg-warning" /> Half Day
             </span>
             <span className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-full bg-info" /> Leave
@@ -723,7 +723,7 @@ export default function Attendance() {
             </p>
           </div>
         ) : (
-          <div className="divide-y divide-black/5">
+          <div className="divide-y divide-slate-100">
             {paginatedList.map((s) => {
               const status = getStatus(s.id);
               return (
@@ -759,8 +759,8 @@ export default function Attendance() {
                           onClick={() => setMark(s.id, key)}
                           className={`w-9 h-9 rounded-lg text-[12px] font-bold border transition-all ${
                             isActive
-                              ? (ACTIVE_STYLES[key] || "bg-ink text-white border-ink")
-                              : "bg-white text-slate-text/55 border-black/10 hover:bg-paper hover:border-black/20"
+                              ? (ACTIVE_STYLES[key] || "bg-primary text-white border-primary")
+                              : "bg-white text-slate-text/55 border-slate-300 hover:bg-paper hover:border-slate-400"
                           }`}
                         >
                           {cfg.label}
@@ -776,7 +776,7 @@ export default function Attendance() {
 
         {/* Pagination */}
         {list.length > attPageSize && (
-          <div className="flex items-center justify-between pt-4 mt-3 border-t border-black/[0.04]">
+          <div className="flex items-center justify-between pt-4 mt-3 border-t border-slate-100">
             <p className="text-[12px] text-slate-text/55">
               Showing {list.length === 0 ? 0 : (attSafePage - 1) * attPageSize + 1}â€“{Math.min(attSafePage * attPageSize, list.length)} of {list.length}
             </p>
@@ -803,14 +803,14 @@ export default function Attendance() {
 
         {/* Footer actions */}
         {list.length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 pt-4 border-t border-black/6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 pt-4 border-t border-slate-200">
             <div className="text-[12.5px] text-slate-text/70">
               Showing <strong className="text-ink">{list.length}</strong>{" "}
               students{" "}
               {Object.entries(statusConfig).map(([key, cfg]) => (
                 <span key={key}>
                   · {cfg.full}{" "}
-                  <strong className={`text-${cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "amber" ? "amber-dark" : "info"}`}>
+                  <strong className={`text-${cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "warning" ? "amber-700" : cfg.tone === "primary" ? "primary-dark" : "info"}`}>
                     {counts[key] || 0}
                   </strong>
                 </span>
@@ -822,7 +822,7 @@ export default function Attendance() {
                   <CheckCircle2 size={16} /> Attendance saved
                 </span>
               )}
-              <Button variant="amber" onClick={handleSave}>
+              <Button variant="primary" onClick={handleSave}>
                 <Check size={15} /> Save Attendance
               </Button>
             </div>
@@ -857,7 +857,7 @@ export default function Attendance() {
                     ? `${Math.round(((staffCounts[key] || 0) / filteredStaff.length) * 100)}% of staff`
                     : `${staffCounts[key] || 0} staff`
                 }
-                accent={cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "amber" ? "amber" : "info"}
+                accent={cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "primary" ? "primary" : "info"}
               />
             ))}
           </div>
@@ -904,11 +904,11 @@ export default function Attendance() {
             }
           >
             {/* Quick actions + legend */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-black/6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-slate-200">
               <div className="flex flex-wrap gap-2 text-[11.5px] text-slate-text/70">
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-success" /> Present</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-alert" /> Absent</span>
-                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-amber" /> Half Day</span>
+                <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-warning" /> Half Day</span>
                 <span className="flex items-center gap-1"><span className="w-2.5 h-2.5 rounded-full bg-info" /> Leave</span>
               </div>
             </div>
@@ -924,7 +924,7 @@ export default function Attendance() {
                 <p className="text-[13px] text-slate-text/60 mt-1">Try a different search or add staff members first.</p>
               </div>
             ) : (
-              <div className="divide-y divide-black/5">
+              <div className="divide-y divide-slate-100">
                 {paginatedStaff.map((s) => {
                   const status = getStaffMark(s.id);
                   return (
@@ -951,8 +951,8 @@ export default function Attendance() {
                               onClick={() => setStaffMark(s.id, key)}
                               className={`w-9 h-9 rounded-lg text-[12px] font-bold border transition-all ${
                                 isActive
-                                  ? (ACTIVE_STYLES[key] || "bg-ink text-white border-ink")
-                                  : "bg-white text-slate-text/55 border-black/10 hover:bg-paper hover:border-black/20"
+                                  ? (ACTIVE_STYLES[key] || "bg-primary text-white border-primary")
+                                  : "bg-white text-slate-text/55 border-slate-300 hover:bg-paper hover:border-slate-400"
                               }`}
                             >
                               {cfg.label}
@@ -968,7 +968,7 @@ export default function Attendance() {
 
             {/* Staff Pagination */}
             {filteredStaff.length > staffPageSize && (
-              <div className="flex items-center justify-between pt-4 mt-3 border-t border-black/[0.04]">
+              <div className="flex items-center justify-between pt-4 mt-3 border-t border-slate-100">
                 <p className="text-[12px] text-slate-text/55">
                   Showing {filteredStaff.length === 0 ? 0 : (staffSafePage - 1) * staffPageSize + 1}–{Math.min(staffSafePage * staffPageSize, filteredStaff.length)} of {filteredStaff.length}
                 </p>
@@ -995,13 +995,13 @@ export default function Attendance() {
 
             {/* Staff footer */}
             {filteredStaff.length > 0 && (
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 pt-4 border-t border-black/6">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 pt-4 border-t border-slate-200">
                 <div className="text-[12.5px] text-slate-text/70">
                   Showing <strong className="text-ink">{filteredStaff.length}</strong> staff
                   {Object.entries(statusConfig).map(([key, cfg]) => (
                     <span key={key}>
                       · {cfg.full}{" "}
-                      <strong className={`text-${cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "amber" ? "amber-dark" : "info"}`}>
+                      <strong className={`text-${cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "warning" ? "amber-700" : cfg.tone === "primary" ? "primary-dark" : "info"}`}>
                         {staffCounts[key] || 0}
                       </strong>
                     </span>
@@ -1013,7 +1013,7 @@ export default function Attendance() {
                       <CheckCircle2 size={16} /> Attendance saved
                     </span>
                   )}
-                  <Button variant="amber" onClick={handleSaveStaff}>
+                  <Button variant="primary" onClick={handleSaveStaff}>
                     <Check size={15} /> Save Attendance
                   </Button>
                 </div>

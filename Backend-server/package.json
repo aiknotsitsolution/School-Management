@@ -4,7 +4,7 @@
   "private": true,
   "description": "Scalable MERN microservices backend for School Management ERP System",
   "scripts": {
-    "install:all": "npm install && npm install --prefix shared && npm install --prefix api-gateway && npm install --prefix services/auth-service && npm install --prefix services/student-service && npm install --prefix services/staff-service && npm install --prefix services/academic-service && npm install --prefix services/fee-service && npm install --prefix services/communication-service && npm install --prefix services/library-service && npm install --prefix services/facility-service",
+    "install:all": "npm install && npm install --prefix shared && npm install --prefix api-gateway && npm install --prefix services/auth-service && npm install --prefix services/student-service && npm install --prefix services/staff-service && npm install --prefix services/academic-service && npm install --prefix services/fee-service && npm install --prefix services/communication-service && npm install --prefix services/library-service && npm install --prefix services/facility-service && npm install --prefix services/accounting-service",
     "start": "node monolith.js",
     "start:gateway": "npm --prefix api-gateway start",
     "dev:all": "node scripts/dev-all.js",
@@ -12,7 +12,8 @@
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
     "db:clean": "node scripts/clean-db.js",
-    "bootstrap:super-admin": "node scripts/bootstrap-super-admin.js"
+    "bootstrap:super-admin": "node scripts/bootstrap-super-admin.js",
+    "test": "node --test services/auth-service/test/*.test.js services/fee-service/test/*.test.js services/staff-service/test/*.test.js services/student-service/test/*.test.js services/academic-service/test/*.test.js services/accounting-service/test/*.test.js services/communication-service/test/*.test.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -47,13 +47,15 @@ function formatDate(d) {
 function normalizeItem(item) {
   const dueDate = item.dueDate;
   const isOverdue = dueDate && new Date(dueDate) < new Date() && item.status !== "Completed";
+  const base = item.status || "Pending";
   return {
     ...item,
     id: item._id || item.id,
     assignedTo: item.assignedTo || "Unassigned",
     assignedToRole: item.assignedToRole || "",
     priority: item.priority || "Medium",
-    status: item.status || (isOverdue ? "Overdue" : "Pending"),
+    // Overdue is derived until staff marks real progress/choice otherwise.
+    status: isOverdue && base === "Pending" ? "Overdue" : base,
   };
 }
 
@@ -194,10 +196,19 @@ export default function Homework() {
     }
   };
 
-  const changeStatus = (id, newStatus) => {
+  const changeStatus = async (id, newStatus) => {
+    const oldStatus = items.find((h) => h.id === id)?.status;
     setItems((prev) =>
       prev.map((h) => (h.id === id ? { ...h, status: newStatus } : h))
     );
+    try {
+      await api.homework.update(id, { status: newStatus });
+    } catch (err) {
+      setItems((prev) =>
+        prev.map((h) => (h.id === id ? { ...h, status: oldStatus ?? h.status } : h))
+      );
+      toast(err.message || "Failed to update status", "error");
+    }
   };
 
   const updateForm = (field, value) => {
@@ -211,7 +222,7 @@ export default function Homework() {
         title="Assign Work"
         description="Assign tasks and responsibilities to teachers and staff members."
         right={
-          <Button variant="amber" onClick={openAdd}>
+          <Button variant="primary" onClick={openAdd}>
             <Plus size={15} /> Assign Task
           </Button>
         }
@@ -230,7 +241,7 @@ export default function Homework() {
           label="Pending"
           value={String(counts.Pending)}
           sub="Not yet started"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={ArrowUpCircle}
@@ -292,7 +303,7 @@ export default function Homework() {
             <p className="text-[13px] text-slate-text/60 mt-1">
               Assign tasks to teachers and staff to get started.
             </p>
-            <Button variant="amber" className="mt-4" onClick={openAdd}>
+            <Button variant="primary" className="mt-4" onClick={openAdd}>
               <Plus size={15} /> Assign Task
             </Button>
           </div>
@@ -301,7 +312,7 @@ export default function Homework() {
             {filtered.map((h) => (
               <div
                 key={h.id}
-                className="flex flex-col sm:flex-row sm:items-start gap-3 p-4 rounded-xl border border-black/[0.06] hover:border-black/10 hover:bg-paper/40 transition-colors"
+                className="flex flex-col sm:flex-row sm:items-start gap-3 p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-paper/40 transition-colors"
               >
                 <div className="w-11 h-11 rounded-xl bg-info/15 text-info flex items-center justify-center shrink-0">
                   <Briefcase size={20} />
@@ -366,7 +377,7 @@ export default function Homework() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   {editId ? "Edit Task" : "Assign Task"}
@@ -404,7 +415,7 @@ export default function Homework() {
                   placeholder="Optional details about the task..."
                   value={form.description}
                   onChange={(e) => updateForm("description", e.target.value)}
-                  className="w-full rounded-xl border border-black/[0.08] bg-paper px-3.5 py-2.5 text-[13.5px] text-ink placeholder:text-slate-text/40 focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info/50 resize-none"
+                  className="w-full rounded-xl border border-slate-200 bg-paper px-3.5 py-2.5 text-[13.5px] text-ink placeholder:text-slate-text/40 focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info/50 resize-none"
                 />
               </div>
 
@@ -461,12 +472,12 @@ export default function Homework() {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowModal(false)}>
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={handleSave}
                 disabled={!form.title.trim() || !form.dueDate || !form.assignedTo.trim()}
               >

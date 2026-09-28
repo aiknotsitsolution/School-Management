@@ -16,6 +16,11 @@ const verifyToken = async (req, res, next) => {
   try {
     const decoded = jwt.verify(header.split(" ")[1], JWT_SECRET);
 
+    // Reject refresh tokens used as access tokens (typ claim).
+    if (decoded.typ !== "access") {
+      return res.status(401).json({ success: false, message: "Invalid token type" });
+    }
+
     const UserModel = mongoose.models.User;
     // Force DB-level validation in production even if TOKEN_VALIDATION=off.
     const tokenValidationOff = process.env.TOKEN_VALIDATION === "off" && process.env.NODE_ENV !== "production";

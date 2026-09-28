@@ -4,7 +4,15 @@ import { PageIntro, Card, Button, Input, Select, Pill, toast } from "../../compo
 import { api } from "../../lib/api";
 import useStudentContext from "./useStudentContext";
 
-const STATUSES = { pending: "amber", approved: "success", rejected: "alert" };
+const STATUSES = { Pending: "primary", Approved: "success", Rejected: "alert" };
+
+// Mirror of the backend STUDENT_LEAVE_TYPES — students may only apply for
+// Sick / Casual / Other leave (Earned and Maternity are staff entitlements).
+const STUDENT_LEAVE_TYPES = [
+  { value: "Sick", label: "Sick Leave" },
+  { value: "Casual", label: "Casual Leave" },
+  { value: "Other", label: "Other Leave" },
+];
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -16,7 +24,7 @@ export default function StudentLeave() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
-  const [form, setForm] = useState({ fromDate: "", toDate: "", reason: "", type: "sick" });
+  const [form, setForm] = useState({ fromDate: "", toDate: "", reason: "", type: "Sick" });
   const [saving, setSaving] = useState(false);
 
   const fetchLeaves = () => {
@@ -39,11 +47,11 @@ export default function StudentLeave() {
         fromDate: form.fromDate,
         toDate: form.toDate || form.fromDate,
         reason: form.reason.trim(),
-        type: form.type,
+        leaveType: form.type,
       });
       toast("Leave request submitted");
       setShowModal(false);
-      setForm({ fromDate: "", toDate: "", reason: "", type: "sick" });
+      setForm({ fromDate: "", toDate: "", reason: "", type: "Sick" });
       fetchLeaves();
     } catch (err) {
       toast(err.message || "Failed to submit", "error");
@@ -83,7 +91,7 @@ export default function StudentLeave() {
                     <Pill tone={STATUSES[r.status] || "neutral"}>{r.status}</Pill>
                   </div>
                   <p className="text-[12px] text-slate-text/70 mt-1">{r.reason}</p>
-                  {r.adminComment && <p className="text-[12px] text-info mt-1"><strong>Admin:</strong> {r.adminComment}</p>}
+                  {r.remarks && <p className="text-[12px] text-info mt-1"><strong>Admin:</strong> {r.remarks}</p>}
                 </div>
               </div>
             ))}
@@ -95,7 +103,7 @@ export default function StudentLeave() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setShowModal(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200">
               <h3 className="font-display font-semibold text-ink text-[16px]">Apply for Leave</h3>
               <button onClick={() => setShowModal(false)} className="p-1.5 rounded-lg hover:bg-paper"><X size={18} /></button>
             </div>
@@ -103,10 +111,9 @@ export default function StudentLeave() {
               <div>
                 <label className="text-[11px] font-semibold text-slate-text/60 uppercase">Leave Type</label>
                 <Select value={form.type} onChange={(e) => setForm({ ...form, type: e.target.value })} className="mt-1">
-                  <option value="sick">Sick Leave</option>
-                  <option value="personal">Personal Leave</option>
-                  <option value="family">Family Leave</option>
-                  <option value="other">Other</option>
+                  {STUDENT_LEAVE_TYPES.map((t) => (
+                    <option key={t.value} value={t.value}>{t.label}</option>
+                  ))}
                 </Select>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -121,10 +128,10 @@ export default function StudentLeave() {
               </div>
               <div>
                 <label className="text-[11px] font-semibold text-slate-text/60 uppercase">Reason *</label>
-                <textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} rows={3} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info" placeholder="Why do you need leave?" />
+                <textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px] focus:outline-none focus:ring-2 focus:ring-info/30 focus:border-info" placeholder="Why do you need leave?" />
               </div>
             </div>
-            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-black/[0.06]">
+            <div className="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200">
               <Button variant="ghost" onClick={() => setShowModal(false)}>Cancel</Button>
               <Button onClick={handleApply} disabled={saving}>{saving ? "Submitting..." : "Submit Request"}</Button>
             </div>

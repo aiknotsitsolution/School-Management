@@ -87,7 +87,7 @@ export default function StudentDetailModal({ studentId, onClose }) {
             </div>
 
             {/* Tabs */}
-            <div className="flex border-b border-black/[0.06] shrink-0 overflow-x-auto">
+            <div className="flex border-b border-slate-200 shrink-0 overflow-x-auto">
               {TABS.map((t) => (
                 <button
                   key={t.key}
@@ -138,7 +138,7 @@ function ProfileTab({ student }) {
         <Row label="Status" value={student.status || "—"} />
       </div>
       <Row label="Address" value={student.address || "—"} />
-      <div className="border-t border-black/[0.06] pt-4 mt-4">
+      <div className="border-t border-slate-200 pt-4 mt-4">
         <p className="text-[11px] font-semibold text-slate-text/50 uppercase tracking-wide mb-3">
           Parent / Guardian
         </p>
@@ -185,7 +185,7 @@ function AttendanceTab({ studentId }) {
       <div className="grid grid-cols-4 gap-3">
         <MiniStat label="Present" value={present} tone="success" />
         <MiniStat label="Absent" value={absent} tone="alert" />
-        <MiniStat label="Leave" value={leave} tone="amber" />
+        <MiniStat label="Leave" value={leave} tone="primary" />
         <MiniStat label="Attendance %" value={`${pct}%`} tone="info" />
       </div>
       {records.length === 0 ? (
@@ -202,10 +202,10 @@ function AttendanceTab({ studentId }) {
             </thead>
             <tbody>
               {records.slice(0, 30).map((r, i) => (
-                <tr key={i} className="border-t border-black/[0.04]">
+                <tr key={i} className="border-t border-slate-100">
                   <td className="py-2 text-slate-text/80">{fmtDate(r.date)}</td>
                   <td className="py-2">
-                    <Pill tone={r.status === "Present" ? "success" : r.status === "Absent" ? "alert" : "amber"}>
+                    <Pill tone={r.status === "Present" ? "success" : r.status === "Absent" ? "alert" : "primary"}>
                       {r.status}
                     </Pill>
                   </td>
@@ -253,7 +253,7 @@ function AcademicTab({ studentId, student }) {
         <Card key={subject} title={subject}>
           <div className="space-y-2">
             {records.map((r, i) => (
-              <div key={i} className="flex items-center justify-between text-[12.5px] py-1.5 border-b border-black/[0.04] last:border-0">
+              <div key={i} className="flex items-center justify-between text-[12.5px] py-1.5 border-b border-slate-100 last:border-0">
                 <span className="text-slate-text/80">{r.examName || r.exam || "—"}</span>
                 <span className="font-semibold text-ink">
                   {r.marksObtained}/{r.maxMarks}
@@ -317,13 +317,13 @@ function HomeworkTab({ student }) {
         const tone = sub
           ? sub.status === "Submitted" || sub.status === "Graded"
             ? "success"
-            : "amber"
+            : "primary"
           : "alert";
         return (
           <div
             key={h._id}
             onClick={() => navigate("/teacher/homework")}
-            className="flex items-center justify-between px-4 py-3 rounded-xl bg-paper/60 border border-black/[0.04] cursor-pointer hover:bg-paper transition-colors"
+            className="flex items-center justify-between px-4 py-3 rounded-xl bg-paper/60 border border-slate-100 cursor-pointer hover:bg-paper transition-colors"
           >
             <div className="min-w-0">
               <p className="text-[13px] font-semibold text-ink truncate">
@@ -370,7 +370,7 @@ function DocumentsTab({ studentId }) {
       {docs.map((d) => (
         <div
           key={d._id}
-          className="flex items-center justify-between px-4 py-3 rounded-xl bg-paper/60 border border-black/[0.04]"
+          className="flex items-center justify-between px-4 py-3 rounded-xl bg-paper/60 border border-slate-100"
         >
           <div className="min-w-0">
             <p className="text-[13px] font-semibold text-ink truncate">{d.title}</p>
@@ -421,7 +421,7 @@ function TeachersTab({ student }) {
       {teachers.map((a, i) => (
         <div
           key={a._id || i}
-          className="flex items-center justify-between px-4 py-3 rounded-xl bg-paper/60 border border-black/[0.04]"
+          className="flex items-center justify-between px-4 py-3 rounded-xl bg-paper/60 border border-slate-100"
         >
           <div className="min-w-0">
             <p className="text-[13px] font-semibold text-ink truncate">
@@ -506,42 +506,46 @@ function HealthTab({ studentId }) {
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-[11px] font-semibold text-slate-text/50 uppercase">Blood Group</label>
-            <input value={form.bloodGroup || ""} onChange={set("bloodGroup")} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px]" placeholder="O+, A-, etc." />
+            <input value={form.bloodGroup || ""} onChange={set("bloodGroup")} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px]" placeholder="O+, A-, etc." />
           </div>
           <div>
             <label className="text-[11px] font-semibold text-slate-text/50 uppercase">Height (cm)</label>
-            <input type="number" value={form.heightCm || ""} onChange={set("heightCm")} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px]" />
+            <input type="number" value={form.heightCm || ""} onChange={set("heightCm")} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px]" />
           </div>
           <div>
             <label className="text-[11px] font-semibold text-slate-text/50 uppercase">Weight (kg)</label>
-            <input type="number" value={form.weightKg || ""} onChange={set("weightKg")} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px]" />
+            <input type="number" value={form.weightKg || ""} onChange={set("weightKg")} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px]" />
           </div>
           <div>
             <label className="text-[11px] font-semibold text-slate-text/50 uppercase">Emergency Medical Contact</label>
-            <input value={form.emergencyMedicalContact || ""} onChange={set("emergencyMedicalContact")} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px]" />
+            <input value={form.emergencyMedicalContact || ""} onChange={set("emergencyMedicalContact")} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px]" />
           </div>
         </div>
         <div>
           <label className="text-[11px] font-semibold text-slate-text/50 uppercase">Allergies (comma separated)</label>
-          <input value={(form.allergies || []).join(", ")} onChange={setArray("allergies")} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px]" placeholder="e.g. Peanuts, Penicillin" />
+          <input value={(form.allergies || []).join(", ")} onChange={setArray("allergies")} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px]" placeholder="e.g. Peanuts, Penicillin" />
         </div>
         <div>
           <label className="text-[11px] font-semibold text-slate-text/50 uppercase">Chronic Conditions (comma separated)</label>
-          <input value={(form.chronicConditions || []).join(", ")} onChange={setArray("chronicConditions")} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px]" placeholder="e.g. Asthma, Diabetes" />
+          <input value={(form.chronicConditions || []).join(", ")} onChange={setArray("chronicConditions")} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px]" placeholder="e.g. Asthma, Diabetes" />
+        </div>
+        <div>
+          <label className="text-[11px] font-semibold text-slate-text/50 uppercase">Immunizations (comma separated)</label>
+          <input value={(form.immunizations || []).join(", ")} onChange={setArray("immunizations")} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px]" placeholder="e.g. MMR — 2021-05-10, Tetanus — 2023-01-22" />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
             <label className="text-[11px] font-semibold text-slate-text/50 uppercase">Vision Notes</label>
-            <input value={form.visionNotes || ""} onChange={set("visionNotes")} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px]" />
+            <input value={form.visionNotes || ""} onChange={set("visionNotes")} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px]" />
           </div>
           <div>
             <label className="text-[11px] font-semibold text-slate-text/50 uppercase">Hearing Notes</label>
-            <input value={form.hearingNotes || ""} onChange={set("hearingNotes")} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px]" />
+            <input value={form.hearingNotes || ""} onChange={set("hearingNotes")} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px]" />
           </div>
         </div>
         <div>
           <label className="text-[11px] font-semibold text-slate-text/50 uppercase">Notes</label>
-          <textarea value={form.notes || ""} onChange={set("notes")} rows={3} className="mt-1 w-full rounded-lg border border-black/10 px-3 py-2 text-[13px]" />
+          <textarea value={form.notes || ""} onChange={set("notes")} rows={3} className="mt-1 w-full rounded-lg border border-slate-300 px-3 py-2 text-[13px]" />
         </div>
       </div>
     );
@@ -575,7 +579,15 @@ function HealthTab({ studentId }) {
             <div>
               <p className="text-[11px] font-semibold text-slate-text/50 uppercase tracking-wide mb-1.5">Chronic Conditions</p>
               <div className="flex flex-wrap gap-1.5">
-                {health.chronicConditions.map((c, i) => <Pill key={i} tone="amber">{c}</Pill>)}
+                {health.chronicConditions.map((c, i) => <Pill key={i} tone="primary">{c}</Pill>)}
+              </div>
+            </div>
+          )}
+          {health.immunizations?.length > 0 && (
+            <div>
+              <p className="text-[11px] font-semibold text-slate-text/50 uppercase tracking-wide mb-1.5">Immunizations</p>
+              <div className="flex flex-wrap gap-1.5">
+                {health.immunizations.map((v, i) => <Pill key={i} tone="info">{v}</Pill>)}
               </div>
             </div>
           )}
@@ -626,15 +638,15 @@ function BehaviorTab({ student }) {
   if (records.length === 0) return <EmptyBlock message="No behavior records found." />;
 
   const typeTone = {
-    incident: "alert", positive: "success", warning: "amber",
+    incident: "alert", positive: "success", warning: "primary",
     detention: "alert", suspension: "alert", other: "neutral",
   };
-  const severityTone = { low: "info", medium: "amber", high: "alert", critical: "alert" };
+  const severityTone = { low: "info", medium: "primary", high: "alert", critical: "alert" };
 
   return (
     <div className="space-y-3">
       {records.map((r) => (
-        <div key={r._id} className="px-4 py-3 rounded-xl bg-paper/60 border border-black/[0.04]">
+        <div key={r._id} className="px-4 py-3 rounded-xl bg-paper/60 border border-slate-100">
           <div className="flex items-center justify-between gap-2 mb-1">
             <p className="text-[13px] font-semibold text-ink">{r.title}</p>
             <div className="flex gap-1.5 shrink-0">
@@ -675,14 +687,14 @@ function AchievementsTab({ student }) {
   if (items.length === 0) return <EmptyBlock message="No achievements recorded." />;
 
   const catTone = {
-    academic: "info", sports: "success", arts: "amber",
+    academic: "info", sports: "success", arts: "primary",
     citizenship: "success", attendance: "info", other: "neutral",
   };
 
   return (
     <div className="space-y-3">
       {items.map((a) => (
-        <div key={a._id} className="flex items-start justify-between gap-3 px-4 py-3 rounded-xl bg-paper/60 border border-black/[0.04]">
+        <div key={a._id} className="flex items-start justify-between gap-3 px-4 py-3 rounded-xl bg-paper/60 border border-slate-100">
           <div className="min-w-0">
             <p className="text-[13px] font-semibold text-ink">{a.title}</p>
             <p className="text-[11.5px] text-slate-text/60 mt-0.5">{fmtDate(a.date)}</p>
@@ -713,7 +725,7 @@ function MiniStat({ label, value, tone = "info" }) {
   const tones = {
     success: "bg-success/10 text-success",
     alert: "bg-alert/10 text-alert",
-    amber: "bg-amber/15 text-amber-dark",
+    primary: "bg-primary/15 text-primary-dark",
     info: "bg-info/10 text-info",
   };
   return (

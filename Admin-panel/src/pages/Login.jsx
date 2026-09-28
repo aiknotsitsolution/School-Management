@@ -19,6 +19,7 @@ const roleHome = {
   school_admin: "/",
   teacher: "/teacher-dashboard",
   student: "/student-dashboard",
+  parent: "/parent-dashboard",
   staff: "/staff-dashboard",
 };
 
@@ -88,7 +89,7 @@ export default function Login() {
         </div>
         <div className="relative z-10 max-w-md">
           <h2 className="font-display text-4xl font-bold leading-tight">
-            One platform to run <span className="text-amber">every part of the school day.</span>
+            One platform to run <span className="text-primary">every part of the school day.</span>
           </h2>
           <p className="text-white/60 mt-4 text-[14.5px] leading-relaxed">
             Attendance, admissions, fees, transport and communication — brought
@@ -96,17 +97,17 @@ export default function Login() {
           </p>
           <div className="flex gap-6 mt-8 pt-8 border-t border-white/10">
             <div>
-              <p className="font-display text-2xl font-bold text-amber">
+              <p className="font-display text-2xl font-bold text-primary">
                 1,065
               </p>
               <p className="text-white/50 text-[12px] mt-0.5">Students</p>
             </div>
             <div>
-              <p className="font-display text-2xl font-bold text-amber">96</p>
+              <p className="font-display text-2xl font-bold text-primary">96</p>
               <p className="text-white/50 text-[12px] mt-0.5">Faculty</p>
             </div>
             <div>
-              <p className="font-display text-2xl font-bold text-amber">18</p>
+              <p className="font-display text-2xl font-bold text-primary">18</p>
               <p className="text-white/50 text-[12px] mt-0.5">Years</p>
             </div>
           </div>
@@ -129,7 +130,7 @@ export default function Login() {
               {brand.shortName}
             </p>
           </div>
-          <p className="text-amber-dark font-semibold text-[12.5px] mb-1.5">
+          <p className="text-primary-dark font-semibold text-[12.5px] mb-1.5">
             Welcome back
           </p>
           <h1 className="font-display text-2xl font-bold text-ink mb-1">
@@ -156,7 +157,7 @@ export default function Login() {
                   required
                   type="email"
                   placeholder="you@example.com"
-                  className="w-full pl-10 pr-3.5 py-3 rounded-lg border border-black/10 text-[13.5px] outline-none focus:border-ink/40 bg-white"
+                  className="w-full pl-10 pr-3.5 py-3 rounded-lg border border-slate-300 text-[13.5px] outline-none focus:border-primary bg-white"
                 />
               </div>
             </div>
@@ -177,7 +178,7 @@ export default function Login() {
                 <input
                   type="checkbox"
                   defaultChecked
-                  className="accent-amber"
+                  className="accent-primary"
                 />{" "}
                 Keep me signed in
               </label>
@@ -193,7 +194,7 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-amber text-ink font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-amber-dark transition-colors"
+              className="w-full bg-primary text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors"
             >
               {loading ? "Signing in..." : "Sign in"}
               {!loading && <ArrowRight size={16} />}

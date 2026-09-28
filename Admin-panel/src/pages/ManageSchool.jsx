@@ -213,7 +213,7 @@ function SchoolProfileForm({ school, user, onSave }) {
             {school?.logo ? (
               <img src={school.logo} alt="School logo" className="w-full h-full object-contain" />
             ) : (
-              <span className="text-amber text-3xl font-display font-bold">
+              <span className="text-primary text-3xl font-display font-bold">
                 {(school?.shortName || school?.name || "S").slice(0, 1).toUpperCase()}
               </span>
             )}
@@ -315,7 +315,7 @@ function SchoolProfileForm({ school, user, onSave }) {
         </div>
       </div>
 
-      <div className="border-t border-black/5 pt-4 mt-2">
+      <div className="border-t border-slate-100 pt-4 mt-2">
         <h4 className="text-[13px] font-bold text-ink mb-3">Affiliation & Recognition</h4>
         <div className="grid sm:grid-cols-3 gap-4">
           <div>
@@ -323,7 +323,7 @@ function SchoolProfileForm({ school, user, onSave }) {
             <select
               value={form.board}
               onChange={(e) => setForm((f) => ({ ...f, board: e.target.value }))}
-              className="w-full h-[38px] rounded-lg border border-black/10 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+              className="w-full h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               <option value="">Select board</option>
               <option value="CBSE">CBSE</option>
@@ -348,7 +348,7 @@ function SchoolProfileForm({ school, user, onSave }) {
             <select
               value={form.recognitionAuthority}
               onChange={(e) => setForm((f) => ({ ...f, recognitionAuthority: e.target.value }))}
-              className="w-full h-[38px] rounded-lg border border-black/10 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-amber/40"
+              className="w-full h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
             >
               <option value="">Select authority</option>
               <option value="CBSE">CBSE, New Delhi</option>
@@ -369,13 +369,13 @@ function SchoolProfileForm({ school, user, onSave }) {
       </div>
 
       <div className="flex items-center justify-end pt-2">
-        <Button variant="amber" onClick={save} disabled={saving}>
+        <Button variant="primary" onClick={save} disabled={saving}>
           <Save size={15} />
           {saving ? "Saving…" : "Save Profile"}
         </Button>
       </div>
 
-      <div className="border-t border-black/5 pt-4">
+      <div className="border-t border-slate-100 pt-4">
         <p className="text-[12px] text-slate-text/60">
           <span className="font-medium text-ink">{user?.name}</span> · {user?.email || "—"} ·{" "}
           <Pill tone="info" className="inline-flex">
@@ -701,8 +701,8 @@ export default function ManageSchool() {
               }}
               className={`flex items-center gap-3 px-4 py-3 rounded-xl border transition-colors text-left ${
                 activeTab === t.key
-                  ? "bg-ink text-white border-ink"
-                  : "bg-white text-ink border-black/10 hover:border-black/20"
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-ink border-slate-300 hover:border-slate-400"
               }`}
             >
               <t.icon size={18} />
@@ -739,7 +739,7 @@ export default function ManageSchool() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder={`Search ${(tab?.label || "").toLowerCase()}...`}
-                className="w-52 pl-9 pr-8 py-2 rounded-lg border border-black/10 text-[13px] outline-none focus:border-ink/40 bg-white placeholder:text-slate-text/50"
+                className="w-52 pl-9 pr-8 py-2 rounded-lg border border-slate-300 text-[13px] outline-none focus:border-primary bg-white placeholder:text-slate-text/50"
               />
               {searchQuery && (
                 <button
@@ -751,7 +751,7 @@ export default function ManageSchool() {
               )}
             </div>
             <Button
-              variant="amber"
+              variant="primary"
               onClick={() =>
                 setCustomModal({ kind: tab.kind, label: tab.singular })
               }

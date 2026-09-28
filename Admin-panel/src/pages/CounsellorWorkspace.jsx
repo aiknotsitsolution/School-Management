@@ -102,7 +102,7 @@ export default function CounsellorWorkspace() {
         description="Track every admitted student, complete their profiles, and hand them a working login — all tied to the school's Admission ID."
         right={
           <Link to="/addstudent">
-            <Button variant="amber">
+            <Button variant="primary">
               <Plus size={15} /> New student
             </Button>
           </Link>
@@ -116,7 +116,7 @@ export default function CounsellorWorkspace() {
             label="Total students"
             value={stats.total}
             sub="in this school"
-            accent="amber"
+            accent="primary"
           />
           <StatCard
             icon={ClipboardCheck}
@@ -170,7 +170,7 @@ export default function CounsellorWorkspace() {
           label="Campus Visits"
           value={pipeline.scheduledVisits}
           sub="scheduled"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={TrendingUp}
@@ -248,7 +248,7 @@ export default function CounsellorWorkspace() {
         <div className="overflow-x-auto">
           <table className="w-full text-left text-[13px]">
             <thead>
-              <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-black/[0.06]">
+              <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-slate-200">
                 <th className="py-2.5 pr-4 font-semibold">Student</th>
                 <th className="py-2.5 pr-4 font-semibold">Admission ID</th>
                 <th className="py-2.5 pr-4 font-semibold">Class · Section</th>
@@ -257,7 +257,7 @@ export default function CounsellorWorkspace() {
                 <th className="py-2.5 font-semibold text-right">Action</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-black/[0.05]">
+            <tbody className="divide-y divide-slate-100">
               {rows.map((student) => (
                 <tr key={student._id}>
                   <td className="py-3 pr-4">
@@ -275,7 +275,7 @@ export default function CounsellorWorkspace() {
                     {student.profileStatus === "complete" ? (
                       <Pill tone="success">complete</Pill>
                     ) : (
-                      <Pill tone="amber">incomplete</Pill>
+                      <Pill tone="primary">incomplete</Pill>
                     )}
                   </td>
                   <td className="py-3 pr-4 text-slate-text/70 whitespace-nowrap">

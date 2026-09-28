@@ -6,6 +6,7 @@ import {
   Pencil,
   Plus,
   Save,
+  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -41,6 +42,12 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
   const [draft, setDraft] = useState(null); // { mode, day, index, ...period }
   const [confirmDelete, setConfirmDelete] = useState(null); // { day, index }
   const [customModal, setCustomModal] = useState(null); // { kind, label, showDescription? } | null
+  const [conflicts, setConflicts] = useState([]); // 409 conflict lines from the last save
+  const [genOpen, setGenOpen] = useState(false);
+  const [genDays, setGenDays] = useState(() => [...DAYS]);
+  const [genOverwrite, setGenOverwrite] = useState(false);
+  const [genPreview, setGenPreview] = useState(null); // dry-run plan
+  const [genBusy, setGenBusy] = useState(false);
 
   useEffect(() => {
     api.staff
@@ -95,6 +102,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
   );
 
   const openAdd = (day) => {
+    setConflicts([]);
     setDraft({
       mode: "add",
       day,
@@ -102,6 +110,8 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
       subjectId: "",
       teacherId: "",
       teacherName: "",
+      roomId: "",
+      roomName: "",
       startTime: "",
       endTime: "",
     });
@@ -110,6 +120,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
   const openEdit = (day, index) => {
     const period = (byDay.get(day) || [])[index];
     if (!period) return;
+    setConflicts([]);
     setDraft({
       mode: "edit",
       day,
@@ -118,6 +129,8 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
       subjectId: period.subjectId || "",
       teacherId: period.teacherId || "",
       teacherName: period.teacherName || "",
+      roomId: period.roomId || "",
+      roomName: period.roomName || "",
       startTime: period.startTime || "",
       endTime: period.endTime || "",
     });
@@ -148,6 +161,8 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
       subject: draft.subject.trim(),
       teacherId: draft.teacherId,
       teacherName: draft.teacherName,
+      roomId: draft.roomId || "",
+      roomName: draft.roomName || "",
       startTime: draft.startTime,
       endTime: draft.endTime,
     };
@@ -168,9 +183,13 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
         ...prev.filter((t) => t.day !== draft.day),
         data,
       ]);
+      setConflicts([]);
       toast(draft.mode === "edit" ? "Period updated" : "Period added");
       setDraft(null);
     } catch (requestError) {
+      if (requestError.status === 409) {
+        setConflicts(requestError.conflicts || [requestError.message]);
+      }
       toast(requestError.message, "error");
     } finally {
       setSaving(false);
@@ -208,10 +227,58 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
         toast("Period removed");
       }
       setConfirmDelete(null);
+      setConflicts([]);
     } catch (requestError) {
+      if (requestError.status === 409) {
+        setConflicts(requestError.conflicts || [requestError.message]);
+      }
       toast(requestError.message, "error");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const reloadList = () => {
+    const query = `class=${encodeURIComponent(cls)}&section=${encodeURIComponent(section)}`;
+    return api.timetable
+      .list(query)
+      .then(({ data }) => setTimetable(Array.isArray(data) ? data : []))
+      .catch((requestError) => setError(requestError.message));
+  };
+
+  const runGenerate = async (dryRun) => {
+    if (!genDays.length) {
+      toast("Select at least one day", "error");
+      return;
+    }
+    setGenBusy(true);
+    try {
+      const { data } = await api.timetable.generate({
+        class: cls,
+        section,
+        days: genDays,
+        overwrite: genOverwrite,
+        dryRun,
+      });
+      if (dryRun) {
+        setGenPreview(data);
+      } else {
+        setGenPreview(null);
+        setGenOpen(false);
+        setConflicts([]);
+        toast(
+          `Timetable generated — ${data.created.length} created, ${data.updated.length} updated, ${data.skipped.length} skipped`,
+        );
+        reloadList();
+      }
+    } catch (requestError) {
+      if (requestError.status === 409) {
+        setConflicts(requestError.conflicts || [requestError.message]);
+        setGenOpen(false);
+      }
+      toast(requestError.message, "error");
+    } finally {
+      setGenBusy(false);
     }
   };
 
@@ -237,6 +304,26 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
         </Card>
       )}
 
+      {conflicts.length > 0 && !draft && (
+        <Card>
+          <div className="flex items-start gap-2.5">
+            <AlertTriangle size={16} className="text-alert mt-0.5 shrink-0" />
+            <div className="min-w-0">
+              <p className="text-[13px] font-semibold text-alert">
+                Scheduling conflict — nothing was saved
+              </p>
+              <ul className="mt-1.5 space-y-1">
+                {conflicts.map((line, i) => (
+                  <li key={i} className="text-[12.5px] text-alert/90">
+                    {line}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </Card>
+      )}
+
       <Card
         title={
           <span className="capitalize">
@@ -252,9 +339,21 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
               </span>
             </div>
             {canWrite && (
-              <Button variant="amber" onClick={() => openAdd("Monday")} disabled={saving}>
-                <Plus size={15} /> Add Period
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setGenPreview(null);
+                    setGenOpen(true);
+                  }}
+                  disabled={saving || genBusy}
+                >
+                  <Sparkles size={15} /> Auto-generate
+                </Button>
+                <Button variant="primary" onClick={() => openAdd("Monday")} disabled={saving}>
+                  <Plus size={15} /> Add Period
+                </Button>
+              </div>
             )}
           </div>
         }
@@ -283,7 +382,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                 return (
                   <div
                     key={day}
-                    className="rounded-xl border border-black/[0.06] overflow-hidden"
+                    className="rounded-xl border border-slate-200 overflow-hidden"
                   >
                     <div className="flex items-center justify-between bg-ink text-white px-4 py-2.5">
                       <span className="font-semibold text-[12.5px]">{day}</span>
@@ -304,7 +403,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                         No periods
                       </p>
                     ) : (
-                      <div className="divide-y divide-black/[0.04]">
+                      <div className="divide-y divide-slate-100">
                         {periods.map((period, index) => (
                           <div key={`${day}-${index}`} className="px-4 py-3">
                             <div className="flex items-center justify-between gap-2">
@@ -312,7 +411,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                                 {period.subject || "—"}
                               </p>
                               <div className="flex items-center gap-1">
-                                <Pill tone="amber">{timeLabel(period.startTime)}</Pill>
+                                <Pill tone="primary">{timeLabel(period.startTime)}</Pill>
                                 {canWrite && (
                                   <div className="flex items-center">
                                     <button
@@ -339,6 +438,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                             </div>
                             <p className="text-[11.5px] text-slate-text/60 mt-1 truncate">
                               {period.teacherName || "Not assigned"}
+                              {period.roomName ? ` · ${period.roomName}` : ""}
                               {period.startTime &&
                                 ` · ${timeLabel(period.startTime)}-${timeLabel(
                                   period.endTime,
@@ -368,7 +468,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
             onClick={() => !saving && setDraft(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   {draft.mode === "edit" ? "Edit Period" : "Add Period"}
@@ -387,6 +487,21 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
             </div>
 
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              {conflicts.length > 0 && (
+                <div className="rounded-lg bg-alert/10 border border-alert/30 px-3.5 py-3">
+                  <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-alert">
+                    <AlertTriangle size={14} /> Scheduling conflict — nothing was saved
+                  </p>
+                  <ul className="mt-1.5 space-y-1">
+                    {conflicts.map((line, i) => (
+                      <li key={i} className="text-[12px] text-alert/90">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div>
                 <label className="block text-[12.5px] font-medium text-ink mb-1.5">
                   Day
@@ -458,6 +573,27 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                 </Select>
               </div>
 
+              <div>
+                <label className="block text-[12.5px] font-medium text-ink mb-1.5">
+                  Room <span className="text-slate-text/60 font-normal">(optional)</span>
+                </label>
+                <MasterSelect
+                  kind="rooms"
+                  label="Room"
+                  placeholder="Select room"
+                  searchLabel="Search rooms..."
+                  value={draft.roomId}
+                  fallbackLabel={draft.roomName}
+                  onChange={(id, item) =>
+                    setDraft((d) => ({
+                      ...d,
+                      roomId: id,
+                      roomName: item ? item.name : "",
+                    }))
+                  }
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-[12.5px] font-medium text-ink mb-1.5">
@@ -486,11 +622,11 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setDraft(null)} disabled={saving}>
                 Cancel
               </Button>
-              <Button variant="amber" onClick={handleSave} disabled={saving}>
+              <Button variant="primary" onClick={handleSave} disabled={saving}>
                 <Save size={15} />
                 {saving ? "Saving..." : draft.mode === "edit" ? "Update" : "Add"}
               </Button>
@@ -525,7 +661,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                 </p>
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={() => setConfirmDelete(null)}
@@ -541,6 +677,118 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
               >
                 <Trash2 size={15} />
                 {saving ? "Removing..." : "Remove"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Auto-generate modal */}
+      {genOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
+            onClick={() => !genBusy && setGenOpen(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <div>
+                <h3 className="font-display font-semibold text-ink text-[17px]">
+                  Auto-generate timetable
+                </h3>
+                <p className="text-[12.5px] text-slate-text/70 mt-0.5">
+                  Class {cls} - {section} · fills the school time slots with this
+                  class&apos;s subject teachers
+                </p>
+              </div>
+              <button
+                onClick={() => !genBusy && setGenOpen(false)}
+                className="p-2 rounded-lg hover:bg-paper text-slate-text"
+                aria-label="Close"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="block text-[12.5px] font-medium text-ink mb-1.5">
+                  Days
+                </label>
+                <div className="grid grid-cols-3 gap-2">
+                  {DAYS.map((day) => (
+                    <label
+                      key={day}
+                      className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-2 text-[12.5px] text-ink cursor-pointer hover:border-slate-300"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={genDays.includes(day)}
+                        onChange={(e) =>
+                          setGenDays((prev) =>
+                            e.target.checked
+                              ? [...prev, day]
+                              : prev.filter((d) => d !== day),
+                          )
+                        }
+                      />
+                      {day.slice(0, 3)}
+                    </label>
+                  ))}
+                </div>
+              </div>
+
+              <label className="flex items-center gap-2 text-[12.5px] text-ink cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={genOverwrite}
+                  onChange={(e) => setGenOverwrite(e.target.checked)}
+                />
+                Replace days that already have a timetable
+                <span className="text-slate-text/60">(otherwise they are skipped)</span>
+              </label>
+
+              {genPreview && (
+                <div className="rounded-lg bg-paper border border-slate-200 px-3.5 py-3">
+                  <p className="text-[12.5px] font-semibold text-ink mb-1.5">
+                    Preview — nothing saved yet
+                  </p>
+                  <ul className="space-y-1">
+                    {genPreview.days.map((d) => {
+                      const unassigned = d.periods.filter((p) => !p.teacherId).length;
+                      return (
+                        <li key={d.day} className="text-[12px] text-slate-text/80">
+                          {d.day}: {d.periods.length} period
+                          {d.periods.length === 1 ? "" : "s"}
+                          {unassigned ? `, ${unassigned} need a teacher` : ""}
+                          {d.replaced ? " · replaces existing" : ""}
+                        </li>
+                      );
+                    })}
+                    {genPreview.skipped.map((day) => (
+                      <li key={day} className="text-[12px] text-slate-text/50">
+                        {day}: skipped (timetable exists)
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setGenOpen(false)} disabled={genBusy}>
+                Cancel
+              </Button>
+              <Button variant="outline" onClick={() => runGenerate(true)} disabled={genBusy}>
+                {genBusy ? "Working..." : "Preview"}
+              </Button>
+              <Button variant="primary" onClick={() => runGenerate(false)} disabled={genBusy}>
+                <Sparkles size={15} />
+                {genBusy ? "Generating..." : genPreview ? "Apply plan" : "Generate"}
               </Button>
             </div>
           </div>

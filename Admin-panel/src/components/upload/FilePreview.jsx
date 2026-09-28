@@ -43,16 +43,16 @@ export default function FilePreview({
   if (!file && !url) return null;
 
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-black/[0.08] bg-paper/60 p-3">
+    <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-paper/60 p-3">
       {file || url ? (
         isImage ? (
           <img
             src={file ? objectUrl : url}
             alt=""
-            className="w-12 h-12 rounded-lg object-cover border border-black/[0.06] shrink-0"
+            className="w-12 h-12 rounded-lg object-cover border border-slate-200 shrink-0"
           />
         ) : (
-          <div className="w-12 h-12 rounded-lg bg-amber/15 text-amber-dark flex items-center justify-center shrink-0">
+          <div className="w-12 h-12 rounded-lg bg-primary/15 text-primary-dark flex items-center justify-center shrink-0">
             <FileText size={20} />
           </div>
         )

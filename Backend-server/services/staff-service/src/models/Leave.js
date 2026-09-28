@@ -4,7 +4,9 @@ const leaveSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     staffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
-    studentId: { type: mongoose.Schema.Types.ObjectId, ref: "Student" },
+    // Students are keyed by admissionNo (User.refId), same as every other
+    // student-scoped collection — not an ObjectId (avoids CastError).
+    studentId: { type: String, index: true },
     leaveType: { type: String, enum: ["Sick", "Casual", "Earned", "Maternity", "Other"], default: "Casual" },
     fromDate: { type: Date, required: true },
     toDate: { type: Date, required: true },

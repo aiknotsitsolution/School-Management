@@ -1,54 +1,54 @@
 const Notice = require("../models/Notice");
-const Notification = require("../models/Notification");
 const { getUserModel } = require("../models/userLite");
+const { resolveAudienceUserIds, insertFanout, visibleClassTagsFor } = require("../services/audience");
+const { sendEmailBulk } = require("../services/relayEmail");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
-const { publish } = require("../realtime/hub");
 
 // Mass-assignment guard: only these fields may be set from the request body
 // (schoolId / postedBy / timestamps stay server-owned).
 const NOTICE_FIELDS = [
-  "title", "description", "category", "pinned", "audience", "attachments", "expiryDate",
+  "title", "description", "category", "pinned", "audience", "classTags", "priority", "attachments", "expiryDate",
 ];
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
-// Audience -> concrete User roles for fan-out. "class_teacher" entries here map
-// to "teacher" (Class Teacher is now a TeacherAssignment responsibility loaded
-// on a teacher account) and only exist to resolve documents published before
-// the role collapse; new notices use the "teacher" audience.
-const AUDIENCE_ROLES = {
-  school_admin: ["school_admin"],
-  class_teacher: ["teacher"],
-  teacher: ["teacher"],
-  staff: ["staff"],
-  student: ["student"],
-  all: ["school_admin", "teacher", "staff", "student"],
+// After a notice is published, fan out an inbox notification to the matching
+// audience (role + classTags resolution lives in services/audience). Priority
+// "emergency" bumps the notification kind so the client renders it as a
+// priority alert. Failures are logged but never block notice creation.
+// Emergency notices also fan out over email (when SMTP is configured) so the
+// alert reaches parents/admins outside the app. Fire-and-forget non-blocking.
+const emergencyEmailBlast = async ({ schoolId, title, description, audience, classTags }) => {
+  try {
+    const User = getUserModel();
+    const userIds = await resolveAudienceUserIds({ schoolId, audience, classTags });
+    if (userIds.length === 0) return;
+    const users = await User.find({ _id: { $in: userIds } }).select("email").lean();
+    const emails = [...new Set(users.map((u) => (u.email ? String(u.email).trim() : null)).filter(Boolean))];
+    if (emails.length === 0) return;
+    await sendEmailBulk({
+      to: emails,
+      subject: `EMERGENCY: ${title}`,
+      html: `<h2 style="color:#b00020">EMERGENCY NOTICE</h2><p>${String(description || title)}</p>`,
+    });
+  } catch (err) {
+    console.error("[emergency email blast skipped]", err.message);
+  }
 };
 
-// After a notice is published, fan out an inbox notification to the matching
-// audience. Failures are logged but never block notice creation.
-const fanOutNotice = async ({ schoolId, title, audience = [] }) => {
+const fanOutNotice = async ({ schoolId, title, description, audience = [], classTags = [], priority = "normal" }) => {
   try {
-    const roles = [...new Set(audience.flatMap((a) => AUDIENCE_ROLES[a] || []))];
-    if (roles.length === 0) return;
-    const User = getUserModel();
-    const userIds = await User.find(
-      { schoolId, isActive: true, role: { $in: roles } },
-      { _id: 1 }
-    ).lean();
-    const all = userIds.map((u) => String(u._id));
-    if (all.length === 0) return;
-    const inserted = await Notification.insertMany(
-      all.map((userId) => ({
-        schoolId,
-        userId,
-        title: "New Notice",
-        message: title,
-        kind: "notice",
-        link: "/notice-board",
-      }))
-    );
-    inserted.forEach((n) => publish(schoolId, n.userId, n));
+    const kind = priority === "emergency" ? "emergency" : "notice";
+    const userIds = await resolveAudienceUserIds({ schoolId, audience, classTags });
+    await insertFanout(schoolId, userIds, {
+      title: kind === "emergency" ? `EMERGENCY: ${title}` : "New Notice",
+      message: title,
+      kind,
+      link: "/notice-board",
+    });
+    if (kind === "emergency") {
+      emergencyEmailBlast({ schoolId, title, description, audience, classTags });
+    }
   } catch (err) {
     console.error("[notice fanout skipped]", err.message);
   }
@@ -57,7 +57,14 @@ const fanOutNotice = async ({ schoolId, title, audience = [] }) => {
 const createNotice = async (req, res) => {
   try {
     const notice = await Notice.create({ ...pick(req.body, NOTICE_FIELDS), schoolId: req.tenantId, postedBy: req.user.name });
-    fanOutNotice({ schoolId: req.tenantId, title: notice.title, audience: notice.audience });
+    fanOutNotice({
+      schoolId: req.tenantId,
+      title: notice.title,
+      description: notice.description,
+      audience: notice.audience,
+      classTags: notice.classTags || [],
+      priority: notice.priority,
+    });
     res.status(201).json({ success: true, data: notice });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -73,6 +80,20 @@ const getNotices = async (req, res) => {
         ? ["teacher", "class_teacher", "all"]
         : [req.user.role, "all"];
     const filter = { schoolId: req.tenantId, audience: { $in: effectiveAudiences } };
+    // Class-tag scoping: only students/parents are restricted; staff and
+    // teachers see tagged notices regardless (they may teach those classes).
+    const ownTags = await visibleClassTagsFor({ tenantId: req.tenantId, user: req.user });
+    if (ownTags !== null) {
+      filter.$and = [
+        {
+          $or: [
+            { classTags: { $exists: false } },
+            { classTags: { $size: 0 } },
+            { classTags: { $in: [...ownTags] } },
+          ],
+        },
+      ];
+    }
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
       Notice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
@@ -94,12 +115,26 @@ const updateNotice = async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ success: false, message: "Nothing to update" });
     }
+    const before = await Notice.findOne({ _id: req.params.id, schoolId: req.tenantId }).lean();
+    if (!before) return res.status(404).json({ success: false, message: "Notice not found" });
     const notice = await Notice.findOneAndUpdate(
       { _id: req.params.id, schoolId: req.tenantId },
       { $set: updates },
       { new: true, runValidators: true },
     );
-    if (!notice) return res.status(404).json({ success: false, message: "Notice not found" });
+    // Escalation: raising a notice to emergency re-fans-out with the emergency
+    // kind so everyone in the (possibly changed) audience gets the alert even
+    // if they already read the original "normal" copy.
+    if (before.priority !== "emergency" && notice.priority === "emergency") {
+      fanOutNotice({
+        schoolId: req.tenantId,
+        title: notice.title,
+        description: notice.description,
+        audience: notice.audience,
+        classTags: notice.classTags || [],
+        priority: "emergency",
+      });
+    }
     res.json({ success: true, data: notice });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });

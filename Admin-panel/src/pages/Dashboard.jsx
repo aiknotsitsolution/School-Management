@@ -49,7 +49,7 @@ import {
   usePaged,
 } from "../components/DashboardPagination";
 
-const PIE_COLORS = ["#16213E", "#E8A33D", "#3F8F5F", "#3B6FA0", "#D65A4A"];
+const PIE_COLORS = ["#172033", "#4F46E5", "#16A34A", "#2563EB", "#DC2626"];
 
 function formatDate(value) {
   return value
@@ -370,7 +370,7 @@ export default function Dashboard() {
         <div className="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/60 to-transparent" />
         <div className="relative z-10 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <p className="text-amber font-semibold text-[12.5px]">
+            <p className="text-primary-light font-semibold text-[12.5px]">
               {new Date().toLocaleDateString("en-IN", {
                 weekday: "long",
                 day: "numeric",
@@ -427,9 +427,9 @@ export default function Dashboard() {
             <Link
               key={item.label}
               to={item.to}
-              className="flex items-center gap-2.5 rounded-xl border border-black/[0.06] bg-white px-3.5 py-3 hover:bg-amber/5 transition-colors"
+              className="flex items-center gap-2.5 rounded-xl border border-slate-200 bg-white px-3.5 py-3 hover:bg-primary/5 transition-colors"
             >
-              <div className="w-8 h-8 rounded-lg bg-amber/12 text-amber-dark flex items-center justify-center shrink-0">
+              <div className="w-8 h-8 rounded-lg bg-primary/12 text-primary-dark flex items-center justify-center shrink-0">
                 <item.icon size={15} />
               </div>
               <span className="text-[12.5px] font-semibold text-ink">{item.label}</span>
@@ -450,7 +450,7 @@ export default function Dashboard() {
           label="Total Students"
           value={studentStats.total.toLocaleString("en-IN")}
           sub={`${studentStats.active.toLocaleString("en-IN")} active students`}
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={CalendarCheck}
@@ -488,7 +488,7 @@ export default function Dashboard() {
           label="Other Staff"
           value={String(staffCount)}
           sub={staffCount === 1 ? "support staff" : "support staff"}
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={ClipboardList}
@@ -522,7 +522,7 @@ export default function Dashboard() {
             <>
               <StatCard icon={UserRound} label="Teachers Present" value={String(teacherPresent)} sub={`${teacherNotMarked} not marked`} accent="success" />
               <StatCard icon={XCircle} label="Absent Today" value={String(absentToday)} sub={`of ${totalStaff} staff`} accent="alert" />
-              <StatCard icon={Clock} label="Not Marked" value={String(Math.max(0, notMarked))} sub="Pending check-in" accent="amber" />
+              <StatCard icon={Clock} label="Not Marked" value={String(Math.max(0, notMarked))} sub="Pending check-in" accent="primary" />
               <StatCard icon={CheckCircle2} label="Total Present" value={String(presentToday)} sub={`${totalStaff > 0 ? ((presentToday / totalStaff) * 100).toFixed(0) : 0}% of staff`} accent="success" />
             </>
           );
@@ -624,17 +624,17 @@ export default function Dashboard() {
                 <CartesianGrid
                   strokeDasharray="3 3"
                   vertical={false}
-                  stroke="#EEEAE0"
+                  stroke="#E2E8F0"
                 />
                 <XAxis
                   dataKey="month"
-                  tick={{ fontSize: 12, fill: "#475467" }}
+                  tick={{ fontSize: 12, fill: "#475569" }}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
                   tickFormatter={(v) => `₹${v / 100000}L`}
-                  tick={{ fontSize: 11, fill: "#475467" }}
+                  tick={{ fontSize: 11, fill: "#475569" }}
                   axisLine={false}
                   tickLine={false}
                 />
@@ -648,13 +648,13 @@ export default function Dashboard() {
                 />
                 <Bar
                   dataKey="collected"
-                  fill="#3F8F5F"
+                  fill="#16A34A"
                   radius={[6, 6, 0, 0]}
                   name="Collected"
                 />
                 <Bar
                   dataKey="pending"
-                  fill="#D65A4A"
+                  fill="#DC2626"
                   radius={[6, 6, 0, 0]}
                   name="Pending"
                 />
@@ -677,10 +677,10 @@ export default function Dashboard() {
               {pagedNotices.map((n) => (
                 <div
                   key={n.id}
-                  className="pb-3.5 border-b border-black/[0.06] last:border-0 last:pb-0"
+                  className="pb-3.5 border-b border-slate-200 last:border-0 last:pb-0"
                 >
                   <div className="flex items-center gap-2 mb-1">
-                    <Pill tone="amber">{n.category}</Pill>
+                    <Pill tone="primary">{n.category}</Pill>
                     <span className="text-[11px] text-slate-text/50">
                       {n.date}
                     </span>
@@ -788,7 +788,7 @@ export default function Dashboard() {
             {pagedBuses.map((b) => (
               <div
                 key={b.id}
-                className="rounded-xl border border-black/[0.06] p-3.5"
+                className="rounded-xl border border-slate-200 p-3.5"
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="w-8 h-8 rounded-lg bg-info/10 text-info flex items-center justify-center">
@@ -830,7 +830,7 @@ export default function Dashboard() {
             {upcomingEvents.map((ev) => (
               <div
                 key={ev._id}
-                className="flex items-center justify-between gap-3 pb-3 border-b border-black/[0.06] last:border-0 last:pb-0"
+                className="flex items-center justify-between gap-3 pb-3 border-b border-slate-200 last:border-0 last:pb-0"
               >
                 <div className="min-w-0">
                   <p className="text-[13px] font-semibold text-ink truncate">

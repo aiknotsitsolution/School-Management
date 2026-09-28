@@ -7,7 +7,7 @@ import { fmtDate } from "./useTeacherContext";
 const categoryTone = {
   Academic: "info",
   Holiday: "success",
-  Sports: "amber",
+  Sports: "primary",
   Fees: "alert",
   Event: "info",
   Transport: "neutral",
@@ -78,8 +78,8 @@ export default function Notices() {
               onClick={() => setFilter(c)}
               className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
                 filter === c
-                  ? "bg-ink text-white border-ink"
-                  : "bg-white text-slate-text border-black/10 hover:border-ink/30"
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-slate-text border-slate-300 hover:border-ink/30"
               }`}
             >
               {c}
@@ -106,15 +106,15 @@ export default function Notices() {
               ? n.audience.join(", ")
               : n.audience || "All";
             return (
-              <Card key={n._id} className={n.pinned ? "ring-1 ring-amber/30" : ""}>
+              <Card key={n._id} className={n.pinned ? "ring-1 ring-primary/30" : ""}>
                 <div className="flex items-start justify-between gap-2 mb-2">
                   <div className="flex items-center gap-2">
                     <Pill tone={categoryTone[n.category] || "neutral"}>
                       {n.category || "General"}
                     </Pill>
                     {n.pinned && (
-                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-amber-dark">
-                        <Pin size={12} fill="#E8A33D" /> Pinned
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary-dark">
+                        <Pin size={12} fill="#4F46E5" /> Pinned
                       </span>
                     )}
                   </div>
@@ -125,7 +125,7 @@ export default function Notices() {
                 <p className="text-[13px] text-slate-text mt-2 leading-relaxed line-clamp-4">
                   {body}
                 </p>
-                <div className="flex items-center justify-between mt-4 pt-3 border-t border-black/[0.06] text-[11.5px] text-slate-text/60">
+                <div className="flex items-center justify-between mt-4 pt-3 border-t border-slate-200 text-[11.5px] text-slate-text/60">
                   <span>For: {audience}</span>
                   <span>{fmtDate(n.expiryDate || n.createdAt)}</span>
                 </div>

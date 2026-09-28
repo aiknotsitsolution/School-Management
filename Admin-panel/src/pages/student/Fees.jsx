@@ -85,7 +85,7 @@ export default function Fees() {
                   const remaining = Number(inv.amount || 0) - Number(inv.paidAmount || 0);
                   const status = inv.status || (remaining <= 0 ? "Paid" : "Pending");
                   return (
-                    <tr key={inv._id} className="border-t border-black/[0.06]">
+                    <tr key={inv._id} className="border-t border-slate-200">
                       <td className="px-5 py-2.5 font-medium text-ink">{inv.title}</td>
                       <td className="px-3 py-2.5 text-slate-text/80">{fmtDate(inv.dueDate || inv.createdAt)}</td>
                       <td className="px-3 py-2.5 font-semibold text-ink">{fmtMoney(inv.amount || 0)}</td>
@@ -118,7 +118,7 @@ export default function Fees() {
               </thead>
               <tbody>
                 {sortedPayments.map((p) => (
-                  <tr key={p._id || p.receiptNo} className="border-t border-black/[0.06]">
+                  <tr key={p._id || p.receiptNo} className="border-t border-slate-200">
                     <td className="px-5 py-2.5">{fmtDate(p.paymentDate || p.createdAt)}</td>
                     <td className="px-3 py-2.5 font-semibold text-success">{fmtMoney(p.amount || 0)}</td>
                     <td className="px-3 py-2.5 text-slate-text/80">{p.receiptNo || p.transactionId || p.invoiceId || "—"}</td>
@@ -137,7 +137,7 @@ export default function Fees() {
         ) : (
           <div className="space-y-2">
             {orders.map((o) => (
-              <div key={o._id} className="rounded-xl border border-black/[0.06] p-3.5 flex items-center justify-between gap-3">
+              <div key={o._id} className="rounded-xl border border-slate-200 p-3.5 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                   <FileClock size={15} className="text-slate-text/50 shrink-0" />
                   <div className="min-w-0">

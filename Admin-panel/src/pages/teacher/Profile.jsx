@@ -259,7 +259,7 @@ export default function Profile() {
       {staff && !profileComplete && (
         <Card title="Complete Profile">
           <form className="grid sm:grid-cols-2 gap-4" onSubmit={handleComplete}>
-            <div className="flex items-start gap-2.5 rounded-xl bg-amber/10 border border-amber/25 px-4 py-3 text-[13px] text-amber-dark sm:col-span-2">
+            <div className="flex items-start gap-2.5 rounded-xl bg-primary/10 border border-primary/25 px-4 py-3 text-[13px] text-primary-dark sm:col-span-2">
               <AlertCircle size={16} className="shrink-0 mt-0.5" />
               <p>
                 Your profile is incomplete. Fill in your date of birth, gender,
@@ -297,7 +297,7 @@ export default function Profile() {
               <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} placeholder="Residential address" />
             </div>
             <div className="sm:col-span-2 flex justify-end">
-              <Button variant="amber" type="submit" disabled={saving}>
+              <Button variant="primary" type="submit" disabled={saving}>
                 <Save size={15} /> {saving ? "Saving…" : "Complete Profile"}
               </Button>
             </div>
@@ -321,7 +321,7 @@ export default function Profile() {
                 </Button>
               </div>
             ) : (
-              <Pill tone="amber">not issued</Pill>
+              <Pill tone="primary">not issued</Pill>
             )
           }
         >
@@ -336,7 +336,7 @@ export default function Profile() {
               </p>
             </div>
           </div>
-          <div className="mt-4 rounded-xl border border-black/[0.06] p-4 bg-warm">
+          <div className="mt-4 rounded-xl border border-slate-200 p-4 bg-warm">
             <TeacherIdCard teacher={staff} school={school} />
           </div>
         </Card>

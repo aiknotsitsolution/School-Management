@@ -30,7 +30,7 @@ export default function Notices() {
       />
 
       {loading ? (
-        <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 bg-white rounded-2xl border border-black/[0.06] animate-pulse" />)}</div>
+        <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-24 bg-white rounded-2xl border border-slate-200 animate-pulse" />)}</div>
       ) : notices.length === 0 ? (
         <Card>
           <div className="py-10 text-center">
@@ -43,7 +43,7 @@ export default function Notices() {
         <div className="space-y-3">
           {notices.map((n) => (
             <Card key={n._id} className="flex flex-col sm:flex-row sm:items-start gap-3">
-              <div className="w-10 h-10 rounded-lg bg-amber/10 text-amber flex items-center justify-center shrink-0">
+              <div className="w-10 h-10 rounded-lg bg-primary/10 text-primary flex items-center justify-center shrink-0">
                 <Megaphone size={18} />
               </div>
               <div className="min-w-0 flex-1">

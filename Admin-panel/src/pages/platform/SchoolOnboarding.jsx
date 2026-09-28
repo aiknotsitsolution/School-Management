@@ -261,7 +261,7 @@ export default function SchoolOnboarding() {
             <Input placeholder="Enter 6-digit pincode" value={form.pincode} onChange={set("pincode")} />
           </div>
           <div className="flex justify-end mt-5">
-            <Button variant="amber" onClick={goToStep1}>
+            <Button variant="primary" onClick={goToStep1}>
               Next <ArrowRight size={15} />
             </Button>
           </div>
@@ -293,7 +293,7 @@ export default function SchoolOnboarding() {
             <Button variant="outline" onClick={() => setStepIndex(0)}>
               <ArrowLeft size={15} /> Back
             </Button>
-            <Button variant="amber" onClick={goToStep2}>
+            <Button variant="primary" onClick={goToStep2}>
               Next <ArrowRight size={15} />
             </Button>
           </div>
@@ -311,7 +311,7 @@ export default function SchoolOnboarding() {
                   className={`w-full flex items-center justify-between px-4 py-3.5 rounded-xl border text-left transition-colors ${
                     planId === plan._id
                       ? "border-ink bg-ink/[0.03]"
-                      : "border-black/10 hover:border-black/25"
+                      : "border-slate-300 hover:border-slate-400"
                   }`}
                 >
                   <div>
@@ -337,7 +337,7 @@ export default function SchoolOnboarding() {
             <Button variant="outline" onClick={() => setStepIndex(1)}>
               <ArrowLeft size={15} /> Back
             </Button>
-            <Button variant="amber" onClick={goToStep3} disabled={!planId}>
+            <Button variant="primary" onClick={goToStep3} disabled={!planId}>
               Next <ArrowRight size={15} />
             </Button>
           </div>
@@ -351,7 +351,7 @@ export default function SchoolOnboarding() {
               Everything is ready. Clicking <span className="font-semibold text-ink">Launch school</span> will create the
               school, set up the admin account, assign the subscription and make it live — all in one go.
             </p>
-            <div className="rounded-xl bg-paper border border-black/[0.06] p-4 space-y-2">
+            <div className="rounded-xl bg-paper border border-slate-200 p-4 space-y-2">
               <div className="flex justify-between">
                 <span className="text-slate-text/70">School</span>
                 <span className="font-semibold text-ink">{form.name}</span>
@@ -374,7 +374,7 @@ export default function SchoolOnboarding() {
             <Button variant="outline" onClick={() => setStepIndex(2)}>
               <ArrowLeft size={15} /> Back
             </Button>
-            <Button variant="amber" onClick={launch} disabled={busy}>
+            <Button variant="primary" onClick={launch} disabled={busy}>
               <Rocket size={15} /> {busy ? "Launching…" : "Launch school"}
             </Button>
           </div>

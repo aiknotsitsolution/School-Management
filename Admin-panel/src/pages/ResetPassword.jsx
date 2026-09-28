@@ -71,7 +71,7 @@ export default function ResetPassword() {
         </div>
         <div className="relative z-10 max-w-md">
           <h2 className="font-display text-4xl font-bold leading-tight">
-            Set a fresh password, <span className="text-amber">securely.</span>
+            Set a fresh password, <span className="text-primary">securely.</span>
           </h2>
           <p className="text-white/60 mt-4 text-[14.5px] leading-relaxed">
             Set a fresh password for your Zipschool OS account. The link is one-time and
@@ -92,15 +92,15 @@ export default function ResetPassword() {
             />
             <p className="font-display font-bold text-ink">Zipschool OS</p>
           </div>
-          <p className="text-amber-dark font-semibold text-[12.5px] mb-1.5">Account recovery</p>
+          <p className="text-primary-dark font-semibold text-[12.5px] mb-1.5">Account recovery</p>
           <h1 className="font-display text-2xl font-bold text-ink mb-1">Reset your password</h1>
           <p className="text-slate-text text-[13.5px] mb-8">One-time link · expires in 15 minutes</p>
 
           {done ? (
-            <div className="rounded-xl border border-black/10 bg-white p-6">
+            <div className="rounded-xl border border-slate-300 bg-white p-6">
               <div className="flex items-center gap-2.5 mb-2">
                 {done === "session_reset" ? (
-                  <AlertTriangle size={20} className="text-amber" />
+                  <AlertTriangle size={20} className="text-primary" />
                 ) : (
                   <CheckCircle2 size={20} className="text-emerald-600" />
                 )}
@@ -115,7 +115,7 @@ export default function ResetPassword() {
               </p>
               <button
                 onClick={() => navigate("/login", { replace: true })}
-                className="w-full bg-amber text-ink font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-amber-dark transition-colors"
+                className="w-full bg-primary text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors"
               >
                 <ArrowLeft size={16} /> Go to login
               </button>
@@ -153,7 +153,7 @@ export default function ResetPassword() {
               <button
                 type="submit"
                 disabled={loading || !token}
-                className="w-full bg-amber text-ink font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-amber-dark transition-colors disabled:opacity-50"
+                className="w-full bg-primary text-white font-semibold py-3 rounded-lg flex items-center justify-center gap-2 hover:bg-primary-dark transition-colors disabled:opacity-50"
               >
                 {loading ? "Updating…" : "Set new password"}
               </button>

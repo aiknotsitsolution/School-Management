@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Select } from "./UI";
 
 // Reusable lightweight pagination bar for dashboard widgets.
-// Matches the dashboard card aesthetic (border-black/[0.06] dividers,
+// Matches the dashboard card aesthetic (border-slate-200 dividers,
 // 12px muted text, subtle select + ghost buttons).
 
 export function DashboardPagination({
@@ -24,7 +24,7 @@ export function DashboardPagination({
 
   return (
     <div
-      className={`flex flex-wrap items-center justify-between gap-3 pt-4 mt-4 border-t border-black/[0.06] ${className}`}
+      className={`flex flex-wrap items-center justify-between gap-3 pt-4 mt-4 border-t border-slate-200 ${className}`}
     >
       <p className="text-[12px] text-slate-text/70">
         Showing {start}–{end} of {total} {unit}
@@ -50,7 +50,7 @@ export function DashboardPagination({
           type="button"
           onClick={() => onPageChange(safePage - 1)}
           disabled={safePage <= 1}
-          className={`rounded-lg border border-black/10 font-semibold text-ink bg-white hover:bg-paper disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${
+          className={`rounded-lg border border-slate-300 font-semibold text-ink bg-white hover:bg-paper disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${
             compact ? "px-2 py-1 rounded-md text-[11.5px]" : "px-3 py-1.5 text-[12px]"
           }`}
           aria-label="Previous page"
@@ -61,7 +61,7 @@ export function DashboardPagination({
           type="button"
           onClick={() => onPageChange(safePage + 1)}
           disabled={safePage >= pages}
-          className={`rounded-lg border border-black/10 font-semibold text-ink bg-white hover:bg-paper disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${
+          className={`rounded-lg border border-slate-300 font-semibold text-ink bg-white hover:bg-paper disabled:opacity-40 disabled:cursor-not-allowed transition-colors ${
             compact ? "px-2 py-1 rounded-md text-[11.5px]" : "px-3 py-1.5 text-[12px]"
           }`}
           aria-label="Next page"

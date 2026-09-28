@@ -20,7 +20,7 @@ export default function AttachmentLinks({ attachments, className = "" }) {
             href={href}
             target="_blank"
             rel="noreferrer noopener"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-black/10 px-2.5 py-1.5 text-[12px] font-semibold text-ink hover:border-black/25 transition-colors"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-white border border-slate-300 px-2.5 py-1.5 text-[12px] font-semibold text-ink hover:border-slate-400 transition-colors"
             title={name}
           >
             <Paperclip size={13} className="text-slate-text/50 shrink-0" />

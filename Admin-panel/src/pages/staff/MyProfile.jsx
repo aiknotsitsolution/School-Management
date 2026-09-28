@@ -148,7 +148,7 @@ export default function MyProfile() {
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <StatCard icon={CalendarCheck} label="My Attendance" value="Track" sub="Open the attendance tool" accent="success" />
-        <StatCard icon={HeartPulse} label="My Leave" value="Apply" sub="Open the leave tool" accent="amber" />
+        <StatCard icon={HeartPulse} label="My Leave" value="Apply" sub="Open the leave tool" accent="primary" />
         <StatCard icon={Wallet} label="Payroll" value="View" sub="Slips and status" accent="info" />
       </div>
 

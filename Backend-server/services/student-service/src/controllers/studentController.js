@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Student = require("../models/Student");
 const { notifyByRefIds } = require("../utils/notify");
+const { deactivateStudentUser } = require("../utils/authCascade");
 const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
 const { resolveTeacherScope } = require("@school-erp/shared/src/utils/teacherScope");
 const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
@@ -184,18 +185,51 @@ const getStudents = async (req, res) => {
       search,
       q,
       linked,
+      includeDeleted,
       page = 1,
       limit = 20,
     } = req.query;
     const filter = { schoolId: req.tenantId };
+    // Soft-deleted students are hidden from every listing unless explicitly
+    // requested (admin "deleted" views / restore flows).
+    if (includeDeleted !== "true" && includeDeleted !== "1") filter.deletedAt = null;
     if (req.user.role === "student") filter.admissionNo = req.user.refId;
     if (req.user.role === "parent")
-      filter._id = { $in: req.user.linkedStudentIds || [] };
+      filter.admissionNo = { $in: req.user.linkedStudentIds || [] };
     if (cls) filter.class = cls;
     if (section) filter.section = section;
     if (status) filter.status = status;
     if (profileStatus) filter.profileStatus = profileStatus;
-    if (admissionNo) filter.admissionNo = String(admissionNo).trim();
+    if (admissionNo) {
+      const adv = String(admissionNo).trim();
+      // Role-scoped listings (student / parent) must never be narrowed to a
+      // record outside their scope: a foreign admissionNo fails closed to an
+      // empty page instead of overwriting the $in/$eq identity filter.
+      if (req.user.role === "student" && String(req.user.refId || "") !== adv) {
+        return res.json({
+          success: true,
+          count: 0,
+          total: 0,
+          page: Number(page),
+          pages: 0,
+          data: [],
+        });
+      }
+      if (
+        req.user.role === "parent" &&
+        !(req.user.linkedStudentIds || []).map(String).includes(adv)
+      ) {
+        return res.json({
+          success: true,
+          count: 0,
+          total: 0,
+          page: Number(page),
+          pages: 0,
+          data: [],
+        });
+      }
+      filter.admissionNo = adv;
+    }
     if (linked === "true" || linked === "1")
       filter.userId = { $exists: true, $ne: null };
     const term = escapeRegex(String(q || search || "").trim());
@@ -235,6 +269,7 @@ const getPendingRegistrations = async (req, res) => {
       // { userId: null } matches both explicit null and absent field, exactly
       // the union of shells (created on admission-confirm) that await a user.
       userId: null,
+      deletedAt: null,
     };
     const students = await Student.find(filter)
       .sort({ createdAt: -1 })
@@ -292,7 +327,7 @@ const getMyStudent = async (req, res) => {
 // Aggregate KPI surface for the Admission Counsellor workspace.
 const counsellorStats = async (req, res) => {
   try {
-    const base = { schoolId: req.tenantId };
+    const base = { schoolId: req.tenantId, deletedAt: null };
     if (req.teacherScope) {
       base.class = req.teacherScope.class;
       if (req.teacherScope.section) base.section = req.teacherScope.section;
@@ -344,6 +379,9 @@ const updateStudent = async (req, res) => {
         .json({ success: false, message: "Student not found" });
     const denied = await assertTeacherStudentAccess(req, student);
     if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
+    if (student.deletedAt) {
+      return res.status(409).json({ success: false, message: "Student is deleted — restore it first" });
+    }
 
     const patch = pick(req.body, STUDENT_EDITABLE);
     delete patch.schoolId;
@@ -414,6 +452,9 @@ const completeProfile = async (req, res) => {
         .json({ success: false, message: "Student not found" });
     const denied = await assertTeacherStudentAccess(req, student);
     if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
+    if (student.deletedAt) {
+      return res.status(409).json({ success: false, message: "Student is deleted — restore it first" });
+    }
 
     const missing = PROFILE_REQUIRED_FIELDS.filter((f) => isEmpty(student[f]));
     if (missing.length) {
@@ -449,6 +490,9 @@ const issueIdCard = async (req, res) => {
         .json({ success: false, message: "Student not found" });
     const denied = await assertTeacherStudentAccess(req, student);
     if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
+    if (student.deletedAt) {
+      return res.status(409).json({ success: false, message: "Student is deleted — restore it first" });
+    }
 
     if (student.profileStatus !== "complete") {
       return res.status(400).json({
@@ -488,18 +532,75 @@ const deleteStudent = async (req, res) => {
       return res
         .status(404)
         .json({ success: false, message: "Student not found" });
+    if (student.deletedAt) {
+      return res
+        .status(409)
+        .json({ success: false, message: "Student is already deleted" });
+    }
     const denied = await assertTeacherStudentAccess(req, student);
     if (denied) return res.status(denied.status).json({ success: false, message: denied.message });
-    await Student.deleteOne({ _id: student._id });
+    // Soft-delete: the row (and its fee/attendance/library references in other
+    // services) stays intact; lists/stats exclude it, and the purge job
+    // hard-deletes it plus owned health/document data after retention.
+    student.deletedAt = new Date();
+    await student.save();
+    // Cascade: deactivate the linked login so the account stops working.
+    // Non-fatal — auth-service being down must not fail the delete.
+    deactivateStudentUser({ schoolId: req.tenantId, admissionNo: student.admissionNo });
     res.json({ success: true, message: "Student deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }
 };
 
+// Undo a soft-delete within the retention window (the purge job is the point
+// of no return). Mirrors auth-service's user restore pattern.
+const restoreStudent = async (req, res) => {
+  try {
+    const student = await Student.findOne({
+      _id: req.params.id,
+      schoolId: req.tenantId,
+    });
+    if (!student)
+      return res
+        .status(404)
+        .json({ success: false, message: "Student not found" });
+    if (!student.deletedAt) {
+      return res
+        .status(409)
+        .json({ success: false, message: "Student is not deleted" });
+    }
+    // The admissionNo may have been re-issued to a new student (partial unique
+    // index allows it) — refuse the restore rather than create a duplicate.
+    const clash = await Student.findOne({
+      schoolId: req.tenantId,
+      admissionNo: student.admissionNo,
+      deletedAt: null,
+      _id: { $ne: student._id },
+    });
+    if (clash) {
+      return res.status(409).json({
+        success: false,
+        message: `Cannot restore: Admission ID "${student.admissionNo}" now belongs to another active student`,
+      });
+    }
+    student.deletedAt = null;
+    await student.save();
+    res.json({ success: true, message: "Student restored", data: student });
+  } catch (err) {
+    if (isDuplicateKey(err)) {
+      return res.status(409).json({
+        success: false,
+        message: "Cannot restore: this Admission ID now belongs to another active student",
+      });
+    }
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
 const bulkStats = async (req, res) => {
   try {
-    const base = { schoolId: req.tenantId };
+    const base = { schoolId: req.tenantId, deletedAt: null };
     if (req.teacherScope) {
       base.class = req.teacherScope.class;
       if (req.teacherScope.section) base.section = req.teacherScope.section;
@@ -533,5 +634,6 @@ module.exports = {
   completeProfile,
   issueIdCard,
   deleteStudent,
+  restoreStudent,
   bulkStats,
 };

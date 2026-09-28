@@ -5,7 +5,7 @@ import { api } from "../../lib/api";
 import useStudentContext from "./useStudentContext";
 
 const CAT_TONES = {
-  academic: "info", sports: "success", arts: "amber",
+  academic: "info", sports: "success", arts: "primary",
   citizenship: "success", attendance: "info", other: "neutral",
 };
 
@@ -52,7 +52,7 @@ export default function StudentAchievements() {
         <StatCard icon={Trophy} label="Total" value={String(counts.total)} sub="All achievements" accent="success" />
         <StatCard icon={Star} label="Academic" value={String(counts.academic || 0)} sub="Academic excellence" accent="info" />
         <StatCard icon={Medal} label="Sports" value={String(counts.sports || 0)} sub="Sports & games" accent="success" />
-        <StatCard icon={Award} label="Arts" value={String(counts.arts || 0)} sub="Arts & culture" accent="amber" />
+        <StatCard icon={Award} label="Arts" value={String(counts.arts || 0)} sub="Arts & culture" accent="primary" />
       </div>
 
       <Card title="Achievement Records">
@@ -66,8 +66,8 @@ export default function StudentAchievements() {
               const Icon = CAT_ICONS[r.category] || Trophy;
               return (
                 <div key={r._id} className="flex items-start gap-3 p-3 rounded-xl bg-paper/60 hover:bg-paper transition-colors">
-                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${(CAT_TONES[r.category] || "neutral") === "info" ? "bg-info/10" : (CAT_TONES[r.category]) === "success" ? "bg-success/10" : "bg-amber/10"}`}>
-                    <Icon size={18} className={(CAT_TONES[r.category] || "neutral") === "info" ? "text-info" : (CAT_TONES[r.category]) === "success" ? "text-success" : "text-amber"} />
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${(CAT_TONES[r.category] || "neutral") === "info" ? "bg-info/10" : (CAT_TONES[r.category]) === "success" ? "bg-success/10" : "bg-primary/10"}`}>
+                    <Icon size={18} className={(CAT_TONES[r.category] || "neutral") === "info" ? "text-info" : (CAT_TONES[r.category]) === "success" ? "text-success" : "text-primary"} />
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="text-[13.5px] font-semibold text-ink">{r.title}</p>

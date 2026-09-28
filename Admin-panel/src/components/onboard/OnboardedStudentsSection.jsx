@@ -185,7 +185,7 @@ export default function OnboardedStudentsSection({
         </div>
       ) : (
         <>
-        <div className="flex flex-col divide-y divide-black/[0.05]">
+        <div className="flex flex-col divide-y divide-slate-100">
           {visible.map((student) => {
             const complete = student.profileStatus === "complete";
             return (
@@ -207,7 +207,7 @@ export default function OnboardedStudentsSection({
                       : "Class pending"}
                   </p>
                   <div className="flex items-center gap-1.5 mt-1.5">
-                    <Pill tone={complete ? "success" : "amber"}>
+                    <Pill tone={complete ? "success" : "primary"}>
                       {complete ? "onboarded" : "pending"}
                     </Pill>
                     {student.idCardNumber && (
@@ -218,7 +218,7 @@ export default function OnboardedStudentsSection({
                 <div className="flex items-center gap-2">
                   {!complete && onOnboardNow && (
                     <Button
-                      variant="amber"
+                      variant="primary"
                       className="!py-2 !px-3 !text-[12px]"
                       onClick={() => onOnboardNow(student)}
                     >
@@ -250,7 +250,7 @@ export default function OnboardedStudentsSection({
             onClick={() => !issuingId && setSelected(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden max-h-[90vh] flex flex-col">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[16px]">Onboard Student</h3>
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">
@@ -268,7 +268,7 @@ export default function OnboardedStudentsSection({
 
             <div className="px-5 py-4 overflow-y-auto space-y-5">
               {/* Status summary */}
-              <div className="rounded-xl bg-paper border border-black/[0.06] p-4 flex flex-wrap items-center gap-x-6 gap-y-2">
+              <div className="rounded-xl bg-paper border border-slate-200 p-4 flex flex-wrap items-center gap-x-6 gap-y-2">
                 <Avatar src={selected.photoUrl} name={selected.name} size={46} />
                 <div>
                   <p className="text-[14px] font-semibold text-ink">{selected.name || "—"}</p>
@@ -280,14 +280,14 @@ export default function OnboardedStudentsSection({
                   </p>
                 </div>
                 <div className="ml-auto">
-                  <Pill tone={selected.profileStatus === "complete" ? "success" : "amber"}>
+                  <Pill tone={selected.profileStatus === "complete" ? "success" : "primary"}>
                     {selected.profileStatus === "complete" ? "Onboarding complete" : "Onboarding pending"}
                   </Pill>
                 </div>
               </div>
 
               {selected.profileStatus !== "complete" ? (
-                <div className="flex items-start gap-2.5 rounded-xl bg-amber/10 border border-amber/25 px-4 py-3 text-[13px] text-amber-dark">
+                <div className="flex items-start gap-2.5 rounded-xl bg-primary/10 border border-primary/25 px-4 py-3 text-[13px] text-primary-dark">
                   <AlertCircle size={16} className="shrink-0 mt-0.5" />
                   <p>
                     This student has not completed onboarding yet. Once the manager /
@@ -319,7 +319,7 @@ export default function OnboardedStudentsSection({
                         <Printer size={14} /> Print
                       </Button>
                       <Button
-                        variant="amber"
+                        variant="primary"
                         className="!py-2 !px-3 !text-[12px]"
                         onClick={() => handleIssue(selected)}
                         disabled={issuingId === selected._id}
@@ -333,7 +333,7 @@ export default function OnboardedStudentsSection({
                     </div>
                   </div>
 
-                  <div className="rounded-xl border border-black/[0.06] p-4 bg-warm">
+                  <div className="rounded-xl border border-slate-200 p-4 bg-warm">
                     <StudentIdCard student={selected} school={school} />
                   </div>
                 </div>
@@ -348,7 +348,7 @@ export default function OnboardedStudentsSection({
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => !savingCustom && setCustomizing(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[16px]">Customize Student ID Card</h3>
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">
@@ -374,17 +374,17 @@ export default function OnboardedStudentsSection({
                     onChange={(e) =>
                       setCustomDraft((d) => ({ ...d, accent: e.target.value }))
                     }
-                    placeholder="#1E2A44"
+                    placeholder="#172033"
                   />
                   <p className="text-[11px] text-slate-text/50 mt-1">
-                    {ACCENT_RE.test(customDraft.accent) ? "Looks good." : "Use a hex colour like #1E2A44."}
+                    {ACCENT_RE.test(customDraft.accent) ? "Looks good." : "Use a hex colour like #172033."}
                   </p>
                 </div>
                 <div className="flex flex-col">
                   <label className="block text-[12.5px] font-medium text-ink mb-1.5">Preview</label>
                   <div
-                    className="w-10 h-10 rounded-lg border border-black/10"
-                    style={{ background: ACCENT_RE.test(customDraft.accent) ? customDraft.accent : "#1E2A44" }}
+                    className="w-10 h-10 rounded-lg border border-slate-300"
+                    style={{ background: ACCENT_RE.test(customDraft.accent) ? customDraft.accent : "#172033" }}
                   />
                 </div>
               </div>
@@ -417,7 +417,7 @@ export default function OnboardedStudentsSection({
                   {BOOLEAN_FIELDS.map(([key, label]) => (
                     <label
                       key={key}
-                      className="flex items-center gap-2 text-[13px] text-ink rounded-lg border border-black/[0.07] px-3 py-2 cursor-pointer"
+                      className="flex items-center gap-2 text-[13px] text-ink rounded-lg border border-slate-200 px-3 py-2 cursor-pointer"
                     >
                       <input
                         type="checkbox"
@@ -425,7 +425,7 @@ export default function OnboardedStudentsSection({
                         onChange={(e) =>
                           setCustomDraft((d) => ({ ...d, [key]: e.target.checked }))
                         }
-                        className="accent-amber"
+                        className="accent-primary"
                       />
                       {label}
                     </label>
@@ -434,11 +434,11 @@ export default function OnboardedStudentsSection({
               </div>
             </div>
 
-            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-black/[0.06]">
+            <div className="flex items-center justify-end gap-2 px-5 py-4 border-t border-slate-200">
               <Button variant="ghost" onClick={() => setCustomizing(false)} disabled={savingCustom}>
                 Cancel
               </Button>
-              <Button variant="amber" onClick={saveCustom} disabled={savingCustom}>
+              <Button variant="primary" onClick={saveCustom} disabled={savingCustom}>
                 {savingCustom ? "Saving…" : "Save design"}
               </Button>
             </div>

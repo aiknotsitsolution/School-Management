@@ -62,13 +62,13 @@ export default function StudyMaterials() {
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Search materials..."
-              className="w-full pl-9 pr-3 py-2 text-[13px] rounded-xl border border-ink/10 bg-white focus:outline-none focus:border-amber-400"
+              className="w-full pl-9 pr-3 py-2 text-[13px] rounded-xl border border-ink/10 bg-white focus:outline-none focus:border-primary"
             />
           </div>
           <select
             value={filterSubject}
             onChange={(e) => setFilterSubject(e.target.value)}
-            className="px-3 py-2 text-[13px] rounded-xl border border-ink/10 bg-white focus:outline-none focus:border-amber-400"
+            className="px-3 py-2 text-[13px] rounded-xl border border-ink/10 bg-white focus:outline-none focus:border-primary"
           >
             <option value="">All Subjects</option>
             {subjects.map((s) => (
@@ -78,7 +78,7 @@ export default function StudyMaterials() {
           <select
             value={filterType}
             onChange={(e) => setFilterType(e.target.value)}
-            className="px-3 py-2 text-[13px] rounded-xl border border-ink/10 bg-white focus:outline-none focus:border-amber-400"
+            className="px-3 py-2 text-[13px] rounded-xl border border-ink/10 bg-white focus:outline-none focus:border-primary"
           >
             <option value="">All Types</option>
             {Object.entries(TYPE_CONFIG).map(([key, val]) => (

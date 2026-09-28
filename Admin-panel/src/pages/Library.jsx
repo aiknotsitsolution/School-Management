@@ -413,7 +413,7 @@ export default function Library() {
           label="Total Titles"
           value={String(stats.totalTitles)}
           sub={`${stats.totalCopies} total copies`}
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={BookOpen}
@@ -449,8 +449,8 @@ export default function Library() {
               onClick={() => setTab(t.key)}
               className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
                 tab === t.key
-                  ? "bg-ink text-white border-ink"
-                  : "bg-white text-slate-text border-black/10 hover:border-ink/30"
+                  ? "bg-primary text-white border-primary"
+                  : "bg-white text-slate-text border-slate-300 hover:border-ink/30"
               }`}
             >
               {t.label}
@@ -458,11 +458,11 @@ export default function Library() {
           ))}
         </div>
         {tab === "books" ? (
-          <Button variant="amber" onClick={openAddBook}>
+          <Button variant="primary" onClick={openAddBook}>
             <Plus size={15} /> Add Book
           </Button>
         ) : (
-          <Button variant="amber" onClick={openIssueModal}>
+          <Button variant="primary" onClick={openIssueModal}>
             <BookPlus size={15} /> Issue Book
           </Button>
         )}
@@ -516,7 +516,7 @@ export default function Library() {
             <div className="overflow-x-auto -mx-5">
               <table className="w-full text-[13px]">
                 <thead>
-                  <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                  <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                     <th className="px-5 py-2.5 font-semibold">Book</th>
                     <th className="px-5 py-2.5 font-semibold">ISBN</th>
                     <th className="px-5 py-2.5 font-semibold">Category</th>
@@ -532,7 +532,7 @@ export default function Library() {
                     return (
                       <tr
                         key={b.id}
-                        className="border-b border-black/[0.04] hover:bg-paper/60"
+                        className="border-b border-slate-100 hover:bg-paper/60"
                       >
                         <td className="px-5 py-3">
                           <p className="font-semibold text-ink">{b.title}</p>
@@ -593,7 +593,7 @@ export default function Library() {
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                   <th className="px-5 py-2.5 font-semibold">Book</th>
                   <th className="px-5 py-2.5 font-semibold">Borrower</th>
                   <th className="px-5 py-2.5 font-semibold">Class</th>
@@ -607,7 +607,7 @@ export default function Library() {
                 {filteredIssues.map((i) => (
                   <tr
                     key={i.id}
-                    className="border-b border-black/[0.04] hover:bg-paper/60"
+                    className="border-b border-slate-100 hover:bg-paper/60"
                   >
                     <td className="px-5 py-3 font-medium text-ink">
                       {i.title}
@@ -665,7 +665,7 @@ export default function Library() {
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={saveBook}
                 disabled={!form.title.trim() || !form.author.trim()}
               >
@@ -767,7 +767,7 @@ export default function Library() {
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={issueBook}
                 disabled={!issueForm.studentKey || !issueForm.bookId}
               >
@@ -881,7 +881,7 @@ function BaseModal({ title, onClose, footer, children, size = "lg" }) {
         onClick={onClose}
       />
       <div className={`relative bg-white rounded-2xl shadow-2xl w-full ${widthClass} overflow-hidden`}>
-        <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
           <h3 className="font-display font-semibold text-ink text-[17px]">
             {title}
           </h3>
@@ -895,7 +895,7 @@ function BaseModal({ title, onClose, footer, children, size = "lg" }) {
         <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
           {children}
         </div>
-        <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+        <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
           {footer}
         </div>
       </div>
@@ -912,7 +912,7 @@ function EmptyState({ icon: Icon, text, action, actionLabel }) {
         Adjust filters or add a new entry.
       </p>
       {action && (
-        <Button variant="amber" className="mt-4" onClick={action}>
+        <Button variant="primary" className="mt-4" onClick={action}>
           <Plus size={15} /> {actionLabel}
         </Button>
       )}

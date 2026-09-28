@@ -133,11 +133,11 @@ export default function PlatformReports() {
                   key={item.id}
                   onClick={() => { setType(item.id); setReport(null); }}
                   className={`w-full text-left px-3 py-2.5 rounded-lg transition-colors ${
-                    type === item.id ? "bg-amber/10 text-ink" : "hover:bg-paper text-slate-text"
+                    type === item.id ? "bg-primary/10 text-ink" : "hover:bg-paper text-slate-text"
                   }`}
                 >
                   <p className="text-[13px] font-semibold flex items-center gap-2">
-                    <FileBarChart size={14} className={type === item.id ? "text-amber-dark" : "text-slate-text/60"} />
+                    <FileBarChart size={14} className={type === item.id ? "text-primary-dark" : "text-slate-text/60"} />
                     {item.title}
                   </p>
                   <p className="text-[11px] text-slate-text/60 mt-0.5 px-6">{item.category}</p>
@@ -167,7 +167,7 @@ export default function PlatformReports() {
                 To
                 <Input type="date" className="mt-1 block" value={to} onChange={(e) => setTo(e.target.value)} />
               </label>
-              <Button variant="amber" onClick={() => run()} disabled={generating || !type}>
+              <Button variant="primary" onClick={() => run()} disabled={generating || !type}>
                 <CalendarDays size={15} /> {generating ? "Generating…" : "Generate"}
               </Button>
               {report && (
@@ -209,10 +209,10 @@ export default function PlatformReports() {
               {pagedRows.length === 0 ? (
                 <p className="text-[13px] text-slate-text/70 py-8 text-center">No rows to display.</p>
               ) : (
-                <div className="overflow-x-auto max-h-[520px] overflow-y-auto scrollbar-thin rounded-lg border border-black/[0.06]">
+                <div className="overflow-x-auto max-h-[520px] overflow-y-auto scrollbar-thin rounded-lg border border-slate-200">
                   <table className="w-full text-left text-[12.5px]">
                     <thead className="sticky top-0 bg-paper">
-                      <tr className="border-b border-black/[0.06]">
+                      <tr className="border-b border-slate-200">
                         {columns.map((column) => (
                           <th
                             key={column}
@@ -227,7 +227,7 @@ export default function PlatformReports() {
                         ))}
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-black/[0.04]">
+                    <tbody className="divide-y divide-slate-100">
                       {pagedRows.map((row, index) => (
                         <tr key={index} className="hover:bg-paper/60">
                           {columns.map((column) => (

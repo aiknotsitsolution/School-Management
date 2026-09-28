@@ -30,7 +30,7 @@ import { useTeacherContext, todayISO, fmtDate } from "./useTeacherContext";
 const STATUS_CONFIG = {
   Present: { label: "P", full: "Present", tone: "success", active: "bg-success text-white border-success" },
   Absent: { label: "A", full: "Absent", tone: "alert", active: "bg-alert text-white border-alert" },
-  "Half Day": { label: "HD", full: "Half Day", tone: "amber", active: "bg-amber text-ink border-amber" },
+  "Half Day": { label: "HD", full: "Half Day", tone: "warning", active: "bg-warning text-white border-warning" },
   Leave: { label: "L", full: "Leave", tone: "info", active: "bg-info text-white border-info" },
 };
 
@@ -159,7 +159,7 @@ export default function Attendance() {
         status: marks[s._id],
       }));
     if (!marked.length) {
-      toast("Select at least one status before saving", "amber");
+      toast("Select at least one status before saving", "primary");
       return;
     }
     setSaving(true);
@@ -212,7 +212,7 @@ export default function Attendance() {
           label="Present"
           value={String(counts.Present)}
           sub="Marked present today"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={X}
@@ -238,11 +238,11 @@ export default function Attendance() {
           >
             <defs>
               <linearGradient id="teachAttGrad" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#3F8F5F" stopOpacity={0.28} />
-                <stop offset="100%" stopColor="#3F8F5F" stopOpacity={0} />
+                <stop offset="0%" stopColor="#16A34A" stopOpacity={0.28} />
+                <stop offset="100%" stopColor="#16A34A" stopOpacity={0} />
               </linearGradient>
             </defs>
-            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#EEEAE0" />
+            <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
             <XAxis
               dataKey="month"
               tick={{ fontSize: 12, fill: "#64748B" }}
@@ -263,7 +263,7 @@ export default function Attendance() {
             <Area
               type="monotone"
               dataKey="attendance"
-              stroke="#3F8F5F"
+              stroke="#16A34A"
               strokeWidth={2.5}
               fill="url(#teachAttGrad)"
             />
@@ -279,7 +279,7 @@ export default function Attendance() {
           </span>
         }
       >
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-black/6">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-slate-200">
           <div className="flex flex-wrap gap-1.5">
             {Object.entries(STATUS_CONFIG).map(([status]) => (
               <button
@@ -306,7 +306,7 @@ export default function Attendance() {
             No students found for this class and section.
           </p>
         ) : (
-          <div className="divide-y divide-black/5">
+          <div className="divide-y divide-slate-100">
             {students.map((s) => {
               const status = marks[s._id];
               return (
@@ -332,7 +332,7 @@ export default function Attendance() {
                         className={`w-9 h-9 rounded-lg text-[12px] font-bold border transition-all ${
                           status === key
                             ? cfg.active
-                            : "bg-white text-slate-text/55 border-black/10 hover:bg-paper hover:border-black/20"
+                            : "bg-white text-slate-text/55 border-slate-300 hover:bg-paper hover:border-slate-400"
                         }`}
                       >
                         {cfg.label}
@@ -346,14 +346,14 @@ export default function Attendance() {
         )}
 
         {(students || []).length > 0 && (
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 pt-4 border-t border-black/6">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 pt-4 border-t border-slate-200">
             <div className="text-[12.5px] text-slate-text/70">
               Present <strong className="text-success">{counts.Present}</strong>
               {" · "}Absent <strong className="text-alert">{counts.Absent}</strong>
-              {" · "}Half Day <strong className="text-amber-dark">{counts["Half Day"]}</strong>
+              {" · "}Half Day <strong className="text-amber-700">{counts["Half Day"]}</strong>
               {" · "}Leave <strong className="text-info">{counts.Leave}</strong>
             </div>
-            <Button variant="amber" onClick={saveAttendance} disabled={saving}>
+            <Button variant="primary" onClick={saveAttendance} disabled={saving}>
               <Save size={15} /> {saving ? "Saving…" : "Save Attendance"}
             </Button>
           </div>
@@ -367,7 +367,7 @@ export default function Attendance() {
             type="date"
             value={historyDate}
             onChange={(e) => setHistoryDate(e.target.value)}
-            className="rounded-lg border border-black/10 px-3 py-1.5 text-[12.5px] outline-none focus:border-ink/40"
+            className="rounded-lg border border-slate-300 px-3 py-1.5 text-[12.5px] outline-none focus:border-primary"
           />
         }
       >
@@ -382,7 +382,7 @@ export default function Attendance() {
               return (
                 <div
                   key={h.date}
-                  className="flex items-center gap-3 py-2.5 border-b border-black/[0.06] last:border-0"
+                  className="flex items-center gap-3 py-2.5 border-b border-slate-200 last:border-0"
                 >
                   <div className="w-10 h-10 rounded-lg bg-paper flex items-center justify-center text-slate-text shrink-0">
                     <CalendarCheck size={16} />

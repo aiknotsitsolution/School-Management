@@ -93,8 +93,8 @@ export default function ProfilePhotoPicker({
         onDragLeave={() => setDragging(false)}
         onDrop={handleDrop}
         className={`relative w-32 h-32 rounded-full overflow-hidden cursor-pointer select-none outline-none ring-2 ring-offset-2 transition-colors group ${
-          dragging ? "ring-amber bg-amber/10" : "ring-black/[0.08] hover:ring-amber/60"
-        } ${focused ? "ring-amber/60" : ""} ${
+          dragging ? "ring-primary bg-primary/10" : "ring-black/[0.08] hover:ring-primary/60"
+        } ${focused ? "ring-primary/60" : ""} ${
           disabled ? "opacity-60 cursor-not-allowed" : ""
         }`}
       >
@@ -106,7 +106,7 @@ export default function ProfilePhotoPicker({
           </span>
         </div>
         {dragging && (
-          <div className="absolute inset-0 flex items-center justify-center bg-amber/85 text-ink text-[12.5px] font-bold">
+          <div className="absolute inset-0 flex items-center justify-center bg-primary/85 text-ink text-[12.5px] font-bold">
             Drop here
           </div>
         )}

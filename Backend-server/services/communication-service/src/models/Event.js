@@ -15,7 +15,7 @@ const eventSchema = new mongoose.Schema(
         type: String,
         // "class_teacher" is retained only as a legacy value for documents
         // written before the role collapse; new audiences use "teacher".
-        enum: ["school_admin", "class_teacher", "teacher", "staff", "student", "all"],
+        enum: ["school_admin", "class_teacher", "teacher", "staff", "student", "parent", "all"],
         default: "all",
       },
     ],

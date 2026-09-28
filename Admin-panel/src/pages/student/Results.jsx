@@ -42,7 +42,7 @@ export default function Results() {
     return (
       <div className="space-y-6">
         <PageIntro eyebrow="Academics" title="My Results" description="Your report card for this session." />
-        <div className="space-y-3">{[0, 1].map((i) => <div key={i} className="h-28 bg-white rounded-2xl border border-black/[0.06] animate-pulse" />)}</div>
+        <div className="space-y-3">{[0, 1].map((i) => <div key={i} className="h-28 bg-white rounded-2xl border border-slate-200 animate-pulse" />)}</div>
       </div>
     );
   }
@@ -92,7 +92,7 @@ export default function Results() {
                     {exam.subjects.map((m, i) => {
                       const pct = m.maxMarks ? Math.round((m.marksObtained / m.maxMarks) * 100) : 0;
                       return (
-                        <tr key={m._id || i} className="border-t border-black/[0.06]">
+                        <tr key={m._id || i} className="border-t border-slate-200">
                           <td className="px-5 py-2.5 font-medium text-ink">{m.subject}</td>
                           <td className="px-3 py-2.5">{m.marksObtained} / {m.maxMarks}</td>
                           <td className="px-3 py-2.5"><Pill tone={["A+", "A", "B+"].includes(m.grade || computeGrade(m.marksObtained, m.maxMarks)) ? "success" : "neutral"}>{m.grade || computeGrade(m.marksObtained, m.maxMarks)}</Pill></td>
@@ -100,7 +100,7 @@ export default function Results() {
                         </tr>
                       );
                     })}
-                    <tr className="border-t-2 border-black/10">
+                    <tr className="border-t-2 border-slate-300">
                       <td className="px-5 py-2.5 font-bold text-ink">Total</td>
                       <td className="px-3 py-2.5 font-semibold text-ink">{exam.obtained} / {exam.max}</td>
                       <td className="px-3 py-2.5" />

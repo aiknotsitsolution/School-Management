@@ -73,10 +73,10 @@ export default function Layout() {
       {needsConfig && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">
           <div className="w-full max-w-md rounded-2xl bg-white p-0 shadow-2xl overflow-hidden">
-            <div className="bg-amber/10 px-6 pt-6 pb-4">
+            <div className="bg-primary/10 px-6 pt-6 pb-4">
               <div className="flex items-center gap-3">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber/20">
-                  <CalendarDays className="h-5 w-5 text-amber-dark" />
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/20">
+                  <CalendarDays className="h-5 w-5 text-primary-dark" />
                 </div>
                 <div>
                   <h3 className="text-[15px] font-semibold text-ink">Academic Session Needs Confirmation</h3>
@@ -104,7 +104,7 @@ export default function Layout() {
               <button
                 type="button"
                 onClick={goToConfig}
-                className="rounded-lg bg-amber px-4 py-2 text-[13px] font-semibold text-ink transition hover:bg-amber-dark"
+                className="rounded-lg bg-primary px-4 py-2 text-[13px] font-semibold text-white transition hover:bg-primary-dark"
               >
                 Save now
               </button>

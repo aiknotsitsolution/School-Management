@@ -103,7 +103,7 @@ export default function Circulation() {
         title="Circulation"
         description="Issue, return and track borrowed books."
         right={
-          <Button variant="amber" onClick={() => setShowIssue((v) => !v)}>
+          <Button variant="primary" onClick={() => setShowIssue((v) => !v)}>
             <BookOpen size={15} /> Issue Book
           </Button>
         }
@@ -113,7 +113,7 @@ export default function Circulation() {
         <StatCard icon={null} label="Currently Issued" value={String(issued.length)} accent="info" />
         <StatCard icon={null} label="Returned" value={String(returned.length)} accent="success" />
         <StatCard icon={null} label="Overdue" value={String(issued.filter((r) => r.dueDate && dateOf(r.dueDate) < today).length)} accent="alert" />
-        <StatCard icon={null} label="Available Titles" value={String(availableBooks.length)} accent="amber" />
+        <StatCard icon={null} label="Available Titles" value={String(availableBooks.length)} accent="primary" />
       </div>
 
       {showIssue && (
@@ -157,7 +157,7 @@ export default function Circulation() {
                 )}
               </div>
               {students.length > 0 && (
-                <div className="absolute z-20 mt-1 w-full max-w-sm bg-white rounded-xl border border-black/10 shadow-lg overflow-hidden">
+                <div className="absolute z-20 mt-1 w-full max-w-sm bg-white rounded-xl border border-slate-300 shadow-lg overflow-hidden">
                   {matchedStudents.map((s) => (
                     <button
                       key={s._id}
@@ -241,7 +241,7 @@ export default function Circulation() {
                 {(statusTab === "Issued" ? issued : returned).map((r) => {
                   const overdue = r.status === "Issued" && r.dueDate && dateOf(r.dueDate) < today;
                   return (
-                    <tr key={r._id} className="border-t border-black/[0.06] hover:bg-paper/60">
+                    <tr key={r._id} className="border-t border-slate-200 hover:bg-paper/60">
                       <td className="px-5 py-2.5">
                         <p className="font-semibold text-ink">{r.bookId?.title || "—"}</p>
                         <p className="text-[12px] text-slate-text/60">{bookById[r.bookId?._id || r.bookId]?.author || ""}</p>

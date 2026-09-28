@@ -11,6 +11,7 @@ import {
   FilterX,
   Link2,
   KeyRound,
+  Pencil,
   Users as UsersIcon,
   UserRound,
   GraduationCap,
@@ -28,11 +29,12 @@ const ROLE_LABELS = {
   teacher: "Teacher",
   staff: "Staff",
   student: "Student",
+  parent: "Parent",
 };
 
 // A school admin can create accounts for every school role EXCEPT admins —
 // privilege escalation is deliberately blocked (enforced server-side too).
-const CREATABLE_ROLES = ["teacher", "staff", "student"];
+const CREATABLE_ROLES = ["teacher", "staff", "student", "parent"];
 
 const DESIGNATION_OPTIONS = [
   "admission_counsellor",
@@ -136,6 +138,7 @@ const emptyForm = () => ({
   section: "",
   refId: "",
   lockedRefId: false,
+  linkedStudentIds: [],
 });
 
 const toUserPayload = (form) => ({
@@ -155,6 +158,8 @@ const toUserPayload = (form) => ({
       : undefined,
   section: form.role === "student" ? form.section.trim() || undefined : undefined,
   refId: form.refId.trim() || undefined,
+  // Parent accounts are defined by their children (admissionNo strings).
+  linkedStudentIds: form.role === "parent" ? form.linkedStudentIds : undefined,
 });
 
 export default function Users() {
@@ -196,6 +201,23 @@ export default function Users() {
   const [pendingStaffPage, setPendingStaffPage] = useState(1);
   const [pendingStaffLoading, setPendingStaffLoading] = useState(true);
   const [viewingStaffPending, setViewingStaffPending] = useState(null);
+  // Student directory for the Parent account child-link picker.
+  const [allStudents, setAllStudents] = useState([]);
+
+  useEffect(() => {
+    api.students
+      .list("limit=1000")
+      .then(({ data }) => setAllStudents(Array.isArray(data) ? data : []))
+      .catch(() => {});
+  }, []);
+
+  const studentLinkOptions = useMemo(
+    () =>
+      allStudents
+        .filter((s) => !form.linkedStudentIds.includes(s.admissionNo))
+        .map((s) => `${s.name} · ${s.admissionNo} · ${s.class || "—"}-${s.section || "—"}`),
+    [allStudents, form.linkedStudentIds]
+  );
 
   useEffect(() => {
     setPendingLoading(true);
@@ -378,6 +400,10 @@ export default function Users() {
       toast("Staff ID is required — enter the Staff ID created in Teachers & Staff", "error");
       return;
     }
+    if (form.role === "parent" && !form.linkedStudentIds.length) {
+      toast("Link at least one student to a parent account", "error");
+      return;
+    }
     setBusy(true);
     try {
       // refId for staff-like roles is the manual Staff ID (Staff.employeeId) —
@@ -426,7 +452,7 @@ export default function Users() {
         description={`${total} account${total === 1 ? "" : "s"} in this school. Create accounts, manage status, inspect a User 360°, and restore removed users.`}
         right={
           <Button
-            variant="amber"
+            variant="primary"
             onClick={() => {
               setCreating(true);
               resetForm();
@@ -526,6 +552,61 @@ export default function Users() {
                    />
                 </>
               )}
+              {form.role === "parent" && (
+                <div className="sm:col-span-2 lg:col-span-3">
+                  <span className="text-[11.5px] font-semibold text-slate-text/60 uppercase block mb-1">
+                    Linked students<span className="normal-case font-medium text-slate-text/40"> · at least one required</span>
+                  </span>
+                  {form.linkedStudentIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {form.linkedStudentIds.map((id) => {
+                        const s = allStudents.find((st) => st.admissionNo === id);
+                        return (
+                          <span
+                            key={id}
+                            className="inline-flex items-center gap-1.5 text-[12px] font-semibold bg-paper border border-slate-200 rounded-full pl-3 pr-1.5 py-1"
+                          >
+                            {s ? `${s.name} · ${id}` : id}
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setForm((f) => ({
+                                  ...f,
+                                  linkedStudentIds: f.linkedStudentIds.filter((v) => v !== id),
+                                }))
+                              }
+                              className="text-slate-text/50 hover:text-ink"
+                              aria-label={`Unlink ${id}`}
+                            >
+                              <X size={12} />
+                            </button>
+                          </span>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <SearchableSelect
+                    options={studentLinkOptions}
+                    value=""
+                    onChange={(val) => {
+                      const m = String(val).match(/·\s*([^·]+?)\s*·/);
+                      const admissionNo = m ? m[1].trim() : "";
+                      if (admissionNo)
+                        setForm((f) => ({
+                          ...f,
+                          linkedStudentIds: f.linkedStudentIds.includes(admissionNo)
+                            ? f.linkedStudentIds
+                            : [...f.linkedStudentIds, admissionNo],
+                        }));
+                    }}
+                    placeholder={studentLinkOptions.length ? "Search & link a student…" : "All students already linked"}
+                  />
+                  <p className="mt-1.5 text-[11.5px] text-slate-text/60">
+                    <Link2 size={12} className="inline -mt-0.5 mr-1" />
+                    The parent sees only the linked children's records. Admission IDs are validated server-side against active students in this school.
+                  </p>
+                </div>
+              )}
               {refField && (
                 <RefIdField
                   withLabel={false}
@@ -536,7 +617,7 @@ export default function Users() {
               )}
             </div>
             {form.lockedRefId && (
-              <p className="text-[12px] text-slate-text/70 bg-paper border border-black/[0.06] rounded-lg px-3 py-2">
+              <p className="text-[12px] text-slate-text/70 bg-paper border border-slate-200 rounded-lg px-3 py-2">
                 This account is locked to the pre-created person record —{" "}
                 {form.role === "student"
                   ? `Admission ID "${form.refId}" and role`
@@ -546,7 +627,7 @@ export default function Users() {
             )}
             {(form.role === "staff" || form.role === "teacher") &&
               !form.lockedRefId && (
-                <p className="text-[12px] text-slate-text/70 bg-paper border border-black/[0.06] rounded-lg px-3 py-2">
+                <p className="text-[12px] text-slate-text/70 bg-paper border border-slate-200 rounded-lg px-3 py-2">
                   <Link2 size={12} className="inline -mt-0.5 mr-1" />
                   Enter the Staff ID created in{" "}
                   <span className="font-medium text-ink">Teachers &amp; Staff</span>. This
@@ -559,7 +640,7 @@ export default function Users() {
               <Button variant="outline" onClick={() => setCreating(false)}>
                 Cancel
               </Button>
-              <Button variant="amber" type="submit" disabled={busy}>
+              <Button variant="primary" type="submit" disabled={busy}>
                 {busy ? "Creating…" : "Create user"}
               </Button>
             </div>
@@ -586,7 +667,7 @@ export default function Users() {
         className="mb-5"
         action={
           pendingTotal > 0 ? (
-            <Pill tone="amber">{pendingTotal} awaiting an account</Pill>
+            <Pill tone="primary">{pendingTotal} awaiting an account</Pill>
           ) : (
             <Pill tone="success">queue clear</Pill>
           )
@@ -608,7 +689,7 @@ export default function Users() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[13px]">
               <thead>
-                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-black/[0.06]">
+                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-slate-200">
                   <th className="py-2.5 pr-4 font-semibold">Student</th>
                   <th className="py-2.5 pr-4 font-semibold">Admission ID</th>
                   <th className="py-2.5 pr-4 font-semibold">Class / Section</th>
@@ -616,7 +697,7 @@ export default function Users() {
                   <th className="py-2.5 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-black/[0.05]">
+              <tbody className="divide-y divide-slate-100">
                 {pendingRows.map((shell) => (
                   <tr key={shell._id} className="hover:bg-paper/60">
                     <td className="py-3 pr-4">
@@ -631,7 +712,7 @@ export default function Users() {
                       {shell.class ? `${shell.class}${shell.section ? `-${shell.section}` : ""}` : "—"}
                     </td>
                     <td className="py-3 pr-4">
-                      <Pill tone="amber">awaiting registration</Pill>
+                      <Pill tone="primary">awaiting registration</Pill>
                     </td>
                     <td className="py-3 text-right">
                       <div className="inline-flex items-center gap-1.5">
@@ -665,7 +746,7 @@ export default function Users() {
         className="mb-5"
         action={
           pendingStaffTotal > 0 ? (
-            <Pill tone="amber">{pendingStaffTotal} awaiting an account</Pill>
+            <Pill tone="primary">{pendingStaffTotal} awaiting an account</Pill>
           ) : (
             <Pill tone="success">queue clear</Pill>
           )
@@ -687,7 +768,7 @@ export default function Users() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[13px]">
               <thead>
-                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-black/[0.06]">
+                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-slate-200">
                   <th className="py-2.5 pr-4 font-semibold">Teacher</th>
                   <th className="py-2.5 pr-4 font-semibold">Staff ID</th>
                   <th className="py-2.5 pr-4 font-semibold">Class / Section</th>
@@ -695,7 +776,7 @@ export default function Users() {
                   <th className="py-2.5 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-black/[0.05]">
+              <tbody className="divide-y divide-slate-100">
                 {pendingStaff.map((teacher) => {
                   const first =
                     Array.isArray(teacher.classesAssigned) && teacher.classesAssigned.length
@@ -807,7 +888,7 @@ export default function Users() {
                   setIncludeDeleted(false);
                   setPage(1);
                 }}
-                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink bg-paper px-3 py-2 rounded-lg border border-black/[0.06] hover:bg-alert/10 hover:text-alert transition-colors whitespace-nowrap"
+                className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink bg-paper px-3 py-2 rounded-lg border border-slate-200 hover:bg-alert/10 hover:text-alert transition-colors whitespace-nowrap"
               >
                 <FilterX size={13} /> Reset
               </button>
@@ -831,7 +912,7 @@ export default function Users() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[13px]">
               <thead>
-                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-black/[0.06]">
+                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-slate-200">
                   <th className="py-2.5 pr-4 font-semibold">User</th>
                   <th className="py-2.5 pr-4 font-semibold">Role</th>
                   <th className="py-2.5 pr-4 font-semibold">Class / Section</th>
@@ -840,12 +921,12 @@ export default function Users() {
                   <th className="py-2.5 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-black/[0.05]">
+              <tbody className="divide-y divide-slate-100">
                 {rows.map((user) => (
                   <tr key={user.id} className={user.deletedAt ? "opacity-60" : "hover:bg-paper/60"}>
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-ink text-amber flex items-center justify-center text-[11px] font-semibold shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-[11px] font-semibold shrink-0">
                           {initials(user.name)}
                         </div>
                         <div className="min-w-0">
@@ -874,7 +955,7 @@ export default function Users() {
                       ) : user.isActive ? (
                         <Pill tone="success">active</Pill>
                       ) : (
-                        <Pill tone="amber">inactive</Pill>
+                        <Pill tone="primary">inactive</Pill>
                       )}
                     </td>
                     <td className="py-3 text-right">
@@ -940,7 +1021,7 @@ export default function Users() {
               shown only at creation time and cannot be retrieved later.
             </p>
             <div className="mt-4 space-y-2.5 text-[13px]">
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <div>
                   <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Email</p>
                   <p className="text-ink font-medium break-all">{createdCredential.email}</p>
@@ -956,7 +1037,7 @@ export default function Users() {
                 </button>
               </div>
               {createdCredential.admissionId && (
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-300 px-3.5 py-2.5">
                   <div>
                     <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Admission ID</p>
                     <p className="text-ink font-medium">{createdCredential.admissionId}</p>
@@ -973,7 +1054,7 @@ export default function Users() {
                 </div>
               )}
               {createdCredential.staffId && (
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-300 px-3.5 py-2.5">
                   <div>
                     <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Staff ID</p>
                     <p className="text-ink font-medium">{createdCredential.staffId}</p>
@@ -989,7 +1070,7 @@ export default function Users() {
                   </button>
                 </div>
               )}
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <div>
                   <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Password</p>
                   <p className="text-ink font-medium break-all">{createdCredential.password}</p>
@@ -1006,7 +1087,7 @@ export default function Users() {
               </div>
             </div>
             <div className="mt-5 flex justify-end">
-              <Button variant="amber" onClick={() => setCreatedCredential(null)}>
+              <Button variant="primary" onClick={() => setCreatedCredential(null)}>
                 Done
               </Button>
             </div>
@@ -1062,15 +1143,15 @@ export default function Users() {
               this shell to a login account; until then it cannot sign in.
             </p>
             <div className="space-y-2.5 text-[13px]">
-              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Student</p>
                 <p className="text-ink font-medium">{viewingPending.name}</p>
               </div>
-              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Admission ID</p>
                 <p className="font-mono text-ink font-medium">{viewingPending.admissionNo}</p>
               </div>
-              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Class / Section</p>
                 <p className="text-ink font-medium">
                   {viewingPending.class
@@ -1078,11 +1159,11 @@ export default function Users() {
                     : "—"}
                 </p>
               </div>
-              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Status</p>
-                <Pill tone="amber">awaiting registration</Pill>
+                <Pill tone="primary">awaiting registration</Pill>
               </div>
-              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Confirmed on</p>
                 <p className="text-ink font-medium">{fmtDate(viewingPending.createdAt)}</p>
               </div>
@@ -1091,7 +1172,7 @@ export default function Users() {
               <Button variant="outline" onClick={() => setViewingPending(null)}>
                 Close
               </Button>
-              <Button variant="amber" onClick={() => { setViewingPending(null); registerPending(viewingPending); }}>
+              <Button variant="primary" onClick={() => { setViewingPending(null); registerPending(viewingPending); }}>
                 Register User
               </Button>
             </div>
@@ -1124,21 +1205,21 @@ export default function Users() {
               this person record to a login account; until then it cannot sign in.
             </p>
             <div className="space-y-2.5 text-[13px]">
-              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Teacher</p>
                 <p className="text-ink font-medium">{viewingStaffPending.name}</p>
               </div>
-              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Staff ID</p>
                 <p className="font-mono text-ink font-medium">{viewingStaffPending.employeeId}</p>
               </div>
               {viewingStaffPending.designation && (
-                <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+                <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
                   <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Designation</p>
                   <p className="text-ink font-medium">{viewingStaffPending.designation}</p>
                 </div>
               )}
-              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Class / Section</p>
                 <p className="text-ink font-medium">
                   {(() => {
@@ -1153,7 +1234,7 @@ export default function Users() {
                   })()}
                 </p>
               </div>
-              <div className="rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Profile</p>
                 {viewingStaffPending.profileStatus === "complete" ? (
                   <Pill tone="success">complete</Pill>
@@ -1167,7 +1248,7 @@ export default function Users() {
                 Close
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={() => {
                   setViewingStaffPending(null);
                   registerPendingStaff(viewingStaffPending);
@@ -1209,7 +1290,7 @@ function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore
       </div>
 
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-12 h-12 rounded-full bg-ink text-amber flex items-center justify-center font-bold shrink-0">
+        <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-bold shrink-0">
           {initials(user.name)}
         </div>
         <div className="min-w-0">
@@ -1225,7 +1306,7 @@ function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore
         ) : user.isActive ? (
           <Pill tone="success">active</Pill>
         ) : (
-          <Pill tone="amber">inactive</Pill>
+          <Pill tone="primary">inactive</Pill>
         )}
         {user.emailVerified === false && <Pill>unverified email</Pill>}
       </div>
@@ -1262,7 +1343,7 @@ function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore
               Cancel
             </Button>
             <Button
-              variant="amber"
+              variant="primary"
               disabled={busy}
               onClick={() =>
                 onEdit({
@@ -1304,6 +1385,18 @@ function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore
               <p className="text-ink">{user.refId}</p>
             </div>
           )}
+          {user.role === "parent" && (
+            <div className="col-span-2">
+              <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">Linked students</p>
+              <div className="flex flex-wrap gap-1.5 mt-1">
+                {(user.linkedStudentIds || []).length ? (
+                  user.linkedStudentIds.map((id) => <Pill key={id}>{id}</Pill>)
+                ) : (
+                  <span className="text-ink">—</span>
+                )}
+              </div>
+            </div>
+          )}
           <div>
             <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">Last login</p>
             <p className="text-ink">{fmtDate(user.lastLogin)}</p>
@@ -1327,7 +1420,7 @@ function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore
         )}
         {canManage &&
           (user.deletedAt ? (
-            <Button variant="amber" disabled={busy} onClick={() => onRestore(user).then(onClose)}>
+            <Button variant="primary" disabled={busy} onClick={() => onRestore(user).then(onClose)}>
               <RotateCcw size={15} /> Restore
             </Button>
           ) : (

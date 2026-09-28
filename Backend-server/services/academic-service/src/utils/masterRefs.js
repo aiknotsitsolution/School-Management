@@ -97,4 +97,24 @@ function missingMessage(missing) {
     .join(", ")}`;
 }
 
-module.exports = { findMissingMasterRefs, findMissingSubjects, missingMessage };
+// Validates a LIST of room references (timetable periods) against the tenant's
+// active Room catalog — same leniency as the other checks (skipped while the
+// catalog is empty so legacy free-string data keeps working).
+async function findMissingRooms({ schoolId, rooms }) {
+  const values = [...new Set((rooms || []).map((r) => String(r).trim()).filter(Boolean))];
+  if (!values.length) return [];
+  const activeCount = await Room.countDocuments({ schoolId, active: true });
+  if (activeCount === 0) return [];
+  const missing = [];
+  for (const value of values) {
+    const found = await Room.findOne({
+      schoolId,
+      active: true,
+      $or: [{ key: normalizeKey(value) }, { name: value }],
+    }).lean();
+    if (!found) missing.push({ kind: "room", value });
+  }
+  return missing;
+}
+
+module.exports = { findMissingMasterRefs, findMissingSubjects, findMissingRooms, missingMessage };

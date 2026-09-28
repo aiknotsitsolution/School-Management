@@ -120,14 +120,14 @@ export default function Profile() {
       <PageIntro eyebrow="Student Portal" title="My Profile" description="Your account, student record and ID card." />
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-black/[0.06] pb-px">
+      <div className="flex gap-1 border-b border-slate-200 pb-px">
         {TABS.map((tab) => (
           <button
             key={tab.key}
             onClick={() => setActiveTab(tab.key)}
             className={`inline-flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold rounded-t-lg transition-colors -mb-px ${
               activeTab === tab.key
-                ? "bg-white border border-black/[0.06] border-b-white text-ink"
+                ? "bg-white border border-slate-200 border-b-white text-ink"
                 : "text-slate-text/60 hover:text-ink hover:bg-paper/50"
             }`}
           >
@@ -156,7 +156,7 @@ export default function Profile() {
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">{user?.email || "—"}</p>
                 <div className="flex items-center gap-2 mt-3">
                   <Pill tone="info">Student</Pill>
-                  {profile?.status === "Active" ? <Pill tone="success">Active</Pill> : <Pill tone="amber">{profile?.status || "—"}</Pill>}
+                  {profile?.status === "Active" ? <Pill tone="success">Active</Pill> : <Pill tone="primary">{profile?.status || "—"}</Pill>}
                 </div>
                 <p className="text-[12px] text-slate-text/70 mt-3">
                   Admission ID · {admissionNo}
@@ -222,7 +222,7 @@ export default function Profile() {
                   </div>
                   <button
                     onClick={() => printIdCard({ student: studentForCard, school })}
-                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-black/[0.1] text-[12.5px] font-semibold text-ink hover:bg-paper transition-colors"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 text-[12.5px] font-semibold text-ink hover:bg-paper transition-colors"
                   >
                     <Printer size={14} /> Print ID Card
                   </button>

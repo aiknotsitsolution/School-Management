@@ -240,6 +240,7 @@ async function request(path, options = {})
     const err = new Error(body.message || "Request failed");
     err.data = body.data || null;
     err.status = response.status;
+    if (Array.isArray(body.conflicts)) err.conflicts = body.conflicts;
     throw err;
   }
   return body;
@@ -253,7 +254,16 @@ export const api = {
   school: {
     me: () => request("/auth/school/me"),
     update: (payload) => request("/auth/school/me", json("PATCH", payload)),
+    paymentGateway: {
+      get: () => request("/auth/school/me/payment-gateway"),
+      update: (payload) =>
+        request("/auth/school/me/payment-gateway", json("PATCH", payload)),
+      test: (payload) =>
+        request("/auth/school/me/payment-gateway/test", json("POST", payload)),
+    },
   },
+  changePassword: (payload) =>
+    request("/auth/change-password", json("POST", payload)),
   resetPassword: (token, newPassword) =>
     request("/auth/reset-password", json("POST", { token, newPassword })),
   forgotPassword: (email) =>
@@ -441,6 +451,8 @@ export const api = {
     update: (id, student) => request(`/students/${id}`, json("PUT", student)),
     issueIdCard: (id) => request(`/students/${id}/issue-id-card`, { method: "POST" }),
     remove: (id) => request(`/students/${id}`, { method: "DELETE" }),
+    // Undo a soft-delete (Phase 2) within the purge retention window.
+    restore: (id) => request(`/students/${id}/restore`, { method: "POST" }),
     stats: () => request("/students/stats/summary"),
   },
   admissions: {
@@ -502,6 +514,16 @@ export const api = {
     list: (params = "") => request(`/timetable${params ? `?${params}` : ""}`),
     save: (item) => request("/timetable", json("POST", item)),
     remove: (id) => request(`/timetable/${id}`, { method: "DELETE" }),
+    generate: (payload) => request("/timetable/generate", json("POST", payload)),
+    substitutions: {
+      list: (params = "") =>
+        request(`/timetable/substitutions${params ? `?${params}` : ""}`),
+      create: (payload) =>
+        request("/timetable/substitutions", json("POST", payload)),
+      setStatus: (id, status) =>
+        request(`/timetable/substitutions/${id}/status`, json("PATCH", { status })),
+      remove: (id) => request(`/timetable/substitutions/${id}`, { method: "DELETE" }),
+    },
   },
   homework: {
     list: (params = "") => request(`/homework${params ? `?${params}` : ""}`),
@@ -546,7 +568,20 @@ export const api = {
     update: (id, item) => request(`/exams/${id}`, json("PUT", item)),
     updateStatus: (id, status) =>
       request(`/exams/${id}/status`, json("PATCH", { status })),
+    termRollup: (params = "") => request(`/exams/term-rollup${params ? `?${params}` : ""}`),
     remove: (id) => request(`/exams/${id}`, { method: "DELETE" }),
+  },
+  gradingScales: {
+    list: () => request("/grading-scales"),
+    active: () => request("/grading-scales/active"),
+    create: (item) => request("/grading-scales", json("POST", item)),
+    update: (id, item) => request(`/grading-scales/${id}`, json("PATCH", item)),
+    activate: (id) => request(`/grading-scales/${id}/activate`, json("POST", {})),
+    remove: (id) => request(`/grading-scales/${id}`, { method: "DELETE" }),
+  },
+  cce: {
+    getCoScholastic: (params = "") => request(`/cce/co-scholastic${params ? `?${params}` : ""}`),
+    saveCoScholastic: (body) => request("/cce/co-scholastic", json("PUT", body)),
   },
   examMasters: {
     list: (kind) => request(`/exam-masters/${kind}`),
@@ -565,6 +600,32 @@ export const api = {
     list: (params = "") => request(`/marks${params ? `?${params}` : ""}`),
     reportCard: (params = "") =>
       request(`/marks/report-card${params ? `?${params}` : ""}`),
+    downloadReportCardPdf: async (params = "") => {
+      const { auth } = store.getState();
+      const token = auth.accessToken || localStorage.getItem("erp_access_token");
+      const response = await fetch(
+        `${API_BASE_URL}/marks/report-card/pdf${params ? `?${params}` : ""}`,
+        { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } },
+      );
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        const err = new Error(body.message || "Download failed");
+        err.status = response.status;
+        throw err;
+      }
+      const blob = await response.blob();
+      const disposition = response.headers.get("Content-Disposition") || "";
+      const match = disposition.match(/filename="?([^";]+)"?/i);
+      const filename = match ? match[1] : "report-card.pdf";
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename;
+      document.body.appendChild(a);
+      a.click();
+      URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+    },
     classSummary: (params = "") =>
       request(`/marks/class-summary${params ? `?${params}` : ""}`),
   },
@@ -579,6 +640,40 @@ export const api = {
     create: (item) => request("/transfers", json("POST", item)),
     history: (params = "") =>
       request(`/transfers/history${params ? `?${params}` : ""}`),
+    // Transfer Certificates (Phase 2) — served under /students so they share
+    // the student-service prefix.
+    tcs: {
+      list: (params = "") =>
+        request(`/students/transfer-certificates${params ? `?${params}` : ""}`),
+      issue: (item) => request("/students/transfer-certificates", json("POST", item)),
+      downloadPdf: async (id) =>
+      {
+        const { auth } = store.getState();
+        const token = auth.accessToken || localStorage.getItem("erp_access_token");
+        const response = await fetch(`${API_BASE_URL}/students/transfer-certificates/${id}/pdf`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        });
+        if (!response.ok)
+        {
+          const body = await response.json().catch(() => ({}));
+          const err = new Error(body.message || "Download failed");
+          err.status = response.status;
+          throw err;
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = match ? match[1] : `transfer-certificate-${id}.pdf`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
+    },
   },
   rollover: {
     prepare: (item) => request("/rollover/prepare", json("POST", item)),
@@ -633,16 +728,58 @@ export const api = {
       create: (item) => request("/payments", json("POST", item)),
       receipt: (receiptNo) =>
         request(`/payments/receipt/${encodeURIComponent(receiptNo)}`),
+      downloadReceiptPdf: async (receiptNo) =>
+      {
+        const { auth } = store.getState();
+        const token = auth.accessToken || localStorage.getItem("erp_access_token");
+        const response = await fetch(
+          `${API_BASE_URL}/payments/receipt/${encodeURIComponent(receiptNo)}/pdf`,
+          { headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) } },
+        );
+        if (!response.ok)
+        {
+          const body = await response.json().catch(() => ({}));
+          const err = new Error(body.message || "Download failed");
+          err.status = response.status;
+          throw err;
+        }
+        const blob = await response.blob();
+        const disposition = response.headers.get("Content-Disposition") || "";
+        const match = disposition.match(/filename="?([^";]+)"?/i);
+        const filename = match ? match[1] : `receipt-${receiptNo}.pdf`;
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+      },
+      setClearance: (id, payload) =>
+        request(`/payments/${id}/clearance`, json("POST", payload)),
     },
     reports: {
       get: (params = "") =>
         request(`/payments/reports${params ? `?${params}` : ""}`),
+      reconciliation: (params = "") =>
+        request(`/payments/reconciliation${params ? `?${params}` : ""}`),
+    },
+    concessions: {
+      list: (params = "") =>
+        request(`/fees/concessions${params ? `?${params}` : ""}`),
+      create: (item) => request("/fees/concessions", json("POST", item)),
+      approve: (id) => request(`/fees/concessions/${id}/approve`, { method: "PATCH" }),
+      reject: (id, reason) =>
+        request(`/fees/concessions/${id}/reject`, json("PATCH", { reason })),
+      remove: (id) => request(`/fees/concessions/${id}`, { method: "DELETE" }),
     },
     orders: {
       list: (params = "") => request(`/payments/orders${params ? `?${params}` : ""}`),
       create: (item) => request("/payments/orders", json("POST", item)),
       initiate: (id) => request(`/payments/orders/${id}/initiate`, { method: "POST" }),
       confirm: (id, payload) => request(`/payments/orders/${id}/confirm`, json("POST", payload)),
+      manualConfirm: (id, payload) => request(`/payments/orders/${id}/manual-confirm`, json("POST", payload)),
       cancel: (id) => request(`/payments/orders/${id}/cancel`, { method: "PATCH" }),
     },
   },
@@ -651,6 +788,24 @@ export const api = {
     create: (item) => request("/notices", json("POST", item)),
     update: (id, item) => request(`/notices/${id}`, json("PUT", item)),
     remove: (id) => request(`/notices/${id}`, { method: "DELETE" }),
+  },
+  diary: {
+    list: (params = "") => request(`/diary${params ? `?${params}` : ""}`),
+    create: (item) => request("/diary", json("POST", item)),
+    update: (id, item) => request(`/diary/${id}`, json("PUT", item)),
+    remove: (id) => request(`/diary/${id}`, { method: "DELETE" }),
+  },
+  messages: {
+    list: (params = "") => request(`/messages${params ? `?${params}` : ""}`),
+    create: (item) => request("/messages", json("POST", item)),
+    get: (id) => request(`/messages/${id}`),
+    reply: (id, body) => request(`/messages/${id}/reply`, json("POST", { body })),
+  },
+  broadcast: {
+    sms: (item) => request("/broadcast/sms", json("POST", item)),
+    email: (item) => request("/broadcast/email", json("POST", item)),
+    logs: (params = "") =>
+      request(`/broadcast/logs${params ? `?${params}` : ""}`),
   },
   notifications: {
     list: (params = "") =>
@@ -734,7 +889,8 @@ export const api = {
     list: () => request("/payroll"),
     create: (item) => request("/payroll", json("POST", item)),
     update: (id, data) => request(`/payroll/${id}`, json("PATCH", data)),
-    generateAll: (month, year) => request("/payroll/generate-all", json("POST", { month, year })),
+    generateAll: (month, year, opts) =>
+      request("/payroll/generate-all", json("POST", { month, year, adjustForAttendance: !!opts?.adjustForAttendance })),
     markPaid: (id) => request(`/payroll/${id}/pay`, json("PATCH", {})),
   },
   books: {
@@ -771,5 +927,26 @@ export const api = {
     create: (item) => request("/inventory", json("POST", item)),
     update: (id, item) => request(`/inventory/${id}`, json("PUT", item)),
     remove: (id) => request(`/inventory/${id}`, { method: "DELETE" }),
+  },
+  accounting: {
+    accounts: {
+      list: (params = "") => request(`/accounting/accounts${params ? `?${params}` : ""}`),
+      create: (item) => request("/accounting/accounts", json("POST", item)),
+      update: (id, item) => request(`/accounting/accounts/${id}`, json("PATCH", item)),
+      remove: (id) => request(`/accounting/accounts/${id}`, { method: "DELETE" }),
+    },
+    journal: {
+      list: (params = "") => request(`/accounting/journal${params ? `?${params}` : ""}`),
+      create: (entry) => request("/accounting/journal", json("POST", entry)),
+      remove: (id) => request(`/accounting/journal/${id}`, { method: "DELETE" }),
+    },
+    reports: {
+      trialBalance: (params = "") =>
+        request(`/accounting/reports/trial-balance${params ? `?${params}` : ""}`),
+      incomeExpense: (params = "") =>
+        request(`/accounting/reports/income-expense${params ? `?${params}` : ""}`),
+      balanceSheet: (params = "") =>
+        request(`/accounting/reports/balance-sheet${params ? `?${params}` : ""}`),
+    },
   },
 };

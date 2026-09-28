@@ -19,6 +19,7 @@ import {
   FilePlus2,
   Power,
   Printer,
+  Download,
 } from "lucide-react";
 import {
   PageIntro,
@@ -32,8 +33,24 @@ import {
 } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
 
-const MODES = ["Cash", "Card", "UPI", "Net Banking", "Cheque", "Online Gateway"];
+const MODES = ["Cash", "Card", "UPI", "Net Banking", "Bank Transfer", "Cheque", "Online Gateway"];
 const FREQUENCIES = ["Monthly", "Quarterly", "Annually", "One-time"];
+const ORDER_STATUS_TONES = {
+  pending: "neutral",
+  awaiting_confirmation: "warning",
+  awaiting_manual_confirm: "info",
+  completed: "success",
+  failed: "alert",
+  cancelled: "neutral",
+};
+const ORDER_STATUS_LABELS = {
+  pending: "Pending",
+  awaiting_confirmation: "Awaiting Gateway",
+  awaiting_manual_confirm: "Awaiting Office Verification",
+  completed: "Completed",
+  failed: "Failed",
+  cancelled: "Cancelled",
+};
 
 function formatDate(value) {
   return value
@@ -52,6 +69,9 @@ function emptyForm() {
     amount: 0,
     mode: "Cash",
     transactionId: "",
+    chequeNo: "",
+    chequeDate: "",
+    bankName: "",
   };
 }
 
@@ -63,6 +83,20 @@ function emptyStructureForm() {
     amount: "",
     frequency: "Monthly",
     dueDate: "",
+  };
+}
+
+function emptyConcessionForm() {
+  return {
+    studentId: "",
+    kind: "Sibling",
+    name: "",
+    type: "percent",
+    value: "",
+    session: "",
+    feeType: "",
+    siblingOf: "",
+    notes: "",
   };
 }
 
@@ -120,14 +154,38 @@ export default function FeesCollection() {
   const [receiptData, setReceiptData] = useState(null);
   const [receiptBusy, setReceiptBusy] = useState(false);
 
+  const [orders, setOrders] = useState([]);
+  const [orderBusyId, setOrderBusyId] = useState(null);
+
+  const [recon, setRecon] = useState(null);
+  const [reconFrom, setReconFrom] = useState("");
+  const [reconTo, setReconTo] = useState("");
+
+  const [concessions, setConcessions] = useState([]);
+  const [showConcessionModal, setShowConcessionModal] = useState(false);
+  const [concessionBusy, setConcessionBusy] = useState(false);
+  const [concessionForm, setConcessionForm] = useState(emptyConcessionForm());
+
+  useEffect(() => {
+    const params = new URLSearchParams();
+    if (reconFrom) params.set("from", reconFrom);
+    if (reconTo) params.set("to", reconTo);
+    api.fees.reports
+      .reconciliation(params.toString())
+      .then(({ data }) => setRecon(data))
+      .catch(() => setRecon(null));
+  }, [reconFrom, reconTo]);
+
   const reload = () => {
     Promise.all([
       api.students.list("limit=1000"),
       api.fees.structures.list().catch(() => ({ data: [] })),
       api.fees.invoices.list().catch(() => ({ data: [] })),
       api.fees.payments.list().catch(() => ({ data: [] })),
+      api.fees.orders.list("limit=50").catch(() => ({ data: [] })),
+      api.fees.concessions.list().catch(() => ({ data: [] })),
     ])
-      .then(([studentResponse, structureResponse, invoiceResponse, paymentResponse]) => {
+      .then(([studentResponse, structureResponse, invoiceResponse, paymentResponse, orderResponse, concessionResponse]) => {
         setStudents((studentResponse.data || []).map((item) => ({
           ...item,
           id: item._id,
@@ -135,9 +193,105 @@ export default function FeesCollection() {
         setStructures(structureResponse.data || []);
         setInvoices(invoiceResponse.data || []);
         setPayments(paymentResponse.data || []);
+        setOrders(orderResponse.data || []);
+        setConcessions(concessionResponse.data || []);
         setLoadError("");
       })
       .catch((err) => setLoadError(err.message));
+  };
+
+  const confirmOrderManually = async (order) => {
+    const receivedRef = window.prompt(
+      `Confirm ₹${order.amount} received for ${order.admissionNo || order.studentId}.\nEnter the payer reference (UPI ref / bank ref, optional):`,
+      "",
+    );
+    if (receivedRef === null) return;
+    setOrderBusyId(order._id);
+    try {
+      await api.fees.orders.manualConfirm(order._id, { receivedRef: receivedRef.trim() });
+      toast("Payment verified and recorded");
+      reload();
+    } catch (err) {
+      toast(err.message || "Failed to confirm order", "error");
+    } finally {
+      setOrderBusyId(null);
+    }
+  };
+
+  const cancelOrder = async (order) => {
+    if (!window.confirm("Cancel this payment order?")) return;
+    setOrderBusyId(order._id);
+    try {
+      await api.fees.orders.cancel(order._id);
+      toast("Order cancelled");
+      reload();
+    } catch (err) {
+      toast(err.message || "Failed to cancel order", "error");
+    } finally {
+      setOrderBusyId(null);
+    }
+  };
+
+  const handleSaveConcession = async () => {
+    if (!concessionForm.studentId) {
+      toast("Select a student", "error");
+      return;
+    }
+    if (!concessionForm.name.trim()) {
+      toast("Enter a concession name", "error");
+      return;
+    }
+    const value = Number(concessionForm.value);
+    if (!Number.isFinite(value) || value < 0 || (concessionForm.type === "percent" && value > 100)) {
+      toast("Enter a valid value (percent 0-100 or flat amount)", "error");
+      return;
+    }
+    if (!concessionForm.session.trim()) {
+      toast("Session is required", "error");
+      return;
+    }
+    setConcessionBusy(true);
+    try {
+      await api.fees.concessions.create({
+        studentId: concessionForm.studentId,
+        kind: concessionForm.kind,
+        name: concessionForm.name.trim(),
+        type: concessionForm.type,
+        value,
+        session: concessionForm.session.trim(),
+        feeType: concessionForm.feeType,
+        siblingOf: concessionForm.siblingOf,
+        notes: concessionForm.notes,
+      });
+      toast("Concession requested — awaiting approval");
+      setShowConcessionModal(false);
+      setConcessionForm(emptyConcessionForm());
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setConcessionBusy(false);
+    }
+  };
+
+  const handleConcessionAction = async (concession, action) => {
+    try {
+      if (action === "approve") {
+        await api.fees.concessions.approve(concession._id);
+        toast("Concession approved");
+      } else if (action === "reject") {
+        const reason = window.prompt("Rejection reason (optional):", "") || "";
+        await api.fees.concessions.reject(concession._id, reason.trim());
+        toast("Concession rejected");
+      } else {
+        if (!window.confirm("Delete this concession? Future invoices will no longer apply it.")) return;
+        await api.fees.concessions.remove(concession._id);
+        toast("Concession deleted");
+      }
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
+    }
   };
 
   useEffect(() => {
@@ -149,6 +303,15 @@ export default function FeesCollection() {
     () => new Map(students.map((s) => [String(s.id), s])),
     [students],
   );
+
+  // Keyed by admissionNo — payments/concessions reference students by
+  // admission number, not by Mongo id.
+  const studentByAdmission = useMemo(
+    () => new Map(students.map((s) => [String(s.admissionNo || ""), s])),
+    [students],
+  );
+
+  const concessionTones = { Active: "success", Requested: "primary", Rejected: "neutral" };
 
   const invoiceMap = useMemo(
     () => new Map(invoices.map((i) => [String(i._id), i])),
@@ -174,6 +337,8 @@ export default function FeesCollection() {
         feeType: invoice?.feeType || "Fee",
         amount: Number(payment.amount || 0),
         mode: payment.mode || "—",
+        clearanceStatus: payment.clearanceStatus || "",
+        chequeNo: payment.chequeNo || "",
         paidOn: payment.paidOn,
         collectedBy: payment.collectedBy || "—",
         invoiceAmount: Number(invoice?.amount || 0),
@@ -195,6 +360,11 @@ export default function FeesCollection() {
 
   const distinctSessions = useMemo(() => {
     const set = new Set(structures.map((s) => s.session).filter(Boolean));
+    return [...set].sort();
+  }, [structures]);
+
+  const distinctFeeTypes = useMemo(() => {
+    const set = new Set(structures.map((s) => s.feeType).filter(Boolean));
     return [...set].sort();
   }, [structures]);
 
@@ -292,6 +462,10 @@ export default function FeesCollection() {
       toast("Enter a valid payment amount", "error");
       return;
     }
+    if (form.mode === "Cheque" && !form.chequeNo.trim()) {
+      toast("Enter the cheque number", "error");
+      return;
+    }
     setBusy(true);
     try {
       const { data } = await api.fees.payments.create({
@@ -299,6 +473,9 @@ export default function FeesCollection() {
         amount,
         mode: form.mode,
         transactionId: form.transactionId.trim() || undefined,
+        chequeNo: form.mode === "Cheque" ? form.chequeNo.trim() : undefined,
+        chequeDate: form.mode === "Cheque" && form.chequeDate ? form.chequeDate : undefined,
+        bankName: form.mode === "Cheque" && form.bankName.trim() ? form.bankName.trim() : undefined,
       });
       toast(`Payment recorded · ${data?.payment?.receiptNo || "done"}`);
       setShowModal(false);
@@ -411,8 +588,8 @@ export default function FeesCollection() {
   };
 
   const handleConfirmInvoices = async () => {
-    if (!invoicePreview?.rows) return;
-    const nonDupes = invoicePreview.rows.filter((r) => !r.duplicate);
+    if (!invoicePreview?.preview) return;
+    const nonDupes = invoicePreview.preview.filter((r) => !r.isDuplicate);
     if (nonDupes.length === 0) {
       toast("No new invoices to generate", "info");
       return;
@@ -425,7 +602,9 @@ export default function FeesCollection() {
           class: invoiceForm.class,
           feeType: invoiceForm.feeType,
           session: invoiceForm.session,
-          amount: r.amount,
+          // Server re-applies concessions on the GROSS amount — never post the
+          // already-netted figure or a student would be discounted twice.
+          amount: r.grossAmount != null ? r.grossAmount : r.amount,
           dueDate: invoiceForm.dueDate || undefined,
         })),
       });
@@ -461,6 +640,24 @@ export default function FeesCollection() {
     }
   };
 
+  const handleClearance = async (payment, action) => {
+    if (
+      action === "bounce" &&
+      !window.confirm("Bounce this cheque? The payment will be reversed from the invoice.")
+    ) {
+      return;
+    }
+    try {
+      const reason =
+        action === "bounce" ? window.prompt("Bounce reason (optional)") || undefined : undefined;
+      await api.fees.payments.setClearance(payment.id, { action, reason });
+      toast(action === "clear" ? "Cheque cleared" : "Cheque bounced — payment reversed");
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
+    }
+  };
+
   const handlePrintReceipt = () => {
     const el = document.getElementById("receipt-printable");
     if (!el) return;
@@ -470,6 +667,16 @@ export default function FeesCollection() {
     );
     win.document.close();
     win.print();
+  };
+
+  const handleDownloadReceiptPdf = async () => {
+    if (!receiptData?.receiptNo) return;
+    try {
+      await api.fees.payments.downloadReceiptPdf(receiptData.receiptNo);
+      toast("Receipt PDF downloaded", "success");
+    } catch (err) {
+      toast(err.message, "error");
+    }
   };
 
   const payableStudents = students.filter(
@@ -496,7 +703,7 @@ export default function FeesCollection() {
                 <FilePlus2 size={15} /> Generate Invoices
               </Button>
             )}
-            <Button variant="amber" onClick={() => setShowModal(true)}>
+            <Button variant="primary" onClick={() => setShowModal(true)}>
               <Plus size={15} /> Record Payment
             </Button>
           </div>
@@ -522,7 +729,7 @@ export default function FeesCollection() {
           label="Collection Rate"
           value={`${stats.collected > 0 || stats.outstanding > 0 ? Math.min(100, Math.round((stats.collected / (stats.collected + stats.outstanding)) * 100)) : 0}%`}
           sub="Collected vs outstanding"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={AlertTriangle}
@@ -557,7 +764,7 @@ export default function FeesCollection() {
               </Select>
             )}
             {canStructure && (
-              <Button variant="amber" className="text-[12px] py-1.5" onClick={openNewStructure}>
+              <Button variant="primary" className="text-[12px] py-1.5" onClick={openNewStructure}>
                 <Plus size={14} /> Add Fee Structure
               </Button>
             )}
@@ -572,7 +779,7 @@ export default function FeesCollection() {
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                   <th className="px-5 py-2.5 font-semibold">Fee Type</th>
                   <th className="px-5 py-2.5 font-semibold">Class</th>
                   <th className="px-5 py-2.5 font-semibold">Session</th>
@@ -589,7 +796,7 @@ export default function FeesCollection() {
                 {filteredStructures.slice(0, 50).map((structure) => (
                   <tr
                     key={structure._id}
-                    className="border-b border-black/[0.04] hover:bg-paper/60"
+                    className="border-b border-slate-100 hover:bg-paper/60"
                   >
                     <td className="px-5 py-3 font-semibold text-ink">
                       {structure.feeType}
@@ -626,7 +833,7 @@ export default function FeesCollection() {
                           </button>
                           <button
                             onClick={() => handleToggleStructure(structure)}
-                            className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-amber"
+                            className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-primary"
                             title={structure.active !== false ? "Deactivate" : "Activate"}
                           >
                             <Power size={14} />
@@ -643,6 +850,284 @@ export default function FeesCollection() {
                     )}
                   </tr>
                 ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Payment order verification queue (manual modes + gateway follow-ups) */}
+      <Card
+        title="Payment Orders"
+        action={
+          <span className="text-[12px] text-slate-text/70">
+            {orders.filter((o) => o.status === "awaiting_manual_confirm").length} awaiting verification
+          </span>
+        }
+      >
+        {orders.length === 0 ? (
+          <p className="py-6 text-center text-[13px] text-slate-text/60">
+            No payment orders yet. Orders created from Online Fees Payment appear here.
+          </p>
+        ) : (
+          <div className="overflow-x-auto -mx-5">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
+                  <th className="px-5 py-2.5 font-semibold">Student</th>
+                  <th className="px-5 py-2.5 font-semibold">Amount</th>
+                  <th className="px-5 py-2.5 font-semibold">Mode</th>
+                  <th className="px-5 py-2.5 font-semibold">Status</th>
+                  <th className="px-5 py-2.5 font-semibold">Created</th>
+                  <th className="px-5 py-2.5 font-semibold text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {orders.map((order) => (
+                  <tr key={order._id} className="border-b border-slate-100 hover:bg-paper/60">
+                    <td className="px-5 py-3 font-semibold text-ink">{order.admissionNo || order.studentId}</td>
+                    <td className="px-5 py-3 text-slate-text font-medium">₹{Number(order.amount).toLocaleString("en-IN")}</td>
+                    <td className="px-5 py-3 text-slate-text">{order.gatewayMode}</td>
+                    <td className="px-5 py-3">
+                      <Pill tone={ORDER_STATUS_TONES[order.status] || "neutral"}>
+                        {ORDER_STATUS_LABELS[order.status] || order.status}
+                      </Pill>
+                    </td>
+                    <td className="px-5 py-3 text-slate-text whitespace-nowrap">{formatDate(order.createdAt)}</td>
+                    <td className="px-5 py-3 text-right">
+                      <div className="inline-flex items-center gap-2">
+                        {order.status === "awaiting_manual_confirm" && canCollect && (
+                          <button
+                            onClick={() => confirmOrderManually(order)}
+                            disabled={orderBusyId === order._id}
+                            className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-600 hover:underline disabled:opacity-50"
+                          >
+                            <Loader2 size={13} className={orderBusyId === order._id ? "animate-spin" : "hidden"} />
+                            Mark Received
+                          </button>
+                        )}
+                        {order.status !== "completed" && order.status !== "cancelled" && (
+                          <button
+                            onClick={() => cancelOrder(order)}
+                            disabled={orderBusyId === order._id}
+                            className="inline-flex items-center gap-1 text-[12px] font-medium text-alert hover:underline disabled:opacity-50"
+                          >
+                            Cancel
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      <Card
+        title="Reconciliation"
+        action={
+          <div className="flex items-center gap-2">
+            <Input
+              type="date"
+              value={reconFrom}
+              onChange={(event) => setReconFrom(event.target.value)}
+              className="w-36"
+            />
+            <span className="text-slate-text/50 text-[12px]">to</span>
+            <Input
+              type="date"
+              value={reconTo}
+              onChange={(event) => setReconTo(event.target.value)}
+              className="w-36"
+            />
+          </div>
+        }
+      >
+        {!recon ? (
+          <p className="py-6 text-center text-[13px] text-slate-text/60">
+            Reconciliation report unavailable (requires finance reports permission).
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-3 gap-3">
+              <div className="rounded-xl border border-slate-200 p-3">
+                <p className="text-[11.5px] text-slate-text/60 uppercase tracking-wide font-semibold">Recorded</p>
+                <p className="font-display text-[20px] font-bold text-ink mt-1">
+                  ₹{Number(recon.totalRecorded || 0).toLocaleString("en-IN")}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-3">
+                <p className="text-[11.5px] text-slate-text/60 uppercase tracking-wide font-semibold">Bounced</p>
+                <p className="font-display text-[20px] font-bold text-alert mt-1">
+                  ₹{Number(recon.bouncedAmount || 0).toLocaleString("en-IN")}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 p-3">
+                <p className="text-[11.5px] text-slate-text/60 uppercase tracking-wide font-semibold">Net Collected</p>
+                <p className="font-display text-[20px] font-bold text-success mt-1">
+                  ₹{Number(recon.netCollected || 0).toLocaleString("en-IN")}
+                </p>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto -mx-5">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
+                    <th className="px-5 py-2.5 font-semibold">Mode</th>
+                    <th className="px-5 py-2.5 font-semibold text-right">Payments</th>
+                    <th className="px-5 py-2.5 font-semibold text-right">Recorded</th>
+                    <th className="px-5 py-2.5 font-semibold text-right">Bounced</th>
+                    <th className="px-5 py-2.5 font-semibold text-right">Net</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {recon.modes.length === 0 ? (
+                    <tr>
+                      <td colSpan={5} className="px-5 py-5 text-center text-slate-text/60">
+                        No payments in this period.
+                      </td>
+                    </tr>
+                  ) : (
+                    recon.modes.map((row) => (
+                      <tr key={row.mode} className="border-b border-slate-100">
+                        <td className="px-5 py-3 font-semibold text-ink">{row.mode}</td>
+                        <td className="px-5 py-3 text-right text-slate-text">{row.count}</td>
+                        <td className="px-5 py-3 text-right text-slate-text">
+                          ₹{Number(row.amount).toLocaleString("en-IN")}
+                        </td>
+                        <td className="px-5 py-3 text-right text-alert">
+                          {row.bouncedAmount
+                            ? `₹${Number(row.bouncedAmount).toLocaleString("en-IN")}`
+                            : "—"}
+                        </td>
+                        <td className="px-5 py-3 text-right font-semibold text-ink">
+                          ₹{Number(row.amount - row.bouncedAmount).toLocaleString("en-IN")}
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {recon.chequeClearance.length > 0 && (
+              <div>
+                <p className="text-[12.5px] font-semibold text-ink mb-2">Cheque clearance</p>
+                <div className="flex flex-wrap gap-2">
+                  {recon.chequeClearance.map((row) => (
+                    <span
+                      key={row.status}
+                      className="rounded-lg border border-slate-200 px-3 py-1.5 text-[12.5px] text-slate-text"
+                    >
+                      <Pill tone={row.status === "Cleared" ? "success" : row.status === "Bounced" ? "alert" : "primary"}>
+                        {row.status}
+                      </Pill>
+                      <span className="ml-2 font-semibold text-ink">
+                        {row.count} · ₹{Number(row.amount).toLocaleString("en-IN")}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+      </Card>
+
+      <Card
+        title="Concessions & Scholarships"
+        action={
+          canStructure ? (
+            <Button
+              variant="outline"
+              onClick={() => {
+                setConcessionForm(emptyConcessionForm());
+                setShowConcessionModal(true);
+              }}
+            >
+              <Plus size={14} /> New Concession
+            </Button>
+          ) : null
+        }
+      >
+        {concessions.length === 0 ? (
+          <p className="py-6 text-center text-[13px] text-slate-text/60">
+            No concessions yet. Sibling discounts, scholarships and manual grants appear here
+            after they are requested.
+          </p>
+        ) : (
+          <div className="overflow-x-auto -mx-5">
+            <table className="w-full text-[13px]">
+              <thead>
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
+                  <th className="px-5 py-2.5 font-semibold">Student</th>
+                  <th className="px-5 py-2.5 font-semibold">Kind</th>
+                  <th className="px-5 py-2.5 font-semibold">Name</th>
+                  <th className="px-5 py-2.5 font-semibold">Value</th>
+                  <th className="px-5 py-2.5 font-semibold">Scope</th>
+                  <th className="px-5 py-2.5 font-semibold">Status</th>
+                  <th className="px-5 py-2.5 font-semibold text-right">Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {concessions.map((concession) => {
+                  const student = studentByAdmission.get(String(concession.studentId));
+                  return (
+                    <tr key={concession._id} className="border-b border-slate-100 hover:bg-paper/60">
+                      <td className="px-5 py-3 font-semibold text-ink">
+                        {student?.name || concession.studentId}
+                      </td>
+                      <td className="px-5 py-3">
+                        <Pill tone={concession.kind === "Scholarship" ? "info" : "neutral"}>
+                          {concession.kind}
+                        </Pill>
+                      </td>
+                      <td className="px-5 py-3 text-slate-text">{concession.name}</td>
+                      <td className="px-5 py-3 font-medium text-ink">
+                        {concession.type === "percent" ? `${concession.value}%` : `₹${Number(concession.value).toLocaleString("en-IN")}`}
+                      </td>
+                      <td className="px-5 py-3 text-slate-text">
+                        {concession.feeType || "All fees"} · {concession.session}
+                      </td>
+                      <td className="px-5 py-3">
+                        <Pill tone={concessionTones[concession.status] || "neutral"}>
+                          {concession.status}
+                        </Pill>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <div className="inline-flex items-center gap-2">
+                          {canStructure && concession.status === "Requested" && (
+                            <>
+                              <button
+                                onClick={() => handleConcessionAction(concession, "approve")}
+                                className="text-[12px] font-medium text-success hover:underline"
+                              >
+                                Approve
+                              </button>
+                              <button
+                                onClick={() => handleConcessionAction(concession, "reject")}
+                                className="text-[12px] font-medium text-alert hover:underline"
+                              >
+                                Reject
+                              </button>
+                            </>
+                          )}
+                          {canStructure && (
+                            <button
+                              onClick={() => handleConcessionAction(concession, "delete")}
+                              className="text-[12px] font-medium text-slate-text hover:underline"
+                            >
+                              Delete
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -675,7 +1160,7 @@ export default function FeesCollection() {
             <p className="text-[13px] text-slate-text/60 mt-1">
               Try changing filters or record a new payment.
             </p>
-            <Button variant="amber" className="mt-4" onClick={() => setShowModal(true)}>
+            <Button variant="primary" className="mt-4" onClick={() => setShowModal(true)}>
               <Plus size={15} /> Record Payment
             </Button>
           </div>
@@ -683,13 +1168,14 @@ export default function FeesCollection() {
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                   <th className="px-5 py-2.5 font-semibold">Receipt No.</th>
                   <th className="px-5 py-2.5 font-semibold">Student</th>
                   <th className="px-5 py-2.5 font-semibold">Class</th>
                   <th className="px-5 py-2.5 font-semibold">Fee Type</th>
                   <th className="px-5 py-2.5 font-semibold">Amount</th>
                   <th className="px-5 py-2.5 font-semibold">Mode</th>
+                  <th className="px-5 py-2.5 font-semibold">Clearance</th>
                   <th className="px-5 py-2.5 font-semibold">Date</th>
                   <th className="px-5 py-2.5 font-semibold">Collected By</th>
                   <th className="px-5 py-2.5 font-semibold text-right">Receipt</th>
@@ -699,7 +1185,7 @@ export default function FeesCollection() {
                 {filtered.map((payment) => (
                   <tr
                     key={payment.id}
-                    className="border-b border-black/[0.04] hover:bg-paper/60"
+                    className="border-b border-slate-100 hover:bg-paper/60"
                   >
                     <td className="px-5 py-3 font-mono text-[12px] text-slate-text">
                       {payment.receiptNo}
@@ -717,6 +1203,43 @@ export default function FeesCollection() {
                       ₹{payment.amount.toLocaleString("en-IN")}
                     </td>
                     <td className="px-5 py-3 text-slate-text">{payment.mode}</td>
+                    <td className="px-5 py-3">
+                      {payment.mode === "Cheque" ? (
+                        <div className="flex items-center gap-1.5">
+                          <Pill
+                            tone={
+                              payment.clearanceStatus === "Cleared"
+                                ? "success"
+                                : payment.clearanceStatus === "Bounced"
+                                  ? "alert"
+                                  : "primary"
+                            }
+                          >
+                            {payment.clearanceStatus || "Pending"}
+                          </Pill>
+                          {canCollect && payment.clearanceStatus !== "Bounced" && (
+                            <span className="flex items-center gap-1.5 text-[11.5px] font-semibold">
+                              {payment.clearanceStatus !== "Cleared" && (
+                                <button
+                                  onClick={() => handleClearance(payment, "clear")}
+                                  className="text-success hover:underline"
+                                >
+                                  Clear
+                                </button>
+                              )}
+                              <button
+                                onClick={() => handleClearance(payment, "bounce")}
+                                className="text-alert hover:underline"
+                              >
+                                Bounce
+                              </button>
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-slate-text/40">—</span>
+                      )}
+                    </td>
                     <td className="px-5 py-3 text-slate-text whitespace-nowrap">
                       {formatDate(payment.paidOn)}
                     </td>
@@ -739,6 +1262,201 @@ export default function FeesCollection() {
         )}
       </Card>
 
+      {/* New Concession Modal */}
+      {showConcessionModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
+            onClick={() => setShowConcessionModal(false)}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <div>
+                <h3 className="font-display font-semibold text-ink text-[17px]">New Concession</h3>
+                <p className="text-[12.5px] text-slate-text/70 mt-0.5">
+                  Requested concessions are applied to invoices only after approval.
+                </p>
+              </div>
+              <button
+                onClick={() => setShowConcessionModal(false)}
+                className="p-2 rounded-lg hover:bg-paper text-slate-text"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
+              <div>
+                <label className="text-[12px] font-semibold text-ink mb-1.5 block">Student *</label>
+                <Select
+                  value={concessionForm.studentId}
+                  onChange={(event) =>
+                    setConcessionForm({ ...concessionForm, studentId: event.target.value })
+                  }
+                  className="w-full"
+                >
+                  <option value="">Select student…</option>
+                  {students.map((student) => (
+                    <option key={student.id} value={student.admissionNo || ""}>
+                      {student.name} · {student.admissionNo}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Kind *</label>
+                  <Select
+                    value={concessionForm.kind}
+                    onChange={(event) =>
+                      setConcessionForm({ ...concessionForm, kind: event.target.value })
+                    }
+                    className="w-full"
+                  >
+                    <option value="Sibling">Sibling Discount</option>
+                    <option value="Scholarship">Scholarship</option>
+                    <option value="Manual">Manual</option>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Name *</label>
+                  <Input
+                    placeholder={
+                      concessionForm.kind === "Sibling"
+                        ? "e.g. Second child 10% off"
+                        : concessionForm.kind === "Scholarship"
+                          ? "e.g. Merit scholarship"
+                          : "e.g. Staff ward concession"
+                    }
+                    value={concessionForm.name}
+                    onChange={(event) =>
+                      setConcessionForm({ ...concessionForm, name: event.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Type *</label>
+                  <Select
+                    value={concessionForm.type}
+                    onChange={(event) =>
+                      setConcessionForm({ ...concessionForm, type: event.target.value })
+                    }
+                    className="w-full"
+                  >
+                    <option value="percent">Percent (%)</option>
+                    <option value="flat">Flat (₹)</option>
+                  </Select>
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Value {concessionForm.type === "percent" ? "(%)" : "(₹)"} *
+                  </label>
+                  <Input
+                    type="number"
+                    min={0}
+                    max={concessionForm.type === "percent" ? 100 : undefined}
+                    value={concessionForm.value}
+                    onChange={(event) =>
+                      setConcessionForm({ ...concessionForm, value: event.target.value })
+                    }
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Session *</label>
+                  {distinctSessions.length > 0 ? (
+                    <Select
+                      value={concessionForm.session}
+                      onChange={(event) =>
+                        setConcessionForm({ ...concessionForm, session: event.target.value })
+                      }
+                      className="w-full"
+                    >
+                      <option value="">Select session…</option>
+                      {distinctSessions.map((session) => (
+                        <option key={session} value={session}>
+                          {session}
+                        </option>
+                      ))}
+                    </Select>
+                  ) : (
+                    <Input
+                      placeholder="e.g. 2025-26"
+                      value={concessionForm.session}
+                      onChange={(event) =>
+                        setConcessionForm({ ...concessionForm, session: event.target.value })
+                      }
+                    />
+                  )}
+                </div>
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Fee Type</label>
+                  <Select
+                    value={concessionForm.feeType}
+                    onChange={(event) =>
+                      setConcessionForm({ ...concessionForm, feeType: event.target.value })
+                    }
+                    className="w-full"
+                  >
+                    <option value="">All fee types</option>
+                    {distinctFeeTypes.map((feeType) => (
+                      <option key={feeType} value={feeType}>
+                        {feeType}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+
+              {concessionForm.kind === "Sibling" && (
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Elder Sibling (admission no.)
+                  </label>
+                  <Input
+                    placeholder="e.g. ADM001"
+                    value={concessionForm.siblingOf}
+                    onChange={(event) =>
+                      setConcessionForm({ ...concessionForm, siblingOf: event.target.value })
+                    }
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="text-[12px] font-semibold text-ink mb-1.5 block">Notes</label>
+                <Input
+                  placeholder="Optional justification / reference"
+                  value={concessionForm.notes}
+                  onChange={(event) =>
+                    setConcessionForm({ ...concessionForm, notes: event.target.value })
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setShowConcessionModal(false)}>
+                Cancel
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleSaveConcession}
+                disabled={concessionBusy || !concessionForm.studentId || !concessionForm.session}
+              >
+                <Save size={15} /> {concessionBusy ? "Saving…" : "Request Concession"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Record Payment Modal */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
@@ -747,7 +1465,7 @@ export default function FeesCollection() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   Record Payment
@@ -868,16 +1586,61 @@ export default function FeesCollection() {
                       }
                     />
                   </div>
+
+                  {form.mode === "Cheque" && (
+                    <div className="grid grid-cols-3 gap-3 rounded-xl border border-slate-200 p-3">
+                      <div>
+                        <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                          Cheque No. *
+                        </label>
+                        <Input
+                          placeholder="Cheque number"
+                          value={form.chequeNo}
+                          onChange={(event) =>
+                            setForm({ ...form, chequeNo: event.target.value })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                          Cheque Date
+                        </label>
+                        <Input
+                          type="date"
+                          value={form.chequeDate}
+                          onChange={(event) =>
+                            setForm({ ...form, chequeDate: event.target.value })
+                          }
+                        />
+                      </div>
+                      <div>
+                        <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                          Bank Name
+                        </label>
+                        <Input
+                          placeholder="Issuing bank"
+                          value={form.bankName}
+                          onChange={(event) =>
+                            setForm({ ...form, bankName: event.target.value })
+                          }
+                        />
+                      </div>
+                      <p className="col-span-3 text-[11.5px] text-slate-text/70 -mt-1">
+                        Cheques start as Pending clearance — bounce reverses the payment from the
+                        invoice.
+                      </p>
+                    </div>
+                  )}
                 </>
               )}
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowModal(false)}>
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={handleSave}
                 disabled={busy || !form.studentId || !form.invoiceId || form.amount <= 0}
               >
@@ -899,7 +1662,7 @@ export default function FeesCollection() {
             }}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   {editingStructure ? "Edit Fee Structure" : "New Fee Structure"}
@@ -1016,7 +1779,7 @@ export default function FeesCollection() {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -1027,7 +1790,7 @@ export default function FeesCollection() {
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={handleSaveStructure}
                 disabled={structureBusy}
               >
@@ -1059,7 +1822,7 @@ export default function FeesCollection() {
             }}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   Bulk Invoice Generation
@@ -1167,38 +1930,49 @@ export default function FeesCollection() {
                 <>
                   <div className="flex items-center gap-4 text-[12.5px] text-slate-text">
                     <span>
-                      Total: <strong className="text-ink">{invoicePreview.rows?.length || 0}</strong>
+                      Total: <strong className="text-ink">{invoicePreview.preview?.length || 0}</strong>
                     </span>
                     <span>
                       Duplicates:{" "}
-                      <strong className="text-amber-dark">
-                        {invoicePreview.rows?.filter((r) => r.duplicate).length || 0}
+                      <strong className="text-primary-dark">
+                        {invoicePreview.preview?.filter((r) => r.isDuplicate).length || 0}
                       </strong>
                     </span>
                     <span>
                       New invoices:{" "}
                       <strong className="text-success">
-                        {invoicePreview.rows?.filter((r) => !r.duplicate).length || 0}
+                        {invoicePreview.preview?.filter((r) => !r.isDuplicate).length || 0}
+                      </strong>
+                    </span>
+                    <span>
+                      Net total:{" "}
+                      <strong className="text-ink">
+                        ₹
+                        {(invoicePreview.preview || [])
+                          .filter((r) => !r.isDuplicate)
+                          .reduce((sum, r) => sum + Number(r.amount || 0), 0)
+                          .toLocaleString("en-IN")}
                       </strong>
                     </span>
                   </div>
 
-                  {invoicePreview.rows && invoicePreview.rows.length > 0 && (
+                  {invoicePreview.preview && invoicePreview.preview.length > 0 && (
                     <div className="overflow-x-auto -mx-5">
                       <table className="w-full text-[13px]">
                         <thead>
-                          <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                          <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                             <th className="px-5 py-2.5 font-semibold">Student</th>
                             <th className="px-5 py-2.5 font-semibold">ID</th>
                             <th className="px-5 py-2.5 font-semibold">Amount</th>
+                            <th className="px-5 py-2.5 font-semibold">Concession</th>
                             <th className="px-5 py-2.5 font-semibold">Status</th>
                           </tr>
                         </thead>
                         <tbody>
-                          {invoicePreview.rows.map((row, idx) => (
+                          {invoicePreview.preview.map((row, idx) => (
                             <tr
                               key={idx}
-                              className="border-b border-black/[0.04] hover:bg-paper/60"
+                              className="border-b border-slate-100 hover:bg-paper/60"
                             >
                               <td className="px-5 py-3 font-semibold text-ink">
                                 {row.studentName || row.studentId}
@@ -1208,10 +1982,25 @@ export default function FeesCollection() {
                               </td>
                               <td className="px-5 py-3 text-slate-text font-medium">
                                 ₹{Number(row.amount).toLocaleString("en-IN")}
+                                {row.concessionAmount > 0 && (
+                                  <span className="ml-2 text-[11.5px] text-slate-text/60 line-through">
+                                    ₹{Number(row.grossAmount).toLocaleString("en-IN")}
+                                  </span>
+                                )}
                               </td>
                               <td className="px-5 py-3">
-                                {row.duplicate ? (
-                                  <Pill tone="amber">Duplicate</Pill>
+                                {row.concessionAmount > 0 ? (
+                                  <Pill tone="info">
+                                    −₹{Number(row.concessionAmount).toLocaleString("en-IN")} ·{" "}
+                                    {row.concession?.name}
+                                  </Pill>
+                                ) : (
+                                  <span className="text-slate-text/40">—</span>
+                                )}
+                              </td>
+                              <td className="px-5 py-3">
+                                {row.isDuplicate ? (
+                                  <Pill tone="primary">Duplicate</Pill>
                                 ) : (
                                   <Pill tone="success">New</Pill>
                                 )}
@@ -1226,7 +2015,7 @@ export default function FeesCollection() {
               )}
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -1244,7 +2033,7 @@ export default function FeesCollection() {
               </Button>
               {invoiceStep === "form" ? (
                 <Button
-                  variant="amber"
+                  variant="primary"
                   onClick={handlePreviewInvoices}
                   disabled={invoiceBusy}
                 >
@@ -1257,7 +2046,7 @@ export default function FeesCollection() {
                 </Button>
               ) : (
                 <Button
-                  variant="amber"
+                  variant="primary"
                   onClick={handleConfirmInvoices}
                   disabled={
                     invoiceBusy ||
@@ -1290,7 +2079,7 @@ export default function FeesCollection() {
             }}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <h3 className="font-display font-semibold text-ink text-[17px]">
                 Payment Receipt
               </h3>
@@ -1321,7 +2110,7 @@ export default function FeesCollection() {
                       {receiptData.schoolAddress || ""}
                     </p>
                   </div>
-                  <hr className="border-black/10 my-3" />
+                  <hr className="border-slate-300 my-3" />
                   <p className="text-center font-semibold text-[13px] mb-3">
                     PAYMENT RECEIPT
                   </p>
@@ -1385,7 +2174,7 @@ export default function FeesCollection() {
                       </tr>
                     </tbody>
                   </table>
-                  <hr className="border-black/10 my-3" />
+                  <hr className="border-slate-300 my-3" />
                   <p className="text-center text-[11px] text-slate-text/50 mt-2">
                     This is a computer-generated receipt.
                   </p>
@@ -1397,12 +2186,17 @@ export default function FeesCollection() {
               )}
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => { setShowReceiptModal(false); setReceiptData(null); }}>
                 Close
               </Button>
               {receiptData && (
-                <Button variant="amber" onClick={handlePrintReceipt}>
+                <Button variant="outline" onClick={handleDownloadReceiptPdf}>
+                  <Download size={15} /> Download PDF
+                </Button>
+              )}
+              {receiptData && (
+                <Button variant="primary" onClick={handlePrintReceipt}>
                   <Printer size={15} /> Print Receipt
                 </Button>
               )}

@@ -1,5 +1,5 @@
 const mongoose = require("mongoose");
-const { computeResult } = require("../utils/grading");
+const { computeResultWith, resolveScale } = require("../utils/grading");
 
 const marksSchema = new mongoose.Schema(
   {
@@ -13,7 +13,10 @@ const marksSchema = new mongoose.Schema(
     subject: { type: String, required: true },
     marksObtained: { type: Number, required: true },
     maxMarks: { type: Number, required: true },
-    passingMarks: { type: Number, default: 33 },
+    // Pass percentage snapshot (resolved from the exam's explicit value or
+    // the school's active GradingScale at write time). Null only on legacy
+    // rows created before the scale subsystem.
+    passingMarks: { type: Number, default: null },
     pct: { type: Number },
     grade: { type: String },
     passed: { type: Boolean },
@@ -26,15 +29,18 @@ marksSchema.index({ schoolId: 1, studentId: 1, examId: 1, subject: 1 }, { unique
 marksSchema.index({ schoolId: 1, examId: 1 });
 marksSchema.index({ schoolId: 1, session: 1 });
 
-// Derive grade/pct/passed from the snapshot so seeded rows, API rows and
-// future re-scaled rows all stay consistent with the canonical grading util.
-marksSchema.pre("save", function (next) {
-  const passingMarks = this.passingMarks == null ? 33 : this.passingMarks;
-  const result = computeResult(this.marksObtained, this.maxMarks, passingMarks);
+// Derive grade/pct/passed from the tenant's ACTIVE grading scale so seeded
+// rows, API rows and manual saves all stay consistent with the configured
+// scale (fallback: built-in default scale — identical to the legacy rules).
+marksSchema.pre("save", async function () {
+  const scale = await resolveScale(this.schoolId);
+  const passingMarks =
+    this.passingMarks == null ? (scale.passPct != null ? scale.passPct : 33) : this.passingMarks;
+  const result = computeResultWith(scale, this.marksObtained, this.maxMarks, passingMarks);
+  this.passingMarks = passingMarks;
   this.pct = +result.pct.toFixed(2);
   this.grade = result.grade;
   this.passed = result.passed;
-  next();
 });
 
 module.exports = mongoose.model("Marks", marksSchema);

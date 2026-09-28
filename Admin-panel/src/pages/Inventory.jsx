@@ -215,7 +215,7 @@ export default function Inventory() {
         title="Inventory Management"
         description="Track school supplies, lab equipment, sports gear and IT assets."
         right={
-          <Button variant="amber" onClick={openAdd}>
+          <Button variant="primary" onClick={openAdd}>
             <Plus size={15} /> Add Item
           </Button>
         }
@@ -227,7 +227,7 @@ export default function Inventory() {
           label="Total Items Tracked"
           value={String(stats.total)}
           sub="All categories"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={AlertTriangle}
@@ -289,7 +289,7 @@ export default function Inventory() {
             <p className="text-[13px] text-slate-text/60 mt-1">
               Try changing filters or add a new item.
             </p>
-            <Button variant="amber" className="mt-4" onClick={openAdd}>
+            <Button variant="primary" className="mt-4" onClick={openAdd}>
               <Plus size={15} /> Add Item
             </Button>
           </div>
@@ -297,7 +297,7 @@ export default function Inventory() {
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                   <th className="px-5 py-2.5 font-semibold">Item</th>
                   <th className="px-5 py-2.5 font-semibold">Category</th>
                   <th className="px-5 py-2.5 font-semibold">Current Stock</th>
@@ -317,7 +317,7 @@ export default function Inventory() {
                   return (
                     <tr
                       key={i.id}
-                      className="border-b border-black/[0.04] hover:bg-paper/60"
+                      className="border-b border-slate-100 hover:bg-paper/60"
                     >
                       <td className="px-5 py-3">
                         <p className="font-semibold text-ink">{i.item}</p>
@@ -401,7 +401,7 @@ export default function Inventory() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   {editId ? "Edit Item" : "Add Item"}
@@ -504,7 +504,7 @@ export default function Inventory() {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-between gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-between gap-2">
               <div>
                 {editId && (
                   <Button
@@ -524,7 +524,7 @@ export default function Inventory() {
                   Cancel
                 </Button>
                 <Button
-                  variant="amber"
+                  variant="primary"
                   onClick={handleSave}
                   disabled={!form.item.trim()}
                 >

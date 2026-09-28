@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
-import { Printer, Download, Search, Settings2, X, ImageUp, Trash2, Check } from "lucide-react";
+import { Printer, Download, Search, Settings2, X, ImageUp, Trash2, Check, Save } from "lucide-react";
 import { PageIntro, Card, Button, Select, Input, toast } from "../components/UI";
 import { api } from "../lib/api";
 import { selectSchool } from "../store/selectors";
@@ -10,7 +10,112 @@ import { usePermission } from "../lib/permissions";
 import { sessionLabel } from "../lib/session";
 
 const ACCENT_RE = /^#[0-9a-fA-F]{6}$/;
-const DEFAULT_ACCENT = "#E8A33D";
+const DEFAULT_ACCENT = "#4F46E5";
+
+// CCE co-scholastic (CLIENT-REQ-027): CBSE default areas + 6-point grade scale.
+const DEFAULT_CCE_AREAS = ["Work Education", "Art Education", "Health & Physical Education"];
+const CCE_GRADE_OPTIONS = [
+  { value: "", label: "—" },
+  { value: "A1", label: "A1 · Outstanding" },
+  { value: "A2", label: "A2 · Excellent" },
+  { value: "B1", label: "B1 · Very Good" },
+  { value: "B2", label: "B2 · Good" },
+  { value: "C", label: "C · Satisfactory" },
+  { value: "D", label: "D · Marginal" },
+];
+
+function mergeCceAreas(saved) {
+  const rows = Array.isArray(saved) ? saved : [];
+  return [
+    ...DEFAULT_CCE_AREAS.map((area) => {
+      const row = rows.find((r) => r.area === area);
+      return { area, grade: row?.grade || "", remark: row?.remark || "" };
+    }),
+    ...rows.filter((r) => !DEFAULT_CCE_AREAS.includes(r.area)),
+  ];
+}
+
+// Inline co-scholastic editor (staff only). Keyed per student+term+session by
+// the parent, so switching rows remounts it and local state resets naturally.
+function CceEditor({ initial, studentId, term, session, cls, section, onSaved }) {
+  const [areas, setAreas] = useState(() => mergeCceAreas(initial?.areas));
+  const [comments, setComments] = useState(initial?.comments || "");
+  const [busy, setBusy] = useState(false);
+
+  const updateArea = (index, field, value) =>
+    setAreas((rows) => rows.map((row, i) => (i === index ? { ...row, [field]: value } : row)));
+
+  const save = async () => {
+    if (!studentId || !term) {
+      toast("Pick a student and term first", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      const { data } = await api.cce.saveCoScholastic({
+        studentId,
+        term,
+        session: session || "",
+        class: cls || "",
+        section: section || "",
+        areas,
+        comments,
+      });
+      onSaved(data);
+    } catch (e) {
+      toast(e.message || "Could not save co-scholastic record", "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Card
+      className="no-print"
+      title="Co-Scholastic Assessment (CCE)"
+      action={
+        <Button variant="primary" onClick={save} disabled={busy}>
+          <Save size={14} /> {busy ? "Saving..." : "Save CCE"}
+        </Button>
+      }
+    >
+      <div className="space-y-2">
+        {areas.map((row, index) => (
+          <div key={row.area} className="flex flex-col sm:flex-row sm:items-center gap-2">
+            <p className="text-[13px] font-semibold text-ink sm:w-64 shrink-0">{row.area}</p>
+            <Select
+              value={row.grade}
+              onChange={(e) => updateArea(index, "grade", e.target.value)}
+              className="min-w-[170px]"
+            >
+              {CCE_GRADE_OPTIONS.map((g) => (
+                <option key={g.value} value={g.value}>
+                  {g.label}
+                </option>
+              ))}
+            </Select>
+            <Input
+              value={row.remark}
+              onChange={(e) => updateArea(index, "remark", e.target.value)}
+              placeholder="Remark (optional)"
+              className="flex-1"
+            />
+          </div>
+        ))}
+        <div>
+          <label className="block text-[12.5px] font-medium text-slate-text/70 mb-1.5">
+            Overall co-scholastic comments
+          </label>
+          <Input
+            value={comments}
+            onChange={(e) => setComments(e.target.value)}
+            placeholder="Teacher's overall note"
+          />
+        </div>
+      </div>
+    </Card>
+  );
+}
 
 function getRemark(pct) {
   if (pct >= 90) return "Outstanding performance. Keep up the excellent work!";
@@ -47,6 +152,8 @@ export default function ReportCard() {
     ? reportCardSettings.accent
     : DEFAULT_ACCENT;
   const [students, setStudents] = useState([]);
+  const [sessions, setSessions] = useState([]);
+  const [sessionFilter, setSessionFilter] = useState("");
   const [selectedId, setSelectedId] = useState("");
   const [term, setTerm] = useState("Term 1");
   const [query, setQuery] = useState("");
@@ -56,6 +163,8 @@ export default function ReportCard() {
   const [customizing, setCustomizing] = useState(false);
   const [savingCustom, setSavingCustom] = useState(false);
   const [customDraft, setCustomDraft] = useState(null);
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const canManageCce = usePermission("exams:write");
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -77,7 +186,7 @@ export default function ReportCard() {
           fatherName: item.parentName || "—",
           avatar:
             item.photoUrl ||
-            `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=16213E&color=fff&bold=true`,
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=172033&color=fff&bold=true`,
         }));
         setStudents(loadedStudents);
         setSelectedId(loadedStudents[0]?.id || "");
@@ -85,19 +194,65 @@ export default function ReportCard() {
       .catch((requestError) => setError(requestError.message));
   }, []);
 
+  // Session filter (CLIENT-REQ-026): default to the current session when the
+  // school has session records, else fall back to "All sessions" (legacy rows
+  // may carry no session label).
+  useEffect(() => {
+    api.sessions
+      .list()
+      .then(({ data }) => {
+        const rows = data || [];
+        setSessions(rows);
+        const current = rows.find((s) => s.isCurrent) || null;
+        setSessionFilter(current ? current.name : "");
+      })
+      .catch(() => setSessionFilter(""));
+  }, []);
+
+  // Shared query contract for the JSON report and the server-rendered PDF.
+  const reportQuery = useMemo(() => {
+    const selectedStudent = students.find((s) => s.id === selectedId);
+    const studentId = selectedStudent?.admissionNo || selectedId;
+    if (!studentId) return "";
+    return `studentId=${encodeURIComponent(studentId)}&examName=${encodeURIComponent(term)}&includeDrafts=${
+      includeDrafts ? "1" : "0"
+    }${sessionFilter ? `&session=${encodeURIComponent(sessionFilter)}` : ""}`;
+  }, [selectedId, students, term, includeDrafts, sessionFilter]);
+
   useEffect(() => {
     if (!selectedId) {
       setReport(null);
       return;
     }
-    const selectedStudent = students.find((s) => s.id === selectedId);
-    const studentId = selectedStudent?.admissionNo || selectedId;
-    const query = `studentId=${encodeURIComponent(studentId)}&examName=${encodeURIComponent(term)}&includeDrafts=${includeDrafts ? "1" : "0"}`;
+    if (!reportQuery) return;
     api.marks
-      .reportCard(query)
+      .reportCard(reportQuery)
       .then(({ data }) => setReport(data))
       .catch((requestError) => setError(requestError.message));
-  }, [selectedId, term, students, includeDrafts]);
+  }, [selectedId, reportQuery]);
+
+  // Canonical student identity (admissionNo) for CCE lookups/saves.
+  const reportStudentId = useMemo(() => {
+    const selectedStudent = students.find((s) => s.id === selectedId);
+    return (selectedStudent && selectedStudent.admissionNo) || selectedId || "";
+  }, [students, selectedId]);
+
+  // Co-scholastic (CCE) row for the selected student + term + session. Stored
+  // with the key it was loaded for, so a stale row is never shown while the
+  // next one is in flight (and no synchronous setState happens in the effect).
+  const cceKey = `${reportStudentId}|${term}|${sessionFilter}`;
+  const [cce, setCce] = useState({ key: "", data: null });
+  useEffect(() => {
+    if (!reportStudentId || !term) return;
+    const key = `${reportStudentId}|${term}|${sessionFilter}`;
+    api.cce
+      .getCoScholastic(
+        `studentId=${encodeURIComponent(reportStudentId)}&term=${encodeURIComponent(term)}&session=${encodeURIComponent(sessionFilter || "")}`,
+      )
+      .then(({ data }) => setCce({ key, data: data || null }))
+      .catch(() => setCce({ key, data: null }));
+  }, [reportStudentId, term, sessionFilter]);
+  const cceDoc = cce.key === cceKey ? cce.data : null;
 
   const filteredStudents = useMemo(() => {
     if (!query.trim()) return students.slice(0, 40);
@@ -141,7 +296,23 @@ export default function ReportCard() {
   const remark = maxTotal ? getRemark(Number(pct)) : "";
   const hasMarks = results.length > 0;
 
-  const attendancePct = student?.attendance;
+  const attendance = report?.attendance || null;
+  const attendancePct = attendance ? attendance.pct : null;
+  const classRank = report?.classRank || null;
+  const totalStudents = report?.totalStudents || 0;
+
+  const downloadPdf = async () => {
+    if (!reportQuery || downloadingPdf) return;
+    setDownloadingPdf(true);
+    try {
+      await api.marks.downloadReportCardPdf(reportQuery);
+      toast("Report card downloaded");
+    } catch (e) {
+      toast(e.message || "Download failed", "error");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   const openCustomize = () => {
     setCustomDraft({
@@ -173,7 +344,7 @@ export default function ReportCard() {
   const saveCustom = async () => {
     if (!customDraft) return;
     if (!ACCENT_RE.test(customDraft.accent)) {
-      toast("Accent must be a hex color like #E8A33D", "error");
+      toast("Accent must be a hex color like #4F46E5", "error");
       return;
     }
     setSavingCustom(true);
@@ -227,10 +398,14 @@ export default function ReportCard() {
                 <Settings2 size={15} /> Customize
               </Button>
             )}
-            <Button variant="outline">
-              <Download size={15} /> Download PDF
+            <Button
+              variant="outline"
+              onClick={downloadPdf}
+              disabled={downloadingPdf || !reportQuery}
+            >
+              <Download size={15} /> {downloadingPdf ? "Preparing..." : "Download PDF"}
             </Button>
-            <Button variant="amber" onClick={() => window.print()}>
+            <Button variant="primary" onClick={() => window.print()}>
               <Printer size={15} /> Print
             </Button>
           </div>
@@ -272,12 +447,25 @@ export default function ReportCard() {
             <option value="Term 2">Term 2</option>
             <option value="Final">Final</option>
           </Select>
+          <Select
+            value={sessionFilter}
+            onChange={(e) => setSessionFilter(e.target.value)}
+            className="min-w-[150px]"
+            title="Academic session"
+          >
+            <option value="">All sessions</option>
+            {sessions.map((s) => (
+              <option key={s._id} value={s.name}>
+                {s.name}
+              </option>
+            ))}
+          </Select>
           <label className="inline-flex items-center gap-2 shrink-0 text-[12.5px] font-medium text-slate-text cursor-pointer select-none">
             <input
               type="checkbox"
               checked={includeDrafts}
               onChange={(e) => setIncludeDrafts(e.target.checked)}
-              className="accent-amber"
+              className="accent-primary"
             />
             Include draft results
           </label>
@@ -289,6 +477,23 @@ export default function ReportCard() {
           </p>
         )}
       </Card>
+
+      {/* Co-scholastic entry (staff only, excluded from print) */}
+      {canManageCce && reportStudentId && term && (
+        <CceEditor
+          key={cceKey}
+          initial={cceDoc}
+          studentId={reportStudentId}
+          term={term}
+          session={sessionFilter || ""}
+          cls={student.class}
+          section={student.section}
+          onSaved={(doc) => {
+            setCce({ key: cceKey, data: doc });
+            toast("Co-scholastic record saved");
+          }}
+        />
+      )}
 
       {/* Report Card Preview */}
       <Card bodyClassName="p-0">
@@ -305,7 +510,7 @@ export default function ReportCard() {
                 className="h-16 max-w-[180px] w-auto object-contain mx-auto"
               />
             ) : (
-              <p className="w-16 h-16 rounded-2xl bg-ink text-amber text-3xl font-display font-bold flex items-center justify-center mx-auto">
+              <p className="w-16 h-16 rounded-2xl bg-primary text-white text-3xl font-display font-bold flex items-center justify-center mx-auto">
                 {schoolLogo}
               </p>
             )}
@@ -338,7 +543,7 @@ export default function ReportCard() {
             <img
               src={student.avatar}
               alt={student.name}
-              className="w-20 h-20 rounded-xl object-cover border border-black/10 shrink-0"
+              className="w-20 h-20 rounded-xl object-cover border border-slate-300 shrink-0"
             />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-2 text-[13px] flex-1">
               <p>
@@ -372,7 +577,7 @@ export default function ReportCard() {
 
           {/* Marks Table */}
           {!hasMarks && (
-            <div className="rounded-xl border border-black/[0.08] p-6 mb-6 text-center">
+            <div className="rounded-xl border border-slate-200 p-6 mb-6 text-center">
               <p className="text-[13.5px] font-semibold text-ink">
                 No marks recorded for {term} yet
               </p>
@@ -381,7 +586,7 @@ export default function ReportCard() {
               </p>
             </div>
           )}
-          <div className="overflow-x-auto rounded-xl border border-black/[0.08] mb-6">
+          <div className="overflow-x-auto rounded-xl border border-slate-200 mb-6">
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="bg-ink text-white text-left text-[11.5px] uppercase tracking-wide">
@@ -415,7 +620,7 @@ export default function ReportCard() {
                         {r.grade}
                       </span>
                       {r.status && r.status !== "published" && (
-                        <span className="block mt-1 text-[10px] font-semibold uppercase tracking-wide text-amber-dark">
+                        <span className="block mt-1 text-[10px] font-semibold uppercase tracking-wide text-primary-dark">
                           {r.status}
                         </span>
                       )}
@@ -427,7 +632,7 @@ export default function ReportCard() {
                   <td className="px-4 py-3 text-center text-ink">{maxTotal}</td>
                   <td className="px-4 py-3 text-center text-ink">{total}</td>
                   <td className="px-4 py-3 text-center">
-                    <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-0.5 rounded-md bg-amber text-ink text-[12px] font-bold">
+                    <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-0.5 rounded-md bg-primary text-white text-[12px] font-bold">
                       {overallGrade}
                     </span>
                   </td>
@@ -437,8 +642,8 @@ export default function ReportCard() {
           </div>
 
           {/* Summary boxes */}
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            <div className="rounded-xl border border-black/[0.08] p-3.5 text-center">
+          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
+            <div className="rounded-xl border border-slate-200 p-3.5 text-center">
               <p className="text-[11px] text-slate-text/60 uppercase tracking-wide font-semibold">
                 Percentage
               </p>
@@ -446,23 +651,40 @@ export default function ReportCard() {
                 {pct}%
               </p>
             </div>
-            <div className="rounded-xl border border-black/[0.08] p-3.5 text-center">
+            <div className="rounded-xl border border-slate-200 p-3.5 text-center">
               <p className="text-[11px] text-slate-text/60 uppercase tracking-wide font-semibold">
                 Overall Grade
               </p>
-              <p className="font-display text-2xl font-bold text-amber-dark mt-1">
+              <p className="font-display text-2xl font-bold text-primary-dark mt-1">
                 {overallGrade}
               </p>
             </div>
-            <div className="rounded-xl border border-black/[0.08] p-3.5 text-center">
+            <div className="rounded-xl border border-slate-200 p-3.5 text-center">
+              <p className="text-[11px] text-slate-text/60 uppercase tracking-wide font-semibold">
+                Class Rank
+              </p>
+              <p className="font-display text-2xl font-bold text-ink mt-1">
+                {classRank || "—"}
+              </p>
+              {classRank && totalStudents > 0 && (
+                <p className="text-[10px] text-slate-text/60 mt-0.5">of {totalStudents}</p>
+              )}
+            </div>
+            <div className="rounded-xl border border-slate-200 p-3.5 text-center">
               <p className="text-[11px] text-slate-text/60 uppercase tracking-wide font-semibold">
                 Attendance
               </p>
               <p className="font-display text-2xl font-bold text-success mt-1">
-                {attendancePct ? `${attendancePct}%` : "—"}
+                {attendancePct != null ? `${attendancePct}%` : "—"}
               </p>
+              {attendance && (
+                <p className="text-[10px] text-slate-text/60 mt-0.5">
+                  {attendance.present}P · {attendance.absent}A · {attendance.leave}L
+                  {attendance.halfDays ? ` · ${attendance.halfDays}H` : ""}
+                </p>
+              )}
             </div>
-            <div className="rounded-xl border border-black/[0.08] p-3.5 text-center">
+            <div className="rounded-xl border border-slate-200 p-3.5 text-center">
               <p className="text-[11px] text-slate-text/60 uppercase tracking-wide font-semibold">
                 Result
               </p>
@@ -476,8 +698,49 @@ export default function ReportCard() {
             </div>
           </div>
 
+          {/* Co-Scholastic Assessment (printed when a record exists or staff can add one) */}
+          {(cceDoc || canManageCce) && (
+            <div className="mb-6">
+              <p className="text-[11.5px] font-semibold text-slate-text/60 uppercase tracking-wide mb-2">
+                Co-Scholastic Assessment
+              </p>
+              <div className="overflow-x-auto rounded-xl border border-slate-200">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="bg-ink text-white text-left text-[11.5px] uppercase tracking-wide">
+                      <th className="px-4 py-2.5 font-semibold">Area</th>
+                      <th className="px-4 py-2.5 font-semibold text-center">Grade</th>
+                      <th className="px-4 py-2.5 font-semibold">Remark</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {mergeCceAreas(cceDoc?.areas).map((row, idx) => (
+                      <tr
+                        key={row.area}
+                        className={`border-b border-slate-100 last:border-0 ${idx % 2 ? "bg-paper/40" : "bg-white"}`}
+                      >
+                        <td className="px-4 py-2.5 font-semibold text-ink">{row.area}</td>
+                        <td className="px-4 py-2.5 text-center">
+                          <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-0.5 rounded-md bg-ink/8 text-ink text-[12px] font-bold">
+                            {row.grade || "—"}
+                          </span>
+                        </td>
+                        <td className="px-4 py-2.5 text-slate-text">{row.remark || "—"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {cceDoc?.comments && (
+                <p className="text-[12.5px] text-slate-text/80 mt-2">
+                  <span className="font-semibold">Comments:</span> {cceDoc.comments}
+                </p>
+              )}
+            </div>
+          )}
+
           {/* Remarks */}
-          <div className="rounded-xl bg-paper border border-black/[0.06] p-4 mb-8">
+          <div className="rounded-xl bg-paper border border-slate-200 p-4 mb-8">
             <p className="text-[11.5px] font-semibold text-slate-text/60 uppercase tracking-wide mb-1.5">
               Class Teacher's Remarks
             </p>
@@ -485,10 +748,10 @@ export default function ReportCard() {
           </div>
 
           {/* Signatures */}
-          <div className="grid grid-cols-3 gap-4 pt-6 border-t border-black/[0.08]">
+          <div className="grid grid-cols-3 gap-4 pt-6 border-t border-slate-200">
             <div className="text-center">
               <div className="h-12 mb-2" />
-              <div className="border-t border-black/20 pt-2">
+              <div className="border-t border-slate-400 pt-2">
                 <p className="text-[12px] font-semibold text-ink">
                   Class Teacher
                 </p>
@@ -496,13 +759,13 @@ export default function ReportCard() {
             </div>
             <div className="text-center">
               <div className="h-12 mb-2" />
-              <div className="border-t border-black/20 pt-2">
+              <div className="border-t border-slate-400 pt-2">
                 <p className="text-[12px] font-semibold text-ink">Principal</p>
               </div>
             </div>
             <div className="text-center">
               <div className="h-12 mb-2" />
-              <div className="border-t border-black/20 pt-2">
+              <div className="border-t border-slate-400 pt-2">
                 <p className="text-[12px] font-semibold text-ink">
                   Parent / Guardian
                 </p>
@@ -528,7 +791,7 @@ export default function ReportCard() {
             onClick={() => !savingCustom && setCustomizing(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
                   Customize Report Card
@@ -553,7 +816,7 @@ export default function ReportCard() {
                   School Logo
                 </label>
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 rounded-xl border border-black/10 bg-paper flex items-center justify-center overflow-hidden shrink-0">
+                  <div className="w-16 h-16 rounded-xl border border-slate-300 bg-paper flex items-center justify-center overflow-hidden shrink-0">
                     {customDraft.logo ? (
                       <img
                         src={customDraft.logo}
@@ -643,7 +906,7 @@ export default function ReportCard() {
                     onChange={(e) =>
                       setCustomDraft((d) => ({ ...d, accent: e.target.value }))
                     }
-                    className="w-10 h-10 rounded-lg border border-black/10 cursor-pointer bg-transparent p-0.5"
+                    className="w-10 h-10 rounded-lg border border-slate-300 cursor-pointer bg-transparent p-0.5"
                   />
                   <Input
                     value={customDraft.accent}
@@ -651,7 +914,7 @@ export default function ReportCard() {
                       setCustomDraft((d) => ({ ...d, accent: e.target.value }))
                     }
                     className="w-28 font-mono"
-                    placeholder="#E8A33D"
+                    placeholder="#4F46E5"
                   />
                 </div>
                 <p className="text-[11.5px] text-slate-text/50 mt-1.5">
@@ -660,7 +923,7 @@ export default function ReportCard() {
               </div>
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={() => setCustomizing(false)}
@@ -669,7 +932,7 @@ export default function ReportCard() {
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={saveCustom}
                 disabled={savingCustom || !ACCENT_RE.test(customDraft.accent)}
               >
@@ -703,7 +966,7 @@ export default function ReportCard() {
 //         right={
 //           <div className="flex gap-2">
 //             <Button variant="outline"><Download size={15} /> Download PDF</Button>
-//             <Button variant="amber" onClick={() => window.print()}><Printer size={15} /> Print</Button>
+//             <Button variant="primary" onClick={() => window.print()}><Printer size={15} /> Print</Button>
 //           </div>
 //         }
 //       />
@@ -723,7 +986,7 @@ export default function ReportCard() {
 //             <h2 className="font-display text-xl font-bold text-ink mt-1">{school.name}</h2>
 //             <p className="text-[11.5px] text-slate-text">{school.address}</p>
 //             <p className="text-[11px] text-slate-text/70">{school.affiliation}</p>
-//             <p className="font-display font-semibold text-amber-dark mt-2 text-[13px]">TERM 2 — PROGRESS REPORT · {school.session}</p>
+//             <p className="font-display font-semibold text-primary-dark mt-2 text-[13px]">TERM 2 — PROGRESS REPORT · {school.session}</p>
 //           </div>
 
 //           <div className="flex items-center gap-4 mb-6">
@@ -738,7 +1001,7 @@ export default function ReportCard() {
 //             </div>
 //           </div>
 
-//           <table className="w-full text-[13px] border border-black/10 rounded-lg overflow-hidden mb-5">
+//           <table className="w-full text-[13px] border border-slate-300 rounded-lg overflow-hidden mb-5">
 //             <thead>
 //               <tr className="bg-ink text-white text-left text-[11.5px] uppercase">
 //                 <th className="px-4 py-2.5 font-semibold">Subject</th>
@@ -751,7 +1014,7 @@ export default function ReportCard() {
 //               {subjectResults.map((s) => {
 //                 const g = s.marks >= 90 ? "A1" : s.marks >= 80 ? "A2" : s.marks >= 70 ? "B1" : "B2";
 //                 return (
-//                   <tr key={s.subject} className="border-t border-black/[0.06]">
+//                   <tr key={s.subject} className="border-t border-slate-200">
 //                     <td className="px-4 py-2.5 font-medium text-ink">{s.subject}</td>
 //                     <td className="px-4 py-2.5 text-center text-slate-text">{s.marks}</td>
 //                     <td className="px-4 py-2.5 text-center text-slate-text">{s.max}</td>
@@ -790,7 +1053,7 @@ export default function ReportCard() {
 //             </p>
 //           </div>
 
-//           <div className="flex justify-between mt-10 pt-4 border-t border-black/10 text-[11.5px] text-slate-text">
+//           <div className="flex justify-between mt-10 pt-4 border-t border-slate-300 text-[11.5px] text-slate-text">
 //             <p>Class Teacher's Signature</p>
 //             <p>Principal's Signature</p>
 //           </div>

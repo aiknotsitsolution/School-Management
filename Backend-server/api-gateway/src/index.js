@@ -10,6 +10,10 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 const PROXY_TIMEOUT_MS = Number(process.env.PROXY_TIMEOUT_MS || 300000);
 
+// Behind a reverse proxy / load balancer so express-rate-limit and req.ip
+// see the real client IP (required for correct rate limiting).
+app.set("trust proxy", 1);
+
 app.use(helmet());
 app.use(
   cors({
@@ -161,6 +165,14 @@ const routes = [
     target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
   },
   {
+    path: "/api/grading-scales",
+    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
+  },
+  {
+    path: "/api/cce",
+    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
+  },
+  {
     path: "/api/marks",
     target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
   },
@@ -225,6 +237,18 @@ const routes = [
     target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
   },
   {
+    path: "/api/diary",
+    target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
+  },
+  {
+    path: "/api/messages",
+    target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
+  },
+  {
+    path: "/api/broadcast",
+    target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
+  },
+  {
     path: "/api/library",
     target: process.env.LIBRARY_SERVICE_URL || "http://localhost:5007",
   },
@@ -239,6 +263,10 @@ const routes = [
   {
     path: "/api/inventory",
     target: process.env.FACILITY_SERVICE_URL || "http://localhost:5008",
+  },
+  {
+    path: "/api/accounting",
+    target: process.env.ACCOUNTING_SERVICE_URL || "http://localhost:5009",
   },
 ];
 

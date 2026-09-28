@@ -113,7 +113,7 @@ function BlockSearchableSelect({ options, value, onChange, onAddCustom }) {
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
-        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15"
+        className="w-full flex items-center justify-between gap-2 px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-[13.5px] text-ink outline-none transition-all hover:border-slate-400 focus:border-primary focus:ring-4 focus:ring-primary/15"
       >
         <span className={value ? "" : "text-slate-text/60"}>
           {value || "Select block"}
@@ -125,8 +125,8 @@ function BlockSearchableSelect({ options, value, onChange, onAddCustom }) {
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl border border-black/10 shadow-lg shadow-black/5 overflow-hidden">
-          <div className="relative p-2 border-b border-black/[0.06]">
+        <div className="absolute z-30 mt-1.5 w-full bg-white rounded-xl border border-slate-300 shadow-lg shadow-black/5 overflow-hidden">
+          <div className="relative p-2 border-b border-slate-200">
             <Search
               size={14}
               className="absolute left-4.5 top-1/2 -translate-y-1/2 text-slate-text/40"
@@ -136,7 +136,7 @@ function BlockSearchableSelect({ options, value, onChange, onAddCustom }) {
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search or type a new block…"
-              className="w-full pl-9 pr-3 py-2 rounded-lg bg-paper border border-black/[0.06] text-[13px] outline-none focus:border-amber/50"
+              className="w-full pl-9 pr-3 py-2 rounded-lg bg-paper border border-slate-200 text-[13px] outline-none focus:border-primary/50"
             />
           </div>
 
@@ -147,12 +147,12 @@ function BlockSearchableSelect({ options, value, onChange, onAddCustom }) {
                   type="button"
                   onClick={() => commit(opt)}
                   className={`w-full text-left px-3.5 py-2 text-[13px] transition-colors ${
-                    i === activeIndex ? "bg-amber/10 text-ink" : "text-ink hover:bg-paper"
+                    i === activeIndex ? "bg-primary/10 text-ink" : "text-ink hover:bg-paper"
                   }`}
                 >
                   {String(opt)}
                   {String(opt).toLowerCase() === q && (
-                    <span className="ml-1.5 text-[11px] text-amber-dark font-medium">(custom)</span>
+                    <span className="ml-1.5 text-[11px] text-primary-dark font-medium">(custom)</span>
                   )}
                 </button>
               </li>
@@ -163,8 +163,8 @@ function BlockSearchableSelect({ options, value, onChange, onAddCustom }) {
                 <button
                   type="button"
                   onClick={() => commit(query.trim(), true)}
-                  className={`w-full text-left px-3.5 py-2 text-[13px] text-amber-dark font-medium hover:bg-amber/10 transition-colors ${
-                    activeIndex === matches.length ? "bg-amber/10" : ""
+                  className={`w-full text-left px-3.5 py-2 text-[13px] text-primary-dark font-medium hover:bg-primary/10 transition-colors ${
+                    activeIndex === matches.length ? "bg-primary/10" : ""
                   }`}
                 >
                   + Add "{query.trim()}"
@@ -313,7 +313,7 @@ export default function Hostel({ embedded = false }) {
 
   const toolbar = (
     <>
-      <Button variant="amber" onClick={() => setShowAllotModal(true)}>
+      <Button variant="primary" onClick={() => setShowAllotModal(true)}>
         <Plus size={15} /> Allot Room
       </Button>
       <Button
@@ -444,7 +444,7 @@ export default function Hostel({ embedded = false }) {
           label="Hostel Students"
           value={String(totalStudents)}
           sub="Currently allotted"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={BedDouble}
@@ -476,8 +476,8 @@ export default function Hostel({ embedded = false }) {
             onClick={() => setWingFilter(w)}
             className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
               wingFilter === w
-                ? "bg-ink text-white border-ink"
-                : "bg-white text-slate-text border-black/10 hover:border-ink/30"
+                ? "bg-primary text-white border-primary"
+                : "bg-white text-slate-text border-slate-300 hover:border-ink/30"
             }`}
           >
             {w === "All" ? "All Wings" : w}
@@ -549,7 +549,7 @@ export default function Hostel({ embedded = false }) {
             onClick={() => setShowRoomModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/6">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <h3 className="font-display font-semibold text-ink text-[17px]">
                 Add Room
               </h3>
@@ -628,11 +628,11 @@ export default function Hostel({ embedded = false }) {
                 </div>
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-black/6 flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowRoomModal(false)}>
                 Cancel
               </Button>
-              <Button variant="amber" onClick={addRoom}>
+              <Button variant="primary" onClick={addRoom}>
                 <Save size={15} /> Add Room
               </Button>
             </div>
@@ -647,7 +647,7 @@ export default function Hostel({ embedded = false }) {
             onClick={() => setShowAllotModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/6">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <h3 className="font-display font-semibold text-ink text-[17px]">
                 Allot Room
               </h3>
@@ -709,7 +709,7 @@ export default function Hostel({ embedded = false }) {
                 />
               </div>
             </div>
-            <div className="px-5 py-4 border-t border-black/6 flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button
                 variant="outline"
                 onClick={() => setShowAllotModal(false)}
@@ -717,7 +717,7 @@ export default function Hostel({ embedded = false }) {
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={allotStudent}
                 disabled={!allotForm.name.trim() || !allotForm.moveOutRoom}
               >

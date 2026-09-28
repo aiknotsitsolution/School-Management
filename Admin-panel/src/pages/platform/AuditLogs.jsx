@@ -153,7 +153,7 @@ export default function AuditLogs() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[12.5px]">
               <thead className="bg-paper">
-                <tr className="border-b border-black/[0.06] text-[11px] uppercase tracking-wide text-slate-text">
+                <tr className="border-b border-slate-200 text-[11px] uppercase tracking-wide text-slate-text">
                   <th className="py-2.5 px-4 font-semibold">When</th>
                   <th className="py-2.5 px-4 font-semibold">Actor</th>
                   <th className="py-2.5 px-4 font-semibold">Action</th>
@@ -162,7 +162,7 @@ export default function AuditLogs() {
                   <th className="py-2.5 px-4 font-semibold">Detail</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-black/[0.04]">
+              <tbody className="divide-y divide-slate-100">
                 {rows.map((row) => (
                   <tr key={row._id} className="hover:bg-paper/60 align-top">
                     <td className="py-2.5 px-4 whitespace-nowrap text-slate-text">{fmtDate(row.createdAt)}</td>
@@ -200,7 +200,7 @@ export default function AuditLogs() {
         )}
 
         {pages > 1 && (
-          <div className="flex items-center justify-between px-4 py-3 border-t border-black/[0.06]">
+          <div className="flex items-center justify-between px-4 py-3 border-t border-slate-200">
             <button
               disabled={page <= 1}
               onClick={() => setPage((p) => Math.max(1, p - 1))}
@@ -228,7 +228,7 @@ export default function AuditLogs() {
             onClick={() => setSelectedLog(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <h3 className="font-display font-semibold text-ink text-[17px]">Audit Log Details</h3>
               <button
                 onClick={() => setSelectedLog(null)}
@@ -254,7 +254,7 @@ export default function AuditLogs() {
               </div>
 
               {/* Actor */}
-              <div className="border-t border-black/[0.06] pt-4">
+              <div className="border-t border-slate-200 pt-4">
                 <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase mb-3">Actor</p>
                 <div className="grid grid-cols-2 gap-3 text-[13px]">
                   <KV label="Email" value={selectedLog.actorEmail || "Not available"} mono />
@@ -263,7 +263,7 @@ export default function AuditLogs() {
               </div>
 
               {/* Target */}
-              <div className="border-t border-black/[0.06] pt-4">
+              <div className="border-t border-slate-200 pt-4">
                 <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase mb-3">Target</p>
                 <div className="grid grid-cols-2 gap-3 text-[13px]">
                   <KV label="Type" value={selectedLog.targetType || "Not available"} />
@@ -272,7 +272,7 @@ export default function AuditLogs() {
               </div>
 
               {/* Details */}
-              <div className="border-t border-black/[0.06] pt-4">
+              <div className="border-t border-slate-200 pt-4">
                 <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase mb-3">Details</p>
                 <div className="text-[13px]">
                   {selectedLog.message ? (
@@ -288,7 +288,7 @@ export default function AuditLogs() {
 
               {/* Request / Context */}
               {(selectedLog.context?.ip || selectedLog.context?.userAgent || selectedLog.context?.xSchoolId) && (
-                <div className="border-t border-black/[0.06] pt-4">
+                <div className="border-t border-slate-200 pt-4">
                   <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase mb-3">Request / Context</p>
                   <div className="grid grid-cols-2 gap-3 text-[13px]">
                     <KV label="IP Address" value={selectedLog.context?.ip || "Not available"} mono />
@@ -304,7 +304,7 @@ export default function AuditLogs() {
 
             </div>
 
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end">
               <Button variant="outline" onClick={() => setSelectedLog(null)}>
                 Close
               </Button>

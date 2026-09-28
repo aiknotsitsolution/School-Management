@@ -14,7 +14,7 @@ const LIMIT_LABELS = {
 const STATUS_TONES = {
   trialing: "info",
   active: "success",
-  past_due: "amber",
+  past_due: "primary",
   suspended: "neutral",
   cancelled: "alert",
   expired: "neutral",
@@ -322,12 +322,12 @@ export default function Subscription() {
             <div className="relative" ref={invoiceDropdownRef}>
               <button
                 onClick={() => setInvoiceDropdownOpen(!invoiceDropdownOpen)}
-                className="flex items-center gap-1.5 text-[12.5px] font-medium text-slate-text hover:text-ink border border-black/[0.08] rounded-lg px-3 py-1.5 hover:bg-paper transition-colors"
+                className="flex items-center gap-1.5 text-[12.5px] font-medium text-slate-text hover:text-ink border border-slate-200 rounded-lg px-3 py-1.5 hover:bg-paper transition-colors"
               >
                 <FileText size={14} /> Invoices <ChevronDown size={12} className={`transition-transform ${invoiceDropdownOpen ? "rotate-180" : ""}`} />
               </button>
               {invoiceDropdownOpen && (
-                <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl border border-black/[0.08] shadow-lg z-30 py-1">
+                <div className="absolute right-0 top-full mt-1 w-52 bg-white rounded-xl border border-slate-200 shadow-lg z-30 py-1">
                   <button
                     className="w-full text-left px-3 py-2 text-[12.5px] text-ink hover:bg-paper flex items-center gap-2"
                     onClick={() => {
@@ -348,7 +348,7 @@ export default function Subscription() {
                   >
                     <Eye size={13} /> View Invoice
                   </button>
-                  <div className="border-t border-black/[0.06] my-1" />
+                  <div className="border-t border-slate-200 my-1" />
                   <button
                     className="w-full text-left px-3 py-2 text-[12.5px] text-ink hover:bg-paper flex items-center gap-2"
                     onClick={() => {
@@ -450,10 +450,10 @@ export default function Subscription() {
             </div>
 
             {isTrial && (
-              <div className="mt-5 rounded-2xl border border-amber/30 bg-gradient-to-br from-amber/5 via-transparent to-amber/10 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
+              <div className="mt-5 rounded-2xl border border-primary/30 bg-gradient-to-br from-primary/5 via-transparent to-primary/10 p-5 flex flex-col sm:flex-row items-start sm:items-center gap-4">
                 <div className="flex items-center gap-3">
-                  <div className="w-11 h-11 rounded-xl bg-amber/15 flex items-center justify-center shrink-0">
-                    <Clock size={22} className="text-amber-dark" />
+                  <div className="w-11 h-11 rounded-xl bg-primary/15 flex items-center justify-center shrink-0">
+                    <Clock size={22} className="text-primary-dark" />
                   </div>
                   <div>
                     <p className="text-[13.5px] font-bold text-ink">Your trial is active</p>
@@ -470,7 +470,7 @@ export default function Subscription() {
                 </div>
                 <div className="flex items-center gap-2 sm:ml-auto shrink-0">
                   <Button
-                    variant="amber"
+                    variant="primary"
                     className="!text-[12.5px]"
                     onClick={() => document.getElementById("plans-section")?.scrollIntoView({ behavior: "smooth" })}
                   >
@@ -478,7 +478,7 @@ export default function Subscription() {
                   </Button>
                   {!isTrialPlan && (
                     <Button
-                      variant="amber"
+                      variant="primary"
                       className="!text-[12.5px]"
                       onClick={() => currentPlan && openCheckout(currentPlan)}
                       disabled={!!busyId}
@@ -537,7 +537,7 @@ export default function Subscription() {
       >
         <div className="grid sm:grid-cols-2 xl:grid-cols-3 gap-5">
           {notice && (
-            <div className="sm:col-span-2 xl:col-span-3 rounded-lg bg-amber/10 border border-amber/20 px-4 py-3 text-[12.5px] text-slate-text">
+            <div className="sm:col-span-2 xl:col-span-3 rounded-lg bg-primary/10 border border-primary/20 px-4 py-3 text-[12.5px] text-slate-text">
               {notice}
             </div>
           )}
@@ -610,7 +610,7 @@ export default function Subscription() {
                       <Button variant="outline" className="flex-1 justify-center" onClick={() => setViewPlan(plan)}>
                         <Eye size={14} /> View Plan
                       </Button>
-                      <Button variant="amber" className="flex-1 justify-center" onClick={() => openCheckout(plan)} disabled={!!busyId}>
+                      <Button variant="primary" className="flex-1 justify-center" onClick={() => openCheckout(plan)} disabled={!!busyId}>
                         <Zap size={14} /> {busyId === plan._id ? "Switching…" : (isTrial ? `Upgrade to ${plan.name}` : "Switch")}
                       </Button>
                     </div>
@@ -629,7 +629,7 @@ export default function Subscription() {
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={!processing ? closeCheckout : undefined} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-black/[0.06] flex items-center justify-between">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[16px]">{checkoutPlan.name}</h3>
                 <p className="text-[12px] text-slate-text/60">{checkoutPlan.description}</p>
@@ -651,7 +651,7 @@ export default function Subscription() {
 
               {/* Switch mode (only when there's an active subscription) */}
               {sub && (
-                <div className="rounded-lg border border-black/[0.06] p-4 space-y-3">
+                <div className="rounded-lg border border-slate-200 p-4 space-y-3">
                   <p className="text-[12.5px] font-semibold text-ink">When do you want this plan to start?</p>
 
                   {/* Advance option */}
@@ -663,7 +663,7 @@ export default function Subscription() {
                       checked={switchMode === "advance"}
                       onChange={() => { setSwitchMode("advance"); setDeclarationChecked(false); }}
                       disabled={processing}
-                      className="mt-0.5 accent-amber"
+                      className="mt-0.5 accent-primary"
                     />
                     <div>
                       <span className="text-[13px] font-medium text-ink">Start after current plan expires</span>
@@ -682,11 +682,11 @@ export default function Subscription() {
                       checked={switchMode === "immediate"}
                       onChange={() => setSwitchMode("immediate")}
                       disabled={processing}
-                      className="mt-0.5 accent-amber"
+                      className="mt-0.5 accent-primary"
                     />
                     <div>
                       <span className="text-[13px] font-medium text-ink">Start immediately</span>
-                      <p className="text-[11.5px] text-amber-dark mt-0.5">
+                      <p className="text-[11.5px] text-primary-dark mt-0.5">
                         Your remaining {Math.max(0, Math.ceil((new Date(sub.currentPeriodEnd) - new Date()) / (1000 * 60 * 60 * 24)))} days on {sub.planId?.name || "current"} plan will be forfeited
                       </p>
                     </div>
@@ -694,13 +694,13 @@ export default function Subscription() {
 
                   {/* Declaration checkbox (only for immediate) */}
                   {switchMode === "immediate" && (
-                    <label className="flex items-start gap-3 pt-2 border-t border-black/[0.04] cursor-pointer">
+                    <label className="flex items-start gap-3 pt-2 border-t border-slate-100 cursor-pointer">
                       <input
                         type="checkbox"
                         checked={declarationChecked}
                         onChange={(e) => setDeclarationChecked(e.target.checked)}
                         disabled={processing}
-                        className="mt-0.5 accent-amber"
+                        className="mt-0.5 accent-primary"
                       />
                       <span className="text-[12px] text-slate-text leading-snug">
                         I understand that my remaining days on the current plan will be forfeited and this action cannot be undone.
@@ -743,7 +743,7 @@ export default function Subscription() {
                     {duration} {duration === 1 ? getUnitLabel(checkoutPlan) : getPluralLabel(checkoutPlan)}
                   </span>
                 </div>
-                <div className="border-t border-black/10 pt-2 flex items-center justify-between text-[14px]">
+                <div className="border-t border-slate-300 pt-2 flex items-center justify-between text-[14px]">
                   <span className="font-semibold text-ink">Total</span>
                   <span className="font-display font-bold text-ink text-lg">
                     {fmtMoney(checkoutPlan.price * duration)}
@@ -769,12 +769,12 @@ export default function Subscription() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={closeCheckout} disabled={processing}>
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={() => {
                   if (switchMode === "immediate" && sub) {
                     setShowConfirmModal(true);
@@ -797,8 +797,8 @@ export default function Subscription() {
           <div className="absolute inset-0 bg-ink/60 backdrop-blur-sm" onClick={() => !processing && setShowConfirmModal(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm overflow-hidden">
             <div className="px-6 py-5 text-center space-y-4">
-              <div className="w-14 h-14 rounded-full bg-amber/15 flex items-center justify-center mx-auto">
-                <AlertTriangle size={28} className="text-amber-dark" />
+              <div className="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center mx-auto">
+                <AlertTriangle size={28} className="text-primary-dark" />
               </div>
               <div>
                 <h3 className="font-display font-semibold text-ink text-[16px]">Switch Immediately?</h3>
@@ -808,16 +808,16 @@ export default function Subscription() {
                 </p>
                 <p className="text-[13px] text-slate-text mt-2 leading-relaxed">
                   If you switch to <strong>{checkoutPlan.name}</strong> immediately, your remaining days will be{" "}
-                  <strong className="text-amber-dark">forfeited</strong> and this action cannot be undone.
+                  <strong className="text-primary-dark">forfeited</strong> and this action cannot be undone.
                 </p>
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-black/[0.06] flex justify-center gap-3">
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-center gap-3">
               <Button variant="outline" onClick={() => setShowConfirmModal(false)} disabled={processing} className="flex-1">
                 Go Back
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={() => upgrade(checkoutPlan, duration, "immediate")}
                 disabled={processing}
                 className="flex-1"
@@ -835,7 +835,7 @@ export default function Subscription() {
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setViewPlan(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[85vh] flex flex-col">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-black/[0.06] flex items-center justify-between shrink-0">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[16px]">{viewPlan.name}</h3>
                 <p className="text-[12px] text-slate-text/60">{viewPlan.code}</p>
@@ -916,9 +916,9 @@ export default function Subscription() {
             </div>
 
             {/* Footer */}
-            <div className="px-6 py-4 border-t border-black/[0.06] flex justify-end gap-2 shrink-0">
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2 shrink-0">
               <Button variant="outline" onClick={() => setViewPlan(null)}>Close</Button>
-              <Button variant="amber" onClick={() => { setViewPlan(null); openCheckout(viewPlan); }}>
+              <Button variant="primary" onClick={() => { setViewPlan(null); openCheckout(viewPlan); }}>
                 <Zap size={14} /> Buy {viewPlan.name}
               </Button>
             </div>
@@ -931,7 +931,7 @@ export default function Subscription() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => !viewInvoiceLoading && setViewInvoice(null)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden max-h-[85vh] flex flex-col">
-            <div className="px-6 py-4 border-b border-black/[0.06] flex items-center justify-between shrink-0">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[16px]">
                   {viewInvoice ? `Invoice ${viewInvoice.invoiceNumber}` : "Loading…"}
@@ -952,7 +952,7 @@ export default function Subscription() {
                 <div className="space-y-4">
                   {/* Status */}
                   <div className="flex items-center gap-2">
-                    <Pill tone={viewInvoice.status === "paid" ? "success" : viewInvoice.status === "overdue" ? "alert" : "amber"}>
+                    <Pill tone={viewInvoice.status === "paid" ? "success" : viewInvoice.status === "overdue" ? "alert" : "primary"}>
                       {(viewInvoice.status || "issued").toUpperCase()}
                     </Pill>
                     <span className="text-[12px] text-slate-text/60">
@@ -1004,7 +1004,7 @@ export default function Subscription() {
                         </div>
                       </>
                     )}
-                    <div className="border-t border-black/10 pt-2 flex items-center justify-between text-[14px]">
+                    <div className="border-t border-slate-300 pt-2 flex items-center justify-between text-[14px]">
                       <span className="font-semibold text-ink">Total Paid</span>
                       <span className="font-display font-bold text-ink">{fmtMoney(viewInvoice.totalAmount || viewInvoice.amount)}</span>
                     </div>
@@ -1013,10 +1013,10 @@ export default function Subscription() {
               ) : null}
             </div>
 
-            <div className="px-6 py-4 border-t border-black/[0.06] flex justify-end gap-2 shrink-0">
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2 shrink-0">
               <Button variant="outline" onClick={() => setViewInvoice(null)}>Close</Button>
               {viewInvoice && ["paid", "issued"].includes(viewInvoice.status) && (
-                <Button variant="amber" onClick={() => downloadInvoicePdf(viewInvoice._id)}>
+                <Button variant="primary" onClick={() => downloadInvoicePdf(viewInvoice._id)}>
                   <Download size={14} /> Download PDF
                 </Button>
               )}
@@ -1031,7 +1031,7 @@ export default function Subscription() {
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setShowInvoicesList(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden max-h-[85vh] flex flex-col">
             {/* Header */}
-            <div className="px-6 py-4 border-b border-black/[0.06] flex items-center justify-between shrink-0">
+            <div className="px-6 py-4 border-b border-slate-200 flex items-center justify-between shrink-0">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[16px]">Transaction History</h3>
                 <p className="text-[12px] text-slate-text/60">{invoicesTotal} invoice{invoicesTotal !== 1 ? "s" : ""} total</p>
@@ -1042,17 +1042,17 @@ export default function Subscription() {
             </div>
 
             {/* Filters */}
-            <div className="px-6 py-3 border-b border-black/[0.04] flex items-center gap-3 shrink-0">
+            <div className="px-6 py-3 border-b border-slate-100 flex items-center gap-3 shrink-0">
               <input
                 type="text"
                 placeholder="Search invoices…"
-                className="flex-1 text-[12.5px] border border-black/[0.08] rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber/30"
+                className="flex-1 text-[12.5px] border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30"
                 value={invoicesSearch}
                 onChange={(e) => setInvoicesSearch(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") fetchInvoicesList(1, invoicesSearch, invoicesStatusFilter); }}
               />
               <select
-                className="text-[12.5px] border border-black/[0.08] rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-amber/30 bg-white"
+                className="text-[12.5px] border border-slate-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-primary/30 bg-white"
                 value={invoicesStatusFilter}
                 onChange={(e) => { setInvoicesStatusFilter(e.target.value); fetchInvoicesList(1, invoicesSearch, e.target.value); }}
               >
@@ -1074,13 +1074,13 @@ export default function Subscription() {
                   <p className="text-[13px] text-slate-text/60">No invoices found</p>
                 </div>
               ) : (
-                <div className="divide-y divide-black/[0.04]">
+                <div className="divide-y divide-slate-100">
                   {invoicesList.map((inv) => (
                     <div key={inv._id} className="px-6 py-3 flex items-center gap-4 hover:bg-paper/50">
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-[13px] font-medium text-ink truncate">{inv.invoiceNumber}</span>
-                          <Pill tone={inv.status === "paid" ? "success" : inv.status === "overdue" ? "alert" : "amber"}>
+                          <Pill tone={inv.status === "paid" ? "success" : inv.status === "overdue" ? "alert" : "primary"}>
                             {inv.status}
                           </Pill>
                         </div>
@@ -1117,7 +1117,7 @@ export default function Subscription() {
 
             {/* Pagination */}
             {invoicesPages > 1 && (
-              <div className="px-6 py-3 border-t border-black/[0.06] flex items-center justify-between shrink-0">
+              <div className="px-6 py-3 border-t border-slate-200 flex items-center justify-between shrink-0">
                 <span className="text-[12px] text-slate-text/60">
                   Page {invoicesPage} of {invoicesPages}
                 </span>

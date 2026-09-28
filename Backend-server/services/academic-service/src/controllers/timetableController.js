@@ -1,5 +1,12 @@
 const Timetable = require("../models/Timetable");
-const { findMissingMasterRefs, findMissingSubjects, missingMessage } = require("../utils/masterRefs");
+const {
+  findMissingMasterRefs,
+  findMissingSubjects,
+  findMissingRooms,
+  missingMessage,
+} = require("../utils/masterRefs");
+const { findIntraDayOverlaps } = require("../utils/periodConflictLib");
+const { findCrossClassConflicts } = require("../utils/periodConflicts");
 
 // Mass-assignment guard: only these fields may be set from the request body.
 const TIMETABLE_FIELDS = ["class", "section", "day", "periods"];
@@ -10,18 +17,21 @@ const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
 
 // Normalise & validate the incoming periods array. Returns { ok, errors, periods }.
-function validatePeriods(periods, { schoolId, cls, section, day, currentId }) {
+// Time-format/semantic errors are 400s; scheduling overlaps are detected
+// separately in the controller and returned as 409 conflicts.
+function validatePeriods(periods) {
   const errors = [];
   if (!Array.isArray(periods)) {
     return { ok: false, errors: ["periods must be an array"] };
   }
   if (periods.length === 0) return { ok: true, errors: [], periods };
 
-  const seenTimes = new Set();
   const normalized = periods.map((p, i) => {
     const subject = String(p.subject || "").trim();
     const teacherId = String(p.teacherId || "").trim();
     const teacherName = String(p.teacherName || "").trim();
+    const roomId = String(p.roomId || "").trim();
+    const roomName = String(p.roomName || "").trim();
     const startTime = String(p.startTime || "").trim();
     const endTime = String(p.endTime || "").trim();
 
@@ -35,52 +45,12 @@ function validatePeriods(periods, { schoolId, cls, section, day, currentId }) {
     if (startTime && endTime && TIME_RE.test(startTime) && TIME_RE.test(endTime) && endTime <= startTime) {
       errors.push(`Period ${i + 1}: endTime must be after startTime`);
     }
-    if (startTime) {
-      if (seenTimes.has(startTime)) {
-        errors.push(`Period ${i + 1}: duplicate period startTime "${startTime}" in the same day`);
-      }
-      seenTimes.add(startTime);
-    }
-    return { subject, teacherId, teacherName, startTime, endTime };
+    return { subject, teacherId, teacherName, roomId, roomName, startTime, endTime };
   });
 
   if (errors.length) return { ok: false, errors, periods: normalized };
 
   return { ok: true, errors, periods: normalized };
-}
-
-// Detect cross-class teacher conflicts for the same day+startTime within the school,
-// excluding the record currently being written (if any).
-async function checkTeacherConflicts({ schoolId, day, periods, currentId }) {
-  const committed = periods.filter((p) => p.teacherId && p.startTime);
-  if (!committed.length) return [];
-
-  const overlapping = await Timetable.find({
-    schoolId,
-    day,
-    _id: currentId ? { $ne: currentId } : { $ne: null },
-    periods: {
-      $elemMatch: {
-        teacherId: { $in: committed.map((p) => p.teacherId) },
-        startTime: { $in: committed.map((p) => p.startTime) },
-      },
-    },
-  }).lean();
-
-  const conflicts = [];
-  for (const doc of overlapping) {
-    for (const other of doc.periods) {
-      const match = committed.find(
-        (p) => p.teacherId === other.teacherId && p.startTime === other.startTime
-      );
-      if (match) {
-        conflicts.push(
-          `${other.teacherName || other.teacherId} is already teaching ${other.subject} at ${other.startTime} on ${day} (${doc.class}-${doc.section})`
-        );
-      }
-    }
-  }
-  return conflicts;
 }
 
 const upsertTimetable = async (req, res) => {
@@ -94,38 +64,53 @@ const upsertTimetable = async (req, res) => {
       return res.status(400).json({ success: false, message: `day must be one of: ${DAYS.join(", ")}` });
     }
 
-    const check = await validatePeriods(periods, { schoolId: req.tenantId, cls, section, day });
+    const check = await validatePeriods(periods);
     if (!check.ok) {
       return res.status(400).json({ success: false, message: check.errors.join("; ") });
     }
 
-    // Referential integrity: class/section/period-subjects must resolve to
-    // active masters when this school has configured the catalogs.
+    // Referential integrity: class/section/period-subjects/period-rooms must
+    // resolve to active masters when this school has configured the catalogs.
     const missing = [
       ...(await findMissingMasterRefs({ schoolId: req.tenantId, class: cls, section })),
       ...(await findMissingSubjects({
         schoolId: req.tenantId,
         subjects: check.periods.map((p) => p.subject),
       })),
+      ...(await findMissingRooms({
+        schoolId: req.tenantId,
+        // The catalog resolves by key/name, so validate the denormalised
+        // roomName (an _id-only period is left unvalidated, like empty refs).
+        rooms: check.periods.map((p) => p.roomName),
+      })),
     ];
     if (missing.length) {
       return res.status(400).json({ success: false, message: missingMessage(missing) });
     }
 
+    // Scheduling conflicts (409): interval overlap inside this day + teacher
+    // and room clashes against every other class-section of the school.
+    const intraDay = findIntraDayOverlaps(check.periods);
+    if (intraDay.length) {
+      return res
+        .status(409)
+        .json({ success: false, message: "Scheduling conflict detected", conflicts: intraDay });
+    }
+
     const existing = await Timetable.findOne({ schoolId: req.tenantId, class: cls, section, day }).lean();
     const currentId = existing ? existing._id : null;
 
-    const teacherConflicts = await checkTeacherConflicts({
+    const crossConflicts = await findCrossClassConflicts({
       schoolId: req.tenantId,
       day,
       periods: check.periods,
       currentId,
     });
-    if (teacherConflicts.length) {
+    if (crossConflicts.length) {
       return res.status(409).json({
         success: false,
         message: "Scheduling conflict detected",
-        conflicts: teacherConflicts,
+        conflicts: crossConflicts,
       });
     }
 

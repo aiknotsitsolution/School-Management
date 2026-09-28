@@ -16,6 +16,7 @@ const services = [
   ["communication", "services/communication-service", 5006],
   ["library", "services/library-service", 5007],
   ["facility", "services/facility-service", 5008],
+  ["accounting", "services/accounting-service", 5009],
 ];
 
 function isPortOpen(port) {

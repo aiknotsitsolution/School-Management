@@ -1,5 +1,20 @@
 const mongoose = require("mongoose");
 
+// Paths that must stay reachable without an active subscription so a school
+// can renew/upgrade (or the platform can manage billing). Matched against
+// req.originalUrl (includes /api/... prefix from the gateway).
+const SUBSCRIPTION_EXEMPT_PATHS = [
+  "/api/payments/orders",
+  "/api/webhooks",
+  "/api/auth/school/me/subscription",
+  "/api/auth/internal/subscription-paid",
+];
+
+const isExemptPath = (url = "") => {
+  const path = url.split("?")[0];
+  return SUBSCRIPTION_EXEMPT_PATHS.some((p) => path.startsWith(p));
+};
+
 /**
  * Middleware that blocks school_admin access when the school has no active
  * subscription. Must run AFTER resolveTenant + requireSchoolActive.
@@ -16,6 +31,11 @@ const requireSubscriptionActive = async (req, res, next) => {
 
   // Super admin bypasses subscription checks
   if (req.user && req.user.role === "super_admin") {
+    return next();
+  }
+
+  // Billing/renewal endpoints must work even when the subscription has lapsed.
+  if (isExemptPath(req.originalUrl || req.url)) {
     return next();
   }
 

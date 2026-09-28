@@ -25,7 +25,7 @@ export default function SplashScreen() {
       {CORNER_RINGS.map((r, i) => (
         <div
           key={i}
-          className="absolute rounded-full border-2 border-amber/25"
+          className="absolute rounded-full border-2 border-primary/25"
           style={{
             width: r.size,
             height: r.size,
@@ -38,7 +38,7 @@ export default function SplashScreen() {
           }}
         >
           <div
-            className="absolute inset-2 rounded-full border border-amber/15"
+            className="absolute inset-2 rounded-full border border-primary/15"
             style={{ animation: `corner-ring-pulse 2.5s ease-in-out ${r.delay + 0.5}s infinite` }}
           />
         </div>
@@ -48,7 +48,7 @@ export default function SplashScreen() {
       <div
         className="absolute w-80 h-80 rounded-full"
         style={{
-          background: "radial-gradient(circle, rgba(232,163,61,0.1) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(79,70,229,0.1) 0%, transparent 70%)",
           animation: "center-glow 2s ease-out 0.3s both",
         }}
       />
@@ -58,7 +58,7 @@ export default function SplashScreen() {
         {/* Logo — 360 rotate in */}
         <div className="relative">
           <div
-            className="absolute -inset-6 rounded-full border border-amber/10"
+            className="absolute -inset-6 rounded-full border border-primary/10"
             style={{ animation: "logo-ring-spin 4s linear 0.2s infinite" }}
           />
           <img
@@ -80,7 +80,7 @@ export default function SplashScreen() {
           className="text-[12px] text-white/45"
           style={{ animation: "splash-fade-in 0.8s ease-out 1s both" }}
         >
-          Powered By <span className="text-amber/70 font-medium">AI Knots IT Solution</span>
+          Powered By <span className="text-white/70 font-medium">AI Knots IT Solution</span>
         </p>
 
         {/* Dot spinner */}

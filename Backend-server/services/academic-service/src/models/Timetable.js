@@ -5,6 +5,8 @@ const periodSchema = new mongoose.Schema(
     subject: String,
     teacherId: String,
     teacherName: String,
+    roomId: { type: String, default: "" },
+    roomName: { type: String, default: "" },
     startTime: String,
     endTime: String,
   },

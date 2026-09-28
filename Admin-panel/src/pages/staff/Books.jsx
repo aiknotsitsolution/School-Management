@@ -89,7 +89,7 @@ export default function Books() {
         right={
           !showForm && (
             <Button
-              variant="amber"
+              variant="primary"
               onClick={() => {
                 setEditing(null);
                 setShowForm(true);
@@ -107,7 +107,7 @@ export default function Books() {
           icon={null}
           label="Total Copies"
           value={String((books || []).reduce((s, b) => s + Number(b.totalCopies || 0), 0))}
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={null}
@@ -176,7 +176,7 @@ export default function Books() {
               </thead>
               <tbody>
                 {list.map((b) => (
-                  <tr key={b._id} className="border-t border-black/[0.06] hover:bg-paper/60">
+                  <tr key={b._id} className="border-t border-slate-200 hover:bg-paper/60">
                     <td className="px-5 py-2.5">
                       <p className="font-semibold text-ink">{b.title}</p>
                       <p className="text-[12px] text-slate-text/60">{b.author || "—"}</p>
@@ -185,7 +185,7 @@ export default function Books() {
                     <td className="px-3 py-2.5 text-slate-text/80">{b.isbn || "—"}</td>
                     <td className="px-3 py-2.5">{b.totalCopies}</td>
                     <td className="px-3 py-2.5">
-                      <Pill tone={Number(b.availableCopies || 0) === 0 ? "alert" : Number(b.availableCopies || 0) < 3 ? "amber" : "success"}>
+                      <Pill tone={Number(b.availableCopies || 0) === 0 ? "alert" : Number(b.availableCopies || 0) < 3 ? "primary" : "success"}>
                         {b.availableCopies || 0}
                       </Pill>
                     </td>

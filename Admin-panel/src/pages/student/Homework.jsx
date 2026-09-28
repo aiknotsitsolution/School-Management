@@ -112,7 +112,7 @@ export default function Homework() {
             <p className="text-[11px] text-slate-text/60 mt-1">Assignments for your class</p>
           </div>
         </Card>
-        <Card><p className="font-display text-xl font-bold text-amber-dark">{submittedCount}</p><p className="text-[11px] text-slate-text/60 mt-1">Submitted</p></Card>
+        <Card><p className="font-display text-xl font-bold text-primary-dark">{submittedCount}</p><p className="text-[11px] text-slate-text/60 mt-1">Submitted</p></Card>
         <Card><p className="font-display text-xl font-bold text-alert">{decorated.filter((h) => h.submission?.status === "Reviewed").length}</p><p className="text-[11px] text-slate-text/60 mt-1">Reviewed</p></Card>
       </div>
 
@@ -143,7 +143,7 @@ export default function Homework() {
             {sorted.map((h) => {
               const sub = h.submission;
               return (
-                <div key={h._id} className="rounded-xl border border-black/[0.06] p-4 hover:border-black/10 transition-colors">
+                <div key={h._id} className="rounded-xl border border-slate-200 p-4 hover:border-slate-300 transition-colors">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
@@ -163,7 +163,7 @@ export default function Homework() {
                         sub.status === "Reviewed" ? (
                           <Pill tone="success">Reviewed · {sub.marks != null ? `${sub.marks}/${h.maxMarks ?? 10}` : "Graded"}</Pill>
                         ) : (
-                          <Pill tone="amber">{sub.status}</Pill>
+                          <Pill tone="primary">{sub.status}</Pill>
                         )
                       ) : h.overdue ? (
                         <Pill tone="alert">Overdue</Pill>
@@ -181,8 +181,8 @@ export default function Homework() {
                       {sub.content && <p className="text-slate-text/80 whitespace-pre-wrap">{sub.content}</p>}
                       <AttachmentLinks attachments={sub.attachments} />
                       {sub.teacherFeedback && (
-                        <div className="mt-1.5 border-t border-black/[0.06] pt-1.5 flex items-start gap-1.5">
-                          <span className="text-amber-dark font-semibold">Teacher:</span>
+                        <div className="mt-1.5 border-t border-slate-200 pt-1.5 flex items-start gap-1.5">
+                          <span className="text-primary-dark font-semibold">Teacher:</span>
                           <span className="text-ink">{sub.teacherFeedback}</span>
                         </div>
                       )}
@@ -197,7 +197,7 @@ export default function Homework() {
                     </div>
                   )}
                   {active?._id === h._id && (
-                    <div className="mt-3 rounded-xl border border-amber/40 bg-amber/[0.04] p-3 space-y-3">
+                    <div className="mt-3 rounded-xl border border-primary/40 bg-primary/[0.04] p-3 space-y-3">
                       <div>
                         <label className="text-[11px] font-semibold text-ink uppercase tracking-wide">Your response</label>
                         <textarea
@@ -205,7 +205,7 @@ export default function Homework() {
                           onChange={(e) => setDraft(e.target.value)}
                           rows={4}
                           placeholder="Type your answer here… (optional if you attach a file)"
-                          className="w-full mt-2 rounded-lg border border-black/10 bg-white p-3 text-[13px] text-ink outline-none focus:border-amber resize-y"
+                          className="w-full mt-2 rounded-lg border border-slate-300 bg-white p-3 text-[13px] text-ink outline-none focus:border-primary resize-y"
                         />
                       </div>
                       <FileDropzone

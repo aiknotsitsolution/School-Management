@@ -69,7 +69,7 @@ export default function Allocations() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Users} label="Total Allocation Slots" value={String(routes.reduce((s, r) => s + (r.assignedStudents?.length || 0), 0))} sub="Assigned across routes" accent="info" />
-        <StatCard icon={Users} label="Routes with Students" value={String(routes.filter((r) => r.assignedStudents?.length > 0).length)} accent="amber" />
+        <StatCard icon={Users} label="Routes with Students" value={String(routes.filter((r) => r.assignedStudents?.length > 0).length)} accent="primary" />
         <StatCard icon={Users} label="Routes Empty" value={String(routes.filter((r) => !r.assignedStudents || r.assignedStudents.length === 0).length)} accent="alert" />
         <StatCard icon={null} label="Routes" value={String(routes.length)} accent="success" />
       </div>
@@ -100,7 +100,7 @@ export default function Allocations() {
                   />
                 </div>
                 {students.length > 0 && (
-                  <div className="border border-black/[0.06] rounded-xl overflow-hidden">
+                  <div className="border border-slate-200 rounded-xl overflow-hidden">
                     {(students || []).map((s) => (
                       <button
                         key={s._id}
@@ -134,7 +134,7 @@ export default function Allocations() {
           ) : (
             <div className="space-y-2">
               {(active.assignedStudents || []).map((id) => (
-                <div key={id} className="flex items-center justify-between rounded-lg border border-black/[0.06] px-3.5 py-2.5">
+                <div key={id} className="flex items-center justify-between rounded-lg border border-slate-200 px-3.5 py-2.5">
                   <span className="text-[13px] font-semibold text-ink">{id}</span>
                 </div>
               ))}

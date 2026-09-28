@@ -10,6 +10,11 @@ const userSchema = new mongoose.Schema(
     role: { type: String, index: true },
     designation: { type: String, default: null },
     isActive: { type: Boolean, default: true },
+    // parent accounts carry their linked children (admissionNos) in the JWT;
+    // mirrored here so class-tagged fan-out and broadcast can reach parents
+    // (parents have refId === null, so refId-only resolvers can never find them).
+    linkedStudentIds: [{ type: String }],
+    email: { type: String, default: null },
   },
   { strict: true }
 );

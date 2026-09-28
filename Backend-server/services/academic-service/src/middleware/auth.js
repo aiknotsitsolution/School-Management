@@ -8,6 +8,7 @@ const {
 } = require("@school-erp/shared/src/middleware/teacherScopeAuth");
 const { resolveTenant } = require("@school-erp/shared/src/middleware/tenant");
 const { requireSchoolActive } = require("@school-erp/shared/src/middleware/requireSchoolActive");
+const { requireSubscriptionActive } = require("@school-erp/shared/src/middleware/requireSubscriptionActive");
 const JWT_SECRET = getJwtSecret();
 
 const verifyToken = async (req, res, next) => {
@@ -17,6 +18,10 @@ const verifyToken = async (req, res, next) => {
   }
   try {
     const decoded = jwt.verify(header.split(" ")[1], JWT_SECRET);
+    // Reject refresh tokens used as access tokens (typ claim).
+    if (decoded.typ !== "access") {
+      return res.status(401).json({ success: false, message: "Invalid token type" });
+    }
     const UserModel = mongoose.models.User;
     const tokenValidationOff = process.env.TOKEN_VALIDATION === "off" && process.env.NODE_ENV !== "production";
     if (!tokenValidationOff && UserModel) {
@@ -39,7 +44,10 @@ const requireTenant = async (req, res, next) => {
   if (!req.tenantId) {
     return res.status(400).json({ success: false, message: "No school context for this request" });
   }
-  return requireSchoolActive(req, res, next);
+  return requireSchoolActive(req, res, (err) => {
+    if (err) return next(err);
+    return requireSubscriptionActive(req, res, next);
+  });
 };
 
 const requirePermission = (permission) => (req, res, next) => {
@@ -59,7 +67,31 @@ const authorizeRoles = (...roles) => (req, res, next) => {
 };
 
 const scopeStudentQuery = (req, res, next) => {
-  if (req.user.role === "student") req.query.studentId = req.user.refId;
+  if (req.user.role === "student") {
+    req.query.studentId = req.user.refId;
+    return next();
+  }
+  // Parents are scoped to their linked children: without an explicit
+  // ?studentId they list all linked children via $in; with one they may only
+  // pick one of their own children (never someone else's).
+  if (req.user.role === "parent") {
+    const linked = (req.user.linkedStudentIds || []).map((s) => String(s)).filter(Boolean);
+    if (linked.length === 0) {
+      // Fail closed: no children, so the query can never match anyone.
+      req.query.studentId = { $in: [] };
+      return next();
+    }
+    if (req.query.studentId) {
+      const requested = String(req.query.studentId).trim();
+      if (!linked.includes(requested)) {
+        return res.status(403).json({ success: false, message: "You can only view your linked children's data" });
+      }
+      req.query.studentId = requested;
+      return next();
+    }
+    req.query.studentId = { $in: linked };
+    return next();
+  }
   next();
 };
 

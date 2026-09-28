@@ -10,6 +10,9 @@ const ENQUIRY_FIELDS = [
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
+const isDuplicateKey = (err) =>
+  err && (err.code === 11000 || (err.name === "MongoServerError" && err.code === 11000));
+
 const PHONE_RE = /^[+]?[0-9\s-]{10,15}$/;
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
@@ -84,6 +87,7 @@ const ensureStudentShell = async ({
   const existing = await Student.findOne({
     schoolId: req.tenantId,
     admissionNo,
+    deletedAt: null,
   });
   if (existing) return { shell: existing, created: false };
 
@@ -108,7 +112,23 @@ const ensureStudentShell = async ({
   if (contact && String(contact).trim()) data.parentContact = String(contact).trim();
   if (email && String(email).trim()) data.parentEmail = String(email).trim();
 
-  const shell = await Student.create(data);
+  let shell;
+  try {
+    shell = await Student.create(data);
+  } catch (err) {
+    // Race: a concurrent confirmation created the same Admission ID between
+    // our findOne and create — the unique index won, so reuse that shell and
+    // keep the confirmation idempotent instead of failing the request.
+    if (isDuplicateKey(err)) {
+      const winner = await Student.findOne({
+        schoolId: req.tenantId,
+        admissionNo,
+        deletedAt: null,
+      });
+      if (winner) return { shell: winner, created: false };
+    }
+    throw err;
+  }
   return { shell, created: true };
 };
 
@@ -162,6 +182,11 @@ const createEnquiry = async (req, res) => {
     }
     res.status(201).json({ success: true, data: enquiry });
   } catch (err) {
+    if (isDuplicateKey(err)) {
+      return res
+        .status(409)
+        .json({ success: false, message: "This Admission ID is already assigned in this school" });
+    }
     res.status(400).json({ success: false, message: err.message });
   }
 };
@@ -240,6 +265,11 @@ const updateEnquiry = async (req, res) => {
     }
     res.json({ success: true, data: enquiry });
   } catch (err) {
+    if (isDuplicateKey(err)) {
+      return res
+        .status(409)
+        .json({ success: false, message: "This Admission ID is already assigned in this school" });
+    }
     res.status(400).json({ success: false, message: err.message });
   }
 };

@@ -3,14 +3,14 @@
 import { Children, useEffect, useRef, useState } from "react";
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
 
-export function StatCard({ icon: Icon, label, value, sub, accent = "amber" }) {
+export function StatCard({ icon: Icon, label, value, sub, accent = "primary" }) {
   const accents = {
-    amber: "border-amber text-amber bg-amber/10",
+    primary: "border-primary text-primary bg-primary/10",
     success: "border-success text-success bg-success/10",
     info: "border-info text-info bg-info/10",
     alert: "border-alert text-alert bg-alert/10",
   };
-  const tone = accents[accent] || accents.amber;
+  const tone = accents[accent] || accents.primary;
   return (
     <div className={`bg-white rounded-2xl p-5 border-l-4 ${tone.split(" ")[0]} shadow-sm`}>
       <div className="flex items-start justify-between">
@@ -29,12 +29,24 @@ export function StatCard({ icon: Icon, label, value, sub, accent = "amber" }) {
   );
 }
 
-export function Card({ title, action, children, className = "", bodyClassName = "p-5" }) {
+export function Card({
+  title,
+  subtitle,
+  action,
+  children,
+  className = "",
+  bodyClassName = "p-5",
+  headerClassName = "px-5 py-4 border-b border-slate-200",
+  titleClassName = "font-display font-semibold text-ink text-[15px]",
+}) {
   return (
-    <div className={`bg-white rounded-2xl border border-black/[0.06] shadow-sm ${className}`}>
+    <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm ${className}`}>
       {title && (
-        <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
-          <h3 className="font-display font-semibold text-ink text-[15px]">{title}</h3>
+        <div className={`flex items-center justify-between gap-3 ${headerClassName}`}>
+          <div className="min-w-0">
+            <h3 className={`${titleClassName}${typeof title === "string" ? " truncate" : ""}`}>{title}</h3>
+            {subtitle && <p className="mt-1 text-[12.5px] text-slate-text/70">{subtitle}</p>}
+          </div>
           {action}
         </div>
       )}
@@ -48,7 +60,8 @@ export function Pill({ children, tone = "neutral" }) {
     neutral: "bg-slate-100 text-slate-600",
     success: "bg-success/10 text-success",
     alert: "bg-alert/10 text-alert",
-    amber: "bg-amber/15 text-amber-dark",
+    primary: "bg-primary/15 text-primary-dark",
+    warning: "bg-warning-light text-amber-700",
     info: "bg-info/10 text-info",
   };
   return (
@@ -62,7 +75,7 @@ export function statusTone(status) {
   const map = {
     Paid: "success", Success: "success", Submitted: "success", Graded: "success",
     "Admission Confirmed": "success", "On Route": "success", Present: "success",
-    Pending: "amber", "Partially Paid": "amber", "Pending Clearance": "amber",
+    Pending: "warning", "Partially Paid": "warning", "Pending Clearance": "warning",
     New: "info", Contacted: "info", "Campus Visit Scheduled": "info", "Not Started": "info",
     Overdue: "alert", Declined: "alert", Absent: "alert", Delayed: "alert",
   };
@@ -85,7 +98,7 @@ export function Avatar({ src, name, size = 32, className = "" }) {
         role="img"
         aria-label={name}
         style={{ width: size, height: size, fontSize: Math.round(size * 0.4) }}
-        className={`rounded-full bg-amber/25 text-amber-dark font-display font-bold flex items-center justify-center shrink-0 ${className}`}
+        className={`rounded-full bg-primary/25 text-primary-dark font-display font-bold flex items-center justify-center shrink-0 ${className}`}
       >
         {initials}
       </div>
@@ -106,7 +119,7 @@ export function PageIntro({ eyebrow, title, description, descriptionClassName = 
   return (
     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
       <div>
-        {eyebrow && <p className="text-[12.5px] font-semibold text-amber-dark mb-1">{eyebrow}</p>}
+        {eyebrow && <p className="text-[12.5px] font-semibold text-primary-dark mb-1">{eyebrow}</p>}
         <h2 className="font-display text-2xl font-bold text-ink">{title}</h2>
         {description && <p className={`text-slate-text text-[13.5px] mt-1 ${descriptionClassName}`}>{description}</p>}
       </div>
@@ -117,11 +130,10 @@ export function PageIntro({ eyebrow, title, description, descriptionClassName = 
 
 export function Button({ children, variant = "primary", className = "", ...props }) {
   const variants = {
-    primary: "bg-ink text-white hover:bg-ink-light",
-    amber: "bg-amber text-ink hover:bg-amber-dark",
-    outline: "bg-white text-ink border border-black/10 hover:bg-paper",
-    ghost: "text-ink hover:bg-black/5",
-    danger: "bg-red-600 text-white hover:bg-red-700",
+    primary: "bg-primary text-white hover:bg-primary-dark",
+    outline: "bg-white text-slate-700 border border-slate-200 hover:bg-slate-50",
+    ghost: "text-slate-700 hover:bg-slate-100",
+    danger: "bg-alert text-white hover:bg-alert/90",
   };
   return (
     <button
@@ -145,7 +157,7 @@ export function Input({ className = "", type = "text", wrapperClassName = "", mi
         type={visibleType}
         min={dateMin}
         max={dateMax}
-        className={`w-full px-4 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all placeholder:text-slate-text/40 hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15 ${className}`}
+        className={`w-full px-4 py-2.5 rounded-xl border border-slate-300 bg-white text-[13.5px] text-ink outline-none transition-all placeholder:text-slate-text/40 hover:border-slate-400 focus:border-primary focus:ring-4 focus:ring-primary/15 ${className}`}
         {...props}
       />
     );
@@ -154,7 +166,7 @@ export function Input({ className = "", type = "text", wrapperClassName = "", mi
     <div className={`relative w-full ${wrapperClassName}`}>
       <input
         type={visibleType}
-        className={`w-full pl-4 pr-10 py-2.5 rounded-xl border border-black/10 bg-white text-[13.5px] text-ink outline-none transition-all placeholder:text-slate-text/40 hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15 ${className}`}
+        className={`w-full pl-4 pr-10 py-2.5 rounded-xl border border-slate-300 bg-white text-[13.5px] text-ink outline-none transition-all placeholder:text-slate-text/40 hover:border-slate-400 focus:border-primary focus:ring-4 focus:ring-primary/15 ${className}`}
         {...props}
       />
       <button
@@ -177,7 +189,8 @@ export function PasswordInput({ icon: Icon, className = "", ...props }) {
       {Icon && <Icon size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-text/40" />}
       <input
         type={show ? "text" : "password"}
-        className={`w-full pl-10 pr-10 py-3 rounded-lg border border-black/10 text-[13.5px] outline-none focus:border-ink/40 bg-white ${className}`}
+className={`w-full pl-10 pr-10 py-3 rounded-lg border border-slate-300 text-[13.5px] outline-none 
+focus:border-primary bg-white ${className}`}
         {...props}
       />
       <button
@@ -299,10 +312,10 @@ export function Select({
             : open
               ? borderless
                 ? "bg-paper"
-                : "border-amber ring-4 ring-amber/15"
+                : "border-primary ring-4 ring-primary/15"
               : borderless
                 ? "hover:bg-paper"
-                : "border-black/10 hover:border-black/20"
+                : "border-slate-300 hover:border-slate-400"
         }`}
       >
         <span
@@ -319,7 +332,7 @@ export function Select({
       {open && (
         <div
           role="listbox"
-          className="absolute left-0 top-full z-40 mt-1.5 w-full overflow-hidden rounded-xl border border-black/10 bg-white shadow-lg shadow-black/5"
+          className="absolute left-0 top-full z-40 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-300 bg-white shadow-lg shadow-black/5"
         >
           <div className="max-h-72 overflow-y-auto p-1">
             {options.map((option) => {
@@ -334,7 +347,7 @@ export function Select({
                   onClick={() => commit(option)}
                   className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-[13px] transition-colors ${
                     active
-                      ? "bg-amber/10 font-semibold text-ink"
+                      ? "bg-primary/10 font-semibold text-ink"
                       : option.disabled
                         ? "cursor-not-allowed text-slate-text/40"
                         : "text-slate-text hover:bg-paper hover:text-ink"
@@ -346,7 +359,7 @@ export function Select({
                     {option.label}
                   </span>
                   {active && (
-                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-amber-dark" />
+                    <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-primary-dark" />
                   )}
                 </button>
               );
@@ -364,10 +377,10 @@ export function toast(message, tone = "success") {
   if (_activeToasts.has(message)) return;
   _activeToasts.add(message);
   const tones = {
-    success: { bg: "#3F8F5F", icon: "✓" },
-    error: { bg: "#D65A4A", icon: "✕" },
-    info: { bg: "#3B6FA0", icon: "ℹ" },
-    amber: { bg: "#C9832A", icon: "!" },
+    success: { bg: "#16A34A", icon: "✓" },
+    error: { bg: "#DC2626", icon: "✕" },
+    info: { bg: "#2563EB", icon: "ℹ" },
+    primary: { bg: "#4F46E5", icon: "!" },
   };
   const t = tones[tone] || tones.success;
   const el = document.createElement("div");

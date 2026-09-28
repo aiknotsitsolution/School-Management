@@ -16,7 +16,7 @@ import {
   Zap,
   Camera,
 } from "lucide-react";
-import { PageIntro, Card, Pill, Input, toast } from "../components/UI";
+import { PageIntro, Card, Pill, Input, Button, PasswordInput, toast } from "../components/UI";
 import { SegmentedTabs } from "../components/Pagination";
 import { selectUser, selectSchool } from "../store/selectors";
 import { setUser, setSchool as setSchoolAction } from "../store/authSlice";
@@ -74,6 +74,7 @@ const fmtDate = (v) =>
 
 const TABS = [
   { id: "profile", label: "My Profile", icon: UserIcon },
+  { id: "security", label: "Security", icon: Shield },
   { id: "organization", label: "Organization Profile", icon: Building2 },
 ];
 
@@ -387,6 +388,8 @@ export default function Account() {
         />
       )}
 
+      {activeTab === "security" && <SecurityTab />}
+
       {activeTab === "organization" && (
         <OrganizationTab
           school={schoolData}
@@ -408,6 +411,126 @@ export default function Account() {
           sessionSaving={sessionSaving}
         />
       )}
+    </div>
+  );
+}
+
+function SecurityTab() {
+  const [form, setForm] = useState({
+    oldPassword: "",
+    newPassword: "",
+    confirmPassword: "",
+  });
+  const [saving, setSaving] = useState(false);
+
+  const set = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+
+  const submit = async (e) => {
+    e.preventDefault();
+    if (!form.oldPassword) return toast("Enter your current password", "error");
+    if (form.newPassword.length < 8)
+      return toast("Password must be at least 8 characters long", "error");
+    if (!/[a-zA-Z]/.test(form.newPassword) || !/[0-9]/.test(form.newPassword))
+      return toast("Password must contain at least one letter and one number", "error");
+    if (form.newPassword !== form.confirmPassword)
+      return toast("New passwords do not match", "error");
+    if (form.newPassword === form.oldPassword)
+      return toast("New password must be different from the current one", "error");
+
+    setSaving(true);
+    try {
+      const res = await api.changePassword({
+        oldPassword: form.oldPassword,
+        newPassword: form.newPassword,
+      });
+      toast(res?.message || "Password updated successfully", "success");
+      setForm({ oldPassword: "", newPassword: "", confirmPassword: "" });
+    } catch (err) {
+      toast(err.message || "Could not change password", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="grid lg:grid-cols-3 gap-5">
+      <Card title="Change password">
+        <form onSubmit={submit} className="space-y-4">
+          <div>
+            <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+              Current password
+            </label>
+            <PasswordInput
+              value={form.oldPassword}
+              onChange={set("oldPassword")}
+              autoComplete="current-password"
+              placeholder="Enter current password"
+            />
+          </div>
+          <div>
+            <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+              New password
+            </label>
+            <PasswordInput
+              value={form.newPassword}
+              onChange={set("newPassword")}
+              autoComplete="new-password"
+              placeholder="At least 8 characters"
+            />
+          </div>
+          <div>
+            <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+              Confirm new password
+            </label>
+            <PasswordInput
+              value={form.confirmPassword}
+              onChange={set("confirmPassword")}
+              autoComplete="new-password"
+              placeholder="Re-enter new password"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-2 pt-1">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() =>
+                setForm({ oldPassword: "", newPassword: "", confirmPassword: "" })
+              }
+              disabled={saving}
+            >
+              Clear
+            </Button>
+            <Button type="submit" variant="primary" disabled={saving}>
+              {saving ? "Updating…" : "Update password"}
+            </Button>
+          </div>
+        </form>
+      </Card>
+
+      <div className="lg:col-span-2 space-y-5">
+        <Card title="Password policy">
+          <ul className="space-y-2 text-[13px] text-slate-text">
+            <li className="flex items-start gap-2">
+              <BadgeCheck size={15} className="text-success mt-0.5 shrink-0" />
+              At least 8 characters
+            </li>
+            <li className="flex items-start gap-2">
+              <BadgeCheck size={15} className="text-success mt-0.5 shrink-0" />
+              At least one letter and one number
+            </li>
+            <li className="flex items-start gap-2">
+              <BadgeCheck size={15} className="text-success mt-0.5 shrink-0" />
+              Different from your current password
+            </li>
+          </ul>
+        </Card>
+        <Card title="Sessions">
+          <p className="text-[13px] text-slate-text">
+            Changing your password signs out every other device. Sessions on this
+            device stay active until the access token expires.
+          </p>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -466,7 +589,7 @@ function ProfileTab({
             ) : undefined
           }
         >
-          <div className="divide-y divide-black/[0.05]">
+          <div className="divide-y divide-slate-100">
             <div className="flex items-center gap-3 py-3">
               <UserIcon size={16} className="text-slate-text/50" />
               <span className="text-[12px] text-slate-text/70 w-32 shrink-0">Name</span>
@@ -514,18 +637,18 @@ function ProfileTab({
           </div>
 
           {editMode && (
-            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-black/[0.06]">
+            <div className="flex items-center gap-2 mt-4 pt-4 border-t border-slate-200">
               <button
                 onClick={onCancel}
                 disabled={saving}
-                className="px-4 py-2 text-[13px] font-semibold text-slate-text hover:text-ink rounded-lg border border-black/[0.08] hover:bg-paper transition-colors"
+                className="px-4 py-2 text-[13px] font-semibold text-slate-text hover:text-ink rounded-lg border border-slate-200 hover:bg-paper transition-colors"
               >
                 Cancel
               </button>
               <button
                 onClick={onSave}
                 disabled={saving}
-                className="px-4 py-2 text-[13px] font-semibold text-amber bg-ink rounded-lg hover:bg-ink/90 transition-colors disabled:opacity-50"
+                className="px-4 py-2 text-[13px] font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
               >
                 {saving ? "Saving…" : "Save Changes"}
               </button>
@@ -654,7 +777,7 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
               {schoolLogo ? (
                 <img src={schoolLogo} alt="School logo" className="w-full h-full object-contain" />
               ) : (
-                <span className="text-amber text-3xl font-display font-bold">{schoolInitial}</span>
+                <span className="text-primary text-3xl font-display font-bold">{schoolInitial}</span>
               )}
             </div>
             <label className="absolute inset-0 rounded-full bg-ink/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer">
@@ -760,7 +883,7 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
             <button
               onClick={onSaveSession}
               disabled={sessionSaving}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold text-amber bg-ink rounded-lg hover:bg-ink/90 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
             >
               {sessionSaving ? "Saving…" : "Save Session"}
             </button>
@@ -791,7 +914,7 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
             <button
               onClick={onSaveSession}
               disabled={sessionSaving}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold text-amber bg-ink rounded-lg hover:bg-ink/90 transition-colors disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
             >
               {sessionSaving ? "Saving…" : "Create Session"}
             </button>
@@ -801,7 +924,7 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
 
       {ORG_SECTIONS.map((section) => (
         <Card key={section.title} title={section.title}>
-          <div className="divide-y divide-black/[0.05]">
+          <div className="divide-y divide-slate-100">
             {section.fields.map(({ key, label, type, required, readOnly }) => {
               const Icon = orgFieldIcons[key] || BadgeCheck;
               const value = school[key];
@@ -829,7 +952,7 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
                       className={`inline-flex items-center gap-1.5 ml-auto text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 ${
                         value === "premium"
                           ? "text-slate-text/60 bg-paper hover:bg-paper/80"
-                          : "text-amber bg-ink hover:bg-ink/90"
+                          : "bg-primary text-white hover:bg-primary-dark"
                       }`}
                     >
                       {value === "trial" ? (
@@ -861,14 +984,14 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
           <button
             onClick={onCancel}
             disabled={saving}
-            className="px-4 py-2 text-[13px] font-semibold text-slate-text hover:text-ink rounded-lg border border-black/[0.08] hover:bg-paper transition-colors"
+            className="px-4 py-2 text-[13px] font-semibold text-slate-text hover:text-ink rounded-lg border border-slate-200 hover:bg-paper transition-colors"
           >
             Cancel
           </button>
           <button
             onClick={onSave}
             disabled={saving}
-            className="px-4 py-2 text-[13px] font-semibold text-amber bg-ink rounded-lg hover:bg-ink/90 transition-colors disabled:opacity-50"
+            className="px-4 py-2 text-[13px] font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
           >
             {saving ? "Saving…" : "Save Changes"}
           </button>

@@ -15,11 +15,11 @@ const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const { writeAudit } = require("../utils/audit");
 const { resolveCurrentSessionInfo, deriveSessionName } = require("./academicSessionController");
 
-const VALID_ROLES = ["super_admin", "school_admin", "teacher", "staff", "student"];
+const VALID_ROLES = ["super_admin", "school_admin", "teacher", "staff", "student", "parent"];
 // School admins create tenant-level accounts. "class_teacher" is not creatable:
 // a Class Teacher is a TeacherAssignment responsibility, assigned by the school
 // admin through the assignment-manager, not a User role.
-const SCHOOL_ADMIN_CREATABLE = ["teacher", "staff", "student"];
+const SCHOOL_ADMIN_CREATABLE = ["teacher", "staff", "student", "parent"];
 
 // Failure responses never dump raw error/debug text (stack traces, DB paths,
 // index/duplicate details) to the client. Details go to the server log only.
@@ -66,7 +66,7 @@ const ensureStudentLink = async ({ schoolId, admissionId, userId }) => {
     const { getStudentModel } = require("../db/studentDb");
     const Student = await getStudentModel();
 
-    const existing = await Student.findOne({ schoolId, admissionNo: admissionId });
+    const existing = await Student.findOne({ schoolId, admissionNo: admissionId, deletedAt: null });
     if (!existing) {
       return {
         status: 400,
@@ -94,13 +94,29 @@ const studentExistsFor = async (schoolId, admissionNo) => {
     const { getStudentModel } = require("../db/studentDb");
     const Student = await getStudentModel();
     return Boolean(
-      await Student.findOne({ schoolId, admissionNo })
+      await Student.findOne({ schoolId, admissionNo, deletedAt: null })
         .select("_id")
         .lean(),
     );
   } catch {
     return null;
   }
+};
+
+// Parent → child links (CLIENT-REQ-052): linkedStudentIds are admissionNo
+// strings of EXISTING active students in the SAME school. Returns a cleaned,
+// de-duplicated array or an error message.
+const cleanAndValidateLinkedStudents = async (schoolId, linkedStudentIds) => {
+  if (!Array.isArray(linkedStudentIds)) {
+    return { error: "linkedStudentIds must be an array of Admission IDs" };
+  }
+  const ids = [...new Set(linkedStudentIds.map((s) => String(s || "").trim()).filter(Boolean))];
+  for (const id of ids) {
+    if (!(await studentExistsFor(schoolId, id))) {
+      return { error: `No active student with Admission ID "${id}" in this school` };
+    }
+  }
+  return { ids };
 };
 
 // ---------------------------------------------------------------------------
@@ -267,6 +283,17 @@ const createUser = async (req, res) => {
       });
     }
 
+    // Parent (and any role carrying child links) must reference real, active,
+    // same-school students — never a random or soft-deleted Admission ID.
+    const links = await cleanAndValidateLinkedStudents(schoolId, linkedStudentIds);
+    if (links.error) return res.status(400).json({ success: false, message: links.error });
+    if (role === "parent" && !links.ids.length) {
+      return res.status(400).json({
+        success: false,
+        message: "At least one student must be linked to a parent account",
+      });
+    }
+
     // Teacher/Staff accounts link to a person record created from
     // the Teachers & Staff page (Staff ID is entered manually on that page —
     // never generated). A nonexistent / already-linked / wrong-role Staff ID is
@@ -321,7 +348,7 @@ const createUser = async (req, res) => {
           : staffRecord
             ? String(staffRecord._id)
             : (refId || null),
-      linkedStudentIds,
+      linkedStudentIds: links.ids,
     });
 
     // Student accounts must resolve to a real student record in the SAME
@@ -427,6 +454,10 @@ const refreshToken = async (req, res) => {
     if (!refreshToken) return res.status(400).json({ success: false, message: "refreshToken is required" });
 
     const decoded = jwt.verify(refreshToken, getJwtSecret());
+    // Only refresh-typed tokens may be exchanged for a new access token.
+    if (decoded.typ !== "refresh") {
+      return res.status(401).json({ success: false, message: "Invalid refresh token" });
+    }
     const user = await User.findById(decoded.id);
     if (!user || !user.isActive || user.deletedAt) return res.status(401).json({ success: false, message: "Invalid refresh token" });
     // Refresh tokens issued before the password was last changed/reset are
@@ -727,7 +758,17 @@ const updateUser = async (req, res) => {
       }
       target.refId = trimmed || null;
     }
-    if (linkedStudentIds !== undefined) target.linkedStudentIds = Array.isArray(linkedStudentIds) ? linkedStudentIds : [];
+    if (linkedStudentIds !== undefined) {
+      const links = await cleanAndValidateLinkedStudents(target.schoolId, linkedStudentIds);
+      if (links.error) return res.status(400).json({ success: false, message: links.error });
+      if (target.role === "parent" && !links.ids.length) {
+        return res.status(400).json({
+          success: false,
+          message: "A parent account must stay linked to at least one student",
+        });
+      }
+      target.linkedStudentIds = links.ids;
+    }
 
     await target.save();
     await writeAudit({ req, user: req.user, action: "user.updated", targetType: "user", targetId: target._id, message: `Updated user ${target.email}` });

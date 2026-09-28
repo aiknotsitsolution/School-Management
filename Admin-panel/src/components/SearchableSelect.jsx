@@ -67,10 +67,10 @@ export default function SearchableSelect({
         type="button"
         onClick={toggle}
         disabled={disabled}
-        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-black/10 text-[13.5px] outline-none bg-white text-left transition-all ${
+        className={`w-full flex items-center justify-between px-4 py-2.5 rounded-xl border border-slate-300 text-[13.5px] outline-none bg-white text-left transition-all ${
           disabled
             ? "opacity-50 cursor-not-allowed bg-slate-50"
-            : "hover:border-black/20 focus:border-amber focus:ring-4 focus:ring-amber/15"
+            : "hover:border-slate-400 focus:border-primary focus:ring-4 focus:ring-primary/15"
         }`}
       >
         <span className={value ? "text-ink" : "text-slate-text/60 truncate"}>
@@ -80,8 +80,8 @@ export default function SearchableSelect({
       </button>
 
       {open && (
-        <div className="absolute z-30 mt-1 w-full bg-white rounded-xl border border-black/10 shadow-lg overflow-hidden">
-          <div className="p-2 border-b border-black/[0.06] relative">
+        <div className="absolute z-30 mt-1 w-full bg-white rounded-xl border border-slate-300 shadow-lg overflow-hidden">
+          <div className="p-2 border-b border-slate-200 relative">
             <Search
               size={14}
               className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-text/40"
@@ -92,7 +92,7 @@ export default function SearchableSelect({
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search..."
-              className="w-full pl-8 pr-7 py-2 rounded-xl border border-black/10 text-[13px] outline-none focus:border-amber focus:ring-4 focus:ring-amber/15 bg-paper/50 placeholder:text-slate-text/50"
+              className="w-full pl-8 pr-7 py-2 rounded-xl border border-slate-300 text-[13px] outline-none focus:border-primary focus:ring-4 focus:ring-primary/15 bg-paper/50 placeholder:text-slate-text/50"
             />
             {query && (
               <button
@@ -117,7 +117,7 @@ export default function SearchableSelect({
                   onClick={() => select(opt)}
                   className={`w-full text-left px-4 py-2 text-[13px] hover:bg-paper transition-colors ${
                     value === opt
-                      ? "bg-amber/10 text-ink font-medium"
+                      ? "bg-primary/10 text-ink font-medium"
                       : "text-ink"
                   }`}
                 >
@@ -133,7 +133,7 @@ export default function SearchableSelect({
                 setOpen(false);
                 onAdd();
               }}
-              className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold text-amber-dark border-t border-black/[0.06] hover:bg-amber/5 transition-colors"
+              className="w-full flex items-center gap-2 px-4 py-2.5 text-[13px] font-semibold text-primary-dark border-t border-slate-200 hover:bg-primary/5 transition-colors"
             >
               <Plus size={14} />
               {addLabel || "Add Custom"}

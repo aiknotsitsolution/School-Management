@@ -40,7 +40,7 @@ import {
 } from "../components/UI";
 import AttendanceTrendChart from "../components/AttendanceTrendChart";
 
-const PIE_COLORS = ["#16213E", "#E8A33D", "#3F8F5F", "#3B6FA0", "#D65A4A"];
+const PIE_COLORS = ["#172033", "#4F46E5", "#16A34A", "#2563EB", "#DC2626"];
 const TABS = [
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "generate", label: "Generate Reports", icon: FileDown },
@@ -207,7 +207,7 @@ const REPORT_CONFIGS = [
     description:
       "Every payment recorded — receipt, mode, amount, collector & date.",
     icon: IndianRupee,
-    accent: "amber",
+    accent: "primary",
     fields: [],
     generate: async () => {
       const { data = [] } = await api.fees.payments.list();
@@ -390,14 +390,14 @@ const REPORT_CONFIGS = [
 
 function TabBar({ active, onChange }) {
   return (
-    <div className="inline-flex items-center gap-1 bg-paper border border-black/[0.06] p-1 rounded-xl">
+    <div className="inline-flex items-center gap-1 bg-paper border border-slate-200 p-1 rounded-xl">
       {TABS.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onChange(tab.id)}
           className={`inline-flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition-colors ${
             active === tab.id
-              ? "bg-ink text-amber shadow-sm"
+              ? "bg-primary text-white shadow-sm"
               : "text-slate-text hover:text-ink"
           }`}
         >
@@ -549,14 +549,14 @@ function GenerateReports() {
               onClick={() => selectReport(report.id)}
               className={`text-left flex flex-col gap-2 p-4 rounded-xl border bg-white transition-all ${
                 active
-                  ? "border-ink shadow-md ring-2 ring-ink/10"
-                  : "border-black/[0.06] hover:border-black/15 hover:shadow-sm"
+                  ? "border-primary shadow-md ring-2 ring-primary/10"
+                  : "border-slate-200 hover:border-slate-300 hover:shadow-sm"
               }`}
             >
               <div className="flex items-center gap-2.5">
                 <span
                   className={`w-9 h-9 rounded-xl flex items-center justify-center ${
-                    active ? "bg-ink text-amber" : "bg-paper text-ink/70"
+                    active ? "bg-primary text-white" : "bg-paper text-ink/70"
                   }`}
                 >
                   <report.icon size={17} />
@@ -604,7 +604,7 @@ function GenerateReports() {
             <Button variant="outline" onClick={() => selectReport(null)}>
               Cancel
             </Button>
-            <Button variant="amber" onClick={generate} disabled={busy}>
+            <Button variant="primary" onClick={generate} disabled={busy}>
               {busy ? (
                 <Loader2 size={15} className="animate-spin" />
               ) : (
@@ -802,7 +802,7 @@ export default function Reports() {
                   label="Total Enrollment"
                   value={data.studentStats.total.toLocaleString("en-IN")}
                   sub={`${data.studentStats.active.toLocaleString("en-IN")} active students`}
-                  accent="amber"
+                  accent="primary"
                 />
                 <StatCard
                   icon={CalendarCheck}
@@ -907,17 +907,17 @@ export default function Reports() {
                         <CartesianGrid
                           strokeDasharray="3 3"
                           vertical={false}
-                          stroke="#EEEAE0"
+                          stroke="#E2E8F0"
                         />
                         <XAxis
                           dataKey="month"
-                          tick={{ fontSize: 12, fill: "#475467" }}
+                          tick={{ fontSize: 12, fill: "#475569" }}
                           axisLine={false}
                           tickLine={false}
                         />
                         <YAxis
                           tickFormatter={(v) => `₹${v / 100000}L`}
-                          tick={{ fontSize: 11, fill: "#475467" }}
+                          tick={{ fontSize: 11, fill: "#475569" }}
                           axisLine={false}
                           tickLine={false}
                         />
@@ -931,13 +931,13 @@ export default function Reports() {
                         />
                         <Bar
                           dataKey="collected"
-                          fill="#3F8F5F"
+                          fill="#16A34A"
                           radius={[6, 6, 0, 0]}
                           name="Collected"
                         />
                         <Bar
                           dataKey="pending"
-                          fill="#D65A4A"
+                          fill="#DC2626"
                           radius={[6, 6, 0, 0]}
                           name="Pending"
                         />
@@ -952,7 +952,7 @@ export default function Reports() {
                       No admission enquiries yet
                     </p>
                   ) : (
-                    <div className="divide-y divide-black/[0.05]">
+                    <div className="divide-y divide-slate-100">
                       {enquiryFunnel.map(([status, count]) => (
                         <div
                           key={status}
@@ -1023,17 +1023,17 @@ export default function Reports() {
                             <CartesianGrid
                               strokeDasharray="3 3"
                               vertical={false}
-                              stroke="#EEEAE0"
+                              stroke="#E2E8F0"
                             />
                             <XAxis
                               dataKey="date"
-                              tick={{ fontSize: 12, fill: "#475467" }}
+                              tick={{ fontSize: 12, fill: "#475569" }}
                               axisLine={false}
                               tickLine={false}
                             />
                             <YAxis
                               tickFormatter={(v) => `₹${v / 100000}L`}
-                              tick={{ fontSize: 11, fill: "#475467" }}
+                              tick={{ fontSize: 11, fill: "#475569" }}
                               axisLine={false}
                               tickLine={false}
                             />
@@ -1047,7 +1047,7 @@ export default function Reports() {
                             />
                             <Bar
                               dataKey="total"
-                              fill="#3B6FA0"
+                              fill="#2563EB"
                               radius={[6, 6, 0, 0]}
                               name="Collected"
                             />
@@ -1065,7 +1065,7 @@ export default function Reports() {
                         <div className="overflow-x-auto -mx-5">
                           <table className="w-full text-[13px]">
                             <thead>
-                              <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                              <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                                 <th className="px-5 py-2.5 font-semibold">
                                   Class
                                 </th>
@@ -1084,7 +1084,7 @@ export default function Reports() {
                               {outstandingReport.map((row) => (
                                 <tr
                                   key={`${row._id?.class}-${row._id?.feeType}`}
-                                  className="border-b border-black/[0.04] last:border-0"
+                                  className="border-b border-slate-100 last:border-0"
                                 >
                                   <td className="px-5 py-3 font-medium text-ink">
                                     {row._id?.class || "—"}
@@ -1119,7 +1119,7 @@ export default function Reports() {
                       ) : (
                         <table className="w-full text-[13px]">
                           <thead>
-                            <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                            <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                               <th className="px-5 py-2.5 font-semibold">
                                 Class
                               </th>
@@ -1135,7 +1135,7 @@ export default function Reports() {
                             {classWiseCollection.map((row) => (
                               <tr
                                 key={row._id}
-                                className="border-b border-black/[0.04] last:border-0"
+                                className="border-b border-slate-100 last:border-0"
                               >
                                 <td className="px-5 py-3 font-medium text-ink">
                                   {row._id || "—"}
@@ -1164,7 +1164,7 @@ export default function Reports() {
                       ) : (
                         <table className="w-full text-[13px]">
                           <thead>
-                            <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                            <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                               <th className="px-5 py-2.5 font-semibold">
                                 Fee Type
                               </th>
@@ -1180,7 +1180,7 @@ export default function Reports() {
                             {feeTypeWiseCollection.map((row) => (
                               <tr
                                 key={row._id}
-                                className="border-b border-black/[0.04] last:border-0"
+                                className="border-b border-slate-100 last:border-0"
                               >
                                 <td className="px-5 py-3 font-medium text-ink">
                                   {row._id || "—"}

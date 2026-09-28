@@ -328,7 +328,7 @@ export default function PlatformUsers() {
         title="Users & Access"
         description={`${total} user${total === 1 ? "" : "s"} platform-wide. Create accounts, manage status, inspect a User 360°, and restore removed users.`}
         right={
-          <Button variant="amber" onClick={() => { setCreating(true); resetForm(); }}>
+          <Button variant="primary" onClick={() => { setCreating(true); resetForm(); }}>
             <Plus size={15} /> New user
           </Button>
         }
@@ -381,14 +381,14 @@ export default function PlatformUsers() {
             </div>
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setCreating(false)}>Cancel</Button>
-              <Button variant="amber" type="submit" disabled={busy}>{busy ? "Creating…" : "Create user"}</Button>
+              <Button variant="primary" type="submit" disabled={busy}>{busy ? "Creating…" : "Create user"}</Button>
             </div>
           </form>
         </Card>
       )}
 
       <Card bodyClassName="p-5">
-        <div className="flex items-center gap-1 mb-4 border-b border-black/[0.06]">
+        <div className="flex items-center gap-1 mb-4 border-b border-slate-200">
           <button
             onClick={() => { setUserTab("active"); setPage(1); }}
             className={`px-4 py-2.5 text-[13px] font-semibold border-b-2 transition-colors ${
@@ -441,7 +441,7 @@ export default function PlatformUsers() {
           {(q.trim() || role || schoolId) && (
             <button
               onClick={() => { setQ(""); setRole(""); setSchoolId(""); setUserTab("active"); setPage(1); }}
-              className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink bg-paper px-3 py-2 rounded-lg border border-black/[0.06] hover:bg-alert/10 hover:text-alert transition-colors"
+              className="inline-flex items-center gap-1.5 text-[12px] font-semibold text-ink bg-paper px-3 py-2 rounded-lg border border-slate-200 hover:bg-alert/10 hover:text-alert transition-colors"
             >
               <FilterX size={13} /> Reset filters
             </button>
@@ -465,7 +465,7 @@ export default function PlatformUsers() {
           <div className="overflow-x-auto">
             <table className="w-full text-left text-[13px]">
               <thead>
-                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-black/[0.06]">
+                <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-slate-200">
                   <th className="py-2.5 pr-4 font-semibold">User</th>
                   <th className="py-2.5 pr-4 font-semibold">Role</th>
                   <th className="py-2.5 pr-4 font-semibold">School</th>
@@ -474,12 +474,12 @@ export default function PlatformUsers() {
                   <th className="py-2.5 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-black/[0.05]">
+              <tbody className="divide-y divide-slate-100">
                 {rows.map((user) => (
                   <tr key={user._id} className={user.deletedAt ? "opacity-60" : "hover:bg-paper/60"}>
                     <td className="py-3 pr-4">
                       <div className="flex items-center gap-2.5 min-w-0">
-                        <div className="w-8 h-8 rounded-full bg-ink text-amber flex items-center justify-center text-[11px] font-semibold shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center text-[11px] font-semibold shrink-0">
                           {initials(user.name)}
                         </div>
                         <div className="min-w-0">
@@ -497,7 +497,7 @@ export default function PlatformUsers() {
                       ) : user.isActive ? (
                         <Pill tone="success">active</Pill>
                       ) : (
-                        <Pill tone="amber">inactive</Pill>
+                        <Pill tone="primary">inactive</Pill>
                       )}
                     </td>
                     <td className="py-3 text-right">
@@ -560,7 +560,7 @@ export default function PlatformUsers() {
         )}
 
         {pages > 1 && (
-          <div className="flex items-center justify-between pt-4 border-t border-black/[0.06] mt-4">
+          <div className="flex items-center justify-between pt-4 border-t border-slate-200 mt-4">
             <p className="text-[12px] text-slate-text/60">Page {page} of {pages}</p>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => setPage((p) => Math.max(1, p - 1))} disabled={page <= 1}>
@@ -583,7 +583,7 @@ export default function PlatformUsers() {
               shown only at creation time and cannot be retrieved later.
             </p>
             <div className="mt-4 space-y-2.5 text-[13px]">
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <div>
                   <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Email</p>
                   <p className="text-ink font-medium break-all">{createdCredential.email}</p>
@@ -596,7 +596,7 @@ export default function PlatformUsers() {
                 </button>
               </div>
               {createdCredential.admissionId && (
-                <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+                <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-300 px-3.5 py-2.5">
                   <div>
                     <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Admission ID</p>
                     <p className="text-ink font-medium">{createdCredential.admissionId}</p>
@@ -609,7 +609,7 @@ export default function PlatformUsers() {
                   </button>
                 </div>
               )}
-              <div className="flex items-center justify-between gap-3 rounded-xl border border-black/10 px-3.5 py-2.5">
+              <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-300 px-3.5 py-2.5">
                 <div>
                   <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Password</p>
                   <p className="text-ink font-medium break-all">{createdCredential.password}</p>
@@ -623,7 +623,7 @@ export default function PlatformUsers() {
               </div>
             </div>
             <div className="mt-5 flex justify-end">
-              <Button variant="amber" onClick={() => setCreatedCredential(null)}>Done</Button>
+              <Button variant="primary" onClick={() => setCreatedCredential(null)}>Done</Button>
             </div>
           </div>
         </div>
@@ -668,7 +668,7 @@ export default function PlatformUsers() {
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setConfirmModal(null)}>Cancel</Button>
               <Button
-                variant={confirmModal.variant === "danger" ? "danger" : "amber"}
+                variant={confirmModal.variant === "danger" ? "danger" : "primary"}
                 onClick={async () => {
                   await confirmModal.onConfirm();
                   setConfirmModal(null);
@@ -712,7 +712,7 @@ function User360({ data, schoolName, onClose, onChanged, onEdit, onToggleActive,
       </div>
 
       <div className="flex items-center gap-3 mb-5">
-        <div className="w-12 h-12 rounded-full bg-ink text-amber flex items-center justify-center font-bold shrink-0">
+        <div className="w-12 h-12 rounded-full bg-primary text-white flex items-center justify-center font-bold shrink-0">
           {initials(user.name)}
         </div>
         <div className="min-w-0">
@@ -728,7 +728,7 @@ function User360({ data, schoolName, onClose, onChanged, onEdit, onToggleActive,
         ) : user.isActive ? (
           <Pill tone="success">active</Pill>
         ) : (
-          <Pill tone="amber">inactive</Pill>
+          <Pill tone="primary">inactive</Pill>
         )}
         {user.emailVerified === false && <Pill>unverified email</Pill>}
       </div>
@@ -763,7 +763,7 @@ function User360({ data, schoolName, onClose, onChanged, onEdit, onToggleActive,
           <div className="flex justify-end gap-2 pt-1">
             <Button variant="outline" onClick={() => setEdit(false)}>Cancel</Button>
             <Button
-              variant="amber"
+              variant="primary"
               disabled={busy}
               onClick={() => onEdit({ name: draft.name, phone: draft.phone || undefined, designation: draft.designation || undefined, class: draft.class || undefined, section: draft.section || undefined, refId: refField && !refField.disabled ? draft.refId || undefined : undefined }).then(saved)}
             >
@@ -801,7 +801,7 @@ function User360({ data, schoolName, onClose, onChanged, onEdit, onToggleActive,
           <Button variant="outline" onClick={() => setEdit(true)}>Edit profile</Button>
         )}
         {user.deletedAt ? (
-          <Button variant="amber" disabled={busy} onClick={() => onRestore(user).then(onChanged)}>
+          <Button variant="primary" disabled={busy} onClick={() => onRestore(user).then(onChanged)}>
             <RotateCcw size={15} /> Restore
           </Button>
         ) : (
@@ -820,7 +820,7 @@ function User360({ data, schoolName, onClose, onChanged, onEdit, onToggleActive,
         <div>
           <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase mb-2">Current subscription</p>
           {data.subscription ? (
-            <div className="rounded-xl border border-black/10 p-3.5">
+            <div className="rounded-xl border border-slate-300 p-3.5">
               <p className="text-[13.5px] font-semibold text-ink">{data.subscription.plan?.name || "—"}</p>
               <p className="text-[12px] text-slate-text/70 capitalize">{data.subscription.status} · renews {fmtDate(data.subscription.nextBillingDate)}</p>
             </div>

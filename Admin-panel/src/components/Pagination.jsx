@@ -1,17 +1,17 @@
 import { ChevronLeft, ChevronRight } from "lucide-react";
 
 // Reports & Analytics-style segmented tab bar: pill container with the active
-// tab filled ink/amber. Each tab carries a live count badge.
+// tab filled ink/primary. Each tab carries a live count badge.
 // tabs: [{ id, label, icon, count }]
 export function SegmentedTabs({ tabs, active, onChange }) {
   return (
-    <div className="inline-flex items-center gap-1 bg-paper border border-black/[0.06] p-1 rounded-xl flex-wrap">
+    <div className="inline-flex items-center gap-1 bg-paper border border-slate-200 p-1 rounded-xl flex-wrap">
       {tabs.map((tab) => (
         <button
           key={tab.id}
           onClick={() => onChange(tab.id)}
           className={`inline-flex items-center gap-2 px-4 py-2 text-[13px] font-semibold rounded-lg transition-colors ${
-            active === tab.id ? "bg-ink text-amber shadow-sm" : "text-slate-text hover:text-ink"
+            active === tab.id ? "bg-primary text-white shadow-sm" : "text-slate-text hover:text-ink"
           }`}
         >
           <tab.icon size={15} />
@@ -37,13 +37,13 @@ export function Pagination({ page, pages, onPage, info = true, alwaysShow = fals
   const numbers = [];
   for (let n = from; n <= to; n++) numbers.push(n);
   const nav =
-    "w-8 h-8 inline-flex items-center justify-center rounded-lg border border-black/[0.06] bg-paper text-slate-text hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
+    "w-8 h-8 inline-flex items-center justify-center rounded-lg border border-slate-200 bg-paper text-slate-text hover:text-ink disabled:opacity-40 disabled:cursor-not-allowed transition-colors";
   const pageBtn = (n, current) =>
     `w-8 h-8 inline-flex items-center justify-center rounded-lg text-[13px] font-semibold transition-colors ${
-      current ? "bg-ink text-amber" : "border border-black/[0.06] bg-paper text-slate-text hover:text-ink"
+      current ? "bg-primary text-white" : "border border-slate-200 bg-paper text-slate-text hover:text-ink"
     }`;
   return (
-    <div className="flex items-center justify-between pt-4 border-t border-black/[0.06] mt-4">
+    <div className="flex items-center justify-between pt-4 border-t border-slate-200 mt-4">
       {info ? (
         <p className="text-[12px] text-slate-text/60">
           Page {page} of {pages}

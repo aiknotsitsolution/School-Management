@@ -32,6 +32,7 @@ const STAFF_PERMISSIONS = {
   accountant: [
     "dashboard:view", "staff:read", "students:read", "fees:read", "fees:collect",
     "fees:structure", "fees:reports", "reports:view", "attendance:read",
+    "accounting:read", "accounting:journal",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
   ],
@@ -64,6 +65,7 @@ const ROLE_PERMISSIONS = {
     "timetable:write", "homework:read", "homework:write", "exams:read",
     "exams:write", "marks:read", "marks:write", "fees:read", "fees:collect",
     "fees:structure", "fees:reports", "reports:view", "library:read", "library:manage",
+    "accounting:read", "accounting:journal",
     "library:notify", "notices:read", "notices:publish", "events:read", "events:publish",
     "transport:read", "transport:update", "inventory:read", "inventory:write",
     "payroll:view", "payroll:admin", "leaves:apply", "leaves:approve",
@@ -87,8 +89,20 @@ const ROLE_PERMISSIONS = {
   student: [
     "dashboard:view", "attendance:read", "homework:read", "exams:read",
     "marks:read", "fees:read", "library:read", "notices:read", "events:read",
-    "transport:read", "timetable:read", "profile:read", "profile:update",
+    "transport:read", "hostel:read", "timetable:read",
+    "profile:read", "profile:update",
+    // Student-portal read surfaces (own records only — routes scope by
+    // refId): hostel room, conduct/behavior history, achievements.
+    "conduct:read", "achievements:read",
     "leaves:apply",
+  ],
+  // Parent portal account: read-only view over the linked children's data.
+  // Deliberately NO profile:*, health:* or students:* — parents are scoped to
+  // their own linkedStudentIds by getStudents' parent branch.
+  parent: [
+    "dashboard:view", "attendance:read", "homework:read", "exams:read",
+    "marks:read", "fees:read", "library:read", "notices:read", "events:read",
+    "transport:read", "timetable:read",
   ],
 };
 

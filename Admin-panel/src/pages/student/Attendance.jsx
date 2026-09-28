@@ -4,7 +4,7 @@ import { PageIntro, Card, Pill, Select } from "../../components/UI";
 import { api } from "../../lib/api";
 import { fmtDate, dateOf } from "./useStudentContext";
 
-const POLICY = { Present: "success", Absent: "alert", Leave: "info", "Half Day": "amber" };
+const POLICY = { Present: "success", Absent: "alert", Leave: "info", "Half Day": "warning" };
 
 export default function Attendance() {
   const [records, setRecords] = useState([]);
@@ -52,7 +52,7 @@ export default function Attendance() {
         <Card><p className="font-display text-xl font-bold text-success">{summary.Present}</p><p className="text-[11px] text-slate-text/60 mt-1">Present</p></Card>
         <Card><p className="font-display text-xl font-bold text-alert">{summary.Absent}</p><p className="text-[11px] text-slate-text/60 mt-1">Absent</p></Card>
         <Card><p className="font-display text-xl font-bold text-info">{summary.Leave}</p><p className="text-[11px] text-slate-text/60 mt-1">Leave</p></Card>
-        <Card><p className="font-display text-xl font-bold text-amber-dark">{summary["Half Day"]}</p><p className="text-[11px] text-slate-text/60 mt-1">Half Day</p></Card>
+        <Card><p className="font-display text-xl font-bold text-amber-700">{summary["Half Day"]}</p><p className="text-[11px] text-slate-text/60 mt-1">Half Day</p></Card>
       </div>
 
       <Card
@@ -90,7 +90,7 @@ export default function Attendance() {
               </thead>
               <tbody>
                 {monthRecords.map((r) => (
-                  <tr key={r._id} className="border-t border-black/[0.06]">
+                  <tr key={r._id} className="border-t border-slate-200">
                     <td className="px-5 py-2.5 font-medium text-ink">{fmtDate(r.date)}</td>
                     <td className="px-3 py-2.5"><Pill tone={POLICY[r.status] || "neutral"}>{r.status}</Pill></td>
                     <td className="px-3 py-2.5 text-slate-text/70">{r.remarks || "—"}</td>

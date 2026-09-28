@@ -61,7 +61,7 @@ export default function TransportDashboard() {
         title="Fleet & Routes"
         description={`Bus operations at ${school?.name || "your school"}.`}
         right={
-          <Button variant="amber" onClick={() => navigate("/transport/routes")}>
+          <Button variant="primary" onClick={() => navigate("/transport/routes")}>
             Manage Routes <ArrowRight size={15} />
           </Button>
         }
@@ -69,7 +69,7 @@ export default function TransportDashboard() {
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard icon={Bus} label="Routes" value={String(stats.routes)} sub={`${totalStops} total stops`} accent="info" />
-        <StatCard icon={Car} label="Vehicles" value={String(stats.vehicles)} sub="Registered buses" accent="amber" />
+        <StatCard icon={Car} label="Vehicles" value={String(stats.vehicles)} sub="Registered buses" accent="primary" />
         <StatCard icon={User} label="Drivers" value={String(stats.drivers)} sub="Across routes" accent="success" />
         <StatCard icon={Users} label="Students Assigned" value={String(stats.students)} sub={`${stats.live} routes live`} accent="alert" />
       </div>
@@ -106,9 +106,9 @@ export default function TransportDashboard() {
           <div className="grid gap-3">
             <button
               onClick={() => navigate("/transport/routes")}
-              className="flex items-center gap-3 bg-white rounded-xl border border-black/[0.06] p-4 hover:border-amber/40 transition-colors text-left"
+              className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 p-4 hover:border-primary/40 transition-colors text-left"
             >
-              <div className="w-9 h-9 rounded-lg bg-amber/10 text-amber flex items-center justify-center"><MapPin size={17} /></div>
+              <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center"><MapPin size={17} /></div>
               <div className="flex-1">
                 <p className="text-[13.5px] font-semibold text-ink">Add / Update Routes</p>
                 <p className="text-[12px] text-slate-text/70">Route numbers, stops, drivers and vehicles</p>
@@ -117,7 +117,7 @@ export default function TransportDashboard() {
             </button>
             <button
               onClick={() => navigate("/transport/allocations")}
-              className="flex items-center gap-3 bg-white rounded-xl border border-black/[0.06] p-4 hover:border-success/40 transition-colors text-left"
+              className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 p-4 hover:border-success/40 transition-colors text-left"
             >
               <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center"><Gauge size={17} /></div>
               <div className="flex-1">
@@ -127,7 +127,7 @@ export default function TransportDashboard() {
               <ArrowRight size={16} className="text-slate-text/40" />
             </button>
           </div>
-          <div className="mt-4 pt-4 border-t border-black/[0.06]">
+          <div className="mt-4 pt-4 border-t border-slate-200">
             <p className="text-[12px] text-slate-text/60">
               Location last updated: {dateOf(routes.filter((r) => r.currentLocation?.updatedAt)[0]?.currentLocation?.updatedAt)} ·
               tracks geolocation reported by the driver app.

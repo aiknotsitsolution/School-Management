@@ -58,6 +58,7 @@ function emptyForm() {
     allowances: "",
     deductions: "",
     deductionReason: "",
+    adjustForAttendance: false,
   };
 }
 
@@ -72,6 +73,7 @@ export default function Payroll() {
   const [form, setForm] = useState(emptyForm());
   const [payslip, setPayslip] = useState(null);
   const [editing, setEditing] = useState(null);
+  const [adjustAll, setAdjustAll] = useState(false);
 
   const reload = useCallback(() => {
     Promise.all([
@@ -99,6 +101,8 @@ export default function Payroll() {
             allowances: Number(p.allowances || 0),
             deductions: Number(p.deductions || 0),
             deductionReason: p.deductionReason || "",
+            attendanceDeduction: Number(p.attendanceDeduction || 0),
+            attendancePct: p.attendancePct ?? null,
             paid: p.status === "Paid",
           };
         }),
@@ -193,6 +197,7 @@ export default function Payroll() {
         allowances: Number(form.allowances) || 0,
         deductions: ded,
         deductionReason: form.deductionReason || "",
+        adjustForAttendance: !!form.adjustForAttendance,
       });
       toast("Payroll entry created");
       setShowModal(false);
@@ -255,10 +260,11 @@ export default function Payroll() {
   };
 
   const generateAll = async () => {
-    if (!window.confirm(`Generate payroll for ALL active staff for ${month} ${year}? Staff with existing entries will be skipped.`)) return;
+    const suffix = adjustAll ? " with attendance-based deductions" : "";
+    if (!window.confirm(`Generate payroll for ALL active staff for ${month} ${year}${suffix}? Staff with existing entries will be skipped.`)) return;
     setGenerating(true);
     try {
-      const { data } = await api.payroll.generateAll(month, year);
+      const { data } = await api.payroll.generateAll(month, year, { adjustForAttendance: adjustAll });
       toast(`Created ${data.created} new payroll entries (${data.skipped} already existed)`);
       reload();
     } catch (err) {
@@ -316,12 +322,21 @@ export default function Payroll() {
               <Download size={15} /> Export CSV
             </Button>
             <PermissionGate permission="payroll:admin">
+              <label className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-text cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={adjustAll}
+                  onChange={(e) => setAdjustAll(e.target.checked)}
+                  className="rounded border-slate-300"
+                />
+                Adjust for attendance
+              </label>
               <Button variant="outline" onClick={generateAll} disabled={generating}>
                 <TrendingUp size={15} /> {generating ? "Generating…" : "Generate for all staff"}
               </Button>
             </PermissionGate>
             <PermissionGate permission="payroll:admin">
-              <Button variant="amber" onClick={openAdd}>
+              <Button variant="primary" onClick={openAdd}>
                 <Plus size={15} /> Create new payroll entry
               </Button>
             </PermissionGate>
@@ -330,8 +345,8 @@ export default function Payroll() {
       />
 
       <Card className="!p-0">
-        <div className="flex flex-wrap items-center gap-3 p-4 border-b border-black/[0.06]">
-          <div className="flex items-center gap-1.5 rounded-xl border border-black/10 bg-white p-1.5 shadow-sm">
+        <div className="flex flex-wrap items-center gap-3 p-4 border-b border-slate-200">
+          <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white p-1.5 shadow-sm">
             <Select
               value={month}
               className="!w-auto !min-w-[135px] !border-0 !bg-transparent !px-3 !py-1.5 font-semibold hover:!border-0 focus:!border-0 focus:!ring-0"
@@ -377,7 +392,7 @@ export default function Payroll() {
           label="Gross Payroll"
           value={`₹${stats.totalGross.toLocaleString("en-IN")}`}
           sub="Basic + allowances"
-          accent="amber"
+          accent="primary"
         />
         <StatCard
           icon={TrendingUp}
@@ -405,7 +420,7 @@ export default function Payroll() {
       <Card
         title={`Payroll Sheet — ${month} ${year}`}
         action={
-          <div className="flex items-center gap-1.5 rounded-xl border border-black/10 bg-white p-1.5 shadow-sm">
+          <div className="flex items-center gap-1.5 rounded-xl border border-slate-300 bg-white p-1.5 shadow-sm">
             <div className="relative">
               <Search
                 size={14}
@@ -449,7 +464,7 @@ export default function Payroll() {
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                   <th className="px-5 py-2.5 font-semibold">Employee</th>
                   <th className="px-5 py-2.5 font-semibold">Department</th>
                   <th className="px-5 py-2.5 font-semibold">Basic</th>
@@ -466,7 +481,7 @@ export default function Payroll() {
                   return (
                     <tr
                       key={e.id}
-                      className="border-b border-black/[0.04] hover:bg-paper/60"
+                      className="border-b border-slate-100 hover:bg-paper/60"
                     >
                       <td className="px-5 py-3">
                         <p className="font-semibold text-ink">{e.name}</p>
@@ -490,7 +505,7 @@ export default function Payroll() {
                         ₹{net.toLocaleString("en-IN")}
                       </td>
                       <td className="px-5 py-3">
-                        <Pill tone={e.paid ? "success" : "amber"}>
+                        <Pill tone={e.paid ? "success" : "primary"}>
                           {e.paid ? "Paid" : "Pending"}
                         </Pill>
                       </td>
@@ -537,7 +552,7 @@ export default function Payroll() {
             onClick={() => setShowModal(false)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <h3 className="font-display font-semibold text-ink text-[17px]">
                 Create Payroll Entry
               </h3>
@@ -634,13 +649,24 @@ export default function Payroll() {
                   />
                 </PayField>
               )}
+              <label className="flex items-center gap-2 text-[12.5px] text-slate-text cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={form.adjustForAttendance}
+                  onChange={(e) =>
+                    setForm((f) => ({ ...f, adjustForAttendance: e.target.checked }))
+                  }
+                  className="rounded border-slate-300"
+                />
+                Adjust for attendance — deduct unauthorised absence for {month} {year}
+              </label>
             </div>
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowModal(false)}>
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={saveEmp}
                 disabled={!form.staffId || !Number(form.basic)}
               >
@@ -675,7 +701,7 @@ export default function Payroll() {
                   className="w-16 h-16 rounded-lg object-contain bg-white p-1 shrink-0"
                 />
               ) : (
-                <div className="w-16 h-16 rounded-lg bg-white/10 flex items-center justify-center text-amber font-display font-bold text-[22px] shrink-0">
+                <div className="w-16 h-16 rounded-lg bg-white/10 flex items-center justify-center text-primary font-display font-bold text-[22px] shrink-0">
                   {(school?.shortName || "S").slice(0, 2).toUpperCase()}
                 </div>
               )}
@@ -683,7 +709,7 @@ export default function Payroll() {
                 <p className="font-display font-bold text-white text-[19px] truncate">
                   {school?.name || "School Name"}
                 </p>
-                <p className="text-amber/80 text-[12px] truncate">
+                <p className="text-primary/80 text-[12px] truncate">
                   {[school?.address, school?.city, school?.state].filter(Boolean).join(", ")}
                 </p>
                 <p className="text-white/50 text-[11px] mt-0.5">
@@ -694,7 +720,7 @@ export default function Payroll() {
             </div>
 
             {/* Title bar */}
-            <div className="bg-paper/60 border-b border-black/[0.06] px-8 py-3 flex items-center justify-between">
+            <div className="bg-paper/60 border-b border-slate-200 px-8 py-3 flex items-center justify-between">
               <div>
                 <p className="font-display font-bold text-ink text-[16px]">Salary Slip</p>
                 <p className="text-[12px] text-slate-text/60">{month} {year}</p>
@@ -707,7 +733,7 @@ export default function Payroll() {
 
             <div className="px-8 py-5 space-y-5">
               {/* Employee details grid */}
-              <div className="grid grid-cols-3 gap-x-6 gap-y-3 text-[13px] border border-black/[0.06] rounded-xl p-4">
+              <div className="grid grid-cols-3 gap-x-6 gap-y-3 text-[13px] border border-slate-200 rounded-xl p-4">
                 <div>
                   <span className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-text/50">Employee Name</span>
                   <p className="font-semibold text-ink mt-0.5">{payslip.name}</p>
@@ -739,7 +765,7 @@ export default function Payroll() {
                 {/* Earnings */}
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-text/50 mb-2">Earnings</p>
-                  <div className="rounded-xl border border-black/[0.06] divide-y divide-black/[0.04]">
+                  <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
                     <div className="flex justify-between px-4 py-2.5 text-[13px]">
                       <span className="text-slate-text">Basic Salary</span>
                       <span className="font-semibold text-ink">₹{payslip.basic.toLocaleString("en-IN")}</span>
@@ -758,7 +784,7 @@ export default function Payroll() {
                 {/* Deductions */}
                 <div>
                   <p className="text-[11px] font-bold uppercase tracking-wider text-slate-text/50 mb-2">Deductions</p>
-                  <div className="rounded-xl border border-black/[0.06] divide-y divide-black/[0.04]">
+                  <div className="rounded-xl border border-slate-200 divide-y divide-slate-100">
                     <div className="flex justify-between px-4 py-2.5 text-[13px]">
                       <span className="text-slate-text">Deductions</span>
                       <span className="font-semibold text-alert">- ₹{payslip.deductions.toLocaleString("en-IN")}</span>
@@ -766,6 +792,14 @@ export default function Payroll() {
                     {payslip.deductions > 0 && payslip.deductionReason && (
                       <div className="px-4 py-2 text-[12px] text-slate-text/60">
                         Reason: {payslip.deductionReason}
+                      </div>
+                    )}
+                    {payslip.attendancePct != null && (
+                      <div className="px-4 py-2 text-[12px] text-slate-text/60">
+                        Attendance this period: {payslip.attendancePct}%
+                        {payslip.attendanceDeduction > 0
+                          ? ` · attendance deduction ₹${payslip.attendanceDeduction.toLocaleString("en-IN")}`
+                          : ""}
                       </div>
                     )}
                     <div className="flex justify-between px-4 py-2.5 text-[13px] bg-alert/[0.03]">
@@ -782,13 +816,13 @@ export default function Payroll() {
                   <p className="text-[13px] text-white/80 font-semibold">Net Payable</p>
                   <p className="text-[11px] text-white/40">After all deductions</p>
                 </div>
-                <p className="text-[28px] font-display font-bold text-amber">
+                <p className="text-[28px] font-display font-bold text-primary">
                   ₹{(payslip.basic + payslip.allowances - payslip.deductions).toLocaleString("en-IN")}
                 </p>
               </div>
 
               {/* Signature + footer */}
-              <div className="flex items-end justify-between pt-2 border-t border-black/[0.06]">
+              <div className="flex items-end justify-between pt-2 border-t border-slate-200">
                 <div className="text-[12px] text-slate-text/50">
                   {school?.recognitionAuthority && <p>Authority: {school.recognitionAuthority}</p>}
                   <p className="mt-1">This is a computer-generated payslip.</p>
@@ -802,12 +836,12 @@ export default function Payroll() {
 
               {/* Status + actions */}
               <div className="flex items-center justify-between pt-1 payslip-hide-on-print">
-                <Pill tone={payslip.paid ? "success" : "amber"}>
+                <Pill tone={payslip.paid ? "success" : "primary"}>
                   {payslip.paid ? "Paid" : "Pending"}
                 </Pill>
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => setPayslip(null)}>Close</Button>
-                  <Button variant="amber" onClick={() => window.print()}>
+                  <Button variant="primary" onClick={() => window.print()}>
                     <Download size={14} /> Print
                   </Button>
                 </div>
@@ -824,7 +858,7 @@ export default function Payroll() {
             onClick={() => setEditing(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <h3 className="font-display font-semibold text-ink text-[17px]">
                 Edit Payroll — {editing.name}
               </h3>
@@ -887,11 +921,11 @@ export default function Payroll() {
                 </PayField>
               )}
             </div>
-            <div className="px-5 py-4 border-t border-black/[0.06] flex justify-end gap-2">
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
               <Button variant="outline" onClick={() => setEditing(null)}>
                 Cancel
               </Button>
-              <Button variant="amber" onClick={saveEdit}>
+              <Button variant="primary" onClick={saveEdit}>
                 <Save size={15} /> Save Changes
               </Button>
             </div>

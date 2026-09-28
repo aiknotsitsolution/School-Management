@@ -9,5 +9,6 @@ router.post("/", requirePermission("marks:write"), ctrl.enterMarks);
 router.get("/", requirePermission("marks:read"), scopeStudentQuery, scopeClassTeacher, ctrl.getMarks);
 router.get("/class-summary", requirePermission("marks:read"), scopeClassTeacher, ctrl.getClassSummary);
 router.get("/report-card", requirePermission("marks:read"), scopeStudentQuery, scopeClassTeacher, ctrl.getReportCard);
+router.get("/report-card/pdf", requirePermission("marks:read"), scopeStudentQuery, scopeClassTeacher, ctrl.getReportCardPdf);
 
 module.exports = router;

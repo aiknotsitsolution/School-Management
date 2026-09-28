@@ -436,7 +436,7 @@ export default function AdmissionEnquiry() {
         title="Admission Enquiry"
         description="Track prospective families from first enquiry to confirmed admission — all in one workspace."
         right={
-          <Button variant="amber" onClick={openAdd}>
+          <Button variant="primary" onClick={openAdd}>
             <Plus size={15} /> New Enquiry
           </Button>
         }
@@ -459,8 +459,8 @@ export default function AdmissionEnquiry() {
               onClick={() => toggleStage(stage.key)}
               className={`rounded-2xl border bg-white p-4 text-left transition-all ${
                 active
-                  ? "border-amber ring-2 ring-amber/20 shadow-sm"
-                  : "border-black/[0.06] shadow-sm hover:border-black/15 hover:-translate-y-0.5"
+                  ? "border-primary ring-2 ring-primary/20 shadow-sm"
+                  : "border-slate-200 shadow-sm hover:border-slate-300 hover:-translate-y-0.5"
               }`}
             >
               <div className="flex items-center justify-between gap-2">
@@ -492,7 +492,7 @@ export default function AdmissionEnquiry() {
               onClick={() => setStatusFilter("All")}
               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11.5px] font-semibold transition-all ${
                 statusFilter === "All"
-                  ? "bg-ink text-white shadow-sm"
+                  ? "bg-primary text-white shadow-sm"
                   : "bg-paper text-slate-text hover:bg-slate-200"
               }`}
             >
@@ -504,7 +504,7 @@ export default function AdmissionEnquiry() {
                 onClick={() => toggleStage(stage.key)}
                 className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-semibold transition-all ${
                   statusFilter === stage.key
-                    ? "bg-ink text-white shadow-sm"
+                    ? "bg-primary text-white shadow-sm"
                     : "bg-paper text-slate-text hover:bg-slate-200"
                 }`}
               >
@@ -538,7 +538,7 @@ export default function AdmissionEnquiry() {
             <p className="text-[13px] text-slate-text/60 mt-1">
               Try different filters or add a new enquiry.
             </p>
-            <Button variant="amber" className="mt-4" onClick={openAdd}>
+            <Button variant="primary" className="mt-4" onClick={openAdd}>
               <Plus size={15} /> New Enquiry
             </Button>
           </div>
@@ -546,7 +546,7 @@ export default function AdmissionEnquiry() {
           <div className="overflow-x-auto -mx-5">
             <table className="w-full text-[12.5px]">
               <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-black/[0.06]">
+                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                   <th className="px-4 py-2.5 font-semibold">ID</th>
                   <th className="px-4 py-2.5 font-semibold">Child / Parent</th>
                   <th className="px-4 py-2.5 font-semibold">Class</th>
@@ -562,7 +562,7 @@ export default function AdmissionEnquiry() {
                   <tr
                     key={e.id}
                     onClick={() => setSelectedId(e.id)}
-                    className="group cursor-pointer border-b border-black/[0.04] last:border-0 hover:bg-paper/60 transition-colors"
+                    className="group cursor-pointer border-b border-slate-100 last:border-0 hover:bg-paper/60 transition-colors"
                   >
                     <td className="px-4 py-2.5">
                       <span className="font-mono text-[10.5px] font-semibold text-slate-text/70 bg-paper px-1.5 py-0.5 rounded">
@@ -611,7 +611,7 @@ export default function AdmissionEnquiry() {
                     >
                       <div className="inline-flex items-center gap-1" onClick={(ev) => ev.stopPropagation()}>
                         <button
-                          className="text-[11px] font-semibold border border-black/[0.1] rounded-lg px-2.5 py-1.5 bg-white text-ink cursor-pointer hover:border-amber/50 hover:bg-amber/5 transition-colors disabled:opacity-50"
+                          className="text-[11px] font-semibold border border-slate-300 rounded-lg px-2.5 py-1.5 bg-white text-ink cursor-pointer hover:border-primary/50 hover:bg-primary/5 transition-colors disabled:opacity-50"
                           onClick={() => setSelectedId(e.id)}
                           disabled={updatingStatusId === e.id}
                         >
@@ -648,7 +648,7 @@ export default function AdmissionEnquiry() {
           />
           <aside className="absolute right-0 inset-y-0 w-full max-w-md bg-white shadow-2xl flex flex-col">
             <div className="relative overflow-hidden bg-ink px-6 pt-6 pb-6 text-white shrink-0">
-              <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full bg-amber/25 blur-2xl" />
+              <div className="absolute -top-10 -right-10 w-44 h-44 rounded-full bg-primary/25 blur-2xl" />
               <div className="absolute -bottom-14 -left-10 w-36 h-36 rounded-full bg-info/20 blur-2xl" />
               <div className="relative flex items-start justify-between">
                 <div className="flex items-center gap-3.5">
@@ -731,7 +731,7 @@ export default function AdmissionEnquiry() {
                           {stage}
                         </span>
                         {current && (
-                          <span className="ml-auto text-[10.5px] font-bold uppercase tracking-wide text-amber-dark bg-amber/15 px-2 py-0.5 rounded-full">
+                          <span className="ml-auto text-[10.5px] font-bold uppercase tracking-wide text-primary-dark bg-primary/15 px-2 py-0.5 rounded-full">
                             Current
                           </span>
                         )}
@@ -741,9 +741,9 @@ export default function AdmissionEnquiry() {
                 </div>
 
                 {showAdmissionInput && selected.status !== "Admission Confirmed" && (
-                  <div className="mt-3 rounded-xl border border-amber/30 bg-amber/5 p-3 space-y-2">
+                  <div className="mt-3 rounded-xl border border-primary/30 bg-primary/5 p-3 space-y-2">
                     <label className="text-[12px] font-semibold text-ink flex items-center gap-1.5">
-                      <Hash size={13} className="text-amber-dark" />
+                      <Hash size={13} className="text-primary-dark" />
                       Admission ID <span className="text-alert">*</span>
                     </label>
                     <Input
@@ -760,7 +760,7 @@ export default function AdmissionEnquiry() {
                     </p>
                     <div className="flex gap-2 pt-1">
                       <Button
-                        variant="amber"
+                        variant="primary"
                         className="!py-1.5"
                         onClick={handleConfirmAdmission}
                         disabled={!pendingAdmissionId.trim()}
@@ -796,7 +796,7 @@ export default function AdmissionEnquiry() {
                 <p className="text-[11px] font-bold uppercase tracking-wider text-slate-text/60 mb-3">
                   Enquiry details
                 </p>
-                <div className="rounded-2xl border border-black/[0.06] divide-y divide-black/[0.04]">
+                <div className="rounded-2xl border border-slate-200 divide-y divide-slate-100">
                   <div className="flex items-center justify-between px-4 py-3">
                     <span className="text-[12.5px] text-slate-text/70 inline-flex items-center gap-2">
                       <Phone size={13} className="text-slate-text/40" /> Contact
@@ -840,7 +840,7 @@ export default function AdmissionEnquiry() {
                     </span>
                     <span className="text-[13px] font-medium text-ink">
                       {selected.followUp && selected.followUp !== "—" ? (
-                        <span className="inline-flex items-center gap-1.5 text-amber-dark">
+                        <span className="inline-flex items-center gap-1.5 text-primary-dark">
                           <CalendarCheck2 size={13} /> Follow-up
                         </span>
                       ) : (
@@ -853,7 +853,7 @@ export default function AdmissionEnquiry() {
                       <span className="text-[12.5px] text-slate-text/70 inline-flex items-center gap-2">
                         <Hash size={13} className="text-slate-text/40" /> Admission ID
                       </span>
-                      <span className="font-mono text-[12.5px] font-semibold bg-amber/15 text-amber-dark px-2 py-0.5 rounded-lg">
+                      <span className="font-mono text-[12.5px] font-semibold bg-primary/15 text-primary-dark px-2 py-0.5 rounded-lg">
                         {selected.admissionNo}
                       </span>
                     </div>
@@ -862,12 +862,12 @@ export default function AdmissionEnquiry() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-black/[0.06] flex justify-end gap-2 shrink-0">
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2 shrink-0">
               <Button variant="outline" onClick={() => setSelectedId(null)}>
                 Done
               </Button>
               {selected.status !== "Admission Confirmed" && (
-                <Button variant="amber" onClick={() => openEdit(selected)}>
+                <Button variant="primary" onClick={() => openEdit(selected)}>
                   <Pencil size={14} /> Edit Enquiry
                 </Button>
               )}
@@ -885,7 +885,7 @@ export default function AdmissionEnquiry() {
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden max-h-[92vh] flex flex-col">
             <div className="relative overflow-hidden bg-ink px-6 pt-5 pb-5 text-white shrink-0">
-              <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-amber/25 blur-2xl" />
+              <div className="absolute -top-10 -right-10 w-40 h-40 rounded-full bg-primary/25 blur-2xl" />
               <div className="relative flex items-center justify-between">
                 <div>
                   <h3 className="font-display font-semibold text-[18px]">
@@ -1073,12 +1073,12 @@ export default function AdmissionEnquiry() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-black/[0.06] flex justify-end gap-2 shrink-0">
+            <div className="px-6 py-4 border-t border-slate-200 flex justify-end gap-2 shrink-0">
               <Button variant="outline" onClick={() => setShowModal(false)}>
                 Cancel
               </Button>
               <Button
-                variant="amber"
+                variant="primary"
                 onClick={handleSave}
                 disabled={saving}
               >

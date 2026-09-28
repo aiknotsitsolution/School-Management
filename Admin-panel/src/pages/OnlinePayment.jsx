@@ -34,9 +34,9 @@ const CLASS_OPTIONS_FALLBACK = [
 ];
 
 const ORDER_TONE = {
-  pending: "amber",
-  awaiting_confirmation: "amber",
-  awaiting_manual_confirm: "amber",
+  pending: "primary",
+  awaiting_confirmation: "primary",
+  awaiting_manual_confirm: "primary",
   completed: "success",
   failed: "alert",
   cancelled: "neutral",
@@ -65,6 +65,8 @@ export default function OnlinePayment() {
   const [student, setStudent] = useState(null);
   const [creating, setCreating] = useState(false);
   const [orderNote, setOrderNote] = useState(null);
+  const [payMode, setPayMode] = useState("auto");
+  const [upiCheckout, setUpiCheckout] = useState(null);
 
   useEffect(() => {
     Promise.all([
@@ -89,7 +91,7 @@ export default function OnlinePayment() {
             displayId: item.admissionNo,
             avatar:
               item.photoUrl ||
-              `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=16213E&color=fff&bold=true`,
+              `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=172033&color=fff&bold=true`,
             feeStatus: pendingAmount === 0 ? "Paid" : "Pending",
           };
         });
@@ -156,7 +158,9 @@ export default function OnlinePayment() {
       const created = [];
       for (const invoice of feeStructure) {
         if (invoice.termAmount <= 0) continue;
-        const { data } = await api.fees.orders.create({ invoiceId: invoice._id });
+        const payload = { invoiceId: invoice._id };
+        if (payMode !== "auto") payload.mode = payMode;
+        const { data } = await api.fees.orders.create(payload);
         created.push(data);
       }
       setOrders((prev) => [...created, ...prev]);
@@ -184,7 +188,7 @@ export default function OnlinePayment() {
           currency: chk.currency,
           description: "School fee payment",
         });
-        await api.payments.orders.confirm(orderId, payload);
+        await api.fees.orders.confirm(orderId, payload);
         setOrders((prev) =>
           prev.map((x) =>
             x._id === orderId
@@ -194,6 +198,7 @@ export default function OnlinePayment() {
         );
         toast("Payment confirmed", "success");
       } else if (chk) {
+        if (chk.upiIntent || chk.upiId) setUpiCheckout({ ...chk, orderId });
         setOrders((prev) =>
           prev.map((x) =>
             x._id === orderId ? { ...x, status: "awaiting_manual_confirm" } : x,
@@ -235,7 +240,7 @@ export default function OnlinePayment() {
       {orderNote && (
         <Card>
           <div className="flex items-start gap-3">
-            <Receipt size={18} className="text-amber-dark mt-0.5 shrink-0" />
+            <Receipt size={18} className="text-primary-dark mt-0.5 shrink-0" />
             <div>
               <p className="text-[13.5px] font-semibold text-ink">
                 Payment {orderNote.length > 1 ? "orders" : "order"} created
@@ -252,6 +257,43 @@ export default function OnlinePayment() {
                 ))}
               </div>
             </div>
+          </div>
+        </Card>
+      )}
+
+      {upiCheckout && (
+        <Card>
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <p className="text-[13.5px] font-semibold text-ink">Pay by UPI</p>
+              {upiCheckout.upiId && (
+                <p className="text-[12.5px] text-slate-text/80 mt-1">
+                  UPI ID: <span className="font-mono font-semibold text-ink">{upiCheckout.upiId}</span>
+                </p>
+              )}
+              <p className="text-[12px] text-slate-text/70 mt-1">
+                Open the UPI app to pay ₹{Number(upiCheckout.amount).toLocaleString("en-IN")}, then share the
+                transaction reference with the school office for verification.
+              </p>
+              <div className="flex items-center gap-2 mt-3">
+                {upiCheckout.upiIntent && (
+                  <Button variant="primary" onClick={() => { window.location.href = upiCheckout.upiIntent; }}>
+                    <ExternalLink size={13} /> Open UPI app
+                  </Button>
+                )}
+                {upiCheckout.upiId && (
+                  <Button
+                    variant="outline"
+                    onClick={() => { navigator.clipboard?.writeText(upiCheckout.upiId); toast("UPI ID copied"); }}
+                  >
+                    Copy UPI ID
+                  </Button>
+                )}
+              </div>
+            </div>
+            <button onClick={() => setUpiCheckout(null)} className="p-2 rounded-lg hover:bg-paper text-slate-text">
+              <X size={16} />
+            </button>
           </div>
         </Card>
       )}
@@ -278,7 +320,7 @@ export default function OnlinePayment() {
         <Card title="Fee Summary" className="lg:col-span-1 h-fit">
           <button
             onClick={() => { setPickerOpen(true); setQuery(""); }}
-            className="flex items-center gap-3 pb-4 mb-4 border-b border-black/[0.06] w-full text-left hover:bg-paper/60 rounded-lg transition-colors"
+            className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-200 w-full text-left hover:bg-paper/60 rounded-lg transition-colors"
           >
             <img src={student?.avatar} alt={student?.name} className="w-12 h-12 rounded-xl object-cover" />
             <div className="flex-1 min-w-0">
@@ -305,7 +347,7 @@ export default function OnlinePayment() {
                   </div>
                 ))}
               </div>
-              <div className="flex justify-between pt-3 mt-3 border-t border-black/[0.06] font-bold text-ink">
+              <div className="flex justify-between pt-3 mt-3 border-t border-slate-200 font-bold text-ink">
                 <span>Total (Current Dues)</span>
                 <span className="font-display">₹{total.toLocaleString("en-IN")}</span>
               </div>
@@ -313,14 +355,23 @@ export default function OnlinePayment() {
           )}
 
           {total > 0 ? (
-            <Button
-              variant="amber"
-              className="w-full justify-center mt-4"
-              disabled={creating}
-              onClick={createOrder}
-            >
-              {creating ? "Creating order…" : `Create payment order · ₹${total.toLocaleString("en-IN")}`}
-            </Button>
+            <>
+              <label className="block text-[11.5px] font-semibold text-ink uppercase tracking-wide mt-4 mb-1">
+                Payment mode
+              </label>
+              <Select value={payMode} onChange={(e) => setPayMode(e.target.value)} className="w-full">
+                <option value="auto">Auto (school default)</option>
+                <option value="upi">UPI (pay by app / QR)</option>
+              </Select>
+              <Button
+                variant="primary"
+                className="w-full justify-center mt-3"
+                disabled={creating}
+                onClick={createOrder}
+              >
+                {creating ? "Creating order…" : `Create payment order · ₹${total.toLocaleString("en-IN")}`}
+              </Button>
+            </>
           ) : (
             <div className="text-center py-5 mt-2">
               <Pill tone="success">Fees paid</Pill>
@@ -340,7 +391,7 @@ export default function OnlinePayment() {
           ) : (
             <div className="space-y-2">
               {studentOrders.map((o) => (
-                <div key={o._id} className="rounded-xl border border-black/[0.06] p-3.5 flex items-center justify-between gap-3">
+                <div key={o._id} className="rounded-xl border border-slate-200 p-3.5 flex items-center justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-[13px] font-semibold text-ink truncate">{o.externalRef}</p>
@@ -351,12 +402,12 @@ export default function OnlinePayment() {
                       </p>
                   </div>
                   <div className="flex items-center gap-2 shrink-0">
-                    {o.status === "pending" && (
+                    {(o.status === "pending" || o.status === "failed") && (
                       <Button variant="outline" onClick={() => initiateOrder(o._id)}>
-                        <ExternalLink size={13} /> Initiate
+                        <ExternalLink size={13} /> {o.status === "failed" ? "Retry" : "Initiate"}
                       </Button>
                     )}
-                    {o.status === "pending" && (
+                    {(o.status === "pending" || o.status === "failed" || o.status === "awaiting_manual_confirm" || o.status === "awaiting_confirmation") && (
                       <Button
                         variant="ghost"
                         onClick={async () => {
@@ -391,7 +442,7 @@ export default function OnlinePayment() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setPickerOpen(false)} />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
-            <div className="flex items-center justify-between px-5 py-4 border-b border-black/[0.06]">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">Select Student</h3>
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">Choose the student to create a payment order for.</p>
@@ -426,7 +477,7 @@ export default function OnlinePayment() {
                       key={s.id}
                       onClick={() => selectStudent(s)}
                       className={`flex items-center gap-3 p-2.5 rounded-xl border text-left transition-colors ${
-                        student?.id === s.id ? "border-amber bg-amber/10" : "border-black/[0.06] hover:border-black/20"
+                        student?.id === s.id ? "border-primary bg-primary/10" : "border-slate-200 hover:border-slate-400"
                       }`}
                     >
                       <img src={s.avatar} alt={s.name} className="w-9 h-9 rounded-lg object-cover shrink-0" />
@@ -435,7 +486,7 @@ export default function OnlinePayment() {
                         <p className="text-[11.5px] text-slate-text/60">{s.displayId} · Class {s.class}-{s.section}</p>
                       </div>
                       <span className="shrink-0">
-                        <Pill tone={s.feeStatus === "Paid" ? "success" : "amber"}>{s.feeStatus}</Pill>
+                        <Pill tone={s.feeStatus === "Paid" ? "success" : "primary"}>{s.feeStatus}</Pill>
                       </span>
                     </button>
                   ))}

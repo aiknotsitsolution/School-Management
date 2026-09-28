@@ -35,6 +35,9 @@ import {
   ChevronDown,
   ShieldAlert,
   Trophy,
+  MessageSquareText,
+  Send,
+  Settings2,
 } from "lucide-react";
 import { selectSchool, selectUser } from "../store/selectors";
 import { canSeeNavigation } from "../lib/scope";
@@ -289,6 +292,27 @@ const groups = [
         perm: "notices:read",
       },
       {
+        to: "/diary",
+        icon: BookOpen,
+        label: "Class Diary",
+        perm: "notices:read",
+        roles: ["school_admin", "super_admin", "teacher", "parent"],
+      },
+      {
+        to: "/messages",
+        icon: MessageSquareText,
+        label: "Message Teacher",
+        perm: "notices:read",
+        roles: ["school_admin", "super_admin", "teacher", "parent"],
+      },
+      {
+        to: "/broadcast",
+        icon: Send,
+        label: "Broadcast",
+        perm: "notices:publish",
+        roles: ["school_admin", "super_admin"],
+      },
+      {
         to: "/events",
         icon: PartyPopper,
         label: "Events",
@@ -340,6 +364,24 @@ const groups = [
         icon: ScrollText,
         label: "Report Card",
         perm: "marks:read",
+      },
+      {
+        to: "/grading-scales",
+        icon: BarChart3,
+        label: "Grading Scales",
+        perm: "exams:read",
+      },
+      {
+        to: "/syllabus",
+        icon: ScrollText,
+        label: "Syllabus",
+        perm: "homework:read",
+      },
+      {
+        to: "/study-materials",
+        icon: FileText,
+        label: "Study Materials",
+        perm: "homework:read",
       },
       {
         to: "/promotions",
@@ -439,6 +481,18 @@ const groups = [
         icon: CreditCard,
         label: "Online Fees Payment",
         perm: "fees:read",
+      },
+      {
+        to: "/payment-gateway",
+        icon: Settings2,
+        label: "Payment Gateway",
+        perm: "payments:settings",
+      },
+      {
+        to: "/accounting",
+        icon: ScrollText,
+        label: "Accounting",
+        perm: "accounting:read",
       },
     ],
   },
@@ -590,6 +644,12 @@ const STUDENT_NAV = [
         roles: ["student"],
       },
       {
+        to: "/diary",
+        icon: BookOpen,
+        label: "Class Diary",
+        roles: ["student"],
+      },
+      {
         to: "/student/library",
         icon: BookOpen,
         label: "My Library",
@@ -623,6 +683,62 @@ const STUDENT_NAV = [
   },
 ];
 
+const PARENT_NAV = [
+  {
+    label: "My Children",
+    items: [
+      {
+        to: "/parent-dashboard",
+        icon: LayoutDashboard,
+        label: "Dashboard",
+        end: true,
+        roles: ["parent"],
+      },
+      {
+        to: "/diary",
+        icon: BookOpen,
+        label: "Class Diary",
+        roles: ["parent"],
+      },
+      {
+        to: "/messages",
+        icon: CalendarDays,
+        label: "Message Teacher",
+        roles: ["parent"],
+      },
+      {
+        to: "/notifications",
+        icon: Bell,
+        label: "Notifications",
+        roles: ["parent"],
+      },
+    ],
+  },
+  {
+    label: "School Services",
+    items: [
+      {
+        to: "/notice-board",
+        icon: ClipboardList,
+        label: "Notices",
+        roles: ["parent"],
+      },
+      {
+        to: "/events",
+        icon: PartyPopper,
+        label: "Events",
+        roles: ["parent"],
+      },
+      {
+        to: "/online-payment",
+        icon: Wallet,
+        label: "Fees & Payments",
+        roles: ["parent"],
+      },
+    ],
+  },
+];
+
 export default function Sidebar({ open, onClose }) {
   const school = useSelector(selectSchool);
   const user = useSelector(selectUser);
@@ -636,12 +752,11 @@ export default function Sidebar({ open, onClose }) {
     ? PERSONA_NAV[persona.key] || []
     : role === "student"
       ? STUDENT_NAV
-      : groups;
+      : role === "parent"
+        ? PARENT_NAV
+        : groups;
 
-  const brandName = school?.shortName || "Zipschool OS";
-  const brandSession = sessionLabel(school)
-    ? `Zipschool OS · ${sessionLabel(school)}`
-    : `Zipschool OS · ${new Date().getFullYear()}`;
+  const brandTagline = "Learning Today, Leading Tomorrow";
 
   return (
     <>
@@ -652,7 +767,7 @@ export default function Sidebar({ open, onClose }) {
         />
       )}
       <aside
-        className={`fixed lg:static z-40 top-0 left-0 h-full w-72 bg-ink text-white flex flex-col
+        className={`fixed lg:static z-40 top-0 left-0 h-full w-72 bg-navy text-white flex flex-col
         transform transition-transform duration-200 lg:translate-x-0
         ${open ? "translate-x-0" : "-translate-x-full"}`}
       >
@@ -673,10 +788,10 @@ export default function Sidebar({ open, onClose }) {
             )}
             <div className="leading-tight">
               <p className="font-display font-bold text-[15px] tracking-tight">
-                {brandName}
+                ZipschoolOS
               </p>
-              <p className="text-[11px] text-white/50">
-                {role === "super_admin" ? "Platform Owner" : brandSession}
+              <p className="text-[11px] text-slate-400">
+                {role === "super_admin" ? "Platform Owner" : brandTagline}
               </p>
             </div>
           </div>
@@ -696,12 +811,12 @@ export default function Sidebar({ open, onClose }) {
             if (items.length === 0) return null;
             return (
               <div key={group.label} className="mb-5">
-                <p className="px-3 mb-1.5 text-[11px] font-semibold text-white/35 tracking-wide">
+                <p className="px-3 mb-1.5 text-[11px] font-semibold text-slate-400 tracking-wide">
                   {group.label}
                 </p>
                 {group.teacherOnly && role === "teacher" && teacherCtx?.allScopes?.length > 1 && (
                   <div className="mx-3 mb-2 rounded-lg bg-white/5 p-2">
-                    <p className="text-[10px] text-white/40 uppercase tracking-wide font-semibold px-1 mb-1.5">
+                    <p className="text-[10px] text-slate-400 uppercase tracking-wide font-semibold px-1 mb-1.5">
                       Active Class
                     </p>
                     <div className="flex flex-wrap gap-1">
@@ -711,8 +826,8 @@ export default function Sidebar({ open, onClose }) {
                           onClick={() => teacherCtx.setActiveScope(i)}
                           className={`text-[11px] font-semibold px-2 py-1 rounded-md transition-colors ${
                             i === teacherCtx.activeScopeIdx
-                              ? "bg-amber text-ink"
-                              : "text-white/50 hover:text-white/80 hover:bg-white/10"
+                              ? "bg-primary text-white"
+                              : "text-slate-400 hover:text-white hover:bg-ink-light"
                           }`}
                         >
                           {s.class}-{s.section || "?"}
@@ -729,10 +844,10 @@ export default function Sidebar({ open, onClose }) {
                       end={item.end}
                       onClick={onClose}
                       className={({ isActive }) =>
-                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors ${
+                        `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13.5px] font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/60 ${
                           isActive
-                            ? "bg-amber text-ink"
-                            : "text-white/70 hover:bg-white/10 hover:text-white"
+                            ? "bg-info text-white shadow-[0_8px_20px_-12px_rgba(37,99,235,0.95)]"
+                            : "text-slate-300 hover:bg-ink-light hover:text-white"
                         }`
                       }
                     >
@@ -752,11 +867,19 @@ export default function Sidebar({ open, onClose }) {
               <p className="text-[12px] font-semibold text-white/90">
                 {school.name}
               </p>
-              <p className="text-[11px] text-white/50 mt-0.5">
+              <p className="text-[11px] text-slate-400 mt-0.5">
                 {school.code} · {sessionLabel(school) || "—"}
               </p>
             </div>
           )}
+          <div className="mt-3.5 flex items-end justify-between gap-2 px-1">
+            <p className="text-[11px] font-medium leading-snug text-white/35">
+              Better Learning
+              <br />
+              Brighter Future
+            </p>
+            <Send size={20} className="mb-0.5 shrink-0 text-info/80" aria-hidden="true" />
+          </div>
         </div>
       </aside>
     </>
