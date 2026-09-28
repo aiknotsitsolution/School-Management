@@ -467,6 +467,7 @@ const refreshToken = async (req, res) => {
       return res.status(401).json({ success: false, message: "Session expired, please log in again" });
     }
 
+    
     const accessToken = generateAccessToken(user);
     res.json({ success: true, data: { accessToken, refreshToken } });
   } catch (err) {
