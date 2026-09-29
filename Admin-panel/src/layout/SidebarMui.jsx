@@ -48,7 +48,7 @@ import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
 
 import useSidebarState, { isRouteActive } from "./useSidebarState";
-import { BRAND, DURATION, EASING, SIDEBAR_TOKENS, softPrimary } from "./sidebarTheme";
+import { BRAND, DURATION, EASING, SB, SIDEBAR_TOKENS, SIDEBAR_TYPE, softPrimary } from "./sidebarTheme";
 import MOCK_NAV from "./sidebarNav.config";
 
 const {
@@ -62,9 +62,12 @@ const {
   groupGap,
   listTopPad,
   listBottomPad,
+  listPadX,
   railIcon,
   radius,
 } = SIDEBAR_TOKENS;
+
+const { label: labelSize, labelNested, groupHeader, icon: iconSize, iconNested, groupHeaderIcon } = SIDEBAR_TYPE;
 
 const allowAll = () => true;
 
@@ -86,19 +89,19 @@ const initialsOf = (name = "") =>
 
 const scrollbarSx = {
   scrollbarWidth: "thin",
-  scrollbarColor: `${BRAND.slate300} transparent`,
+  scrollbarColor: `${SB.slate300} transparent`,
   "&::-webkit-scrollbar": { width: 6 },
   "&::-webkit-scrollbar-track": { background: "transparent" },
   "&::-webkit-scrollbar-thumb": {
-    backgroundColor: BRAND.slate300,
+    backgroundColor: SB.slate300,
     borderRadius: 999,
   },
-  "&::-webkit-scrollbar-thumb:hover": { backgroundColor: BRAND.slate500 },
+  "&::-webkit-scrollbar-thumb:hover": { backgroundColor: SB.slate500 },
 };
 
 const fadeTransition = {
   transition: { timeout: DURATION.fast, easing: EASING.standard },
-  arrow: { sx: { color: BRAND.slate900 } },
+  arrow: { sx: { color: SB.slate900 } },
 };
 
 /* ── Badge ───────────────────────────────────────────────────────────────── */
@@ -109,8 +112,8 @@ function BadgePill({ count, tone = "primary" }) {
     <Box
       component="span"
       sx={{
-        minWidth: 20,
-        height: 20,
+        minWidth: 22,
+        height: 22,
         px: 0.6,
         display: "inline-flex",
         alignItems: "center",
@@ -118,7 +121,7 @@ function BadgePill({ count, tone = "primary" }) {
         borderRadius: "999px",
         bgcolor: (t) => alpha(t.palette[paletteKey].main, 0.14),
         color: (t) => t.palette[paletteKey].main,
-        fontSize: 11,
+        fontSize: 12,
         fontWeight: 750,
         lineHeight: 1,
         fontVariantNumeric: "tabular-nums",
@@ -175,9 +178,9 @@ const itemRootSx = (selected) => ({
       easing: EASING.standard,
     }),
   "&:hover": {
-    bgcolor: selected ? softPrimary(0.13) : BRAND.slate100,
-    color: selected ? "primary.dark" : BRAND.slate900,
-    "& .nav-icon": { color: selected ? "primary.main" : BRAND.slate700 },
+    bgcolor: selected ? softPrimary(0.13) : SB.slate100,
+    color: selected ? "primary.dark" : SB.slate900,
+    "& .nav-icon": { color: selected ? "primary.main" : SB.slate700 },
   },
   "&.Mui-focusVisible": {
     boxShadow: `0 0 0 3px ${alpha(BRAND.main, 0.28)}`,
@@ -185,15 +188,15 @@ const itemRootSx = (selected) => ({
   ...activeRailSx,
 });
 
-const iconSx = (selected) => ({
+const iconSx = (selected, nested = false) => ({
   minWidth: 0,
   color: "inherit",
   // Width/height are set alongside `fontSize` so this works with MUI SvgIcons
   // and with lucide-react icons, which size via attributes instead of em.
   "& .nav-icon": {
-    fontSize: 20,
-    width: 20,
-    height: 20,
+    fontSize: nested ? iconNested : iconSize,
+    width: nested ? iconNested : iconSize,
+    height: nested ? iconNested : iconSize,
     display: "block",
     flexShrink: 0,
     color: selected ? "primary.main" : "currentColor",
@@ -222,7 +225,7 @@ function RailSubItem({ to, label, badge }) {
         borderRadius: 1,
         textDecoration: "none",
         color: alpha("#E2E8F0", 0.88),
-        fontSize: 12,
+        fontSize: labelNested,
         fontWeight: 600,
         transition: (t) =>
           t.transitions.create(["background-color", "color"], {
@@ -256,7 +259,7 @@ function RailTooltip({ label, badge, children, anchor }) {
   const title = (
     <Box sx={{ px: 1, py: 0.5 }}>
       <Box sx={{ display: "flex", alignItems: "center", gap: 0.75 }}>
-        <Typography sx={{ fontSize: 12.5, fontWeight: 700, color: "#F8FAFC" }}>
+        <Typography sx={{ fontSize: 14, fontWeight: 700, color: "#F8FAFC" }}>
           {label}
         </Typography>
         <NavBadge badge={badge} />
@@ -333,11 +336,11 @@ function NavItem({
             "&::after": {
               content: '""',
               position: "absolute",
-              left: 18,
+              left: 20,
               top: 0,
               bottom: 0,
               width: 1,
-              bgcolor: BRAND.slate200,
+              bgcolor: SB.slate200,
             },
           }
         : null),
@@ -378,8 +381,8 @@ function NavItem({
                   onToggleExpand?.();
                 }}
                 sx={{
-                  width: 24,
-                  height: 24,
+                  width: 28,
+                  height: 28,
                   color: "text.secondary",
                   transition: (t) =>
                     t.transitions.create("transform", {
@@ -389,7 +392,7 @@ function NavItem({
                   transform: expanded ? "rotate(0deg)" : "rotate(-90deg)",
                 }}
               >
-                <KeyboardArrowDownRoundedIcon sx={{ fontSize: 18 }} />
+                <KeyboardArrowDownRoundedIcon sx={{ fontSize: 20 }} />
               </IconButton>
             ) : null}
           </Box>
@@ -399,7 +402,7 @@ function NavItem({
       {Icon ? (
         <ListItemIcon
           sx={{
-            ...iconSx(selected),
+            ...iconSx(selected, isNested),
             pl: collapsed ? 0 : 0.5,
             pr: collapsed ? 0 : 0.75,
           }}
@@ -414,7 +417,7 @@ function NavItem({
           slotProps={{
             primary: {
               sx: {
-                fontSize: 13,
+                fontSize: isNested ? labelNested : labelSize,
                 fontWeight: selected ? 700 : 550,
                 lineHeight: 1.35,
                 color: "inherit",
@@ -437,7 +440,7 @@ function NavItem({
             height: 8,
             borderRadius: "50%",
             bgcolor: "error.main",
-            border: `2px solid ${BRAND.slate900}`,
+            border: `2px solid ${SB.slate900}`,
             boxShadow: selected ? `0 0 0 2px ${alpha(BRAND.main, 0.35)}` : "none",
           }}
         />
@@ -524,7 +527,7 @@ function GroupHeader({ group, collapsed }) {
               right: 14,
               bottom: 5,
               height: 1,
-              bgcolor: BRAND.slate200,
+              bgcolor: SB.slate200,
             },
           }}
         >
@@ -533,11 +536,11 @@ function GroupHeader({ group, collapsed }) {
               component={GroupIcon}
               className="nav-icon"
               sx={{
-                fontSize: 15,
-                width: 15,
-                height: 15,
+                fontSize: groupHeaderIcon,
+                width: groupHeaderIcon,
+                height: groupHeaderIcon,
                 opacity: 0.5,
-                color: BRAND.slate500,
+                color: SB.slate500,
               }}
             />
           ) : null}
@@ -557,8 +560,8 @@ function GroupHeader({ group, collapsed }) {
         minHeight: groupHeaderHeight,
         display: "flex",
         alignItems: "center",
-        color: BRAND.slate500,
-        fontSize: 10.5,
+        color: SB.slate500,
+        fontSize: groupHeader,
         fontWeight: 800,
         letterSpacing: "0.09em",
         textTransform: "uppercase",
@@ -575,8 +578,8 @@ function BrandMark({ brand }) {
   return (
     <Box
       sx={{
-        width: 38,
-        height: 38,
+        width: 46,
+        height: 46,
         flexShrink: 0,
         borderRadius: 2.5,
         display: "grid",
@@ -585,7 +588,7 @@ function BrandMark({ brand }) {
           "linear-gradient(135deg, #4F46E5 0%, #7C3AED 55%, #DB2777 100%)",
         color: "#fff",
         fontWeight: 800,
-        fontSize: 15,
+        fontSize: 16,
         letterSpacing: "-0.02em",
         boxShadow: `0 10px 22px -12px ${alpha(BRAND.main, 0.9)}`,
         overflow: "hidden",
@@ -623,10 +626,10 @@ function BrandBlock({ brand, collapsed }) {
         <Typography
           noWrap
           sx={{
-            fontSize: 14,
+            fontSize: 15.5,
             fontWeight: 750,
             lineHeight: 1.2,
-            color: BRAND.slate900,
+            color: SB.slate900,
             letterSpacing: "-0.015em",
           }}
         >
@@ -634,7 +637,7 @@ function BrandBlock({ brand, collapsed }) {
         </Typography>
         <Typography
           noWrap
-          sx={{ fontSize: 11.5, color: "text.secondary", mt: 0.25, fontWeight: 550 }}
+          sx={{ fontSize: 12.5, color: "text.secondary", mt: 0.25, fontWeight: 550 }}
         >
           {brand?.code || brand?.session || "School ERP"}
         </Typography>
@@ -649,9 +652,9 @@ function UserBlock({ user, collapsed, onSettings, onSignOut }) {
       src={user?.avatar}
       alt=""
       sx={{
-        width: 34,
-        height: 34,
-        fontSize: 12.5,
+        width: 40,
+        height: 40,
+        fontSize: 15,
         fontWeight: 750,
         bgcolor: softPrimary(0.16),
         color: "primary.dark",
@@ -679,11 +682,11 @@ function UserBlock({ user, collapsed, onSettings, onSignOut }) {
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography
           noWrap
-          sx={{ fontSize: 12.5, fontWeight: 700, color: BRAND.slate900, lineHeight: 1.25 }}
+          sx={{ fontSize: 13.5, fontWeight: 700, color: SB.slate900, lineHeight: 1.25 }}
         >
           {user?.name || "Account"}
         </Typography>
-        <Typography noWrap sx={{ fontSize: 11, color: "text.secondary", mt: 0.15 }}>
+        <Typography noWrap sx={{ fontSize: 12, color: "text.secondary", mt: 0.15 }}>
           {user?.role || "Member"}
         </Typography>
       </Box>
@@ -697,12 +700,12 @@ function UserBlock({ user, collapsed, onSettings, onSignOut }) {
               onClick={onSettings}
               sx={{
                 color: "text.secondary",
-                width: 30,
-                height: 30,
-                "&:hover": { bgcolor: BRAND.slate100, color: BRAND.slate900 },
+                width: 34,
+                height: 34,
+                "&:hover": { bgcolor: SB.slate100, color: SB.slate900 },
               }}
             >
-              <SettingsRoundedIcon sx={{ fontSize: 17 }} />
+              <SettingsRoundedIcon sx={{ fontSize: 19 }} />
             </IconButton>
           ) : null}
           {onSignOut ? (
@@ -712,12 +715,12 @@ function UserBlock({ user, collapsed, onSettings, onSignOut }) {
               onClick={onSignOut}
               sx={{
                 color: "text.secondary",
-                width: 30,
-                height: 30,
+                width: 34,
+                height: 34,
                 "&:hover": { bgcolor: alpha("#E11D48", 0.1), color: "error.main" },
               }}
             >
-              <LogoutRoundedIcon sx={{ fontSize: 17 }} />
+              <LogoutRoundedIcon sx={{ fontSize: 19 }} />
             </IconButton>
           ) : null}
         </Box>
@@ -827,8 +830,9 @@ export default function SidebarMui({
           width: isMobile ? Math.min(width, 320) : collapsed ? railWidth : width,
           boxSizing: "border-box",
           overflowX: "hidden",
-          borderRight: `1px solid ${BRAND.slate200}`,
-          backgroundImage: `linear-gradient(180deg, #FFFFFF 0%, ${BRAND.slate50} 100%)`,
+          borderRight: `1px solid ${SB.slate200}`,
+          backgroundImage:
+            "linear-gradient(180deg, var(--color-white) 0%, var(--color-paper) 100%)",
           transition: (t) =>
             t.transitions.create("width", {
               duration: DURATION.rail,
@@ -847,7 +851,7 @@ export default function SidebarMui({
           sx={{
             display: "flex",
             alignItems: "center",
-            minHeight: 64,
+            minHeight: 76,
             px: collapsed ? 0 : 2,
             justifyContent: collapsed ? "center" : "flex-start",
           }}
@@ -855,7 +859,7 @@ export default function SidebarMui({
           <BrandBlock brand={brand} collapsed={collapsed} />
         </Box>
 
-        <Divider sx={{ borderColor: BRAND.slate200 }} />
+        <Divider sx={{ borderColor: SB.slate200 }} />
 
         {/* scrollable navigation */}
         <Box
@@ -867,6 +871,7 @@ export default function SidebarMui({
             overflowX: "hidden",
             pt: `${listTopPad}px`,
             pb: `${listBottomPad}px`,
+            px: collapsed ? 0 : `${listPadX}px`,
             ...scrollbarSx,
           }}
         >
@@ -875,7 +880,7 @@ export default function SidebarMui({
               {group.header ? <GroupHeader group={group} collapsed={collapsed} /> : null}
 
               {group.extra ? (
-                <Box sx={{ px: collapsed ? 0 : 1.5, pb: "4px" }}>{group.extra}</Box>
+                <Box sx={{ px: collapsed ? 0 : 1.5, pb: "5px" }}>{group.extra}</Box>
               ) : null}
 
               <List disablePadding dense>
@@ -903,7 +908,7 @@ export default function SidebarMui({
 
           {filtered.length === 0 ? (
             <Box sx={{ px: collapsed ? 0 : 2, py: 3, textAlign: "center" }}>
-              <Typography sx={{ fontSize: 12, color: "text.secondary" }}>
+              <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
                 {collapsed ? "—" : "No navigation items available for your role."}
               </Typography>
             </Box>
@@ -911,8 +916,8 @@ export default function SidebarMui({
         </Box>
 
         {/* footer — user + collapse toggle */}
-        <Box sx={{ borderTop: `1px solid ${BRAND.slate200}`, bgcolor: "#FFFFFFCC" }}>
-          <Box sx={{ px: collapsed ? 0 : 2, py: 1.5 }}>
+        <Box sx={{ borderTop: `1px solid ${SB.slate200}`, bgcolor: "color-mix(in srgb, var(--color-white) 80%, transparent)" }}>
+          <Box sx={{ px: collapsed ? 0 : 2, py: 1.75 }}>
             <UserBlock
               user={user}
               collapsed={collapsed}
@@ -923,7 +928,7 @@ export default function SidebarMui({
 
           {showFooterToggle && !isMobile ? (
             <>
-              <Divider sx={{ borderColor: BRAND.slate200 }} />
+              <Divider sx={{ borderColor: SB.slate200 }} />
               <Box sx={{ p: 1 }}>
                 <Tooltip
                   title={collapsed ? "Expand navigation" : "Collapse navigation"}
@@ -936,7 +941,7 @@ export default function SidebarMui({
                     aria-expanded={!collapsed}
                     sx={{
                       width: "100%",
-                      height: 36,
+                      height: 46,
                       justifyContent: collapsed ? "center" : "flex-start",
                       gap: 1,
                       px: collapsed ? 0 : 1.25,
@@ -946,7 +951,7 @@ export default function SidebarMui({
                         t.transitions.create(["background-color", "color"], {
                           duration: DURATION.fast,
                         }),
-                      "&:hover": { bgcolor: BRAND.slate100, color: BRAND.slate900 },
+                      "&:hover": { bgcolor: SB.slate100, color: SB.slate900 },
                     }}
                   >
                     <Box
@@ -963,15 +968,15 @@ export default function SidebarMui({
                       }}
                     >
                       {collapsed ? (
-                        <KeyboardDoubleArrowRightRoundedIcon sx={{ fontSize: 18 }} />
+                        <KeyboardDoubleArrowRightRoundedIcon sx={{ fontSize: 20 }} />
                       ) : (
-                        <KeyboardDoubleArrowLeftRoundedIcon sx={{ fontSize: 18 }} />
+                        <KeyboardDoubleArrowLeftRoundedIcon sx={{ fontSize: 20 }} />
                       )}
                     </Box>
 
                     {collapsed ? null : (
                       <Typography
-                        sx={{ fontSize: 12, fontWeight: 650, flex: 1, textAlign: "left" }}
+                        sx={{ fontSize: 13.5, fontWeight: 650, flex: 1, textAlign: "left" }}
                       >
                         Collapse
                       </Typography>

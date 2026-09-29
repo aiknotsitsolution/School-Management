@@ -22,24 +22,38 @@ export const BRAND = {
 };
 
 export const SIDEBAR_TOKENS = {
-  expandedWidth: 292,
-  collapsedWidth: 76,
+  expandedWidth: 312,
+  collapsedWidth: 84,
   // NOTE: these are raw PIXELS, not MUI theme-spacing units. Call sites render
   // them as `${n}px` — passing them bare into `sx` would multiply by the theme
   // spacing (8px per unit) and blow the spacing up 8x.
-  itemHeight: 40,
-  nestedItemHeight: 36,
+  itemHeight: 50,
+  nestedItemHeight: 46,
   // Group heading block: vertical padding + minimum height.
-  groupHeaderPadY: 4,
-  groupHeaderHeight: 24,
+  groupHeaderPadY: 5,
+  groupHeaderHeight: 28,
   // Breathing room between a group heading and the first item under it.
   groupHeaderGap: 2,
-  groupGap: 4,
+  groupGap: 6,
   // Space above the first item / under the final item, before the footer.
-  listTopPad: 4,
-  listBottomPad: 4,
-  railIcon: 40,
-  radius: 10,
+  listTopPad: 6,
+  listBottomPad: 6,
+  // Horizontal gutter so item backgrounds do not touch the drawer edge. 6px +
+  // the item's own 10px padding lines item text up with the 16px brand/header
+  // text. Collapsed rail stays edge-to-edge because items centre themselves.
+  listPadX: 6,
+  railIcon: 48,
+  radius: 12,
+};
+
+/** Nav label / icon scale, so tab size lives in one place. */
+export const SIDEBAR_TYPE = {
+  label: 15,
+  labelNested: 14,
+  groupHeader: 11.5,
+  icon: 28,
+  iconNested: 24,
+  groupHeaderIcon: 19,
 };
 
 export const EASING = {
@@ -56,6 +70,23 @@ export const DURATION = {
   rail: 260,
 };
 
+/* The rail is hand-styled with literal hex values, so it does not inherit the
+   Tailwind dark remap. These are CSS-variable references instead — MUI writes
+   them straight into `style`, the browser resolves them against whatever
+   `[data-theme]` currently says, and every surface flips for free. */
+export const SB = {
+  slate950: "var(--color-slate-950)",
+  slate900: "var(--color-ink)",
+  slate800: "var(--color-slate-800)",
+  slate700: "var(--color-slate-700)",
+  slate500: "var(--color-slate-500)",
+  slate300: "var(--color-slate-300)",
+  slate200: "var(--color-slate-200)",
+  slate100: "var(--color-slate-100)",
+  slate50: "var(--color-paper)",
+  paper: "var(--color-white)",
+};
+
 export const sidebarTheme = createTheme({
   cssVariables: true,
   palette: {
@@ -66,13 +97,13 @@ export const sidebarTheme = createTheme({
       light: BRAND.light,
     },
     background: {
-      default: BRAND.slate50,
-      paper: "#FFFFFF",
+      default: "var(--color-paper)",
+      paper: "var(--color-white)",
     },
-    divider: BRAND.slate200,
+    divider: "var(--color-slate-200)",
     text: {
-      primary: BRAND.slate900,
-      secondary: BRAND.slate500,
+      primary: "var(--color-ink)",
+      secondary: "var(--color-slate-text)",
     },
   },
   shape: { borderRadius: SIDEBAR_TOKENS.radius },
@@ -103,7 +134,7 @@ export const sidebarTheme = createTheme({
       defaultProps: { arrow: true, enterDelay: 220, leaveDelay: 60 },
       styleOverrides: {
         tooltip: {
-          backgroundColor: BRAND.slate900,
+          backgroundColor: "#0F172A",
           color: "#F8FAFC",
           fontSize: 12,
           fontWeight: 600,
@@ -112,7 +143,7 @@ export const sidebarTheme = createTheme({
           borderRadius: 10,
           boxShadow: "0 18px 40px -18px rgba(11,18,32,0.65)",
         },
-        arrow: { color: BRAND.slate900 },
+        arrow: { color: "#0F172A" },
       },
     },
     MuiButtonBase: {
