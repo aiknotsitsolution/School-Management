@@ -31,6 +31,10 @@ const STATUS_FILTERS = ["All", STATUS_LIVE, STATUS_NO_GPS];
 const STATUS_COLOR = { [STATUS_LIVE]: "#16A34A", [STATUS_NO_GPS]: "#94A3B8" };
 const STATUS_TONE = { [STATUS_LIVE]: "success", [STATUS_NO_GPS]: "neutral" };
 
+// How often the fleet view re-polls for bus positions. Every poll is served from
+// the cached OSRM route plan, so this stays cheap.
+const LIVE_REFRESH_MS = 30000;
+
 // Neutral fallback centre (geographic centre of India). Used only when the
 // school profile carries no coordinates and no bus has reported a GPS fix yet —
 // it is a map viewport default, not a claimed school location.
@@ -153,10 +157,15 @@ function FleetMap({
           icon: makeBusIcon(STATUS_COLOR[STATUS_LIVE]),
           riseOnHover: true,
         });
-        marker.bindTooltip(`${r.id} · last ping ${timeAgo(r.currentLocation.updatedAt) || "—"}`, {
-          direction: "top",
-          offset: [0, -22],
-        });
+        marker.bindTooltip(
+          `${r.id} · last ping ${timeAgo(r.currentLocation.updatedAt) || "—"}${
+            r.live?.etaMinutes ? ` · ${r.live.etaMinutes} min to ${r.live.nextStop || "next stop"}` : ""
+          }`,
+          {
+            direction: "top",
+            offset: [0, -22],
+          },
+        );
         marker.on("click", () => onSelect(r));
         marker.addTo(mapRef.current);
         markersRef.current[r.id] = marker;
@@ -246,6 +255,78 @@ function Metric({ label, value, icon: Icon }) {
   );
 }
 
+// Live routing readout: OSRM driving distance + ETA to the next stop, or the
+// full route plan when the bus is at the last stop.
+function LiveProgress({ live, plan }) {
+  if (!live) return null;
+  const { nextStop, distanceKm, etaMinutes, routingSource, stale } = live;
+
+  if (distanceKm === null && etaMinutes === null) {
+    return (
+      <div className="mt-3 rounded-lg bg-amber-50/70 border border-amber-200 px-3 py-2 text-[11.5px] text-amber-800">
+        {nextStop
+          ? `Heading to ${nextStop} — add coordinates to this stop for distance & ETA.`
+          : "Add stops with coordinates to get live distance and ETA."}
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className={`mt-3 rounded-lg px-3 py-2.5 border ${
+        stale
+          ? "bg-slate-50 border-slate-200"
+          : "bg-emerald-50/70 border-emerald-200"
+      }`}
+    >
+      <div className="flex items-center justify-between gap-2">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/60">
+          {stale ? "Last known position" : "Live position"}
+        </p>
+        {plan?.totalKm ? (
+          <p className="text-[10.5px] text-slate-text/50">
+            Full route {plan.totalKm} km
+            {plan.totalMinutes ? ` · ${plan.totalMinutes} min` : ""}
+          </p>
+        ) : null}
+      </div>
+
+      <div className="grid grid-cols-2 gap-3 mt-2">
+        <div>
+          <p className="text-[10.5px] text-slate-text/60">Next stop</p>
+          <p className="text-[12.5px] font-semibold text-ink truncate">
+            {nextStop || "—"}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10.5px] text-slate-text/60">Distance</p>
+          <p className="text-[12.5px] font-semibold text-ink">
+            {distanceKm !== null ? `${distanceKm} km` : "—"}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10.5px] text-slate-text/60">ETA</p>
+          <p className="text-[12.5px] font-semibold text-ink">
+            {etaMinutes !== null ? `${etaMinutes} min` : "—"}
+          </p>
+        </div>
+        <div>
+          <p className="text-[10.5px] text-slate-text/60">Stops left</p>
+          <p className="text-[12.5px] font-semibold text-ink">
+            {live.stopsRemaining ?? "—"}
+          </p>
+        </div>
+      </div>
+
+      {routingSource !== "osrm" ? (
+        <p className="text-[10.5px] text-slate-text/50 mt-1.5">
+          Straight-line estimate — routing service unavailable.
+        </p>
+      ) : null}
+    </div>
+  );
+}
+
 export default function BusTracking() {
   const school = useSelector(selectSchool);
 
@@ -256,8 +337,8 @@ export default function BusTracking() {
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true);
     setError("");
     try {
       const res = await api.transport.list();
@@ -276,6 +357,8 @@ export default function BusTracking() {
           driverPhone: route.driverContact || "",
           vehicleNo: route.vehicleNo || "—",
           stopCount: route.stops?.length || 0,
+          live: route.live || null,
+          routePlan: route.routePlan || null,
         };
       });
       setRoutes(loaded);
@@ -283,16 +366,33 @@ export default function BusTracking() {
         prev ? loaded.find((r) => r.id === prev.id) || loaded[0] || null : loaded[0] || null,
       );
     } catch (err) {
-      setError(err.message || "Could not load transport routes");
-      setRoutes([]);
-      setSelected(null);
+      // A failed poll must not wipe the last known positions — keep showing
+      // stale data and only surface the error on an explicit (non-silent) load.
+      if (!silent) {
+        setError(err.message || "Could not load transport routes");
+        setRoutes([]);
+        setSelected(null);
+      }
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   }, []);
 
   useEffect(() => {
     load();
+  }, [load]);
+
+  // Live tracking: silent poll so markers, distance and ETA keep moving.
+  // Paused while the tab is hidden and whenever the document is offline.
+  useEffect(() => {
+    let timer = null;
+    const tick = () => {
+      const visible = document.visibilityState === "visible";
+      const online = typeof navigator.onLine === "undefined" || navigator.onLine;
+      if (visible && online) load(true);
+    };
+    timer = setInterval(tick, LIVE_REFRESH_MS);
+    return () => clearInterval(timer);
   }, [load]);
 
   const filtered = useMemo(() => {
@@ -443,6 +543,8 @@ export default function BusTracking() {
                         </span>
                       </div>
                     </div>
+
+                    <LiveProgress live={selected.live} plan={selected.routePlan} />
                   </>
                 )}
               </Card>
@@ -508,6 +610,9 @@ export default function BusTracking() {
                       <th className="px-5 py-2.5 font-semibold">Driver</th>
                       <th className="px-5 py-2.5 font-semibold">Contact</th>
                       <th className="px-5 py-2.5 font-semibold">Assigned</th>
+                      <th className="px-5 py-2.5 font-semibold">Next Stop</th>
+                      <th className="px-5 py-2.5 font-semibold">Distance</th>
+                      <th className="px-5 py-2.5 font-semibold">ETA</th>
                       <th className="px-5 py-2.5 font-semibold">Last Ping</th>
                       <th className="px-5 py-2.5 font-semibold">Status</th>
                     </tr>
@@ -540,6 +645,17 @@ export default function BusTracking() {
                           )}
                         </td>
                         <td className="px-5 py-3 text-slate-text">{b.assigned}</td>
+                        <td className="px-5 py-3 text-slate-text max-w-[180px] truncate">
+                          {b.live?.nextStop || "—"}
+                        </td>
+                        <td className="px-5 py-3 text-slate-text font-medium">
+                          {b.live?.distanceKm !== null && b.live?.distanceKm !== undefined
+                            ? `${b.live.distanceKm} km`
+                            : "—"}
+                        </td>
+                        <td className="px-5 py-3 text-slate-text font-medium">
+                          {b.live?.etaMinutes ? `${b.live.etaMinutes} min` : "—"}
+                        </td>
                         <td className="px-5 py-3 text-slate-text">
                           {b.location ? formatPing(b.location.updatedAt) : "—"}
                         </td>

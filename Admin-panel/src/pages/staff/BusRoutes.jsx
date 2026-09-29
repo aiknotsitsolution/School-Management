@@ -31,12 +31,20 @@ export default function BusRoutes() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
+
+    // Stops accept either a bare name ("Andheri") or "Name | lat, lng"
+    // (e.g. "Andheri | 19.1197, 72.8464"). Coordinates are what unlock the
+    // OSRM distance/ETA readout on the live tracking map.
     const stops = fd
       .get("stops")
       .split(",")
       .map((s) => s.trim())
       .filter(Boolean)
-      .map((name) => ({ name }));
+      .map((entry) => {
+        const [name, coords] = entry.split("|").map((p) => (p || "").trim());
+        const [lat, lng] = (coords || "").split(",").map((c) => Number((c || "").trim()));
+        return Number.isFinite(lat) && Number.isFinite(lng) ? { name, lat, lng } : { name };
+      });
     if (stops.length < 2) {
       toast("Add at least two stops", "error");
       return;
@@ -49,7 +57,8 @@ export default function BusRoutes() {
       stops,
     };
     try {
-      await api.transport.create(payload);
+      if (editing) await api.transport.update(editing._id, payload);
+      else await api.transport.create(payload);
       toast(editing ? "Route updated" : "Route created", "success");
       setShowForm(false);
       setEditing(null);
@@ -107,8 +116,14 @@ export default function BusRoutes() {
             <Input name="driverContact" placeholder="Driver Contact" defaultValue={editing?.driverContact} />
             <Input
               name="stops"
-              placeholder="Stops (comma separated)"
-              defaultValue={editing?.stops?.map((s) => s.name).join(", ")}
+              placeholder='Stops (comma separated). Add coordinates as "Name | lat, lng" for live ETA'
+              defaultValue={editing?.stops
+            ?.map((s) =>
+              typeof s.lat === "number" && typeof s.lng === "number"
+                ? `${s.name} | ${s.lat}, ${s.lng}`
+                : s.name,
+            )
+            .join(", ")}
               className="sm:col-span-2 lg:col-span-2"
             />
             <div className="flex items-end gap-2">

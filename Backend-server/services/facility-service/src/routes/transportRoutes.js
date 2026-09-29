@@ -10,6 +10,7 @@ router.use(verifyToken, resolveTenant, requireTenant);
 
 router.post("/", requirePermission("transport:update"), ctrl.createRoute);
 router.get("/", requirePermission("transport:read"), scopeStudentParam("studentId"), ctrl.getRoutes);
+router.patch("/:id", requirePermission("transport:update"), ctrl.updateRoute);
 router.patch("/:id/location", requirePermission("transport:update"), ctrl.updateLocation);
 router.patch("/:id/assign", requirePermission("transport:update"), ctrl.assignStudent);
 

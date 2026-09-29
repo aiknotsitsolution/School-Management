@@ -918,6 +918,7 @@ export const api = {
   transport: {
     list: () => request("/transport"),
     create: (item) => request("/transport", json("POST", item)),
+    update: (id, item) => request(`/transport/${id}`, json("PATCH", item)),
     updateLocation: (id, item) =>
       request(`/transport/${id}/location`, json("PATCH", item)),
     assign: (id, item) =>
