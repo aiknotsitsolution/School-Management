@@ -1,12 +1,65 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { useSelector } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
+import { ThemeProvider } from "@mui/material/styles";
 import { CalendarDays } from "lucide-react";
-import Sidebar from "./Sidebar";
+import SidebarMui from "./SidebarMui";
+import { sidebarTheme } from "./sidebarTheme";
+import { groups, STUDENT_NAV, PARENT_NAV } from "./sidebarNavData";
 import Topbar from "./Topbar";
 import SupportChatbot from "../components/SupportChatbot";
-import { selectSchool, selectRole } from "../store/selectors";
+import { selectSchool, selectRole, selectUser } from "../store/selectors";
+import { logout } from "../store/authSlice";
+import { canSeeNavigation } from "../lib/scope";
+import { resolvePersona, isPersonaStaff } from "../lib/persona";
+import { PERSONA_NAV } from "../lib/personaNav";
 import { sessionLabel, schoolNeedsConfig, getDismissConfigKey } from "../lib/session";
+import { useTeacherContext } from "../pages/teacher/useTeacherContext";
+
+const ROLE_LABEL = {
+  super_admin: "Platform Owner",
+  school_admin: "School Admin",
+  admin: "School Admin",
+  teacher: "Teacher",
+  staff: "Staff",
+  student: "Student / Parent",
+  parent: "Student / Parent",
+};
+
+const EMPTY_NAV = [];
+
+// Self-sourcing so `nav` stays referentially stable: `useTeacherContext` returns
+// a fresh object every render, and the assignments fetch is module-cached, so
+// calling it here costs no extra request while keeping the active-scope index
+// live through the shared listener store.
+function TeacherScopeSwitcher() {
+  const { allScopes, activeScopeIdx, setActiveScope } = useTeacherContext();
+  if (!allScopes || allScopes.length < 2) return null;
+
+  return (
+    <div className="rounded-lg bg-slate-100 p-2">
+      <p className="text-[10px] uppercase tracking-wide font-semibold text-slate-500 px-1 mb-1.5">
+        Active Class
+      </p>
+      <div className="flex flex-wrap gap-1">
+        {allScopes.map((s, i) => (
+          <button
+            key={`${s.class}-${s.section}`}
+            type="button"
+            onClick={() => setActiveScope(i)}
+            className={`text-[11px] font-semibold px-2 py-1 rounded-md transition-colors ${
+              i === activeScopeIdx
+                ? "bg-primary text-white"
+                : "text-slate-500 hover:bg-white"
+            }`}
+          >
+            {s.class}-{s.section || "?"}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 function isOnboardingDefaultDates(session) {
   if (!session?.startDate || !session?.endDate) return false;
@@ -21,8 +74,69 @@ export default function Layout() {
   const [open, setOpen] = useState(false);
   const [promptDismissed, setPromptDismissed] = useState(false);
   const navigate = useNavigate();
+  const dispatch = useDispatch();
   const school = useSelector(selectSchool);
+  const user = useSelector(selectUser);
   const role = useSelector(selectRole);
+
+  const persona = isPersonaStaff(user) ? resolvePersona(user) : null;
+
+  const baseGroups = useMemo(() => {
+    if (persona) return PERSONA_NAV[persona.key] || EMPTY_NAV;
+    if (role === "student") return STUDENT_NAV;
+    if (role === "parent") return PARENT_NAV;
+    return groups;
+  }, [persona, role]);
+
+  const nav = useMemo(
+    () =>
+      baseGroups
+        .filter((g) => !g.teacherOnly || role === "teacher")
+        .map((g, i) => ({
+          id: g.id || `grp-${g.label || i}`,
+          header: g.header || g.label,
+          items: g.items || [],
+          extra: g.teacherOnly && role === "teacher" ? <TeacherScopeSwitcher /> : null,
+        })),
+    [baseGroups, role],
+  );
+
+  // Persona nav is already curated, so it bypasses the permission filter the
+  // same way the previous sidebar did.
+  const canSee = useMemo(
+    () => (persona ? () => true : (item) => canSeeNavigation(item, user, role)),
+    [persona, user, role],
+  );
+
+  const legacyRole = { admin: "school_admin", parent: "student" }[role] || role;
+  const settingsTarget = legacyRole === "super_admin" ? "/platform/settings" : "/settings";
+
+  const sidebarBrand = useMemo(
+    () => ({
+      name: "ZipschoolOS",
+      code: school
+        ? [school.code, sessionLabel(school)].filter(Boolean).join(" · ")
+        : "School ERP",
+      logo: school?.logo || "/ZipschoolOS-Transparent-logo.png",
+    }),
+    [school],
+  );
+
+  const sidebarUser = useMemo(
+    () => ({
+      name: user?.name,
+      avatar: user?.avatar,
+      role:
+        ROLE_LABEL[legacyRole] ||
+        (role === "staff" && user?.designation ? `Staff · ${user.designation}` : "Member"),
+    }),
+    [user, role, legacyRole],
+  );
+
+  const handleSignOut = () => {
+    dispatch(logout());
+    navigate("/login", { replace: true });
+  };
 
   const needsConfig = useMemo(() => {
     if (!["school_admin", "admin"].includes(role)) return false;
@@ -48,7 +162,19 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-paper">
-      <Sidebar open={open} onClose={() => setOpen(false)} />
+      <ThemeProvider theme={sidebarTheme}>
+        <SidebarMui
+          nav={nav}
+          brand={sidebarBrand}
+          user={sidebarUser}
+          canSee={canSee}
+          onSettings={() => navigate(settingsTarget)}
+          onSignOut={handleSignOut}
+          open={open}
+          onClose={() => setOpen(false)}
+          mobileBreakpoint="lg"
+        />
+      </ThemeProvider>
       <div className="flex-1 flex flex-col min-w-0">
         <Topbar onMenuClick={() => setOpen(true)} />
         <main className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-6">

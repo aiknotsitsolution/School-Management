@@ -8,6 +8,13 @@ import {
   Activity,
   CalendarClock,
   Sparkles,
+  Server,
+  Radio,
+  CreditCard,
+  FileClock,
+  School,
+  Layers,
+  Route,
 } from "lucide-react";
 import {
   AreaChart,
@@ -24,10 +31,23 @@ import {
   CartesianGrid,
 } from "recharts";
 import { api } from "../../lib/api";
-import { Card, PageIntro, Pill, StatCard } from "../../components/UI";
+import { Pill } from "../../components/UI";
 import { DashboardPagination } from "../../components/DashboardPagination";
+import {
+  HeroBanner,
+  GlassStat,
+  MetricGrid,
+  MetricCard,
+  Panel,
+  EmptyPanel,
+  ListRow,
+  BarList,
+  AlertStrip,
+  ACCENTS,
+  greeting,
+} from "../../components/dashboard/DashKit";
 
-const PIE_COLORS = ["#172033", "#4F46E5", "#16A34A", "#2563EB", "#DC2626"];
+const PIE_COLORS = ["#4F46E5", "#2563EB", "#0EA5E9", "#14B8A6", "#F59E0B", "#EC4899"];
 const SUB_LABELS = {
   trialing: "Trialing",
   active: "Active",
@@ -63,6 +83,29 @@ const timeAgo = (value) => {
   return `${days}d ago`;
 };
 
+function ChartTooltip({ active, payload, label, money = false }) {
+  if (!active || !payload || !payload.length) return null;
+  return (
+    <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-xl shadow-black/8">
+      {label && <p className="text-[12.5px] font-bold text-ink">{label}</p>}
+      <div className="mt-2 space-y-1.5">
+        {payload.map((entry) => (
+          <div key={entry.dataKey} className="flex items-center gap-2 text-[12px]">
+            <span
+              className="h-2.5 w-2.5 shrink-0 rounded-full"
+              style={{ background: entry.stroke || entry.fill || entry.color }}
+            />
+            <span className="flex-1 text-slate-text/70">{entry.name}</span>
+            <span className="font-bold text-ink">
+              {money ? inr(entry.value) : entry.value}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function PlatformDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -87,29 +130,45 @@ export default function PlatformDashboard() {
 
   if (loading) {
     return (
-      <div className="w-full">
-        <PageIntro eyebrow="Platform Owner" title="Platform Dashboard" />
-        <Card>
-          <p className="text-[13px] text-slate-text/70">Loading platform overview…</p>
-        </Card>
+      <div className="space-y-5">
+        <div className="h-[216px] animate-pulse rounded-3xl bg-slate-200/70" aria-hidden="true" />
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-3">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div key={i} className="h-[132px] animate-pulse rounded-2xl bg-slate-200/70" />
+          ))}
+        </div>
+        <div className="grid gap-5 lg:grid-cols-2">
+          <div className="h-[300px] animate-pulse rounded-2xl bg-slate-200/70" />
+          <div className="h-[300px] animate-pulse rounded-2xl bg-slate-200/70" />
+        </div>
       </div>
     );
   }
 
   if (error || !data) {
     return (
-      <div className="w-full">
-        <PageIntro eyebrow="Platform Owner" title="Platform Dashboard" />
-        <Card>
-          <p className="text-[13px] text-alert">Unable to load platform analytics: {error || "no data"}</p>
-        </Card>
+      <div className="space-y-5">
+        <HeroBanner
+          gradient="ink"
+          eyebrow="Platform Owner"
+          name="Platform"
+          title="Platform Dashboard"
+          meta="Network analytics are unavailable right now"
+        />
+        <Panel>
+          <EmptyPanel
+            icon={AlertTriangle}
+            iconTone={ACCENTS.alert.icon}
+            title="Unable to load platform analytics"
+            text={error || "The analytics service returned no data. Please retry in a moment."}
+          />
+        </Panel>
       </div>
     );
   }
 
   const ov = data.overview || {};
   const schools = ov.schools || {};
-  const subs = ov.subscriptions || {};
   const exp = data.expiringSubscriptions || { in7: 0, in15: 0, in30: 0, total: 0, page: 1, pageSize: 5, items: [] };
   const planBars = (data.planDistribution || [])
     .filter((p) => p.count > 0)
@@ -124,83 +183,116 @@ export default function PlatformDashboard() {
   const activity = Array.isArray(data.recentActivity) ? data.recentActivity : data.recentActivity?.items || [];
   const activityTotal = data.recentActivityTotal ?? activity.length;
   const growth = data.schoolGrowth || [];
+  const subDistribution = (data.subscriptionDistribution || []).filter((s) => s.count > 0);
 
   const freeTrialCount = planBars.find((p) => p.name === "TRIAL")?.count ?? 0;
   const paidCount = planBars.reduce((sum, p) => sum + (p.name !== "TRIAL" ? p.count : 0), 0);
+  const totalSchools = schools.total ?? data.schools ?? 0;
+  const collected = Number(revenue.collected || 0);
+  const outstanding = Number(revenue.outstanding || 0);
+  const collectionRate = collected + outstanding > 0 ? (collected / (collected + outstanding)) * 100 : 0;
 
   return (
-    <div className="w-full">
-      <PageIntro
-        eyebrow="Platform Owner"
+    <div className="space-y-5 sm:space-y-6">
+      {/* ── Hero ──────────────────────────────────────────────────── */}
+      <HeroBanner
+        gradient="ink"
+        eyebrow={greeting()}
+        name="Platform Owner"
         title="Platform Dashboard"
-        description="Live snapshot across the entire multi-tenant network: growth, subscriptions, revenue, onboarding and operator attention items."
+        meta="Live snapshot across the entire multi-tenant network — growth, subscriptions, revenue, onboarding and operator attention items."
+        dateLabel={new Date().toLocaleDateString("en-IN", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })}
+        quote="Every school on the network is a relationship, not a row."
+        quoteTitle="Multi-tenant command centre"
+        right={
+          <>
+            <GlassStat value={totalSchools} label="Schools" />
+            <GlassStat value={paidCount} label="Paying schools" />
+            <GlassStat value={inr(ov.mrr ?? data.mrr ?? 0)} label="MRR" />
+          </>
+        }
       />
 
       {alerts.length > 0 && (
-        <div className="mb-5 space-y-2">
-          {alerts.map((alert, index) => (
-            <div
-              key={`${alert.type}-${index}`}
-              className={`flex items-start gap-2.5 px-4 py-3 rounded-xl text-[13px] border ${
-                alert.severity === "warning"
-                  ? "bg-alert/5 border-alert/20 text-alert-dark"
-                  : "bg-info/5 border-info/20 text-info-dark"
-              }`}
-            >
-              <AlertTriangle size={15} className="mt-0.5 shrink-0" />
-              <span>{alert.message}</span>
-            </div>
-          ))}
+        <div
+          className={`rounded-2xl border p-4 ${
+            alerts.some((a) => a.severity === "warning")
+              ? "border-amber-200 bg-amber-50/70"
+              : "border-sky-200 bg-sky-50/70"
+          }`}
+        >
+          <p className="mb-2.5 flex items-center gap-2 text-[12.5px] font-bold uppercase tracking-[0.08em] text-slate-text/70">
+            <AlertTriangle size={14} aria-hidden="true" /> Operator alerts
+          </p>
+          <AlertStrip
+            items={alerts.map((alert) => ({
+              label: alert.message,
+              tone: alert.severity === "warning" ? "warning" : "info",
+            }))}
+          />
         </div>
       )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-5">
-        <StatCard
+      {/* ── Primary metrics ──────────────────────────────────────── */}
+      <MetricGrid columns={3}>
+        <MetricCard
           icon={Building2}
           label="Schools"
-          value={schools.total ?? data.schools ?? 0}
+          value={totalSchools}
           sub={`${schools.active ?? data.activeSchools ?? 0} active`}
           accent="primary"
         />
-        <StatCard
+        <MetricCard
           icon={Users}
           label="Users"
           value={(ov.users?.total ?? data.users ?? 0).toLocaleString("en-IN")}
           sub="excl. platform owner"
           accent="info"
         />
-        <StatCard
+        <MetricCard
           icon={Sparkles}
-          label="Current Free Trial Subscriptions"
+          label="Free Trial Subscriptions"
           value={freeTrialCount}
           sub={`${freeTrialCount} schools on free trial`}
-          accent="info"
+          accent="violet"
         />
-        <StatCard
+        <MetricCard
           icon={TrendingUp}
-          label="Current Paid Subscriptions"
+          label="Paid Subscriptions"
           value={paidCount}
           sub={`${paidCount} paying schools`}
           accent="success"
         />
-        <StatCard
-          icon={TrendingUp}
-          label="MRR"
+        <MetricCard
+          icon={Wallet}
+          label="Monthly Recurring Revenue"
           value={inr(ov.mrr ?? data.mrr ?? 0)}
           sub={`ARPU ${inr(ov.arpu ?? data.arpu ?? 0)}`}
-          accent="info"
+          accent="warn"
         />
-        <StatCard
-          icon={Wallet}
+        <MetricCard
+          icon={CreditCard}
           label="Revenue"
-          value={inr(revenue.collected ?? data.revenue?.collected)}
-          sub={`${inr(revenue.outstanding ?? data.revenue?.outstanding)} outstanding`}
-          accent={Number(revenue.outstanding || 0) > 0 ? "alert" : "success"}
+          value={inr(collected)}
+          sub={`${inr(outstanding)} outstanding`}
+          accent={outstanding > 0 ? "alert" : "success"}
+          progress={collectionRate}
         />
-      </div>
+      </MetricGrid>
 
-      <div className="grid lg:grid-cols-2 gap-5 mb-5">
-        <Card title="School growth (12 months)">
+      {/* ── Growth + subscription mix ────────────────────────────── */}
+      <div className="grid gap-5 lg:grid-cols-2">
+        <Panel
+          title="School growth"
+          icon={TrendingUp}
+          iconTone={ACCENTS.primary.icon}
+          subtitle="New schools onboarded over the last 12 months"
+        >
           {growth.length ? (
             <ResponsiveContainer width="100%" height={250}>
               <AreaChart data={growth} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
@@ -210,131 +302,229 @@ export default function PlatformDashboard() {
                     <stop offset="100%" stopColor="#4F46E5" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#EAE8E2" vertical={false} />
-                <XAxis dataKey="label" tick={{ fontSize: 11, fill: "#6B6B6B" }} interval={1} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#6B6B6B" }} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)" }} />
-                <Area type="monotone" dataKey="count" name="Schools" fill="url(#growthFill)" stroke="#4F46E5" strokeWidth={2} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                <XAxis
+                  dataKey="label"
+                  tick={{ fontSize: 11, fill: "#64748B" }}
+                  axisLine={false}
+                  tickLine={false}
+                  interval={1}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 11, fill: "#64748B" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip cursor={{ stroke: "#4F46E5", strokeOpacity: 0.15 }} content={<ChartTooltip />} />
+                <Area
+                  type="monotone"
+                  dataKey="count"
+                  name="Schools"
+                  fill="url(#growthFill)"
+                  stroke="#4F46E5"
+                  strokeWidth={2.5}
+                />
               </AreaChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-[13px] text-slate-text/70">No school growth data yet.</p>
+            <EmptyPanel
+              icon={School}
+              title="No growth data yet"
+              text="Once schools start onboarding, monthly growth will be charted here."
+            />
           )}
-        </Card>
+        </Panel>
 
-        <Card title="Subscription status" bodyClassName="flex items-center gap-2 p-5">
-          <div className="flex-1">
-            {(data.subscriptionDistribution || []).filter((s) => s.count > 0).length ? (
-              <ResponsiveContainer width="100%" height={250}>
-                <PieChart>
-                  <Pie
-                    data={(data.subscriptionDistribution || []).filter((s) => s.count > 0)}
-                    dataKey="count"
-                    nameKey="label"
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={58}
-                    outerRadius={85}
-                    paddingAngle={2}
-                  >
-                    {(data.subscriptionDistribution || []).map((entry, index) => (
-                      <Cell key={entry.status} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)" }} />
-                </PieChart>
-              </ResponsiveContainer>
-            ) : (
-              <p className="text-[13px] text-slate-text/70 p-5">No subscriptions yet.</p>
-            )}
-          </div>
-          <div className="space-y-2 w-40 shrink-0">
-            {(data.subscriptionDistribution || [])
-              .filter((s) => s.count > 0)
-              .map((entry, index) => (
-                <div key={entry.status} className="flex items-center gap-2 text-[12.5px]">
-                  <span
-                    className="w-2.5 h-2.5 rounded-full inline-block"
-                    style={{ background: PIE_COLORS[index % PIE_COLORS.length] }}
-                  />
-                  <span className="flex-1 text-slate-text">{entry.label}</span>
-                  <span className="font-semibold text-ink">{entry.count}</span>
+        <Panel
+          title="Subscription status"
+          icon={Layers}
+          iconTone={ACCENTS.teal.icon}
+          subtitle="Every school by lifecycle state"
+        >
+          {!subDistribution.length ? (
+            <EmptyPanel
+              icon={Layers}
+              iconTone={ACCENTS.teal.icon}
+              title="No subscriptions yet"
+              text="Subscription states will appear here as schools sign up."
+            />
+          ) : (
+            <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_150px] sm:items-center">
+              <div className="relative">
+                <ResponsiveContainer width="100%" height={230}>
+                  <PieChart>
+                    <Pie
+                      data={subDistribution}
+                      dataKey="count"
+                      nameKey="label"
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={58}
+                      outerRadius={86}
+                      paddingAngle={2}
+                      stroke="none"
+                    >
+                      {subDistribution.map((entry, index) => (
+                        <Cell key={entry.status} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip content={<ChartTooltip />} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                  <span className="font-display text-[26px] font-bold leading-none text-ink">
+                    {subDistribution.reduce((s, x) => s + x.count, 0)}
+                  </span>
+                  <span className="mt-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-slate-text/60">
+                    schools
+                  </span>
                 </div>
-              ))}
-          </div>
-        </Card>
+              </div>
+              <div className="space-y-2">
+                {subDistribution.map((entry, index) => (
+                  <div
+                    key={entry.status}
+                    className="flex items-center gap-2 rounded-lg bg-slate-50 px-2.5 py-2 text-[12.5px]"
+                  >
+                    <span
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
+                      style={{ background: PIE_COLORS[index % PIE_COLORS.length] }}
+                    />
+                    <span className="min-w-0 flex-1 truncate text-slate-text">{entry.label}</span>
+                    <span className="font-bold text-ink">{entry.count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Panel>
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-5 mb-5">
-        <Card title="Plan distribution">
+      {/* ── Plans + funnel + revenue ─────────────────────────────── */}
+      <div className="grid gap-5 lg:grid-cols-3">
+        <Panel
+          title="Plan distribution"
+          icon={Route}
+          iconTone={ACCENTS.violet.icon}
+          subtitle="Schools per subscription plan"
+        >
           {planBars.length ? (
             <ResponsiveContainer width="100%" height={230}>
               <BarChart data={planBars} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#EAE8E2" vertical={false} />
-                <XAxis dataKey="name" tick={{ fontSize: 11, fill: "#6B6B6B" }} />
-                <YAxis allowDecimals={false} tick={{ fontSize: 11, fill: "#6B6B6B" }} />
-                <Tooltip contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)" }} />
-                <Bar dataKey="count" name="Schools" fill="#172033" radius={[6, 6, 0, 0]} />
+                <CartesianGrid strokeDasharray="3 3" stroke="#E2E8F0" vertical={false} />
+                <XAxis
+                  dataKey="name"
+                  tick={{ fontSize: 11, fill: "#64748B" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <YAxis
+                  allowDecimals={false}
+                  tick={{ fontSize: 11, fill: "#64748B" }}
+                  axisLine={false}
+                  tickLine={false}
+                />
+                <Tooltip cursor={{ fill: "rgba(79,70,229,0.05)" }} content={<ChartTooltip />} />
+                <Bar dataKey="count" name="Schools" fill="#4F46E5" radius={[6, 6, 0, 0]} maxBarSize={44} />
               </BarChart>
             </ResponsiveContainer>
           ) : (
-            <p className="text-[13px] text-slate-text/70">No plans assigned yet.</p>
+            <EmptyPanel
+              icon={Layers}
+              iconTone={ACCENTS.violet.icon}
+              title="No plans assigned"
+              text="Plan assignment will show once schools pick a subscription tier."
+            />
           )}
-        </Card>
+        </Panel>
 
-        <Card title="Onboarding funnel">
-          <div className="space-y-3">
-            {funnel.map((step, index) => {
-              const max = Math.max(1, ...funnel.map((f) => f.count));
-              const width = Math.round((step.count / max) * 100);
-              return (
-                <div key={step.step}>
-                  <div className="flex items-center justify-between text-[12.5px] mb-1">
-                    <span className="text-slate-text">{step.step}</span>
-                    <span className="font-semibold text-ink">{step.count}</span>
-                  </div>
-                  <div className="h-2 rounded-full bg-paper overflow-hidden">
-                    <div
-                      className="h-full rounded-full"
-                      style={{ width: `${width}%`, background: PIE_COLORS[index % PIE_COLORS.length] }}
-                    />
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </Card>
+        <Panel
+          title="Onboarding funnel"
+          icon={Server}
+          iconTone={ACCENTS.info.icon}
+          subtitle="Where schools drop out during setup"
+        >
+          {funnel.length ? (
+            <BarList
+              accent="primary"
+              showPct={false}
+              items={funnel.map((step, index) => ({
+                label: step.step,
+                value: step.count,
+                barColor: PIE_COLORS[index % PIE_COLORS.length],
+              }))}
+            />
+          ) : (
+            <EmptyPanel
+              icon={Server}
+              iconTone={ACCENTS.info.icon}
+              title="No funnel data"
+              text="Onboarding step completion will be charted here."
+            />
+          )}
+        </Panel>
 
-        <Card title="Revenue" bodyClassName="p-5 space-y-4">
-          <div className="grid grid-cols-2 gap-3">
-            <div className="rounded-xl bg-success/5 border border-success/15 p-3.5">
-              <p className="text-[11.5px] text-slate-text/70 font-medium">Collected</p>
-              <p className="font-display text-[18px] font-bold text-success">{inr(revenue.collected)}</p>
+        <Panel
+          title="Revenue"
+          icon={CreditCard}
+          iconTone={ACCENTS.success.icon}
+          subtitle="Invoiced vs realised"
+        >
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 p-3.5">
+                <p className="text-[11.5px] font-medium text-slate-text/70">Collected</p>
+                <p className="mt-1 font-display text-[18px] font-bold text-emerald-600">
+                  {inr(collected)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-rose-100 bg-rose-50/70 p-3.5">
+                <p className="text-[11.5px] font-medium text-slate-text/70">Outstanding</p>
+                <p className="mt-1 font-display text-[18px] font-bold text-rose-500">
+                  {inr(outstanding)}
+                </p>
+              </div>
             </div>
-            <div className="rounded-xl bg-alert/5 border border-alert/15 p-3.5">
-              <p className="text-[11.5px] text-slate-text/70 font-medium">Outstanding</p>
-              <p className="font-display text-[18px] font-bold text-alert">{inr(revenue.outstanding)}</p>
+            <div>
+              <div className="mb-1.5 flex items-center justify-between text-[12px]">
+                <span className="text-slate-text/70">Collection rate</span>
+                <span className="font-bold text-ink">{Math.round(collectionRate)}%</span>
+              </div>
+              <div className="h-2 w-full overflow-hidden rounded-full bg-slate-100">
+                <div
+                  className="h-full rounded-full bg-emerald-500 transition-all duration-500"
+                  style={{ width: `${Math.max(2, collectionRate)}%` }}
+                />
+              </div>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Pill tone="success">{invoiceCounts.paid || 0} paid</Pill>
+              <Pill tone="primary">{invoiceCounts.issued || 0} issued</Pill>
+              <Pill tone="alert">{invoiceCounts.overdue || 0} overdue</Pill>
+              <Pill>{invoiceCounts.draft || 0} draft</Pill>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2">
-            <Pill tone="success">{invoiceCounts.paid || 0} paid</Pill>
-            <Pill tone="primary">{invoiceCounts.issued || 0} issued</Pill>
-            <Pill tone="alert">{invoiceCounts.overdue || 0} overdue</Pill>
-            <Pill>{invoiceCounts.draft || 0} draft</Pill>
-          </div>
-        </Card>
+        </Panel>
       </div>
 
       {refreshing && (
-        <div className="flex items-center gap-2 mb-3 text-[12px] text-slate-text/70 animate-pulse">
-          <span className="w-2.5 h-2.5 rounded-full bg-primary/60" />
+        <div className="flex items-center gap-2 text-[12px] text-slate-text/70">
+          <span className="relative flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-60" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-primary" />
+          </span>
           Updating…
         </div>
       )}
 
-      <div className={`grid lg:grid-cols-2 gap-5 mb-5 ${refreshing ? "opacity-60 pointer-events-none" : ""}`}>
-        <Card
+      {/* ── Expiring + activity ──────────────────────────────────── */}
+      <div className={`grid gap-5 lg:grid-cols-2 ${refreshing ? "opacity-70" : ""}`}>
+        <Panel
           title="Expiring subscriptions"
+          icon={CalendarClock}
+          iconTone={ACCENTS.warn.icon}
+          subtitle="Renewals due soon"
           action={
             <div className="flex gap-1.5">
               <Pill tone={exp.in7 > 0 ? "alert" : "success"}>{exp.in7 || 0} in 7d</Pill>
@@ -342,80 +532,121 @@ export default function PlatformDashboard() {
               <Pill tone="info">{exp.in30} in 30d</Pill>
             </div>
           }
-          bodyClassName="p-0"
         >
           {exp.items?.length ? (
-            <div className="divide-y divide-slate-100">
-              {exp.items.map((item) => (
-                <div key={item._id} className="px-5 py-3 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-lg bg-primary/15 text-primary-dark flex items-center justify-center shrink-0">
-                    <CalendarClock size={15} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] font-semibold text-ink truncate">
-                      {item.school?.name || "Unknown school"}
-                    </p>
-                    <p className="text-[11.5px] text-slate-text/70">
-                      {item.plan?.name || "—"} · {SUB_LABELS[item.status] || item.status}
-                    </p>
-                  </div>
-                  <span className="text-[12px] text-slate-text/70 whitespace-nowrap">
-                    {item.reference ? fmtDate(item.reference) : "—"}
-                  </span>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="space-y-2.5">
+                {exp.items.map((item) => (
+                  <ListRow
+                    key={item._id}
+                    icon={CalendarClock}
+                    iconTone={ACCENTS.warn.icon}
+                    title={item.school?.name || "Unknown school"}
+                    meta={`${item.plan?.name || "—"} · ${SUB_LABELS[item.status] || item.status}`}
+                    trailing={
+                      <span className="whitespace-nowrap text-[12px] font-semibold text-slate-text/70">
+                        {item.reference ? fmtDate(item.reference) : "—"}
+                      </span>
+                    }
+                  />
+                ))}
+              </div>
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <DashboardPagination
+                  total={exp.total}
+                  page={params.expPage}
+                  pageSize={params.expLimit}
+                  onPageChange={(p) => setParams((s) => ({ ...s, expPage: p }))}
+                  onPageSizeChange={(n) => setParams((s) => ({ ...s, expLimit: n, expPage: 1 }))}
+                  unit="subscriptions"
+                  compact
+                />
+              </div>
+            </>
           ) : (
-            <p className="p-5 text-[13px] text-slate-text/70">No expiring subscriptions.</p>
-          )}
-          <div className="px-5 pb-2">
-            <DashboardPagination
-              total={exp.total}
-              page={params.expPage}
-              pageSize={params.expLimit}
-              onPageChange={(p) => setParams((s) => ({ ...s, expPage: p }))}
-              onPageSizeChange={(n) => setParams((s) => ({ ...s, expLimit: n, expPage: 1 }))}
-              unit="subscriptions"
-              compact
+            <EmptyPanel
+              icon={CalendarClock}
+              iconTone={ACCENTS.success.icon}
+              title="No expiring subscriptions"
+              text="Nothing is due for renewal in the current window. Enjoy the quiet."
             />
-          </div>
-        </Card>
+          )}
+        </Panel>
 
-        <Card title="Recent platform activity" bodyClassName="p-0">
+        <Panel
+          title="Recent platform activity"
+          icon={Activity}
+          iconTone={ACCENTS.info.icon}
+          subtitle="Audit trail of operator actions"
+        >
           {activity.length ? (
-            <div className="divide-y divide-slate-100">
-              {activity.map((entry) => (
-                <div key={entry._id} className="px-5 py-3 flex items-start gap-3">
-                  <div className="w-8 h-8 rounded-full bg-primary text-white flex items-center justify-center mt-0.5 shrink-0">
-                    <Activity size={14} />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-[13px] text-ink">
-                      <span className="font-semibold">{entry.actorEmail || "system"}</span>{" "}
-                      <span className="text-slate-text/70">{entry.message || entry.action}</span>
-                    </p>
-                    <p className="text-[11.5px] text-slate-text/60 mt-0.5">
-                      {entry.action} · {entry.actorRole || "—"} · {timeAgo(entry.createdAt)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            <>
+              <div className="space-y-2.5">
+                {activity.map((entry) => (
+                  <ListRow
+                    key={entry._id}
+                    icon={Activity}
+                    iconTone={ACCENTS.info.icon}
+                    title={
+                      <>
+                        <span className="font-bold">{entry.actorEmail || "system"}</span>{" "}
+                        <span className="font-medium text-slate-text/70">
+                          {entry.message || entry.action}
+                        </span>
+                      </>
+                    }
+                    meta={`${entry.action} · ${entry.actorRole || "—"} · ${timeAgo(entry.createdAt)}`}
+                  />
+                ))}
+              </div>
+              <div className="mt-4 border-t border-slate-100 pt-3">
+                <DashboardPagination
+                  total={activityTotal}
+                  page={params.actPage}
+                  pageSize={params.actLimit}
+                  onPageChange={(p) => setParams((s) => ({ ...s, actPage: p }))}
+                  onPageSizeChange={(n) => setParams((s) => ({ ...s, actLimit: n, actPage: 1 }))}
+                  unit="events"
+                  compact
+                />
+              </div>
+            </>
           ) : (
-            <p className="p-5 text-[13px] text-slate-text/70">No platform activity recorded yet.</p>
-          )}
-          <div className="px-5 pb-2">
-            <DashboardPagination
-              total={activityTotal}
-              page={params.actPage}
-              pageSize={params.actLimit}
-              onPageChange={(p) => setParams((s) => ({ ...s, actPage: p }))}
-              onPageSizeChange={(n) => setParams((s) => ({ ...s, actLimit: n, actPage: 1 }))}
-              unit="events"
-              compact
+            <EmptyPanel
+              icon={FileClock}
+              iconTone={ACCENTS.neutral.icon}
+              title="No platform activity yet"
+              text="Operator actions across the network will be recorded here."
             />
+          )}
+        </Panel>
+      </div>
+
+      {/* ── Live status strip ─────────────────────────────────────── */}
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        {[
+          { icon: Server, label: "Analytics", value: "Live", tone: "text-emerald-600" },
+          { icon: Radio, label: "Realtime hub", value: "Connected", tone: "text-emerald-600" },
+          { icon: Building2, label: "Active schools", value: `${schools.active ?? data.activeSchools ?? 0}`, tone: "text-ink" },
+          { icon: Wallet, label: "ARPU", value: inr(ov.arpu ?? data.arpu ?? 0), tone: "text-ink" },
+        ].map((item) => (
+          <div
+            key={item.label}
+            className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3.5"
+          >
+            <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-50 text-slate-500`}>
+              <item.icon size={17} />
+            </span>
+            <div className="min-w-0">
+              <p className="truncate text-[11px] font-semibold uppercase tracking-wide text-slate-text/60">
+                {item.label}
+              </p>
+              <p className={`mt-0.5 truncate font-display text-[16px] font-bold ${item.tone}`}>
+                {item.value}
+              </p>
+            </div>
           </div>
-        </Card>
+        ))}
       </div>
     </div>
   );

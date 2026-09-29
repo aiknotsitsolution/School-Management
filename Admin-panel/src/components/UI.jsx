@@ -3,28 +3,67 @@
 import { Children, useEffect, useRef, useState } from "react";
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
 
-export function StatCard({ icon: Icon, label, value, sub, accent = "primary" }) {
-  const accents = {
-    primary: "border-primary text-primary bg-primary/10",
-    success: "border-success text-success bg-success/10",
-    info: "border-info text-info bg-info/10",
-    alert: "border-alert text-alert bg-alert/10",
-  };
-  const tone = accents[accent] || accents.primary;
+const STAT_TONES = {
+  blue: {
+    card: "bg-blue-50/70 border-blue-100 hover:border-blue-200",
+    icon: "bg-white text-blue-600 shadow-[0_4px_14px_rgba(37,99,235,0.12)]",
+  },
+  emerald: {
+    card: "bg-emerald-50/70 border-emerald-100 hover:border-emerald-200",
+    icon: "bg-white text-emerald-600 shadow-[0_4px_14px_rgba(16,185,129,0.12)]",
+  },
+  amber: {
+    card: "bg-amber-50/70 border-amber-100 hover:border-amber-200",
+    icon: "bg-white text-amber-500 shadow-[0_4px_14px_rgba(245,158,11,0.14)]",
+  },
+  rose: {
+    card: "bg-rose-50/70 border-rose-100 hover:border-rose-200",
+    icon: "bg-white text-rose-500 shadow-[0_4px_14px_rgba(225,29,72,0.12)]",
+  },
+  slate: {
+    card: "bg-slate-50/70 border-slate-200 hover:border-slate-300",
+    icon: "bg-white text-slate-600 shadow-[0_4px_14px_rgba(15,23,42,0.10)]",
+  },
+};
+
+const ACCENT_TONE = {
+  primary: "blue",
+  success: "emerald",
+  info: "amber",
+  alert: "rose",
+  neutral: "slate",
+};
+
+export function StatCard({ icon: Icon, label, value, sub, accent = "primary", tone, bars }) {
+  const t = STAT_TONES[tone] || STAT_TONES[ACCENT_TONE[accent]] || STAT_TONES.blue;
   return (
-    <div className={`bg-white rounded-2xl p-5 border-l-4 ${tone.split(" ")[0]} shadow-sm`}>
-      <div className="flex items-start justify-between">
-        <div>
-          <p className="text-[12.5px] text-slate-text/80 font-medium">{label}</p>
-          <p className="font-display text-[28px] font-bold text-ink mt-1 leading-none">{value}</p>
-          {sub && <p className="text-[11.5px] text-slate-text/60 mt-2">{sub}</p>}
-        </div>
+    <div
+      className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-16px_rgba(15,23,42,0.35)] ${t.card}`}
+    >
+      <div className="flex items-center gap-3">
         {Icon && (
-          <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${tone.split(" ").slice(1).join(" ")}`}>
+          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${t.icon}`} aria-hidden="true">
             <Icon size={19} />
-          </div>
+          </span>
         )}
+        <div className="min-w-0">
+          <p className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-slate-text/70">{label}</p>
+          <p className="mt-1.5 truncate font-display text-[26px] font-bold leading-none text-ink">{value}</p>
+        </div>
       </div>
+      {sub && <p className="mt-2.5 text-[11.5px] leading-snug text-slate-text/70">{sub}</p>}
+      {bars && bars.length > 0 && (
+        <div className="mt-3 flex h-6 items-end gap-1" aria-hidden="true">
+          {bars.map((b, i) => (
+            <span
+              key={`${b.color}-${i}`}
+              className={`w-2.5 rounded-sm ${b.color}`}
+              style={{ height: `${b.height}px` }}
+            />
+          ))}
+        </div>
+      )}
+      <span className="pointer-events-none absolute -bottom-7 -right-6 h-16 w-16 rounded-full bg-white/50" aria-hidden="true" />
     </div>
   );
 }

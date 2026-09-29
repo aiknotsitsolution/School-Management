@@ -6,18 +6,23 @@ import {
   ClipboardList,
   Users,
   Save,
-  ChevronRight,
   Timer,
-  ArrowRight,
   GraduationCap,
   AlertTriangle,
   ShieldAlert,
   Trophy,
+  Megaphone,
+  CheckCircle2,
+  Check,
+  Clock,
+  RotateCcw,
+  Zap,
+  UserCheck,
+  CalendarRange,
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import {
   StatCard,
-  Card,
   Pill,
   Button,
   Avatar,
@@ -30,22 +35,134 @@ import { useSelector } from "react-redux";
 import { todayISO, fmtDate, useTeacherContext } from "./teacher/useTeacherContext";
 import { EmptyBlock } from "../components/StateViews";
 import AttendanceCheckinModal from "../components/AttendanceCheckinModal";
+import {
+  HeroBanner,
+  GlassStat,
+  QuickActions,
+  MetricGrid,
+  Panel,
+  ViewLink,
+  EmptyPanel,
+  ListRow,
+  Badge,
+  Donut,
+  StatTile,
+  BarList,
+  SegmentedControl,
+  AlertStrip,
+  DashboardSkeleton,
+  ACCENTS,
+  greeting,
+} from "../components/dashboard/DashKit";
 
 const WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const STATUSES = ["Present", "Absent", "Leave", "Half Day"];
 const STATUS_STYLE = {
-  Present: "bg-success/12 text-success",
-  Absent: "bg-alert/12 text-alert",
-  Leave: "bg-info/12 text-info",
-  "Half Day": "bg-primary/15 text-primary-dark",
+  Present: "bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-200",
+  Absent: "bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-200",
+  Leave: "bg-sky-100 text-sky-700 ring-1 ring-inset ring-sky-200",
+  "Half Day": "bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-200",
+};
+const STATUS_DOT = {
+  Present: "bg-emerald-500",
+  Absent: "bg-rose-500",
+  Leave: "bg-sky-500",
+  "Half Day": "bg-amber-500",
+};
+const STATUS_BAR = {
+  Present: "bg-emerald-500",
+  Absent: "bg-rose-500",
+  Leave: "bg-sky-500",
+  "Half Day": "bg-amber-500",
 };
 
-function greeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Good morning";
-  if (h < 17) return "Good afternoon";
-  return "Good evening";
+function toMinutes(t) {
+  if (!t) return null;
+  const m = String(t).trim().match(/^(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const h = parseInt(m[1], 10);
+  const min = parseInt(m[2], 10);
+  if (h > 23 || min > 59) return null;
+  return h * 60 + min;
+}
+
+function periodStatus(period, nowMin) {
+  const start = toMinutes(period.startTime);
+  const end = toMinutes(period.endTime);
+  if (start == null) return { key: "unscheduled", label: "Scheduled" };
+  let endMin = end;
+  if (endMin != null && endMin <= start) endMin += 1440;
+  if (nowMin < start) {
+    const diff = start - nowMin;
+    if (diff <= 30) return { key: "upcoming_soon", label: `Start in ${diff} min` };
+    return { key: "upcoming", label: "Upcoming" };
+  }
+  if (endMin == null) return { key: "ongoing", label: "In session" };
+  if (nowMin >= endMin) return { key: "completed", label: "Completed" };
+  return { key: "ongoing", label: `Ongoing · ${endMin - nowMin} min left` };
+}
+
+function nowMinutes() {
+  const d = new Date();
+  return d.getHours() * 60 + d.getMinutes();
+}
+
+const PERIOD_TONE = {
+  ongoing: "bg-emerald-100 text-emerald-700",
+  upcoming_soon: "bg-sky-100 text-sky-700",
+  upcoming: "bg-slate-100 text-slate-600",
+  completed: "bg-slate-100 text-slate-600",
+  unscheduled: "bg-slate-100 text-slate-600",
+};
+
+function PeriodCard({ period, nowMin }) {
+  const st = periodStatus(period, nowMin);
+  const isLive = st.key === "ongoing";
+  return (
+    <div
+      className="relative w-[220px] shrink-0 snap-start overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 transition-shadow hover:shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+    >
+      <span
+        className="pointer-events-none absolute -right-6 -top-7 h-16 w-16 rounded-full bg-emerald-50"
+        aria-hidden="true"
+      />
+      <div className="relative flex items-center justify-between gap-2">
+        <span className="rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-600">
+          P{period.periodNo ?? ""}
+        </span>
+        <span className="text-[11.5px] font-semibold tabular-nums text-slate-text/75">
+          {period.startTime}
+          {period.endTime ? ` – ${period.endTime}` : ""}
+        </span>
+      </div>
+      <div className="relative mt-3 flex items-center gap-2.5">
+        <span
+          className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${
+            isLive ? ACCENTS.success.icon : ACCENTS.neutral.icon
+          }`}
+          aria-hidden="true"
+        >
+          <Timer size={16} />
+        </span>
+        <p className="truncate font-display text-[15px] font-bold leading-tight text-ink">
+          {period.subject || "—"}
+        </p>
+      </div>
+      <div className="relative mt-auto pt-3.5">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${PERIOD_TONE[st.key]}`}
+        >
+          {st.key === "ongoing" ? (
+            <CheckCircle2 size={12} className="animate-pulse" aria-hidden="true" />
+          ) : (
+            <Clock size={12} aria-hidden="true" />
+          )}
+          {st.label}
+        </span>
+      </div>
+    </div>
+  );
 }
 
 export default function TeacherDashboard() {
@@ -58,7 +175,6 @@ export default function TeacherDashboard() {
     teachingAssignments,
     teachingScopes,
     allScopes,
-    activeScope,
     activeScopeIdx,
     setActiveScope,
     loading: ctxLoading,
@@ -157,19 +273,6 @@ export default function TeacherDashboard() {
       .catch(() => setShowCheckin(true));
   }, []);
 
-  if (!ctxLoading && !loading && !cls) {
-    return (
-      <div className="rounded-2xl bg-paper p-10 text-center">
-        <p className="font-display text-xl font-bold text-ink mb-1">
-          {hasClassTeacher ? "No class assigned yet" : "No teaching assignment yet"}
-        </p>
-        <p className="text-[13px] text-slate-text">
-          Contact the school admin to assign you a class, section and subject{sessionLabel(school) ? ` for session ${sessionLabel(school)}` : ""}.
-        </p>
-      </div>
-    );
-  }
-
   const marked = Object.values(markMap).filter(Boolean);
   const presentCount = marked.filter((s) => s === "Present").length;
   const absentCount = marked.filter((s) => s === "Absent").length;
@@ -192,6 +295,26 @@ export default function TeacherDashboard() {
     setMarkMap((m) =>
       m[id] === status ? { ...m, [id]: undefined } : { ...m, [id]: status },
     );
+
+  const markAll = (status) => {
+    setMarkMap((m) => {
+      const next = { ...m };
+      students.forEach((s) => {
+        next[s._id] = status;
+      });
+      return next;
+    });
+  };
+
+  const clearAll = () => {
+    setMarkMap((m) => {
+      const next = {};
+      Object.keys(m).forEach((k) => {
+        next[k] = undefined;
+      });
+      return next;
+    });
+  };
 
   const saveAttendance = async () => {
     const records = students
@@ -220,427 +343,560 @@ export default function TeacherDashboard() {
     }
   };
 
+  if (!ctxLoading && !loading && !cls) {
+    return (
+      <div className="rounded-3xl bg-gradient-to-br from-slate-50 to-paper p-12 text-center">
+        <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-white text-primary shadow-sm">
+          <GraduationCap size={28} />
+        </div>
+        <p className="mt-5 font-display text-xl font-bold text-ink">
+          {hasClassTeacher ? "No class assigned yet" : "No teaching assignment yet"}
+        </p>
+        <p className="mx-auto mt-2 max-w-md text-[13px] leading-relaxed text-slate-text">
+          Contact the school admin to assign you a class, section and subject
+          {sessionLabel(school) ? ` for session ${sessionLabel(school)}` : ""}.
+        </p>
+      </div>
+    );
+  }
+
+  const unresolvedBehavior = behaviorRecords.filter((r) => !r.resolved).length;
+  const academicAchievements = achievements.filter((r) => r.category === "academic").length;
+
+  const attentionItems = [];
+  if (unmarkedCount > 0) {
+    attentionItems.push({
+      label: `${unmarkedCount} student${unmarkedCount === 1 ? "" : "s"} with no attendance marked today`,
+      tone: "alert",
+      icon: AlertTriangle,
+    });
+  }
+  if (overdueHomework.length > 0) {
+    attentionItems.push({
+      label: `${overdueHomework.length} homework assignment${overdueHomework.length === 1 ? "" : "s"} overdue`,
+      tone: "warning",
+      icon: BookOpenCheck,
+    });
+  }
+  if (unresolvedBehavior > 0) {
+    attentionItems.push({
+      label: `${unresolvedBehavior} behaviour record${unresolvedBehavior === 1 ? "" : "s"} unresolved`,
+      tone: "info",
+      icon: ShieldAlert,
+    });
+  }
+
+  const quickActions = [
+    { to: "/teacher/attendance", icon: CalendarCheck, label: "Mark Attendance", tone: ACCENTS.success.icon },
+    { to: "/teacher/homework", icon: BookOpenCheck, label: "Assign Homework", tone: ACCENTS.violet.icon },
+    { to: "/teacher/exams", icon: ClipboardList, label: "Examinations", tone: ACCENTS.alert.icon },
+    { to: "/teacher/timetable", icon: CalendarRange, label: "My Timetable", tone: ACCENTS.warn.icon },
+    { to: "/teacher/performance", icon: Trophy, label: "Class Insights", tone: ACCENTS.primary.icon },
+  ];
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5 sm:space-y-6">
       {showCheckin && (
         <AttendanceCheckinModal
           userName={user?.name || "Teacher"}
           onDone={() => setShowCheckin(false)}
         />
       )}
-      <div className="relative rounded-2xl overflow-hidden bg-ink min-h-[200px] sm:min-h-[240px]">
-        {school?.settings?.bannerImage && (
-          <img src={school.settings.bannerImage} alt="" className="absolute inset-0 w-full h-full object-cover" />
-        )}
-        <div className="absolute inset-0 bg-gradient-to-r from-ink/90 via-ink/60 to-transparent" />
-        <div className="relative z-10 p-6 sm:p-8 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-          <div className="flex items-center gap-4">
-            <Avatar src={staff?.photoUrl} name={user?.name || "Teacher"} size={54} />
+
+      {/* ── Hero ──────────────────────────────────────────────────── */}
+      <HeroBanner
+        gradient="emerald"
+        eyebrow={greeting()}
+        name={(user?.name || "Teacher").split(" ")[0]}
+        title={(user?.name || "Teacher").split(" ")[0]}
+        meta={
+          [
+            hasClassTeacher ? `Class Teacher · Class ${cls}` : "Teacher",
+            section ? `-${section}` : "",
+            hasClassTeacher && students.length ? ` · ${students.length} students` : "",
+            teachingAssignments.length
+              ? ` · ${teachingAssignments.length} teaching assignment${teachingAssignments.length === 1 ? "" : "s"}`
+              : "",
+            staff?.designation ? ` · ${staff.designation}` : "",
+          ]
+            .filter(Boolean)
+            .join("")
+        }
+        dateLabel={new Date().toLocaleDateString("en-IN", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })}
+        image={school?.settings?.bannerImage}
+        quote="Every lesson you plan is a life you shape."
+        quoteTitle={school?.name || "Teaching workspace"}
+        right={
+          <>
+            <GlassStat value={presentCount} label="Present today" />
+            <GlassStat value={openHomework.length} label="Open homework" />
+            <GlassStat value={students.length} label="Students" />
+          </>
+        }
+      />
+
+      {/* ── Class scope switcher ──────────────────────────────────── */}
+      {allScopes.length > 1 && (
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+          <div className="flex items-center gap-2.5">
+            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+              <Users size={16} />
+            </span>
             <div>
-              <p className="text-primary-light font-semibold text-[12.5px]">
-                {new Date().toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" })}
-              </p>
-              <h2 className="font-display text-2xl sm:text-[26px] font-bold text-white mt-0.5">
-                {greeting()}, {(user?.name || "Teacher").split(" ")[0]}
-              </h2>
-              <p className="text-white/60 text-[13.5px] mt-1">
-                {hasClassTeacher ? `Class Teacher · Class ${cls}` : "Teacher"}
-                {section ? `-${section}` : ""}
-                {hasClassTeacher && students.length ? ` · ${students.length} students` : ""}
-                {teachingAssignments.length ? ` · ${teachingAssignments.length} teaching assignment${teachingAssignments.length === 1 ? "" : "s"}` : ""}
-                {staff?.designation ? ` · ${staff.designation}` : ""}
+              <p className="text-[13px] font-bold text-ink">Active class</p>
+              <p className="text-[11.5px] text-slate-text/60">
+                Switch between the classes assigned to you
               </p>
             </div>
           </div>
-          <div className="flex gap-3">
-            {allScopes.length > 1 && (
-              <div className="relative bg-white/10 backdrop-blur rounded-xl px-3 py-2">
-                <label className="text-[10px] text-white/50 uppercase tracking-wide font-semibold block">Active Class</label>
-                <div className="flex items-center gap-1 mt-0.5">
-                  {allScopes.map((s, i) => (
-                    <button
-                      key={`${s.class}-${s.section}`}
-                      onClick={() => setActiveScope(i)}
-                      className={`text-[11.5px] font-semibold px-2 py-1 rounded-lg transition-colors ${
-                        i === activeScopeIdx
-                          ? "bg-white/20 text-white"
-                          : "text-white/50 hover:text-white/80"
-                      }`}
-                    >
-                      {s.class}-{s.section || "?"}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-            <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-3 text-center">
-              <p className="font-display text-xl font-bold text-white">{presentCount}</p>
-              <p className="text-white/50 text-[11px]">Present today</p>
-            </div>
-            <div className="bg-white/10 backdrop-blur rounded-xl px-4 py-3 text-center">
-              <p className="font-display text-xl font-bold text-white">{openHomework.length}</p>
-              <p className="text-white/50 text-[11px]">Open homework</p>
-            </div>
-          </div>
+          <SegmentedControl
+            ariaLabel="Active class"
+            value={activeScopeIdx}
+            onChange={setActiveScope}
+            options={allScopes.map((s) => ({
+              value: allScopes.indexOf(s),
+              label: `Class ${s.class}-${s.section || "?"}`,
+            }))}
+          />
         </div>
-      </div>
+      )}
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={Users}
-          label="Students"
-          value={String(students.length)}
-          sub={`Class ${cls}${section ? `-${section}` : ""}`}
-          accent="info"
-        />
-        <StatCard
-          icon={CalendarCheck}
-          label="Present Today"
-          value={String(presentCount)}
-          sub={`${absentCount} absent · ${unmarkedCount} unmarked`}
-          accent="success"
-        />
-        <StatCard
-          icon={ClipboardList}
-          label="Upcoming Exams"
-          value={String(upcomingExams.length)}
-          sub={upcomingExams.map((e) => e.subject).slice(0, 2).join(" · ") || "No exams"}
-          accent="alert"
-        />
-        <StatCard
-          icon={BookOpenCheck}
-          label="Open Homework"
-          value={String(openHomework.length)}
-          sub={`${overdueHomework.length} overdue`}
-          accent="primary"
-        />
-      </div>
+      {/* ── Quick actions ──────────────────────────────────────────── */}
+      <QuickActions
+        title="Quick Actions"
+        icon={Zap}
+        action={<ViewLink to="/teacher/timetable">Full timetable</ViewLink>}
+        items={quickActions}
+      />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={ShieldAlert}
-          label="Behavior Records"
-          value={String(behaviorRecords.length)}
-          sub={`${behaviorRecords.filter((r) => !r.resolved).length} unresolved`}
-          accent="alert"
-        />
-        <StatCard
-          icon={Trophy}
-          label="Achievements"
-          value={String(achievements.length)}
-          sub={`${achievements.filter((r) => r.category === "academic").length} academic`}
-          accent="success"
-        />
-      </div>
-
-      {(() => {
-        const unmarkedStudents = students.filter((s) => !todayAttendance[s.admissionNo]);
-        const attentionItems = [];
-        if (unmarkedStudents.length > 0) {
-          attentionItems.push({
-            label: `${unmarkedStudents.length} student${unmarkedStudents.length === 1 ? "" : "s"} with no attendance marked today`,
-            tone: "alert",
-          });
-        }
-        if (overdueHomework.length > 0) {
-          attentionItems.push({
-            label: `${overdueHomework.length} homework assignment${overdueHomework.length === 1 ? "" : "s"} overdue`,
-            tone: "primary",
-          });
-        }
-        if (attentionItems.length === 0) return null;
-        return (
-          <Card title="Attention Required" className="border-l-4 border-l-alert">
-            <div className="flex flex-wrap gap-3">
-              {attentionItems.map((item, i) => (
-                <div
-                  key={i}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-[12.5px] font-semibold ${
-                    item.tone === "alert"
-                      ? "bg-alert/10 text-alert"
-                      : "bg-primary/15 text-primary-dark"
-                  }`}
-                >
-                  <AlertTriangle size={14} />
-                  {item.label}
-                </div>
-              ))}
-            </div>
-          </Card>
-        );
-      })()}
-
-      <div className="grid lg:grid-cols-3 gap-5">
-        <Card
-          title="Mark Attendance · Today"
-          className="lg:col-span-2"
-          action={
-            <span className="text-[11px] font-semibold text-slate-text/60">{todayISO()}</span>
-          }
+      {attentionItems.length > 0 && (
+        <Panel
+          title="Attention Required"
+          icon={AlertTriangle}
+          iconTone={ACCENTS.alert.icon}
+          subtitle="Things worth acting on today"
         >
-          {loading ? (
-            <p className="text-[13px] text-slate-text py-8 text-center">Loading students…</p>
-          ) : students.length === 0 ? (
-            <EmptyBlock title="No students found in this class." />
-          ) : (
-            <>
-              <div className="overflow-x-auto -mx-5 max-h-80">
-                <table className="w-full text-[13px]">
-                  <thead className="sticky top-0 bg-white">
-                    <tr className="text-left text-[11px] text-slate-text/50 uppercase tracking-wide">
-                      <th className="px-5 py-2 font-semibold">Student</th>
-                      {STATUSES.map((s) => (
-                        <th key={s} className="px-3 py-2 font-semibold text-center">{s}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {students.map((s) => (
-                      <tr key={s._id} className="border-t border-slate-200">
-                        <td className="px-5 py-2.5">
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <Avatar src={s.photoUrl} name={s.name} size={30} />
-                            <div className="min-w-0">
-                              <p className="font-semibold text-ink truncate">{s.name}</p>
-                              <p className="text-[11px] text-slate-text/60">{s.admissionNo}</p>
-                            </div>
-                          </div>
-                        </td>
-                        {STATUSES.map((st) => (
-                          <td key={st} className="px-3 py-2.5 text-center">
-                            <button
-                              type="button"
-                              onClick={() => setStatus(s._id, st)}
-                              className={`text-[11.5px] font-semibold rounded-full px-2.5 py-1 min-w-[64px] transition-colors ${markMap[s._id] === st ? STATUS_STYLE[st] : "text-slate-400 hover:text-slate-500"}`}
-                            >
-                              {st}
-                            </button>
-                          </td>
+          <AlertStrip items={attentionItems} />
+        </Panel>
+      )}
+
+      {loading ? (
+        <DashboardSkeleton />
+      ) : (
+        <>
+          {/* ── Metric strip ───────────────────────────────────────── */}
+          <MetricGrid columns={4}>
+            <StatCard
+              icon={Users}
+              label="Students"
+              value={String(students.length)}
+              sub={`Class ${cls}${section ? `-${section}` : ""}`}
+              accent="info"
+            />
+            <StatCard
+              icon={CalendarCheck}
+              label="Present Today"
+              value={String(presentCount)}
+              sub={`${absentCount} absent · ${unmarkedCount} unmarked`}
+              accent="success"
+            />
+            <StatCard
+              icon={ClipboardList}
+              label="Upcoming Exams"
+              value={String(upcomingExams.length)}
+              sub={upcomingExams.map((e) => e.subject).slice(0, 2).join(" · ") || "No exams"}
+              accent="alert"
+            />
+            <StatCard
+              icon={BookOpenCheck}
+              label="Open Homework"
+              value={String(openHomework.length)}
+              sub={
+                overdueHomework.length ? (
+                  <span className="font-semibold text-rose-500">
+                    {overdueHomework.length} overdue
+                  </span>
+                ) : (
+                  "Nothing overdue"
+                )
+              }
+              accent="primary"
+            />
+          </MetricGrid>
+
+          <MetricGrid columns={2}>
+            <StatCard
+              icon={ShieldAlert}
+              label="Behavior Records"
+              value={String(behaviorRecords.length)}
+              sub={`${unresolvedBehavior} unresolved`}
+              accent="alert"
+            />
+            <StatCard
+              icon={Trophy}
+              label="Achievements"
+              value={String(achievements.length)}
+              sub={`${academicAchievements} academic`}
+              accent="success"
+            />
+          </MetricGrid>
+
+          {/* ── Today's periods ────────────────────────────────────── */}
+          <Panel
+            title="Today's Teaching"
+            icon={CalendarDays}
+            iconTone={ACCENTS.teal.icon}
+            subtitle={
+              isWeekend
+                ? "Weekend — enjoy the break"
+                : `${todayPeriods.length} period${todayPeriods.length === 1 ? "" : "s"} scheduled`
+            }
+            action={<ViewLink to="/teacher/timetable">Full timetable</ViewLink>}
+          >
+            {isWeekend ? (
+              <EmptyPanel
+                icon={CalendarDays}
+                iconTone={ACCENTS.success.icon}
+                title="Weekend — no classes"
+                text="No periods are scheduled for today. Use the time to plan next week."
+                action={<ViewLink to="/teacher/timetable">Full timetable</ViewLink>}
+              />
+            ) : todayPeriods.length ? (
+              <div className="scrollbar-thin flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1">
+                {todayPeriods.map((p, i) => (
+                  <PeriodCard
+                    key={`${p.subject}-${p.startTime}-${i}`}
+                    period={p}
+                    nowMin={nowMinutes()}
+                  />
+                ))}
+              </div>
+            ) : (
+              <EmptyPanel
+                icon={CalendarRange}
+                title="No timetable published yet"
+                text="The class timetable has not been published yet, so no periods appear here."
+                action={<ViewLink to="/teacher/timetable">Full timetable</ViewLink>}
+              />
+            )}
+          </Panel>
+
+          {/* ── Mark attendance ────────────────────────────────────── */}
+          <Panel
+            title="Mark Attendance · Today"
+            icon={UserCheck}
+            iconTone={ACCENTS.success.icon}
+            subtitle={todayISO()}
+            action={
+              students.length > 0 && (
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => markAll("Present")}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11.5px] font-bold text-emerald-700 transition hover:bg-emerald-100"
+                  >
+                    <Check size={12} /> All present
+                  </button>
+                  <button
+                    type="button"
+                    onClick={clearAll}
+                    className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11.5px] font-bold text-slate-600 transition hover:bg-slate-200"
+                  >
+                    <RotateCcw size={12} /> Reset
+                  </button>
+                </div>
+              )
+            }
+          >
+            {loading ? (
+              <p className="py-8 text-center text-[13px] text-slate-text">Loading students…</p>
+            ) : students.length === 0 ? (
+              <EmptyBlock title="No students found in this class." />
+            ) : (
+              <>
+                {/* Progress summary */}
+                <div className="mb-4 grid grid-cols-2 gap-2.5 sm:grid-cols-4">
+                  <StatTile
+                    label="Marked"
+                    value={`${marked.length}/${students.length}`}
+                    dot="bg-slate-400"
+                  />
+                  <StatTile
+                    label="Present"
+                    value={presentCount}
+                    dot={STATUS_DOT.Present}
+                    tone="text-emerald-600"
+                  />
+                  <StatTile
+                    label="Absent"
+                    value={absentCount}
+                    dot={STATUS_DOT.Absent}
+                    tone="text-rose-500"
+                  />
+                  <StatTile
+                    label="Leave / half"
+                    value={leaveCount}
+                    dot={STATUS_DOT["Half Day"]}
+                    tone="text-amber-600"
+                  />
+                </div>
+
+                <div className="-mx-5 max-h-[420px] overflow-x-auto overflow-y-auto sm:-mx-6">
+                  <table className="w-full text-[13px]">
+                    <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur">
+                      <tr className="text-left text-[11px] uppercase tracking-wide text-slate-text/50">
+                        <th className="px-5 py-2.5 font-semibold sm:px-6">Student</th>
+                        {STATUSES.map((s) => (
+                          <th key={s} className="px-2 py-2.5 text-center font-semibold">
+                            {s}
+                          </th>
                         ))}
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-4 pt-4 border-t border-slate-200">
-                <span className="text-[12px] text-slate-text/60">
-                  Tap a status to set it, tap again to clear. {unmarkedCount} unmarked.
-                </span>
-                <Button onClick={saveAttendance} disabled={saving}>
-                  <Save size={15} /> {saving ? "Saving…" : "Save Attendance"}
-                </Button>
-              </div>
-            </>
-          )}
-        </Card>
-
-        <Card
-          title="Today's Timetable"
-          action={<CalendarDays size={16} className="text-slate-text/50" />}
-        >
-          {isWeekend ? (
-            <p className="text-[13px] text-slate-text py-8 text-center">Weekend — no classes.</p>
-          ) : todayPeriods.length ? (
-            <div className="space-y-2">
-              {todayPeriods.map((p, i) => (
-                <div key={i} className="flex items-center gap-3 py-2.5 px-2">
-                  <div className="w-8 h-8 rounded-lg bg-primary/12 text-primary-dark flex items-center justify-center shrink-0">
-                    <Timer size={15} />
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[13px] font-semibold text-ink truncate">{p.subject}</p>
-                    <p className="text-[11px] text-slate-text/60">{p.startTime}{p.endTime ? ` – ${p.endTime}` : ""}</p>
-                  </div>
-                </div>
-              ))}
-              <Link
-                to="/teacher/timetable"
-                className="flex items-center gap-1 text-[12px] font-semibold text-info pt-1"
-              >
-                Full timetable <ArrowRight size={13} />
-              </Link>
-            </div>
-          ) : (
-            <p className="text-[13px] text-slate-text py-8 text-center">No timetable published yet.</p>
-          )}
-        </Card>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-5">
-        <Card
-          title="Homework & Assignments"
-          className="lg:col-span-2"
-          action={
-            <Link to="/teacher/homework" className="text-[12px] font-semibold text-info flex items-center gap-1">
-              Manage <ChevronRight size={13} />
-            </Link>
-          }
-        >
-          {loading ? (
-            <p className="text-[13px] text-slate-text py-8 text-center">Loading…</p>
-          ) : homework.length === 0 ? (
-            <EmptyBlock title="Nothing assigned yet." />
-          ) : (
-            <div className="space-y-2.5">
-              {homework.slice(0, 6).map((hw) => (
-                <div key={hw._id} className="flex items-center justify-between gap-3 pb-2.5 border-b border-slate-200 last:border-0 last:pb-0">
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-ink truncate">{hw.title}</p>
-                    <p className="text-[11.5px] text-slate-text/60">Due {fmtDate(hw.dueDate)}</p>
-                  </div>
-                  <div className="flex items-center gap-2 shrink-0">
-                    <Pill tone="primary">{hw.subject}</Pill>
-                    {new Date(hw.dueDate) < new Date() && <Pill tone="alert">Overdue</Pill>}
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-
-        <Card
-          title="Upcoming Exams"
-          action={
-            <Link to="/teacher/exams" className="text-[12px] font-semibold text-info flex items-center gap-1">
-              View all <ChevronRight size={13} />
-            </Link>
-          }
-        >
-          {upcomingExams.length === 0 ? (
-            <p className="text-[13px] text-slate-text py-8 text-center">No exams scheduled.</p>
-          ) : (
-            <div className="space-y-2.5">
-              {upcomingExams.slice(0, 6).map((ex) => (
-                <div key={ex._id} className="flex items-center justify-between gap-2 pb-2.5 border-b border-slate-200 last:border-0 last:pb-0">
-                  <div>
-                    <p className="text-[13px] font-semibold text-ink">{ex.subject}</p>
-                    <p className="text-[11.5px] text-slate-text/60">{ex.examName}</p>
-                  </div>
-                  <Pill tone="alert">{fmtDate(ex.date)}</Pill>
-                </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
-
-      <div className="grid lg:grid-cols-3 gap-5">
-        <Card
-          title="My Teaching"
-          action={<GraduationCap size={16} className="text-slate-text/50" />}
-        >
-          {teachingScopes.length === 0 ? (
-            <p className="text-[13px] text-slate-text py-8 text-center">
-              No teaching scopes assigned yet.
-            </p>
-          ) : (
-            <div className="space-y-2.5">
-              {teachingScopes.slice(0, 6).map((scope, i) => {
-                const subjects = scope.subjects?.length ? scope.subjects.join(", ") : null;
-                return (
-                  <div
-                    key={`${scope.class}-${scope.section || ""}-${i}`}
-                    className="pb-2.5 border-b border-slate-200 last:border-0 last:pb-0"
-                  >
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="min-w-0">
-                        <p className="text-[13px] font-semibold text-ink">
-                          Class {scope.class}
-                          {scope.section ? `-${scope.section}` : ""}
-                        </p>
-                        {subjects && (
-                          <p className="text-[11.5px] text-slate-text/60 truncate">{subjects}</p>
-                        )}
-                      </div>
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Link
-                          to={`/teacher/timetable?${scopeQuery(scope)}`}
-                          className="text-[11.5px] font-semibold text-info bg-info/10 px-2 py-1 rounded-lg hover:bg-info/20"
+                    </thead>
+                    <tbody>
+                      {students.map((s) => (
+                        <tr
+                          key={s._id}
+                          className="border-t border-slate-100 transition-colors hover:bg-slate-50/70"
                         >
-                          Timetable
-                        </Link>
-                        <Link
-                          to={`/teacher/attendance?${scopeQuery(scope)}`}
-                          className="text-[11.5px] font-semibold text-success bg-success/10 px-2 py-1 rounded-lg hover:bg-success/20"
-                        >
-                          Attendance
-                        </Link>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          )}
-        </Card>
-
-        <Card
-          title="Notices"
-          className="lg:col-span-2"
-          action={
-            <Link to="/teacher/notices" className="text-[12px] font-semibold text-info flex items-center gap-1">
-              View all <ChevronRight size={13} />
-            </Link>
-          }
-        >
-          {notices.length === 0 ? (
-            <p className="text-[13px] text-slate-text py-6 text-center">No notices yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {notices.slice(0, 5).map((n) => (
-                <div key={n._id} className="flex items-start gap-3">
-                  <div className="w-1.5 h-1.5 rounded-full mt-2 shrink-0 bg-primary" />
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-ink leading-snug">{n.title}</p>
-                    <p className="text-[11.5px] text-slate-text/60 mt-0.5 line-clamp-2">{n.description || n.body || ""}</p>
-                  </div>
+                          <td className="px-5 py-2.5 sm:px-6">
+                            <div className="flex min-w-0 items-center gap-2.5">
+                              <Avatar src={s.photoUrl} name={s.name} size={30} />
+                              <div className="min-w-0">
+                                <p className="truncate font-semibold text-ink">{s.name}</p>
+                                <p className="text-[11px] text-slate-text/60">
+                                  {s.admissionNo}
+                                  {s.rollNo ? ` · Roll ${s.rollNo}` : ""}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          {STATUSES.map((st) => (
+                            <td key={st} className="px-2 py-2 text-center">
+                              <button
+                                type="button"
+                                onClick={() => setStatus(s._id, st)}
+                                aria-pressed={markMap[s._id] === st}
+                                className={`min-w-[62px] rounded-full px-2.5 py-1.5 text-[11.5px] font-bold transition-all ${
+                                  markMap[s._id] === st
+                                    ? `${STATUS_STYLE[st]} shadow-[0_2px_8px_-4px_rgba(15,23,42,0.4)]`
+                                    : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+                                }`}
+                              >
+                                {st}
+                              </button>
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
-              ))}
-            </div>
-          )}
-        </Card>
-      </div>
 
-      <div className="grid lg:grid-cols-3 gap-5">
-        <Card
-          title="Class Insights"
-          className="lg:col-span-3"
-          action={
-            <Link to="/teacher/performance" className="text-[12px] font-semibold text-info flex items-center gap-1">
-              Full report <ChevronRight size={13} />
-            </Link>
-          }
-        >
-          <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-4">
-            <div>
-              <span className="text-[12.5px] text-slate-text">Attendance rate</span>
-              <p className="text-[14px] font-bold text-success mt-0.5">{attendanceRate ?? "—"}%</p>
-              <div className="w-full h-2.5 bg-slate-100 rounded-full overflow-hidden mt-2">
-                <div className="h-full bg-success rounded-full transition-all" style={{ width: `${attendanceRate ?? 0}%` }} />
+                <div className="mt-4 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-4 sm:flex-row">
+                  <span className="text-[12px] text-slate-text/60">
+                    Tap a status to set it, tap again to clear. {unmarkedCount} unmarked.
+                  </span>
+                  <Button onClick={saveAttendance} disabled={saving}>
+                    <Save size={15} /> {saving ? "Saving…" : "Save Attendance"}
+                  </Button>
+                </div>
+              </>
+            )}
+          </Panel>
+
+          {/* ── Homework + exams ───────────────────────────────────── */}
+          <div className="grid gap-5 lg:grid-cols-3">
+            <Panel
+              className="lg:col-span-2"
+              title="Homework & Assignments"
+              icon={BookOpenCheck}
+              iconTone={ACCENTS.violet.icon}
+              subtitle={`${openHomework.length} open · ${overdueHomework.length} overdue`}
+              action={<ViewLink to="/teacher/homework">Manage</ViewLink>}
+            >
+              {homework.length === 0 ? (
+                <EmptyPanel
+                  icon={BookOpenCheck}
+                  iconTone={ACCENTS.violet.icon}
+                  title="Nothing assigned yet"
+                  text="Create a homework assignment and it will show up here for quick review."
+                  action={<ViewLink to="/teacher/homework">Assign homework</ViewLink>}
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  {homework.slice(0, 6).map((hw) => (
+                    <ListRow
+                      key={hw._id}
+                      icon={BookOpenCheck}
+                      iconTone={ACCENTS.violet.icon}
+                      title={hw.title}
+                      meta={`Due ${fmtDate(hw.dueDate)}`}
+                      trailing={
+                        <>
+                          <Pill tone="primary">{hw.subject}</Pill>
+                          {new Date(hw.dueDate) < new Date() && (
+                            <Badge tone="alert">Overdue</Badge>
+                          )}
+                        </>
+                      }
+                    />
+                  ))}
+                </div>
+              )}
+            </Panel>
+
+            <Panel
+              title="Upcoming Exams"
+              icon={ClipboardList}
+              iconTone={ACCENTS.alert.icon}
+              action={<ViewLink to="/teacher/exams">View all</ViewLink>}
+            >
+              {upcomingExams.length === 0 ? (
+                <EmptyPanel
+                  icon={ClipboardList}
+                  iconTone={ACCENTS.alert.icon}
+                  title="No exams scheduled"
+                  text="Examination schedules created by the school will appear here."
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  {upcomingExams.slice(0, 6).map((ex) => (
+                    <ListRow
+                      key={ex._id}
+                      icon={ClipboardList}
+                      iconTone={ACCENTS.alert.icon}
+                      title={ex.subject}
+                      meta={ex.examName}
+                      trailing={<Badge tone="warning">{fmtDate(ex.date)}</Badge>}
+                    />
+                  ))}
+                </div>
+              )}
+            </Panel>
+          </div>
+
+          {/* ── Insights + scopes ──────────────────────────────────── */}
+          <div className="grid gap-5 lg:grid-cols-3">
+            <Panel
+              title="Class Insights"
+              icon={Trophy}
+              iconTone={ACCENTS.primary.icon}
+              subtitle={`${school?.name || "School"} · Session ${sessionLabel(school) || "—"}`}
+              action={<ViewLink to="/teacher/performance">Full report</ViewLink>}
+            >
+              <div className="flex flex-col items-center gap-4 sm:flex-row sm:items-center">
+                <Donut
+                  value={attendanceRate ?? 0}
+                  color="text-success"
+                  label={attendanceRate != null ? `${attendanceRate}%` : "—"}
+                  sublabel="Attendance"
+                />
+                <div className="w-full flex-1">
+                  <BarList
+                    accent="primary"
+                    showPct={false}
+                    items={[
+                      { label: "Present today", value: presentCount, barClass: STATUS_BAR.Present },
+                      { label: "Absent today", value: absentCount, barClass: STATUS_BAR.Absent },
+                      {
+                        label: "Leave / half day",
+                        value: leaveCount,
+                        barClass: "bg-amber-500",
+                      },
+                      { label: "Not marked", value: unmarkedCount, barClass: "bg-slate-300" },
+                    ]}
+                  />
+                </div>
               </div>
-            </div>
-            <div className="border-t border-slate-200 pt-2 sm:border-t-0 sm:pt-0">
-              <span className="text-[12.5px] text-slate-text">Absent today</span>
-              <p className="text-[14px] font-bold text-alert mt-0.5">{absentCount}</p>
-            </div>
-            <div className="border-t border-slate-200 pt-2 sm:border-t-0 sm:pt-0">
-              <span className="text-[12.5px] text-slate-text">Leave / Half day</span>
-              <p className="text-[14px] font-bold text-info mt-0.5">{leaveCount}</p>
-            </div>
-            <div className="border-t border-slate-200 pt-2 sm:border-t-0 sm:pt-0">
-              <span className="text-[12.5px] text-slate-text">Open homework</span>
-              <p className="text-[14px] font-bold text-ink mt-0.5">{openHomework.length}</p>
-            </div>
-            <div className="border-t border-slate-200 pt-2 sm:border-t-0 sm:pt-0">
-              <span className="text-[12.5px] text-slate-text">My teaching scopes</span>
-              <p className="text-[14px] font-bold text-info mt-0.5">{teachingScopes.length}</p>
-            </div>
+            </Panel>
+
+            <Panel
+              className="lg:col-span-2"
+              title="My Teaching"
+              icon={GraduationCap}
+              iconTone={ACCENTS.teal.icon}
+              subtitle={`${teachingScopes.length} teaching scope${teachingScopes.length === 1 ? "" : "s"}`}
+            >
+              {teachingScopes.length === 0 ? (
+                <EmptyPanel
+                  icon={GraduationCap}
+                  iconTone={ACCENTS.teal.icon}
+                  title="No teaching scopes assigned"
+                  text="Once the school admin assigns you subjects, they will be listed here."
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  {teachingScopes.slice(0, 6).map((scope, i) => {
+                    const subjects = scope.subjects?.length ? scope.subjects.join(", ") : null;
+                    return (
+                      <ListRow
+                        key={`${scope.class}-${scope.section || ""}-${i}`}
+                        icon={GraduationCap}
+                        iconTone={ACCENTS.teal.icon}
+                        title={`Class ${scope.class}${scope.section ? `-${scope.section}` : ""}`}
+                        meta={subjects || "All subjects"}
+                        trailing={
+                          <>
+                            <Link
+                              to={`/teacher/timetable?${scopeQuery(scope)}`}
+                              className="whitespace-nowrap rounded-lg bg-sky-50 px-2.5 py-1 text-[11.5px] font-bold text-sky-700 transition hover:bg-sky-100"
+                            >
+                              Timetable
+                            </Link>
+                            <Link
+                              to={`/teacher/attendance?${scopeQuery(scope)}`}
+                              className="whitespace-nowrap rounded-lg bg-emerald-50 px-2.5 py-1 text-[11.5px] font-bold text-emerald-700 transition hover:bg-emerald-100"
+                            >
+                              Attendance
+                            </Link>
+                          </>
+                        }
+                      />
+                    );
+                  })}
+                </div>
+              )}
+            </Panel>
           </div>
-          <div className="mt-4 pt-3 border-t border-slate-200 text-[11.5px] text-slate-text/50">
-            {school?.name || "School"} · Session {sessionLabel(school) || "—"}
-          </div>
-        </Card>
-      </div>
+
+          {/* ── Notices ────────────────────────────────────────────── */}
+          <Panel
+            title="Notices"
+            icon={Megaphone}
+            iconTone={ACCENTS.warn.icon}
+            subtitle="Announcements from the school"
+            action={<ViewLink to="/teacher/notices">View all</ViewLink>}
+          >
+            {notices.length === 0 ? (
+              <EmptyPanel
+                icon={Megaphone}
+                iconTone={ACCENTS.warn.icon}
+                title="No notices yet"
+                text="School announcements and circulars will appear here."
+              />
+            ) : (
+              <div className="grid gap-2.5 md:grid-cols-2">
+                {notices.slice(0, 6).map((n) => (
+                  <ListRow
+                    key={n._id}
+                    icon={Megaphone}
+                    iconTone={ACCENTS.warn.icon}
+                    title={n.title}
+                    description={n.description || n.body || ""}
+                    meta={fmtDate(n.createdAt)}
+                  />
+                ))}
+              </div>
+            )}
+          </Panel>
+        </>
+      )}
     </div>
   );
 }

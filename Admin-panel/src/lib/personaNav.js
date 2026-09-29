@@ -4,41 +4,37 @@
 // route protected by RequirePersona (frontend) and role+permission+tenant
 // checks (backend).
 
-import {
-  LayoutDashboard,
-  Wallet,
-  Receipt,
-  BookOpen,
-  ArrowDownToLine,
-  Bus,
-  MapPin,
-  Gauge,
-  UserPlus,
-  UserSearch,
-  Bell,
-  ClipboardList,
-  CalendarCheck,
-  FileBarChart2,
-} from "lucide-react";
+// Navigation icons: MUI Material Design *Filled* set (no extra dependency).
+import AccountBalanceWallet from "@mui/icons-material/AccountBalanceWallet";
+import Assignment from "@mui/icons-material/Assignment";
+import Dashboard from "@mui/icons-material/Dashboard";
+import Download from "@mui/icons-material/Download";
+import EventAvailable from "@mui/icons-material/EventAvailable";
+import InsertChart from "@mui/icons-material/InsertChart";
+import MenuBook from "@mui/icons-material/MenuBook";
+import Notifications from "@mui/icons-material/Notifications";
+import PersonSearch from "@mui/icons-material/PersonSearch";
+import Place from "@mui/icons-material/Place";
+import Speed from "@mui/icons-material/Speed";
 
 const attendance = {
   to: "/staff/my-attendance",
-  icon: CalendarCheck,
+  icon: EventAvailable,
   label: "My Attendance",
 };
 const leave = {
   to: "/leave",
-  icon: FileBarChart2,
+  icon: InsertChart,
   label: "Leave",
 };
 const notifications = {
   to: "/notifications",
-  icon: Bell,
+  icon: Notifications,
   label: "Notifications",
 };
 const notices = {
   to: "/notice-board",
-  icon: ClipboardList,
+  icon: Assignment,
   label: "Notices",
 };
 
@@ -49,32 +45,32 @@ function group(label, items) {
 export const PERSONA_NAV = {
   accountant: [
     group("Accountant Workspace", [
-      { to: "/accountant", icon: LayoutDashboard, label: "Dashboard", end: true },
-      { to: "/accountant/fees", icon: Wallet, label: "Manage Fees" },
+      { to: "/accountant", icon: Dashboard, label: "Dashboard", end: true },
+      { to: "/accountant/fees", icon: AccountBalanceWallet, label: "Manage Fees" },
     ]),
     group("Staff Tools", [attendance, leave, notices, notifications]),
   ],
   librarian: [
     group("Librarian Workspace", [
-      { to: "/librarian", icon: LayoutDashboard, label: "Dashboard", end: true },
-      { to: "/librarian/books", icon: BookOpen, label: "Books" },
-      { to: "/librarian/circulation", icon: ArrowDownToLine, label: "Circulation" },
+      { to: "/librarian", icon: Dashboard, label: "Dashboard", end: true },
+      { to: "/librarian/books", icon: MenuBook, label: "Books" },
+      { to: "/librarian/circulation", icon: Download, label: "Circulation" },
     ]),
     group("Staff Tools", [attendance, leave, notices, notifications]),
   ],
   transport: [
     group("Transport Workspace", [
-      { to: "/transport", icon: LayoutDashboard, label: "Dashboard", end: true },
-      { to: "/transport/routes", icon: MapPin, label: "Bus Routes" },
-      { to: "/transport/allocations", icon: Gauge, label: "Allocations" },
+      { to: "/transport", icon: Dashboard, label: "Dashboard", end: true },
+      { to: "/transport/routes", icon: Place, label: "Bus Routes" },
+      { to: "/transport/allocations", icon: Speed, label: "Allocations" },
     ]),
     group("Staff Tools", [attendance, leave, notices, notifications]),
   ],
   receptionist: [
     group("Reception Workspace", [
-      { to: "/reception", icon: LayoutDashboard, label: "Dashboard", end: true },
-      { to: "/reception/enquiries", icon: ClipboardList, label: "Enquiries" },
-      { to: "/reception/student-lookup", icon: UserSearch, label: "Student Lookup" },
+      { to: "/reception", icon: Dashboard, label: "Dashboard", end: true },
+      { to: "/reception/enquiries", icon: Assignment, label: "Enquiries" },
+      { to: "/reception/student-lookup", icon: PersonSearch, label: "Student Lookup" },
     ]),
     group("Staff Tools", [attendance, leave, notices, notifications]),
   ],

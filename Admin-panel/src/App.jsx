@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Ban } from "lucide-react";
 import Layout from "./layout/Layout";
+import SidebarMuiPreview from "./layout/SidebarMuiPreview";
 import { loadActiveGradingScale } from "./lib/grading";
 import { logout } from "./store/authSlice";
 import Login from "./pages/Login";
@@ -1088,6 +1089,7 @@ export default function App() {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
+        <Route path="/sidebar-preview" element={<SidebarMuiPreview />} />
       </Routes>
     </BrowserRouter>
   );

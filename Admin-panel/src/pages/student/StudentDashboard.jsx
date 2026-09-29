@@ -21,7 +21,7 @@ import {
   Trophy,
   Zap,
 } from "lucide-react";
-import { Card } from "../../components/UI";
+import { Card, StatCard } from "../../components/UI";
 import { computeGrade } from "../../lib/grading";
 import { api } from "../../lib/api";
 import useStudentContext, {
@@ -41,25 +41,6 @@ const QUICK_ACTIONS = [
   { to: "/student/exams", label: "Examinations", icon: ClipboardList, tone: "bg-emerald-50 text-emerald-600" },
   { to: "/student/results", label: "Results / Report Card", icon: Trophy, tone: "bg-amber-50 text-amber-600" },
 ];
-
-const METRIC_TONES = {
-  rose: {
-    card: "bg-rose-50/70 border-rose-100 hover:border-rose-200",
-    icon: "bg-white text-rose-500 shadow-[0_4px_14px_rgba(225,29,72,0.12)]",
-  },
-  blue: {
-    card: "bg-blue-50/70 border-blue-100 hover:border-blue-200",
-    icon: "bg-white text-blue-600 shadow-[0_4px_14px_rgba(37,99,235,0.12)]",
-  },
-  amber: {
-    card: "bg-amber-50/70 border-amber-100 hover:border-amber-200",
-    icon: "bg-white text-amber-500 shadow-[0_4px_14px_rgba(245,158,11,0.14)]",
-  },
-  emerald: {
-    card: "bg-emerald-50/70 border-emerald-100 hover:border-emerald-200",
-    icon: "bg-white text-emerald-600 shadow-[0_4px_14px_rgba(16,185,129,0.12)]",
-  },
-};
 
 const ATT_DOT = {
   Present: "bg-emerald-500",
@@ -212,38 +193,6 @@ function EmptyPanel({ icon: Icon, title, text, action, iconTone = "bg-blue-50 te
 
 function Skeleton({ className = "" }) {
   return <div className={`animate-pulse rounded-xl bg-slate-200/70 ${className}`} aria-hidden="true" />;
-}
-
-function MetricCard({ icon: Icon, label, value, sub, tone, bars }) {
-  const t = METRIC_TONES[tone] || METRIC_TONES.blue;
-  return (
-    <div
-      className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-16px_rgba(15,23,42,0.35)] ${t.card}`}
-    >
-      <div className="flex items-center gap-3">
-        <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${t.icon}`} aria-hidden="true">
-          <Icon size={19} />
-        </span>
-        <div className="min-w-0">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-slate-text/70">{label}</p>
-          <p className="font-display text-[26px] font-bold leading-none text-ink mt-1.5">{value}</p>
-        </div>
-      </div>
-      <p className="mt-2.5 text-[11.5px] leading-snug text-slate-text/70">{sub}</p>
-      {bars && bars.length > 0 && (
-        <div className="mt-3 flex h-6 items-end gap-1" aria-hidden="true">
-          {bars.map((b, i) => (
-            <span
-              key={`${b.color}-${i}`}
-              className={`w-2.5 rounded-sm ${b.color}`}
-              style={{ height: `${b.height}px` }}
-            />
-          ))}
-        </div>
-      )}
-      <span className="pointer-events-none absolute -bottom-7 -right-6 h-16 w-16 rounded-full bg-white/50" aria-hidden="true" />
-    </div>
-  );
 }
 
 function AttendanceRing({ pct }) {
@@ -743,17 +692,17 @@ export default function StudentDashboard() {
         <>
           {/* ── Metric strip ────────────────────────────────────────── */}
           <section aria-label="Key metrics" className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <MetricCard
+            <StatCard
               icon={CalendarCheck2}
-              tone="rose"
+              accent="alert"
               label="Attendance"
               value={`${attPct}%`}
               sub={`${byStatus.Present} present of ${attendance.length} recorded`}
               bars={attendanceBars}
             />
-            <MetricCard
+            <StatCard
               icon={BookOpenCheck}
-              tone="blue"
+              accent="primary"
               label="Homework"
               value={String(hwClass.length)}
               sub={
@@ -766,16 +715,16 @@ export default function StudentDashboard() {
                 )
               }
             />
-            <MetricCard
+            <StatCard
               icon={CalendarDays}
-              tone="amber"
+              accent="info"
               label="Upcoming Exams"
               value={String(upcomingExams.length)}
               sub={upcomingExams.length ? "Scheduled ahead" : "Nothing scheduled"}
             />
-            <MetricCard
+            <StatCard
               icon={CreditCard}
-              tone="emerald"
+              accent="success"
               label="Fees Due"
               value={fmtMoney(pendingDue)}
               sub={feesTotal ? `of ${fmtMoney(feesTotal)} invoiced` : "No invoices yet"}

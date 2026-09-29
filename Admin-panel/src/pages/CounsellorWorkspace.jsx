@@ -1,18 +1,41 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { Search, Users, ClipboardCheck, UserCheck, Plus, ArrowRight, PhoneCall, CalendarClock, TrendingUp } from "lucide-react";
-import { api } from "../lib/api";
-import {
-  Button,
-  Card,
-  Input,
-  PageIntro,
-  Pill,
-  StatCard,
-  toast,
-} from "../components/UI";
-import { selectUser } from "../store/selectors";
 import { useSelector } from "react-redux";
+import {
+  Users,
+  ClipboardCheck,
+  UserCheck,
+  Plus,
+  PhoneCall,
+  CalendarClock,
+  TrendingUp,
+  Search,
+  ArrowRight,
+  Sparkles,
+  UserPlus,
+  BadgeCheck,
+  TimerReset,
+  MapPin,
+  UserCog,
+  Inbox,
+} from "lucide-react";
+import { api } from "../lib/api";
+import { Input, toast } from "../components/UI";
+import { selectUser } from "../store/selectors";
+import {
+  HeroBanner,
+  GlassStat,
+  QuickActions,
+  MetricGrid,
+  MetricCard,
+  Panel,
+  Badge,
+  ListRow,
+  EmptyPanel,
+  InlineLoader,
+  ACCENTS,
+  greeting,
+} from "../components/dashboard/DashKit";
 
 const fmtDate = (value) =>
   value
@@ -22,6 +45,18 @@ const fmtDate = (value) =>
         year: "numeric",
       })
     : "—";
+
+const today = () => new Date().toISOString().slice(0, 10);
+
+const isOpen = (enquiry) => !["Admitted", "Rejected"].includes(enquiry.status);
+
+const QUICK_LINKS = [
+  { to: "/addstudent", icon: UserPlus, label: "New admission", tone: ACCENTS.primary.icon },
+  { to: "/students", icon: Users, label: "All students", tone: ACCENTS.info.icon },
+  { to: "/students/complete", icon: BadgeCheck, label: "Complete profiles", tone: ACCENTS.success.icon },
+  { to: "/admission-enquiry", icon: ClipboardCheck, label: "Admission pipeline", tone: ACCENTS.violet.icon },
+  { to: "/attendance", icon: TrendingUp, label: "Track attendance", tone: ACCENTS.warn.icon },
+];
 
 export default function CounsellorWorkspace() {
   const user = useSelector(selectUser);
@@ -56,12 +91,8 @@ export default function CounsellorWorkspace() {
       .list()
       .then(({ data }) => {
         const enquiries = Array.isArray(data) ? data : [];
-        const today = new Date().toISOString().slice(0, 10);
         const followUpsDue = enquiries.filter(
-          (e) =>
-            e.followUpDate &&
-            new Date(e.followUpDate).toISOString().slice(0, 10) <= today &&
-            !["Admitted", "Rejected"].includes(e.status),
+          (e) => e.followUpDate && new Date(e.followUpDate).toISOString().slice(0, 10) <= today() && isOpen(e),
         ).length;
         const scheduledVisits = enquiries.filter(
           (e) => e.status === "Campus Visit Scheduled",
@@ -94,214 +125,303 @@ export default function CounsellorWorkspace() {
       .catch(() => setLoading(false));
   }, [debouncedTerm]);
 
+  const dueFollowUps = pipeline.recentEnquiries.filter(
+    (e) => e.followUpDate && new Date(e.followUpDate).toISOString().slice(0, 10) <= today() && isOpen(e),
+  );
+  const campusVisits = pipeline.recentEnquiries.filter(
+    (e) => e.status === "Campus Visit Scheduled",
+  );
+  const incomplete = rows.filter((r) => r.profileStatus !== "complete").length;
+
   return (
-    <div className="max-w-6xl">
-      <PageIntro
-        eyebrow={`${user?.name || "Admission Counsellor"} · Admissions`}
+    <div className="space-y-5 sm:space-y-6">
+      <HeroBanner
+        gradient="violet"
+        eyebrow={`${greeting()} · ${user?.name || "Admission Counsellor"}`}
+        name="Admissions"
         title="Counsellor Workspace"
-        description="Track every admitted student, complete their profiles, and hand them a working login — all tied to the school's Admission ID."
+        meta="Turn every enquiry into an admission — complete profiles, schedule campus visits and never miss a follow-up."
+        dateLabel={new Date().toLocaleDateString("en-IN", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })}
+        quote="A parent's first conversation with a school decides everything that follows."
+        quoteTitle="Admissions desk"
         right={
-          <Link to="/addstudent">
-            <Button variant="primary">
-              <Plus size={15} /> New student
-            </Button>
-          </Link>
+          <>
+            <GlassStat value={stats?.total ?? 0} label="Students" />
+            <GlassStat value={stats?.incomplete ?? 0} label="Incomplete" />
+            <GlassStat value={`${pipeline.conversionRate}%`} label="Conversion" />
+          </>
         }
       />
 
-      {stats && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 mb-5">
-          <StatCard
-            icon={Users}
-            label="Total students"
-            value={stats.total}
-            sub="in this school"
-            accent="primary"
-          />
-          <StatCard
-            icon={ClipboardCheck}
-            label="Incomplete profiles"
-            value={stats.incomplete}
-            sub="need your attention"
-            accent="info"
-          />
-          <StatCard
-            icon={UserCheck}
-            label="Completed profiles"
-            value={stats.complete}
-            sub="ready to use"
-            accent="success"
-          />
-          <Card className="!p-0" bodyClassName="p-3.5">
-            <p className="text-[11.5px] font-semibold text-slate-text/60 uppercase tracking-wide">
-              Recently created
-            </p>
-            <div className="mt-2 space-y-2">
-              {stats.recent?.length
-                ? stats.recent.slice(0, 3).map((s) => (
-                    <div key={s._id} className="flex items-center justify-between gap-2 text-[12.5px]">
-                      <span className="text-ink font-medium truncate">{s.name}</span>
-                      <span className="text-slate-text/60 shrink-0">{s.admissionNo}</span>
+      <QuickActions
+        title="Admissions Shortcuts"
+        icon={Sparkles}
+        columns={5}
+        action={
+          <Link
+            to="/addstudent"
+            className="inline-flex items-center gap-2 rounded-xl bg-info px-3.5 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-blue-700"
+          >
+            <Plus size={14} /> New student
+          </Link>
+        }
+        items={QUICK_LINKS}
+      />
+
+      <MetricGrid columns={4}>
+            <MetricCard
+              icon={Users}
+              label="Total students"
+              value={stats?.total ?? 0}
+              sub="in this school"
+              accent="primary"
+              to="/students"
+            />
+            <MetricCard
+              icon={ClipboardCheck}
+              label="Incomplete profiles"
+              value={stats?.incomplete ?? 0}
+              sub={stats?.incomplete ? "need your attention" : "all caught up"}
+              accent="info"
+              progress={stats?.total ? (stats.complete / stats.total) * 100 : 0}
+            />
+            <MetricCard
+              icon={UserCheck}
+              label="Completed profiles"
+              value={stats?.complete ?? 0}
+              sub="ready to use"
+              accent="success"
+            />
+            <MetricCard
+              icon={TrendingUp}
+              label="Total enquiries"
+              value={pipeline.totalEnquiries}
+              sub={`${pipeline.conversionRate}% converted to admission`}
+              accent="violet"
+            />
+          </MetricGrid>
+
+          <MetricGrid columns={4}>
+            <MetricCard
+              icon={PhoneCall}
+              label="Follow-ups due"
+              value={pipeline.followUpsDue}
+              sub={pipeline.followUpsDue ? "call them today" : "none pending"}
+              accent={pipeline.followUpsDue > 0 ? "alert" : "success"}
+            />
+            <MetricCard
+              icon={CalendarClock}
+              label="Campus visits"
+              value={pipeline.scheduledVisits}
+              sub="scheduled"
+              accent="primary"
+            />
+            <MetricCard
+              icon={UserCog}
+              label="Profiles to finish"
+              value={incomplete}
+              sub="in the list below"
+              accent="warn"
+            />
+            <MetricCard
+              icon={BadgeCheck}
+              label="Recently created"
+              value={stats?.recent?.length ?? 0}
+              sub={stats?.recent?.[0] ? `latest · ${stats.recent[0].name}` : "no students yet"}
+              accent="neutral"
+            />
+          </MetricGrid>
+
+          {(dueFollowUps.length > 0 || campusVisits.length > 0) && (
+            <div className="grid gap-5 lg:grid-cols-2">
+              {pipeline.followUpsDue > 0 && (
+                <Panel
+                  title="Follow-ups due"
+                  icon={TimerReset}
+                  iconTone={ACCENTS.alert.icon}
+                  subtitle={`${pipeline.followUpsDue} enquiry${pipeline.followUpsDue === 1 ? "" : "ies"} waiting on a call`}
+                >
+                  {dueFollowUps.length ? (
+                    <div className="space-y-2.5">
+                      {dueFollowUps.slice(0, 4).map((e) => (
+                        <ListRow
+                          key={e._id}
+                          icon={PhoneCall}
+                          iconTone={ACCENTS.alert.icon}
+                          title={e.childName}
+                          meta={`${e.classApplied} · follow up ${fmtDate(e.followUpDate)}`}
+                          trailing={<Badge tone="alert">Due</Badge>}
+                        />
+                      ))}
                     </div>
-                  ))
-                : <p className="text-[12.5px] text-slate-text/70">No students yet.</p>}
-            </div>
-          </Card>
-        </div>
-      )}
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3.5 mb-5">
-        <StatCard
-          icon={TrendingUp}
-          label="Total Enquiries"
-          value={pipeline.totalEnquiries}
-          sub="in pipeline"
-          accent="info"
-        />
-        <StatCard
-          icon={PhoneCall}
-          label="Follow-ups Due"
-          value={pipeline.followUpsDue}
-          sub={pipeline.followUpsDue > 0 ? "need attention" : "none pending"}
-          accent={pipeline.followUpsDue > 0 ? "alert" : "success"}
-        />
-        <StatCard
-          icon={CalendarClock}
-          label="Campus Visits"
-          value={pipeline.scheduledVisits}
-          sub="scheduled"
-          accent="primary"
-        />
-        <StatCard
-          icon={TrendingUp}
-          label="Conversion Rate"
-          value={`${pipeline.conversionRate}%`}
-          sub="enquiry → admission"
-          accent="success"
-        />
-      </div>
-
-      {(pipeline.followUpsDue > 0 || pipeline.scheduledVisits > 0) && (
-        <Card title="Admission Pipeline" className="mb-5">
-          <div className="grid sm:grid-cols-2 gap-4">
-            {pipeline.followUpsDue > 0 && (
-              <div>
-                <p className="text-[12px] font-semibold text-slate-text/60 uppercase tracking-wide mb-2">
-                  Follow-ups Due
-                </p>
-                <div className="space-y-2">
-                  {pipeline.recentEnquiries
-                    .filter(
-                      (e) =>
-                        e.followUpDate &&
-                        new Date(e.followUpDate).toISOString().slice(0, 10) <=
-                          new Date().toISOString().slice(0, 10) &&
-                        !["Admitted", "Rejected"].includes(e.status),
-                    )
-                    .slice(0, 4)
-                    .map((e) => (
-                      <div key={e._id} className="flex items-center justify-between gap-2 text-[12.5px]">
-                        <span className="text-ink font-medium truncate">{e.childName}</span>
-                        <span className="text-slate-text/60 shrink-0">{e.classApplied}</span>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-            {pipeline.scheduledVisits > 0 && (
-              <div>
-                <p className="text-[12px] font-semibold text-slate-text/60 uppercase tracking-wide mb-2">
-                  Campus Visits Scheduled
-                </p>
-                <div className="space-y-2">
-                  {pipeline.recentEnquiries
-                    .filter((e) => e.status === "Campus Visit Scheduled")
-                    .slice(0, 4)
-                    .map((e) => (
-                      <div key={e._id} className="flex items-center justify-between gap-2 text-[12.5px]">
-                        <span className="text-ink font-medium truncate">{e.childName}</span>
-                        <Pill tone="info">Visit</Pill>
-                      </div>
-                    ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </Card>
-      )}
-
-      <Card title="Search admitted students" bodyClassName="p-5">
-        <div className="relative max-w-md">
-          <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/50" />
-          <Input
-            placeholder="Search by Admission ID or name…"
-            className="pl-9"
-            value={term}
-            onChange={(event) => setTerm(event.target.value)}
-          />
-        </div>
-
-        <p className="text-[12px] text-slate-text/60 mt-3 mb-2">
-          {loading ? "Loading…" : `${total} result${total === 1 ? "" : "s"}`}
-        </p>
-
-        <div className="overflow-x-auto">
-          <table className="w-full text-left text-[13px]">
-            <thead>
-              <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-slate-200">
-                <th className="py-2.5 pr-4 font-semibold">Student</th>
-                <th className="py-2.5 pr-4 font-semibold">Admission ID</th>
-                <th className="py-2.5 pr-4 font-semibold">Class · Section</th>
-                <th className="py-2.5 pr-4 font-semibold">Profile</th>
-                <th className="py-2.5 pr-4 font-semibold">Joined</th>
-                <th className="py-2.5 font-semibold text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100">
-              {rows.map((student) => (
-                <tr key={student._id}>
-                  <td className="py-3 pr-4">
-                    <p className="font-medium text-ink">{student.name}</p>
-                  </td>
-                  <td className="py-3 pr-4">
-                    <span className="font-mono text-[12.5px] bg-paper px-2 py-1 rounded">
-                      {student.admissionNo}
-                    </span>
-                  </td>
-                  <td className="py-3 pr-4 text-slate-text/80">
-                    {student.class ? `${student.class} · ${student.section || "—"}` : "—"}
-                  </td>
-                  <td className="py-3 pr-4">
-                    {student.profileStatus === "complete" ? (
-                      <Pill tone="success">complete</Pill>
-                    ) : (
-                      <Pill tone="primary">incomplete</Pill>
-                    )}
-                  </td>
-                  <td className="py-3 pr-4 text-slate-text/70 whitespace-nowrap">
-                    {fmtDate(student.createdAt)}
-                  </td>
-                  <td className="py-3 text-right">
-                    <Link
-                      to={`/students/complete/${student._id}`}
-                      className="inline-flex items-center gap-1 text-[12px] font-semibold text-info bg-info/10 px-2.5 py-1.5 rounded-lg hover:bg-info/20"
-                    >
-                      Open profile <ArrowRight size={13} />
-                    </Link>
-                  </td>
-                </tr>
-              ))}
-              {!loading && rows.length === 0 && (
-                <tr>
-                  <td colSpan={6} className="py-8 text-center text-[13px] text-slate-text/70">
-                    No students match this search.
-                  </td>
-                </tr>
+                  ) : (
+                    <EmptyPanel
+                      icon={PhoneCall}
+                      iconTone={ACCENTS.success.icon}
+                      title="Nothing overdue"
+                      text="Every enquiry with a follow-up date has been contacted."
+                    />
+                  )}
+                </Panel>
               )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+
+              {pipeline.scheduledVisits > 0 && (
+                <Panel
+                  title="Campus visits scheduled"
+                  icon={MapPin}
+                  iconTone={ACCENTS.violet.icon}
+                  subtitle={`${pipeline.scheduledVisits} famil${pipeline.scheduledVisits === 1 ? "y" : "ies"} expected on campus`}
+                >
+                  {campusVisits.length ? (
+                    <div className="space-y-2.5">
+                      {campusVisits.slice(0, 4).map((e) => (
+                        <ListRow
+                          key={e._id}
+                          icon={MapPin}
+                          iconTone={ACCENTS.violet.icon}
+                          title={e.childName}
+                          meta={`${e.classApplied} · ${e.visitDate ? fmtDate(e.visitDate) : "date to confirm"}`}
+                          trailing={<Badge tone="violet">Visit</Badge>}
+                        />
+                      ))}
+                    </div>
+                  ) : (
+                    <EmptyPanel
+                      icon={MapPin}
+                      iconTone={ACCENTS.neutral.icon}
+                      title="No visits scheduled"
+                      text="Mark an enquiry as “Campus Visit Scheduled” to plan the visit here."
+                    />
+                  )}
+                </Panel>
+              )}
+            </div>
+          )}
+
+          <Panel
+            title="Search admitted students"
+            icon={Inbox}
+            iconTone={ACCENTS.info.icon}
+            subtitle={
+              loading
+                ? "Loading…"
+                : `${total} result${total === 1 ? "" : "s"} · open a profile to complete it`
+            }
+            bodyClassName="px-5 sm:px-6 pb-5 pt-4"
+          >
+            <div className="relative mb-4 max-w-md">
+              <Search
+                size={15}
+                className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/50"
+                aria-hidden="true"
+              />
+              <Input
+                placeholder="Search by Admission ID or name…"
+                className="pl-9"
+                value={term}
+                onChange={(event) => setTerm(event.target.value)}
+              />
+            </div>
+
+            {loading ? (
+              <InlineLoader label="Searching students…" />
+            ) : rows.length === 0 ? (
+              <EmptyPanel
+                icon={Search}
+                iconTone={ACCENTS.neutral.icon}
+                title="No students match this search"
+                text="Try a different name or Admission ID, or clear the search to see everyone."
+                action={
+                  term ? (
+                    <button
+                      type="button"
+                      onClick={() => setTerm("")}
+                      className="rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-[12.5px] font-bold text-slate-700 transition-colors hover:border-slate-300"
+                    >
+                      Clear search
+                    </button>
+                  ) : null
+                }
+              />
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left text-[13px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-[11.5px] uppercase tracking-wide text-slate-text/60">
+                      <th className="py-2.5 pr-4 font-semibold">Student</th>
+                      <th className="py-2.5 pr-4 font-semibold">Admission ID</th>
+                      <th className="py-2.5 pr-4 font-semibold">Class · Section</th>
+                      <th className="py-2.5 pr-4 font-semibold">Profile</th>
+                      <th className="py-2.5 pr-4 font-semibold">Joined</th>
+                      <th className="py-2.5 text-right font-semibold">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100">
+                    {rows.map((student) => (
+                      <tr key={student._id} className="transition-colors hover:bg-slate-50/70">
+                        <td className="py-3 pr-4">
+                          <p className="font-medium text-ink">{student.name}</p>
+                        </td>
+                        <td className="py-3 pr-4">
+                          <span className="rounded bg-paper px-2 py-1 font-mono text-[12.5px]">
+                            {student.admissionNo}
+                          </span>
+                        </td>
+                        <td className="py-3 pr-4 text-slate-text/80">
+                          {student.class ? `${student.class} · ${student.section || "—"}` : "—"}
+                        </td>
+                        <td className="py-3 pr-4">
+                          <Badge
+                            tone={student.profileStatus === "complete" ? "success" : "primary"}
+                          >
+                            {student.profileStatus === "complete" ? "complete" : "incomplete"}
+                          </Badge>
+                        </td>
+                        <td className="whitespace-nowrap py-3 pr-4 text-slate-text/70">
+                          {fmtDate(student.createdAt)}
+                        </td>
+                        <td className="py-3 text-right">
+                          <Link
+                            to={`/students/complete/${student._id}`}
+                            className="inline-flex items-center gap-1 rounded-lg bg-info/10 px-2.5 py-1.5 text-[12px] font-semibold text-info hover:bg-info/20"
+                          >
+                            Open profile <ArrowRight size={13} />
+                          </Link>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </Panel>
+
+          {stats?.recent?.length ? (
+            <Panel
+              title="Recently created students"
+              icon={Sparkles}
+              iconTone={ACCENTS.success.icon}
+              subtitle="Fresh admissions added to the roll"
+            >
+              <div className="grid gap-2.5 sm:grid-cols-3">
+                {stats.recent.slice(0, 3).map((s) => (
+                  <ListRow
+                    key={s._id}
+                    icon={UserPlus}
+                    iconTone={ACCENTS.success.icon}
+                    title={s.name}
+                    meta={s.admissionNo}
+                    to={`/students/complete/${s._id}`}
+                  />
+                ))}
+              </div>
+        </Panel>
+      ) : null}
     </div>
   );
 }

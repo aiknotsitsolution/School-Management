@@ -6,11 +6,48 @@ import {
   ArrowRight,
   ClipboardList,
   UserSearch,
+  Sparkles,
+  ShieldAlert,
+  Bell,
+  PhoneCall,
+  MapPin,
+  UserPlus,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { PageIntro, Card, StatCard, Button, Pill, toast } from "../../components/UI";
+import { toast } from "../../components/UI";
 import { api } from "../../lib/api";
 import useStaffContext, { fmtDate } from "./useStaffContext";
+import {
+  HeroBanner,
+  GlassStat,
+  QuickActions,
+  MetricGrid,
+  MetricCard,
+  Panel,
+  BarList,
+  Badge,
+  ListRow,
+  EmptyPanel,
+  DashboardSkeleton,
+  ACCENTS,
+  greeting,
+} from "../../components/dashboard/DashKit";
+
+const STATUS_TONE = {
+  New: "info",
+  Admitted: "success",
+  Rejected: "alert",
+  "Campus Visit Scheduled": "violet",
+  "Follow Up": "warning",
+};
+
+const DESK_LINKS = [
+  { to: "/reception/enquiries", icon: ClipboardList, label: "Admission enquiries", tone: ACCENTS.primary.icon },
+  { to: "/reception/student-lookup", icon: UserSearch, label: "Student lookup", tone: ACCENTS.success.icon },
+  { to: "/reception/notices", icon: Megaphone, label: "Notice board", tone: ACCENTS.info.icon },
+  { to: "/reception/enquiries", icon: UserPlus, label: "Log a walk-in", tone: ACCENTS.violet.icon },
+  { to: "/reception/notices", icon: Bell, label: "Publish notice", tone: ACCENTS.warn.icon },
+];
 
 export default function ReceptionDashboard() {
   const { school } = useStaffContext();
@@ -33,9 +70,13 @@ export default function ReceptionDashboard() {
 
   const stats = useMemo(() => {
     const byStatus = {};
-    enquiries.forEach((q) => { byStatus[q.status] = (byStatus[q.status] || 0) + 1; });
+    enquiries.forEach((q) => {
+      byStatus[q.status] = (byStatus[q.status] || 0) + 1;
+    });
     const sources = {};
-    enquiries.forEach((q) => { sources[q.source] = (sources[q.source] || 0) + 1; });
+    enquiries.forEach((q) => {
+      sources[q.source] = (sources[q.source] || 0) + 1;
+    });
     return {
       total: enquiries.length,
       byStatus,
@@ -45,91 +86,224 @@ export default function ReceptionDashboard() {
     };
   }, [enquiries]);
 
-  if (loading) {
-    return <p className="text-[13px] text-slate-text py-10 text-center">Loading reception…</p>;
-  }
+  const conversionRate =
+    stats.total > 0 ? Math.round((stats.admitted / stats.total) * 100) : 0;
+  const emergencyNotices = notices.filter((n) => n.priority === "emergency");
+  const sourceItems = Object.entries(stats.sources)
+    .filter(([source]) => source && source !== "undefined")
+    .sort((a, b) => b[1] - a[1]);
 
   return (
-    <div className="space-y-6">
-      <PageIntro
-        eyebrow="Reception Workspace"
-        title="Front Desk"
-        description={`Welcome desk overview at ${school?.name || "your school"}.`}
+    <div className="space-y-5 sm:space-y-6">
+      <HeroBanner
+        gradient="sky"
+        eyebrow={`${greeting()} · Reception Workspace`}
+        name="Front Desk"
+        title={school?.name || "Reception"}
+        meta="The first voice of the school — greet visitors, log every walk-in enquiry and keep parents informed."
+        dateLabel={new Date().toLocaleDateString("en-IN", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })}
+        quote="Welcome everyone who walks through our gate — that is the whole job."
+        quoteTitle="Front office"
         right={
-          <Button variant="primary" onClick={() => navigate("/reception/enquiries")}>
-            Manage Enquiries <ArrowRight size={15} />
-          </Button>
+          <>
+            <GlassStat value={stats.total} label="Enquiries" />
+            <GlassStat value={stats.new} label="To follow up" />
+            <GlassStat value={notices.length} label="Notices" />
+          </>
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Inbox} label="Total Enquiries" value={String(stats.total)} sub="All admission leads" accent="info" />
-        <StatCard icon={Users} label="New (to follow up)" value={String(stats.new)} sub="Uncontacted leads" accent="primary" />
-        <StatCard icon={Users} label="Admitted" value={String(stats.admitted)} sub="Converted" accent="success" />
-        <StatCard icon={Megaphone} label="Active Notices" value={String(notices.length)} sub="Currently published" accent="alert" />
-      </div>
+      <QuickActions
+        title="Front Desk Shortcuts"
+        icon={Sparkles}
+        columns={5}
+        action={
+          <button
+            type="button"
+            onClick={() => navigate("/reception/enquiries")}
+            className="inline-flex items-center gap-2 rounded-xl bg-info px-3.5 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-blue-700"
+          >
+            Manage Enquiries <ArrowRight size={14} />
+          </button>
+        }
+        items={DESK_LINKS}
+      />
 
-      <div className="grid lg:grid-cols-2 gap-6">
-        <Card title="Recent Enquiries" action={<button onClick={() => navigate("/reception/enquiries")} className="text-[12px] font-semibold text-info hover:underline">View all</button>}>
-          {enquiries.length === 0 ? (
-            <p className="text-[13px] text-slate-text py-8 text-center">No enquiries yet.</p>
-          ) : (
-            <div className="space-y-3">
-              {enquiries.slice(0, 6).map((q) => (
-                <div key={q._id} className="flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-[13px] font-semibold text-ink">{q.childName || "—"}</p>
-                    <p className="text-[12px] text-slate-text/60">
-                      Class {q.classApplied || "—"} · {q.contact || "—"} · {fmtDate(q.createdAt)}
-                    </p>
-                  </div>
-                  <Pill tone={q.status === "New" ? "info" : q.status === "Admitted" ? "success" : q.status === "Rejected" ? "alert" : "neutral"}>
-                    {q.status}
-                  </Pill>
+      {loading ? (
+        <DashboardSkeleton metricCols={4} />
+      ) : (
+        <>
+          <MetricGrid columns={4}>
+            <MetricCard
+              icon={Inbox}
+              label="Total enquiries"
+              value={stats.total}
+              sub="all admission leads"
+              accent="info"
+            />
+            <MetricCard
+              icon={PhoneCall}
+              label="New to follow up"
+              value={stats.new}
+              sub={stats.new ? "uncontacted leads" : "all contacted"}
+              accent={stats.new > 0 ? "warn" : "success"}
+            />
+            <MetricCard
+              icon={Users}
+              label="Admitted"
+              value={stats.admitted}
+              sub={`${conversionRate}% conversion rate`}
+              accent="success"
+              progress={conversionRate}
+            />
+            <MetricCard
+              icon={Megaphone}
+              label="Active notices"
+              value={notices.length}
+              sub={
+                emergencyNotices.length ? (
+                  <span className="font-semibold text-rose-500">
+                    {emergencyNotices.length} emergency
+                  </span>
+                ) : (
+                  "currently published"
+                )
+              }
+              accent={emergencyNotices.length ? "alert" : "violet"}
+            />
+          </MetricGrid>
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            <Panel
+              title="Recent enquiries"
+              icon={Inbox}
+              iconTone={ACCENTS.primary.icon}
+              subtitle="Latest walk-ins and phone leads"
+              className="lg:col-span-2"
+              action={
+                <button
+                  type="button"
+                  onClick={() => navigate("/reception/enquiries")}
+                  className="inline-flex items-center gap-1 whitespace-nowrap text-[12.5px] font-semibold text-info transition-colors hover:text-blue-700"
+                >
+                  View all <ArrowRight size={14} />
+                </button>
+              }
+            >
+              {enquiries.length === 0 ? (
+                <EmptyPanel
+                  icon={Inbox}
+                  iconTone={ACCENTS.neutral.icon}
+                  title="No enquiries yet"
+                  text="Log walk-ins and phone leads so the admissions team can follow up."
+                  action={
+                    <button
+                      type="button"
+                      onClick={() => navigate("/reception/enquiries")}
+                      className="rounded-xl bg-info px-3.5 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-blue-700"
+                    >
+                      Log an enquiry
+                    </button>
+                  }
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  {enquiries.slice(0, 6).map((q) => (
+                    <ListRow
+                      key={q._id}
+                      icon={UserPlus}
+                      iconTone={
+                        q.status === "New" ? ACCENTS.warn.icon : ACCENTS.primary.icon
+                      }
+                      title={q.childName || "—"}
+                      meta={`Class ${q.classApplied || "—"} · ${q.contact || "—"} · ${fmtDate(q.createdAt)}`}
+                      trailing={<Badge tone={STATUS_TONE[q.status] || "neutral"}>{q.status}</Badge>}
+                    />
+                  ))}
                 </div>
-              ))}
-            </div>
-          )}
-        </Card>
+              )}
+            </Panel>
 
-        <Card title="Quick Actions">
-          <div className="grid gap-3">
-            <button
-              onClick={() => navigate("/reception/enquiries")}
-              className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 p-4 hover:border-primary/40 transition-colors text-left"
-            >
-              <div className="w-9 h-9 rounded-lg bg-primary/10 text-primary flex items-center justify-center"><ClipboardList size={17} /></div>
-              <div className="flex-1">
-                <p className="text-[13.5px] font-semibold text-ink">Admission Enquiries</p>
-                <p className="text-[12px] text-slate-text/70">Log walk-ins, follow up and update stages</p>
-              </div>
-              <ArrowRight size={16} className="text-slate-text/40" />
-            </button>
-            <button
-              onClick={() => navigate("/reception/student-lookup")}
-              className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 p-4 hover:border-success/40 transition-colors text-left"
-            >
-              <div className="w-9 h-9 rounded-lg bg-success/10 text-success flex items-center justify-center"><UserSearch size={17} /></div>
-              <div className="flex-1">
-                <p className="text-[13.5px] font-semibold text-ink">Student Lookup</p>
-                <p className="text-[12px] text-slate-text/70">Find a student by name or admission number</p>
-              </div>
-              <ArrowRight size={16} className="text-slate-text/40" />
-            </button>
-            <button
-              onClick={() => navigate("/reception/notices")}
-              className="flex items-center gap-3 bg-white rounded-xl border border-slate-200 p-4 hover:border-info/40 transition-colors text-left"
-            >
-              <div className="w-9 h-9 rounded-lg bg-info/10 text-info flex items-center justify-center"><Megaphone size={17} /></div>
-              <div className="flex-1">
-                <p className="text-[13.5px] font-semibold text-ink">Notice Board</p>
-                <p className="text-[12px] text-slate-text/70">Browse published notices</p>
-              </div>
-              <ArrowRight size={16} className="text-slate-text/40" />
-            </button>
+            <div className="space-y-5">
+              <Panel
+                title="Enquiry sources"
+                icon={MapPin}
+                iconTone={ACCENTS.violet.icon}
+                subtitle="Where families hear about us"
+              >
+                {sourceItems.length === 0 ? (
+                  <EmptyPanel
+                    icon={MapPin}
+                    iconTone={ACCENTS.neutral.icon}
+                    title="No source data"
+                    text="Sources will be summarised once enquiries carry a source."
+                  />
+                ) : (
+                  <BarList
+                    accent="violet"
+                    showPct={false}
+                    items={sourceItems.map(([source, count]) => ({
+                      label: source,
+                      value: count,
+                    }))}
+                  />
+                )}
+              </Panel>
+
+              <Panel
+                title="Notice board"
+                icon={Megaphone}
+                iconTone={ACCENTS.info.icon}
+                subtitle={`${notices.length} published`}
+                action={
+                  <button
+                    type="button"
+                    onClick={() => navigate("/reception/notices")}
+                    className="inline-flex items-center gap-1 whitespace-nowrap text-[12.5px] font-semibold text-info transition-colors hover:text-blue-700"
+                  >
+                    Open <ArrowRight size={14} />
+                  </button>
+                }
+              >
+                {notices.length === 0 ? (
+                  <EmptyPanel
+                    icon={Megaphone}
+                    iconTone={ACCENTS.neutral.icon}
+                    title="No notices published"
+                    text="Notices you publish will be visible to every parent instantly."
+                  />
+                ) : (
+                  <div className="space-y-2.5">
+                    {notices.slice(0, 4).map((n) => (
+                      <ListRow
+                        key={n._id}
+                        icon={n.priority === "emergency" ? ShieldAlert : Megaphone}
+                        iconTone={
+                          n.priority === "emergency" ? ACCENTS.alert.icon : ACCENTS.info.icon
+                        }
+                        title={n.title}
+                        meta={fmtDate(n.createdAt)}
+                        trailing={
+                          n.priority === "emergency" ? (
+                            <Badge tone="alert">Emergency</Badge>
+                          ) : n.pinned ? (
+                            <Badge tone="info">Pinned</Badge>
+                          ) : null
+                        }
+                      />
+                    ))}
+                  </div>
+                )}
+              </Panel>
+            </div>
           </div>
-        </Card>
-      </div>
+        </>
+      )}
     </div>
   );
 }

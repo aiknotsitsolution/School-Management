@@ -465,7 +465,7 @@ function MasterList({
       ) : filtered.length === 0 ? (
         <div className="py-10 text-center">
           <p className="text-[13px] text-slate-text/60">
-            {query ? `No ${label.toLowerCase()} match "${query}"` : `No ${label.toLowerCase()} configured yet`}
+            {searchQuery ? `No ${label.toLowerCase()} match "${searchQuery}"` : `No ${label.toLowerCase()} configured yet`}
           </p>
         </div>
       ) : (

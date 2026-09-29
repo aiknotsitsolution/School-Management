@@ -7,14 +7,65 @@ import {
   ArrowRight,
   ArrowDownCircle,
   CircleDollarSign,
+  Banknote,
+  Printer,
+  CreditCard,
+  Sparkles,
+  Inbox,
+  BanknoteIcon,
+  Landmark,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { PageIntro, Card, StatCard, Pill, Button, toast } from "../../components/UI";
+import { toast } from "../../components/UI";
 import { api } from "../../lib/api";
 import useStaffContext, { fmtMoney, fmtDate, todayISO, dateOf } from "./useStaffContext";
+import {
+  HeroBanner,
+  GlassStat,
+  QuickActions,
+  MetricGrid,
+  MetricCard,
+  Panel,
+  BarList,
+  Badge,
+  ListRow,
+  EmptyPanel,
+  DashboardSkeleton,
+  ACCENTS,
+  greeting,
+} from "../../components/dashboard/DashKit";
+
+const STATUS_TONE = {
+  Paid: "success",
+  Partial: "primary",
+  Unpaid: "neutral",
+  Overdue: "alert",
+};
+
+const MODE_ICON = {
+  cash: BanknoteIcon,
+  Cash: BanknoteIcon,
+  upi: CreditCard,
+  UPI: CreditCard,
+  card: CreditCard,
+  Card: CreditCard,
+  bank: Landmark,
+  Bank: Landmark,
+  transfer: Landmark,
+  cheque: Receipt,
+  Cheque: Receipt,
+};
+
+const QUICK_LINKS = [
+  { to: "/accountant/fees", icon: Receipt, label: "Fee management", tone: ACCENTS.primary.icon },
+  { to: "/accountant/fees", icon: Banknote, label: "Collect payment", tone: ACCENTS.success.icon },
+  { to: "/accountant/fees", icon: CreditCard, label: "Online payments", tone: ACCENTS.info.icon },
+  { to: "/accountant/fees", icon: Printer, label: "Print receipts", tone: ACCENTS.violet.icon },
+  { to: "/fees-collection", icon: Inbox, label: "Fee collection", tone: ACCENTS.warn.icon },
+];
 
 export default function AccountantDashboard() {
-  const { user, school, persona } = useStaffContext();
+  const { school } = useStaffContext();
   const navigate = useNavigate();
   const [payments, setPayments] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -22,10 +73,7 @@ export default function AccountantDashboard() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.allSettled([
-      api.fees.payments.list(),
-      api.fees.invoices.list(),
-    ])
+    Promise.allSettled([api.fees.payments.list(), api.fees.invoices.list()])
       .then(([p, i]) => {
         setPayments(p.status === "fulfilled" ? p.value.data || [] : []);
         setInvoices(i.status === "fulfilled" ? i.value.data || [] : []);
@@ -50,128 +98,272 @@ export default function AccountantDashboard() {
       (s, i) => s + (Number(i.amount || 0) - Number(i.paidAmount || 0)),
       0,
     );
-    const byStatus = {}; 
-    invoices.forEach((i) => { byStatus[i.status] = (byStatus[i.status] || 0) + 1; });
+    const byStatus = {};
+    invoices.forEach((i) => {
+      byStatus[i.status] = (byStatus[i.status] || 0) + 1;
+    });
     const byMode = {};
-    payments.forEach((p) => { byMode[p.mode] = (byMode[p.mode] || 0) + 1; });
+    payments.forEach((p) => {
+      byMode[p.mode] = (byMode[p.mode] || 0) + 1;
+    });
     return {
-      todayPaid, monthPaid, outstanding, dueCount: due.length,
-      byStatus, byMode, totalCollected: payments.reduce((s, p) => s + Number(p.amount || 0), 0),
+      todayPaid,
+      monthPaid,
+      outstanding,
+      dueCount: due.length,
+      byStatus,
+      byMode,
+      totalCollected: payments.reduce((s, p) => s + Number(p.amount || 0), 0),
     };
   }, [payments, invoices, today, monthPrefix]);
 
-  if (loading) {
-    return <p className="text-[13px] text-slate-text py-10 text-center">Loading accountant dashboard…</p>;
-  }
+  const invoicedTotal = invoices.reduce((s, i) => s + Number(i.amount || 0), 0);
+  const collectionRate =
+    invoicedTotal > 0 ? (stats.totalCollected / invoicedTotal) * 100 : 0;
 
   return (
-    <div className="space-y-6">
-      <PageIntro
-        eyebrow="Accountant Workspace"
-        title="Fees & Collections"
-        description={`Track fee collections at ${school?.name || "your school"}.`}
+    <div className="space-y-5 sm:space-y-6">
+      <HeroBanner
+        gradient="emerald"
+        eyebrow={`${greeting()} · Accountant Workspace`}
+        name="Fees & Collections"
+        title={school?.name || "Fee Collection"}
+        meta="Every rupee in, every receipt out — track collections, chase overdue invoices and keep the ledger clean."
+        dateLabel={new Date().toLocaleDateString("en-IN", {
+          weekday: "long",
+          day: "numeric",
+          month: "long",
+          year: "numeric",
+        })}
+        quote="A clean ledger is the quiet foundation of a trusted school."
+        quoteTitle="Accounts desk"
         right={
-          <Button variant="primary" onClick={() => navigate("/accountant/fees")}>
-            Manage Fees <ArrowRight size={15} />
-          </Button>
+          <>
+            <GlassStat value={fmtMoney(stats.todayPaid)} label="Today" />
+            <GlassStat value={fmtMoney(stats.monthPaid)} label="This month" />
+            <GlassStat value={fmtMoney(stats.outstanding)} label="Outstanding" />
+          </>
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={TrendingUp} label="Today's Collection" value={fmtMoney(stats.todayPaid)} sub="Payments logged today" accent="success" />
-        <StatCard icon={CircleDollarSign} label="This Month" value={fmtMoney(stats.monthPaid)} sub={`${monthPrefix.slice(5, 7)}/${monthPrefix.slice(0, 4)} period`} accent="primary" />
-        <StatCard icon={Wallet} label="Lifetime Collected" value={fmtMoney(stats.totalCollected)} sub={`${payments.length} transactions`} accent="info" />
-        <StatCard icon={AlertCircle} label="Outstanding" value={fmtMoney(stats.outstanding)} sub={`${stats.dueCount} unpaid invoices`} accent="alert" />
-      </div>
+      <QuickActions
+        title="Fee Desk Shortcuts"
+        icon={Sparkles}
+        columns={5}
+        action={
+          <button
+            type="button"
+            onClick={() => navigate("/accountant/fees")}
+            className="inline-flex items-center gap-2 rounded-xl bg-info px-3.5 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-blue-700"
+          >
+            Manage Fees <ArrowRight size={14} />
+          </button>
+        }
+        items={QUICK_LINKS}
+      />
 
-      <div className="grid lg:grid-cols-3 gap-6">
-        <Card title="Recent Transactions" className="lg:col-span-2">
-          {payments.length === 0 ? (
-            <p className="text-[13px] text-slate-text py-8 text-center">No payments recorded yet.</p>
-          ) : (
-            <div className="overflow-x-auto -mx-5">
-              <table className="w-full text-[13px]">
-                <thead>
-                  <tr className="text-left text-[11px] text-slate-text/50 uppercase tracking-wide">
-                    <th className="px-5 py-2 font-semibold">Student</th>
-                    <th className="px-3 py-2 font-semibold">Amount</th>
-                    <th className="px-3 py-2 font-semibold">Mode</th>
-                    <th className="px-3 py-2 font-semibold">Receipt</th>
-                    <th className="px-3 py-2 font-semibold">Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {payments.slice(0, 7).map((p) => (
-                    <tr key={p._id} className="border-t border-slate-200">
-                      <td className="px-5 py-2.5 font-semibold text-ink">{p.studentId || "—"}</td>
-                      <td className="px-3 py-2.5 text-success font-semibold">{fmtMoney(p.amount)}</td>
-                      <td className="px-3 py-2.5"><Pill tone="neutral">{p.mode || "—"}</Pill></td>
-                      <td className="px-3 py-2.5 text-slate-text/80">{p.receiptNo || "—"}</td>
-                      <td className="px-3 py-2.5 text-slate-text/80">{fmtDate(p.paidOn)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
+      {loading ? (
+        <DashboardSkeleton metricCols={4} />
+      ) : (
+        <>
+          <MetricGrid columns={4}>
+            <MetricCard
+              icon={TrendingUp}
+              label="Today's collection"
+              value={fmtMoney(stats.todayPaid)}
+              sub="payments logged today"
+              accent="success"
+            />
+            <MetricCard
+              icon={CircleDollarSign}
+              label="This month"
+              value={fmtMoney(stats.monthPaid)}
+              sub={`${monthPrefix.slice(5, 7)}/${monthPrefix.slice(0, 4)} period`}
+              accent="primary"
+            />
+            <MetricCard
+              icon={Wallet}
+              label="Lifetime collected"
+              value={fmtMoney(stats.totalCollected)}
+              sub={`${payments.length} transactions`}
+              accent="info"
+              progress={Math.min(100, collectionRate)}
+            />
+            <MetricCard
+              icon={AlertCircle}
+              label="Outstanding"
+              value={fmtMoney(stats.outstanding)}
+              sub={`${stats.dueCount} unpaid invoice${stats.dueCount === 1 ? "" : "s"}`}
+              accent={stats.outstanding > 0 ? "alert" : "success"}
+            />
+          </MetricGrid>
 
-        <div className="space-y-6">
-          <Card title="Invoice Status">
-            <div className="space-y-3">
-              {["Paid", "Partial", "Unpaid", "Overdue"].map((s) => (
-                <div key={s} className="flex items-center justify-between">
-                  <Pill tone={s === "Paid" ? "success" : s === "Overdue" ? "alert" : s === "Partial" ? "primary" : "neutral"}>{s}</Pill>
-                  <span className="text-[13px] font-semibold text-ink">{stats.byStatus[s] || 0}</span>
+          <div className="grid gap-5 lg:grid-cols-3">
+            <Panel
+              title="Recent transactions"
+              icon={Receipt}
+              iconTone={ACCENTS.success.icon}
+              subtitle="Latest payments recorded"
+              className="lg:col-span-2"
+              action={
+                <button
+                  type="button"
+                  onClick={() => navigate("/accountant/fees")}
+                  className="inline-flex items-center gap-1 whitespace-nowrap text-[12.5px] font-semibold text-info transition-colors hover:text-blue-700"
+                >
+                  Manage fees <ArrowRight size={14} />
+                </button>
+              }
+            >
+              {payments.length === 0 ? (
+                <EmptyPanel
+                  icon={Receipt}
+                  iconTone={ACCENTS.neutral.icon}
+                  title="No payments recorded yet"
+                  text="Fee payments you log will appear here, newest first."
+                />
+              ) : (
+                <div className="space-y-2.5">
+                  {payments.slice(0, 7).map((p) => {
+                    const ModeIcon = MODE_ICON[p.mode] || CreditCard;
+                    return (
+                      <ListRow
+                        key={p._id}
+                        icon={ModeIcon}
+                        iconTone={ACCENTS.success.icon}
+                        title={
+                          <span className="text-emerald-600">{fmtMoney(p.amount)}</span>
+                        }
+                        meta={`${p.studentId || "—"} · ${p.mode || "mode not set"}`}
+                        trailing={
+                          <span className="whitespace-nowrap font-mono text-[11.5px] text-slate-text/70">
+                            {p.receiptNo || fmtDate(p.paidOn)}
+                          </span>
+                        }
+                      />
+                    );
+                  })}
                 </div>
-              ))}
-            </div>
-          </Card>
-          <Card title="Payment Modes">
-            {Object.keys(stats.byMode).length === 0 ? (
-              <p className="text-[13px] text-slate-text py-6 text-center">No data yet.</p>
-            ) : (
-              <div className="space-y-3">
-                {Object.entries(stats.byMode).map(([mode, count]) => (
-                  <div key={mode} className="flex items-center justify-between">
-                    <span className="text-[13px] text-ink">{mode}</span>
-                    <span className="text-[13px] font-semibold text-slate-text">{count}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </Card>
-        </div>
-      </div>
+              )}
+            </Panel>
 
-      <div className="grid sm:grid-cols-2 gap-4">
-        <button
-          onClick={() => navigate("/accountant/fees")}
-          className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:border-info/40 transition-colors text-left"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-info/10 text-info flex items-center justify-center"><Receipt size={19} /></div>
-            <div>
-              <p className="font-display font-semibold text-ink text-[15px]">Collect Payment</p>
-              <p className="text-[12.5px] text-slate-text/70">Record a fee payment against an invoice</p>
+            <div className="space-y-5">
+              <Panel
+                title="Invoice status"
+                icon={Receipt}
+                iconTone={ACCENTS.violet.icon}
+                subtitle={`${invoices.length} invoice${invoices.length === 1 ? "" : "s"} on record`}
+              >
+                {invoices.length === 0 ? (
+                  <EmptyPanel
+                    icon={Receipt}
+                    iconTone={ACCENTS.neutral.icon}
+                    title="No invoices yet"
+                    text="Generate fee invoices to start tracking collections."
+                  />
+                ) : (
+                  <div className="space-y-2.5">
+                    {["Paid", "Partial", "Unpaid", "Overdue"].map((s) => (
+                      <div
+                        key={s}
+                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5"
+                      >
+                        <Badge tone={STATUS_TONE[s]}>{s}</Badge>
+                        <span className="font-display text-[15px] font-bold text-ink">
+                          {stats.byStatus[s] || 0}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </Panel>
+
+              <Panel
+                title="Payment modes"
+                icon={CreditCard}
+                iconTone={ACCENTS.info.icon}
+                subtitle="How families pay"
+              >
+                {Object.keys(stats.byMode).length === 0 ? (
+                  <EmptyPanel
+                    icon={CreditCard}
+                    iconTone={ACCENTS.neutral.icon}
+                    title="No payment data"
+                    text="Modes will be summarised once payments are recorded."
+                  />
+                ) : (
+                  <BarList
+                    accent="primary"
+                    showPct={false}
+                    items={Object.entries(stats.byMode).map(([mode, count]) => ({
+                      label: mode,
+                      value: count,
+                    }))}
+                  />
+                )}
+              </Panel>
             </div>
           </div>
-          <ArrowDownCircle size={18} className="text-slate-text/40" />
-        </button>
-        <button
-          onClick={() => navigate("/accountant/fees")}
-          className="flex items-center justify-between bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:border-primary/40 transition-colors text-left"
-        >
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center"><Wallet size={19} /></div>
-            <div>
-              <p className="font-display font-semibold text-ink text-[15px]">Fee Structure</p>
-              <p className="text-[12.5px] text-slate-text/70">Define or update fee types per class</p>
-            </div>
+
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => navigate("/accountant/fees")}
+              className="group flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-emerald-200 hover:shadow-[0_14px_30px_-20px_rgba(16,185,129,0.5)]"
+            >
+              <span className="flex items-center gap-3">
+                <span
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${ACCENTS.success.icon}`}
+                  aria-hidden="true"
+                >
+                  <ArrowDownCircle size={19} />
+                </span>
+                <span>
+                  <span className="block font-display text-[15px] font-bold text-ink">
+                    Collect payment
+                  </span>
+                  <span className="mt-0.5 block text-[12.5px] text-slate-text/70">
+                    Record a fee payment against an invoice
+                  </span>
+                </span>
+              </span>
+              <ArrowRight
+                size={18}
+                className="shrink-0 text-slate-text/40 transition-colors group-hover:text-emerald-500"
+                aria-hidden="true"
+              />
+            </button>
+
+            <button
+              type="button"
+              onClick={() => navigate("/accountant/fees")}
+              className="group flex items-center justify-between rounded-2xl border border-slate-200 bg-white p-5 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-indigo-200 hover:shadow-[0_14px_30px_-20px_rgba(79,70,229,0.5)]"
+            >
+              <span className="flex items-center gap-3">
+                <span
+                  className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${ACCENTS.primary.icon}`}
+                  aria-hidden="true"
+                >
+                  <Wallet size={19} />
+                </span>
+                <span>
+                  <span className="block font-display text-[15px] font-bold text-ink">
+                    Fee structure
+                  </span>
+                  <span className="mt-0.5 block text-[12.5px] text-slate-text/70">
+                    Define or update fee types per class
+                  </span>
+                </span>
+              </span>
+              <ArrowRight
+                size={18}
+                className="shrink-0 text-slate-text/40 transition-colors group-hover:text-info"
+                aria-hidden="true"
+              />
+            </button>
           </div>
-          <ArrowRight size={18} className="text-slate-text/40" />
-        </button>
-      </div>
+        </>
+      )}
     </div>
   );
 }
