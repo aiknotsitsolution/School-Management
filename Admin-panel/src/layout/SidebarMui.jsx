@@ -62,7 +62,6 @@ const {
   groupGap,
   listTopPad,
   listBottomPad,
-  listPadX,
   railIcon,
   radius,
 } = SIDEBAR_TOKENS;
@@ -204,6 +203,18 @@ const iconSx = (selected, nested = false) => ({
     transition: (t) =>
       t.transitions.create(["color", "filter"], {
         duration: DURATION.normal,
+        easing: EASING.standard,
+      }),
+  },
+  // Raster artwork (PNG/WebP in navPngIcons) ships with transparent padding
+  // baked into the file, so at the same box size it reads smaller than the
+  // vector glyphs. `objectFit: contain` fills the box, this lifts the visible
+  // artwork to match.
+  "img.nav-icon": {
+    transform: "scale(1.14)",
+    transition: (t) =>
+      t.transitions.create("transform", {
+        duration: DURATION.fast,
         easing: EASING.standard,
       }),
   },
@@ -871,7 +882,6 @@ export default function SidebarMui({
             overflowX: "hidden",
             pt: `${listTopPad}px`,
             pb: `${listBottomPad}px`,
-            px: collapsed ? 0 : `${listPadX}px`,
             ...scrollbarSx,
           }}
         >

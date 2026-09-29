@@ -38,11 +38,7 @@ export const SIDEBAR_TOKENS = {
   // Space above the first item / under the final item, before the footer.
   listTopPad: 6,
   listBottomPad: 6,
-  // Horizontal gutter so item backgrounds do not touch the drawer edge. 6px +
-  // the item's own 10px padding lines item text up with the 16px brand/header
-  // text. Collapsed rail stays edge-to-edge because items centre themselves.
-  listPadX: 6,
-  railIcon: 48,
+  railIcon: 52,
   radius: 12,
 };
 
@@ -51,9 +47,9 @@ export const SIDEBAR_TYPE = {
   label: 15,
   labelNested: 14,
   groupHeader: 11.5,
-  icon: 28,
-  iconNested: 24,
-  groupHeaderIcon: 19,
+  icon: 32,
+  iconNested: 28,
+  groupHeaderIcon: 21,
 };
 
 export const EASING = {
