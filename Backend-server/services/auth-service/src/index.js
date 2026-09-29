@@ -8,6 +8,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
+const { liveness, readiness } = require("@school-erp/shared/src/health");
 
 const authRoutes = require("./routes/authRoutes");
 const sessionRoutes = require("./routes/sessionRoutes");
@@ -53,9 +54,8 @@ app.use(
 app.use(morgan("dev"));
 app.use(express.json({ limit: "5mb" }));
 
-app.get("/health", (req, res) =>
-  res.json({ success: true, service: "auth-service", status: "UP" }),
-);
+app.get("/health", liveness("auth-service"));
+app.get("/health/ready", readiness("auth-service", mongoose));
 app.use("/api/auth/internal", internalRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/auth/sessions", sessionRoutes);

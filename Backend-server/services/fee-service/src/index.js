@@ -8,6 +8,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
+const { liveness, readiness } = require("@school-erp/shared/src/health");
 
 const feeStructureRoutes = require("./routes/feeStructureRoutes");
 const concessionRoutes = require("./routes/concessionRoutes");
@@ -73,9 +74,8 @@ mongoose
     process.exit(1);
   });
 
-app.get("/health", (req, res) =>
-  res.json({ success: true, service: "fee-service", status: "UP" }),
-);
+app.get("/health", liveness("fee-service"));
+app.get("/health/ready", readiness("fee-service", mongoose));
 app.use("/api/fees/structure", feeStructureRoutes);
 // Before the /api/fees catch-all so /api/fees/concessions never falls into
 // invoiceRoutes' parameterised paths.

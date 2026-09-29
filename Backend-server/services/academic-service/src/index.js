@@ -8,6 +8,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const morgan = require("morgan");
 const mongoose = require("mongoose");
+const { liveness, readiness } = require("@school-erp/shared/src/health");
 const imagekit = require("@school-erp/shared/src/config/imagekit");
 
 const timetableRoutes = require("./routes/timetableRoutes");
@@ -54,9 +55,8 @@ mongoose
     process.exit(1);
   });
 
-app.get("/health", (req, res) =>
-  res.json({ success: true, service: "academic-service", status: "UP" }),
-);
+app.get("/health", liveness("academic-service"));
+app.get("/health/ready", readiness("academic-service", mongoose));
 app.use("/api/timetable", timetableRoutes);
 app.use("/api/attendance", attendanceRoutes);
 app.use("/api/homework/submissions", homeworkSubmissionRoutes);

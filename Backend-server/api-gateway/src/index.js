@@ -9,6 +9,7 @@ const { createProxyMiddleware } = require("http-proxy-middleware");
 const app = express();
 const PORT = process.env.PORT || 5000;
 const PROXY_TIMEOUT_MS = Number(process.env.PROXY_TIMEOUT_MS || 300000);
+const STARTED_AT = Date.now();
 
 // Behind a reverse proxy / load balancer so express-rate-limit and req.ip
 // see the real client IP (required for correct rate limiting).
@@ -97,11 +98,15 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get("/health", (req, res) => {
+// Liveness: the gateway itself is up (never touches downstream services, so
+// a dependency blip can't fail the monolith startup poll or a deploy check).
+app.get("/health", (_req, res) => {
+  res.set("Cache-Control", "no-store");
   res.json({
     success: true,
     service: "api-gateway",
     status: "UP",
+    uptime: Math.round((Date.now() - STARTED_AT) / 1000),
     time: new Date().toISOString(),
   });
 });
@@ -291,6 +296,34 @@ routes.forEach(({ path, target }) => {
       },
     }),
   );
+});
+
+// Readiness: the gateway holds no DB connection of its own, so it fans out to
+// every downstream service's /health/ready (each of those pings MongoDB).
+// Registered after `routes` (defined above) and before the 404 fallback.
+app.get("/health/ready", async (_req, res) => {
+  res.set("Cache-Control", "no-store");
+  const targets = [...new Set(routes.map((r) => r.target))];
+  const services = await Promise.all(
+    targets.map(async (target) => {
+      try {
+        const r = await fetch(`${target}/health/ready`, {
+          signal: AbortSignal.timeout(4000),
+        });
+        return { target, ok: r.ok, status: r.status };
+      } catch (err) {
+        return { target, ok: false, error: err.message };
+      }
+    }),
+  );
+  const ok = services.every((s) => s.ok);
+  res.status(ok ? 200 : 503).json({
+    success: ok,
+    service: "api-gateway",
+    status: ok ? "UP" : "DEGRADED",
+    checks: { services },
+    time: new Date().toISOString(),
+  });
 });
 
 app.use((req, res) => {

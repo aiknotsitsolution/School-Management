@@ -8,6 +8,7 @@ const cors = require("cors");
 const helmet = require("helmet");
 const path = require("node:path");
 const mongoose = require("mongoose");
+const { liveness, readiness } = require("@school-erp/shared/src/health");
 const morgan = require("morgan");
 
 const studentRoutes = require("./routes/studentRoutes");
@@ -55,9 +56,8 @@ mongoose
     process.exit(1);
   });
 
-app.get("/health", (req, res) =>
-  res.json({ success: true, service: "student-service", status: "UP" }),
-);
+app.get("/health", liveness("student-service"));
+app.get("/health/ready", readiness("student-service", mongoose));
 app.use("/api/students/internal", internalRoutes);
 app.use("/api/students", studentRoutes);
 app.use("/api/admissions", enquiryRoutes);
