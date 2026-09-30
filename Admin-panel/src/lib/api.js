@@ -3,7 +3,7 @@ import { setTokens, logout } from "../store/authSlice";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
-  "https://school-management-production-d739.up.railway.app/api";
+  "https://school-management-production-e239.up.railway.app//api";
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
 
@@ -214,12 +214,17 @@ async function request(path, options = {})
   // super_admin impersonates a school via X-School-Id; everyone else's tenant
   // comes from their JWT.
   const includeSchoolHeader = user?.role === "super_admin" && passiveSchoolId;
+  // Campus scope for the whole session. The backend only narrows queries once
+  // BRANCH_SCOPE=on; until then the header is accepted and ignored.
+  const activeBranchId =
+    auth.activeBranchId || localStorage.getItem("erp_active_branch");
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(includeSchoolHeader ? { "X-School-Id": passiveSchoolId } : {}),
+      ...(activeBranchId ? { "X-Branch-Id": activeBranchId } : {}),
       ...options.headers,
     },
   });
@@ -298,6 +303,20 @@ export const api = {
   schools: {
     list: () => request("/auth/schools"),
     create: (school) => request("/auth/schools", json("POST", school)),
+  },
+  // Campus / branch management. `mine` is the switcher's data source and only
+  // returns branches the caller may act in; `quota` drives the "x of y used"
+  // hint on the Branches page.
+  branches: {
+    list: () => request("/branches"),
+    mine: () => request("/branches/mine"),
+    quota: () => request("/branches/quota"),
+    get: (id) => request(`/branches/${id}`),
+    create: (branch) => request("/branches", json("POST", branch)),
+    update: (id, branch) => request(`/branches/${id}`, json("PATCH", branch)),
+    setHeadOffice: (id) =>
+      request(`/branches/${id}/head-office`, json("POST", {})),
+    remove: (id) => request(`/branches/${id}`, { method: "DELETE" }),
   },
   sessions: {
     list: () => request("/auth/sessions"),
