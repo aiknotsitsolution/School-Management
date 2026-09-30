@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      "/api": "https://school-management-production-e239.up.railway.app/",
+      "/api": "https://school-management-production-e239.up.railway.app",
     },
   },
 });

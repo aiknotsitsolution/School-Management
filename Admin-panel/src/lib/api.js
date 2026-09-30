@@ -3,7 +3,7 @@ import { setTokens, logout } from "../store/authSlice";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
-  "https://school-management-production-e239.up.railway.app//api";
+  "https://school-management-production-e239.up.railway.app/api";
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
 
