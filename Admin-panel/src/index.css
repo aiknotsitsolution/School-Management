@@ -256,6 +256,39 @@
   background-color: rgb(2 6 20 / 0.55);
 }
 
+/* `text-white` resolves through --color-white, which the dark palette above
+   remaps to #111827 so that `bg-white` cards become dark surfaces. That is
+   the right call for backgrounds and the wrong one for text: white text only
+   ever sits on a coloured, gradient or ink surface, so flipping it along with
+   the surface renders dark-on-dark. The greeting hero is the visible case —
+   its headline, stat labels and date pill all sit on a violet gradient, and
+   the pill compounds it by layering text-white over bg-white/15. Backgrounds
+   keep the remap; only the text utilities are pinned back to real white.
+   Opacity steps cover every `text-white/<n>` in the codebase. */
+[data-theme="dark"] .text-white {
+  color: #fff;
+}
+[data-theme="dark"] .text-white\/35 { color: rgb(255 255 255 / 0.35); }
+[data-theme="dark"] .text-white\/40 { color: rgb(255 255 255 / 0.4); }
+[data-theme="dark"] .text-white\/45 { color: rgb(255 255 255 / 0.45); }
+[data-theme="dark"] .text-white\/50 { color: rgb(255 255 255 / 0.5); }
+[data-theme="dark"] .text-white\/55 { color: rgb(255 255 255 / 0.55); }
+[data-theme="dark"] .text-white\/60 { color: rgb(255 255 255 / 0.6); }
+[data-theme="dark"] .text-white\/70 { color: rgb(255 255 255 / 0.7); }
+[data-theme="dark"] .text-white\/80 { color: rgb(255 255 255 / 0.8); }
+[data-theme="dark"] .text-white\/85 { color: rgb(255 255 255 / 0.85); }
+
+/* Five call sites reach white through a state variant, and each has a
+   non-white resting colour (Landing's pricing badge sits on text-primary).
+   The override has to keep that state or the badge would go white at rest. */
+[data-theme="dark"] .hover\:text-white:hover,
+[data-theme="dark"] .focus\:text-white:focus {
+  color: #fff;
+}
+[data-theme="dark"] .group-hover\:text-white:is(:where(.group):hover *) {
+  color: #fff;
+}
+
 @keyframes upload-slide {
   0% { transform: translateX(-12%); }
   35% { transform: translateX(60%); }
@@ -358,6 +391,21 @@ body {
   animation: noiseShift .4s steps(2) infinite;
 }
 @keyframes noiseShift { 0% { transform: translateY(0); } 100% { transform: translateY(2px); } }
+
+/* Sidebar navigation feedback.
+   React Router wraps route changes in startTransition, which holds the previous
+   page until the next one commits and suppresses the Suspense fallback — so a
+   navigation with a cold chunk reads as a dead click. This bar (plus the
+   skeleton in NavProgress.jsx) is the feedback that transition removes. */
+.nav-progress {
+  width: 34%;
+  background: var(--color-primary);
+  animation: nav-progress 1.05s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes nav-progress {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(340%); }
+}
 
 /* Windows-style splash screen */
 .splash-exit {

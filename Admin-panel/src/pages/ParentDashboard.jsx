@@ -171,9 +171,7 @@ export default function ParentDashboard() {
           month: "long",
           year: "numeric",
         })}
-        quote="Education is the most powerful weapon which you can use to change the world."
-        quoteTitle="Parent portal"
-        right={
+        stats={
           <>
             <GlassStat value={children.length} label="Children" />
             <GlassStat value={unread} label="Unread alerts" />

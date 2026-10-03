@@ -408,9 +408,7 @@ export default function TeacherDashboard() {
           year: "numeric",
         })}
         image={school?.settings?.bannerImage}
-        quote="Every lesson you plan is a life you shape."
-        quoteTitle={school?.name || "Teaching workspace"}
-        right={
+        stats={
           <>
             <GlassStat value={presentCount} label="Present today" />
             <GlassStat value={openHomework.length} label="Open homework" />

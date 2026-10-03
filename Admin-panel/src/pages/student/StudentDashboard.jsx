@@ -779,13 +779,6 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
               </Link>
             </div>
           </div>
-
-          <blockquote className="hidden w-[170px] shrink-0 flex-col gap-2 rounded-2xl bg-white/95 px-4 py-3 shadow-[0_18px_40px_-24px_rgba(11,25,44,0.7)] lg:flex xl:w-[200px]">
-            <p className="font-display text-[14px] font-bold leading-snug text-ink">
-              “Small steps every day lead to big dreams.”
-            </p>
-            <span className="h-1 w-12 rounded-full bg-[#E9424E]" aria-hidden="true" />
-          </blockquote>
         </div>
       </section>
 

@@ -123,6 +123,7 @@ import {
 import { hasPermission, legacyRole } from "./lib/permissions";
 import { resolvePersona } from "./lib/persona";
 import SplashScreen from "./components/SplashScreen";
+import NavProgress from "./components/NavProgress";
 
 // Shown when a non-super_admin lands in a suspended school. Never redirects
 // into /subscription (that route requires school:settings and would loop
@@ -285,6 +286,9 @@ export default function App() {
   return (
     <BrowserRouter>
       <SplashScreen />
+      {/* Outside <Routes> so it survives navigation and can report the wait
+          that startTransition otherwise hides. */}
+      <NavProgress />
       <Suspense fallback={<RouteFallback />}>
       <Routes>
         <Route path="/" element={<LandingGate />} />

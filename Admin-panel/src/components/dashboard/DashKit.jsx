@@ -140,19 +140,6 @@ export const HERO_GRADIENTS = {
   ink: "from-[#0B192C] via-[#172033] to-[#1E3A5F]",
 };
 
-export const HERO_ACCENT = {
-  blue: "#E9424E",
-  indigo: "#F59E0B",
-  emerald: "#FDE68A",
-  slate: "#93C5FD",
-  plum: "#FBCFE8",
-  teal: "#FCD34D",
-  amber: "#FED7AA",
-  rose: "#FECACA",
-  sky: "#BAE6FD",
-  ink: "#C7D2FE",
-};
-
 /* ── Data helpers ───────────────────────────────────────────────────────── */
 
 // Month-by-month bucketing for sparklines and trend areas.
@@ -311,15 +298,13 @@ export function HeroBanner({
   meta,
   dateLabel,
   image,
-  quote,
-  quoteTitle,
   right,
+  stats,
   children,
   className = "",
   showGreetingIcon = true,
 }) {
   const grad = HERO_GRADIENTS[gradient] || HERO_GRADIENTS.blue;
-  const accentBar = HERO_ACCENT[gradient] || HERO_ACCENT.blue;
 
   return (
     <section
@@ -351,7 +336,7 @@ export function HeroBanner({
         aria-hidden="true"
       />
 
-      <div className="relative z-10 flex min-h-[200px] flex-col gap-6 p-6 sm:min-h-[216px] sm:flex-row sm:items-center sm:p-8">
+      <div className="relative z-10 flex min-h-[200px] flex-col gap-4 p-6 sm:min-h-[216px] sm:flex-row sm:flex-wrap sm:items-center sm:px-8">
         <div className="min-w-0 max-w-full lg:max-w-[46%]">
           {(eyebrow || name) && (
             <p className="flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-white/80">
@@ -369,25 +354,30 @@ export function HeroBanner({
           )}
           {meta && <p className="mt-1.5 text-[12.5px] font-medium tracking-wide text-white/70">{meta}</p>}
           {dateLabel && (
-            <span className="mt-3.5 inline-flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 text-[12.5px] font-medium text-white ring-1 ring-inset ring-white/20">
+            <span className="mt-2.5 inline-flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 text-[12.5px] font-medium text-white ring-1 ring-inset ring-white/20">
               <CalendarDays size={14} aria-hidden="true" />
               {dateLabel}
             </span>
           )}
         </div>
 
-        {quote && (
-          <blockquote className="hidden w-[190px] shrink-0 flex-col gap-2 rounded-2xl bg-white/95 px-4 py-3.5 shadow-[0_18px_40px_-24px_rgba(11,25,44,0.7)] xl:flex">
-            <p className="font-display text-[14px] font-bold leading-snug text-ink">{quote}</p>
-            <span className="h-1 w-12 rounded-full" style={{ background: accentBar }} aria-hidden="true" />
-            {quoteTitle && (
-              <p className="text-[11px] font-medium text-slate-text/60">{quoteTitle}</p>
-            )}
-          </blockquote>
-        )}
-
         {right && <div className="flex flex-wrap items-start gap-3 sm:ml-auto">{right}</div>}
         {children}
+        {/*
+          Stats get their own full-width row at the foot of the hero, content
+          pushed right. They used to live in `right`, where `sm:ml-auto` put
+          them top-right — directly over the banner image, which is absolutely
+          positioned across the right 52-62% at full height. Wrapping them to
+          their own line drops them clear of the greeting, and `justify-end`
+          keeps them on the right where they read as a stat rail. `w-full` is
+          what forces the wrap; `mt-auto` pins the row to the bottom when the
+          hero is taller than its content.
+        */}
+        {stats && (
+          <div className="flex w-full flex-wrap items-start justify-end gap-3 sm:mt-auto">
+            {stats}
+          </div>
+        )}
       </div>
     </section>
   );

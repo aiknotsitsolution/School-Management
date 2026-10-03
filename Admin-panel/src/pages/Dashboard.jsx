@@ -462,7 +462,6 @@ export default function Dashboard() {
         gradient="indigo"
         eyebrow={greeting()}
         name={firstName}
-        title={`${greeting()}, ${firstName}`}
         meta={
           `${studentStats.total.toLocaleString("en-IN")} students · ` +
           `${studentStats.active.toLocaleString("en-IN")} active · ` +
@@ -471,9 +470,7 @@ export default function Dashboard() {
         }
         dateLabel={dateLabel}
         image={school?.settings?.bannerImage}
-        quote="Great schools are built on great data."
-        quoteTitle={school?.name || "School command centre"}
-        right={
+        stats={
           <>
             <GlassStat value={`${attendancePercentage}%`} label="Attendance today" />
             <GlassStat value={pendingEnquiries} label="New enquiries" />

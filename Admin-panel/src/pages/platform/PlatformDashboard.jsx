@@ -207,9 +207,7 @@ export default function PlatformDashboard() {
           month: "long",
           year: "numeric",
         })}
-        quote="Every school on the network is a relationship, not a row."
-        quoteTitle="Multi-tenant command centre"
-        right={
+        stats={
           <>
             <GlassStat value={totalSchools} label="Schools" />
             <GlassStat value={paidCount} label="Paying schools" />

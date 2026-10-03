@@ -174,9 +174,7 @@ export default function StaffDashboard() {
           year: "numeric",
         })}
         image={school?.settings?.bannerImage}
-        quote="Every role keeps the school running."
-        quoteTitle={school?.name || "Staff workspace"}
-        right={
+        stats={
           <>
             <GlassStat value={fmtMoney(latestPay?.netPay) || "—"} label="Latest take-home" />
             <GlassStat value={`${leaveCounts.Approved}/${leaves.length}`} label="Leaves approved" />

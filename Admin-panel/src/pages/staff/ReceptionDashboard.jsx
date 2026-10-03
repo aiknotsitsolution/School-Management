@@ -186,9 +186,7 @@ emergencyCount > 0
           month: "long",
           year: "numeric",
         })}
-        quote="Welcome everyone who walks through our gate — that is the whole job."
-        quoteTitle="Front office"
-        right={
+        stats={
           <>
             <GlassStat value={stats.total} label="Enquiries" />
             <GlassStat value={stats.new} label="To follow up" />

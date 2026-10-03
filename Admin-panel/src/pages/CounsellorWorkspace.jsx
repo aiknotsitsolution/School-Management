@@ -147,9 +147,7 @@ export default function CounsellorWorkspace() {
           month: "long",
           year: "numeric",
         })}
-        quote="A parent's first conversation with a school decides everything that follows."
-        quoteTitle="Admissions desk"
-        right={
+        stats={
           <>
             <GlassStat value={stats?.total ?? 0} label="Students" />
             <GlassStat value={stats?.incomplete ?? 0} label="Incomplete" />

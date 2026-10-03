@@ -184,9 +184,7 @@ export default function TransportDashboard() {
           month: "long",
           year: "numeric",
         })}
-        quote="The safest classroom for some children is the bus that brings them home."
-        quoteTitle="Fleet operations"
-        right={
+        stats={
           <>
             <GlassStat value={stats.routes} label="Routes" />
             <GlassStat value={stats.live} label="Live now" />

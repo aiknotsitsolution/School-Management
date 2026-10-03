@@ -7,6 +7,7 @@ const {
 } = require("../models/Subscription");
 const BillingInvoice = require("../models/BillingInvoice");
 const School = require("../models/School");
+const Branch = require("../models/Branch");
 const User = require("../models/User");
 const AuditLog = require("../models/AuditLog");
 const PlatformSetting = require("../models/PlatformSetting");
@@ -1522,6 +1523,49 @@ const updateSchoolProfile = async (req, res) =>
         ? `School profile updated: ${changed} (code: ${previous.code} → ${attemptedCode})`
         : `School profile updated: ${changed}`,
     });
+
+    // The head-office branch is minted from the school code at creation time
+    // (onboarding and backfill-branches.js both do this), so a corrected school
+    // code otherwise leaves the Branches page advertising the retired one.
+    // Only the head office that still carries the previous code is touched —
+    // a branch whose code was set deliberately keeps it, and a collision with
+    // another branch is reported rather than failing an already-applied write.
+    if (codeMoved)
+    {
+      try
+      {
+        const headOffice = await Branch.findOne({
+          schoolId: school._id,
+          isHeadOffice: true,
+          isDeleted: false,
+          code: previous.code,
+        });
+        if (headOffice)
+        {
+          const clash = await Branch.findOne({
+            schoolId: school._id,
+            code: attemptedCode,
+            _id: { $ne: headOffice._id },
+            isDeleted: false,
+          });
+          if (clash)
+          {
+            console.warn(`[platform] head-office branch code not synced for ${school.code}: "${attemptedCode}" is already used by another branch`);
+          }
+          else
+          {
+            headOffice.code = attemptedCode;
+            await headOffice.save();
+          }
+        }
+      }
+      catch (branchErr)
+      {
+        // Non-fatal: the school row is already updated, so failing here would
+        // turn a successful profile edit into a 500 and a half-applied request.
+        console.error(`[platform] head-office branch code sync failed for ${school.code}:`, branchErr.message);
+      }
+    }
 
     res.json({ success: true, message: "School updated", data: toSchoolJson(school) });
   } catch (err)

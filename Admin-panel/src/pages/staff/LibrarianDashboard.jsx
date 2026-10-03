@@ -178,9 +178,7 @@ export default function LibrarianDashboard() {
           month: "long",
           year: "numeric",
         })}
-        quote="A library is not a luxury but one of the necessities of life."
-        quoteTitle="Reading room"
-        right={
+        stats={
           <>
             <GlassStat value={stats.titles} label="Titles" />
             <GlassStat value={stats.available} label="On shelf" />

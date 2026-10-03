@@ -47,6 +47,7 @@ import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
 import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 
 import useSidebarState, { isRouteActive } from "./useSidebarState";
+import { prefetchRoute } from "../lib/routeLoaders";
 import { BRAND, DURATION, EASING, SB, SIDEBAR_TOKENS, SIDEBAR_TYPE, softPrimary } from "./sidebarTheme";
 import PageArtwork from "../components/PageArtwork";
 
@@ -389,6 +390,13 @@ function NavItem({
       component={RouterLink}
       to={item.to}
       {...itemProps}
+      // Warm the route's chunk while the pointer is still travelling to it.
+      // Navigation runs inside React Router's startTransition, which holds the
+      // old page until the new one is ready; with the chunk already fetched the
+      // swap lands in a frame instead of after the import. Duplicate calls are
+      // free — the module cache absorbs them.
+      onMouseEnter={() => prefetchRoute(item.to)}
+      onFocus={() => prefetchRoute(item.to)}
       onClick={() => onNavigate?.(item)}
       aria-label={collapsed ? item.label : undefined}
       secondaryAction={

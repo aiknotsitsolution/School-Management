@@ -215,9 +215,7 @@ export default function AccountantDashboard() {
           month: "long",
           year: "numeric",
         })}
-        quote="A clean ledger is the quiet foundation of a trusted school."
-        quoteTitle="Accounts desk"
-        right={
+        stats={
           <>
             <GlassStat value={fmtMoney(stats.todayPaid)} label="Today" />
             <GlassStat value={fmtMoney(stats.monthPaid)} label="This month" />
