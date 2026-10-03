@@ -3,6 +3,9 @@ const mongoose = require("mongoose");
 const homeworkSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the homework belongs to; set from the branch of the class it is
+    // posted for.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     assignType: { type: String, enum: ["student", "staff"], default: "student" },
     class: { type: String },
     section: { type: String },
@@ -24,6 +27,6 @@ const homeworkSchema = new mongoose.Schema(
 );
 
 // Hot list query: tenant + class/section scope.
-homeworkSchema.index({ schoolId: 1, class: 1, section: 1 });
+homeworkSchema.index({ schoolId: 1, branchId: 1, class: 1, section: 1 });
 
 module.exports = mongoose.model("Homework", homeworkSchema);

@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const invoiceSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the invoice was raised at; normally the student's own branch.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     studentId: { type: String, required: true },
     class: { type: String },
     feeType: { type: String, required: true },

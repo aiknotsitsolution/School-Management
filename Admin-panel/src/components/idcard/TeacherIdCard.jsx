@@ -66,7 +66,10 @@ export function staffIdCardMarkup({ teacher, school }) {
   const schoolName = school?.name || "Zipschool OS";
   const shortName = school?.shortName || "SCHOOL";
   const session = sessionLabel(school) || String(new Date().getFullYear());
-  const idNumber = teacher.idCardNumber || "—";
+  // The Employee ID is the person's only identifier on the card — the
+  // server-side idCardNumber (NDSEMP0001-2026-7B34 style) is internal state
+  // used to track issuance and is never printed.
+  const idNumber = teacher.employeeId || "—";
   const issuedDate = formatDate(teacher.idCardIssuedAt);
 
   const cardBase =
@@ -88,7 +91,7 @@ export function staffIdCardMarkup({ teacher, school }) {
           <div style="font-size:17px;font-weight:800;color:#0f172a;line-height:1.2;">${esc(teacher.name || "—")}</div>
           <div style="margin-top:10px;font-size:11.5px;color:#475569;display:flex;flex-direction:column;gap:6px;">
             <div><span style="text-transform:uppercase;letter-spacing:.06em;font-weight:700;font-size:9px;color:#94a3b8;">Designation</span> <span style="font-weight:700;color:#0f172a;">${esc(teacher.designation || "—")}</span></div>
-            <div><span style="text-transform:uppercase;letter-spacing:.06em;font-weight:700;font-size:9px;color:#94a3b8;">Staff ID</span> <span style="font-weight:700;font-family:ui-monospace,monospace;color:#0f172a;">${esc(idNumber)}</span></div>
+            <div><span style="text-transform:uppercase;letter-spacing:.06em;font-weight:700;font-size:9px;color:#94a3b8;">Employee ID</span> <span style="font-weight:700;font-family:ui-monospace,monospace;color:#0f172a;">${esc(idNumber)}</span></div>
             ${teacher.department ? `<div><span style="text-transform:uppercase;letter-spacing:.06em;font-weight:700;font-size:9px;color:#94a3b8;">Department</span> <span style="font-weight:600;color:#334155;">${esc(teacher.department)}</span></div>` : ""}
           </div>
         </div>
@@ -130,9 +133,9 @@ export function staffIdCardMarkup({ teacher, school }) {
       <div style="position:absolute;left:18px;right:18px;bottom:34px;display:flex;align-items:center;justify-content:space-between;gap:8px;">
         <div style="display:flex;align-items:center;gap:8px;">
           <div style="background:repeating-linear-gradient(90deg,#0f172a 0 1px,transparent 1px 3px);opacity:.55;width:80px;height:24px;"></div>
-          <span style="background:${accent};border-radius:8px;color:#fff;font-family:ui-monospace,monospace;font-size:11px;font-weight:700;padding:3px 10px;">ID ${esc(teacher.idCardNumber || teacher.employeeId || "—")}</span>
+          <span style="background:${accent};border-radius:8px;color:#fff;font-family:ui-monospace,monospace;font-size:11px;font-weight:700;padding:3px 10px;">ID ${esc(teacher.employeeId || "—")}</span>
         </div>
-        ${teacher.idCardNumber ? `<span style="font-size:9px;color:#94a3b8;text-align:right;">Issued ${esc(issuedDate)}</span>` : ""}
+        ${teacher.idCardIssuedAt ? `<span style="font-size:9px;color:#94a3b8;text-align:right;">Issued ${esc(issuedDate)}</span>` : ""}
       </div>
       <div style="position:absolute;left:18px;right:18px;bottom:8px;font-size:8.5px;color:#94a3b8;font-style:italic;text-align:center;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${esc(s.footerNote)}</div>
     </div>`;

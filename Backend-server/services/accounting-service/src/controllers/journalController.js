@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Account = require("../models/Account");
 const JournalEntry = require("../models/JournalEntry");
 const { ensureSystemAccounts } = require("../services/coaSeed");
@@ -6,7 +7,7 @@ const { validateEntryLines } = require("../utils/ledger");
 const getJournal = async (req, res) => {
   try {
     const { from, to, source, refId } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(JournalEntry, req, { schoolId: req.tenantId })
     if (source) filter.source = source;
     if (refId) filter.refId = refId;
     if (from || to) {
@@ -25,7 +26,7 @@ const createJournal = async (req, res) => {
   try {
     const { date, memo, lines } = req.body || {};
     await ensureSystemAccounts(req.tenantId);
-    const accounts = await Account.find({ schoolId: req.tenantId, active: true }).select("code").lean();
+    const accounts = await Account.find(scopeQuery(Account, req, { schoolId: req.tenantId, active: true })).select("code").lean();
     const validCodes = new Set(accounts.map((a) => a.code));
     const check = validateEntryLines(lines, validCodes);
     if (!check.ok) return res.status(400).json({ success: false, message: check.error });
@@ -46,7 +47,7 @@ const createJournal = async (req, res) => {
 
 const deleteJournal = async (req, res) => {
   try {
-    const entry = await JournalEntry.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const entry = await JournalEntry.findOne(scopeQuery(JournalEntry, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!entry) return res.status(404).json({ success: false, message: "Entry not found" });
     if (entry.source !== "manual") {
       return res.status(400).json({

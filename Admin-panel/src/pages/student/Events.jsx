@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { PartyPopper, MapPin, Clock, CalendarDays } from "lucide-react";
 import { PageIntro, Card, Pill } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
 import { fmtDate } from "./useStudentContext";
 
@@ -24,7 +25,7 @@ export default function Events() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="School Activities"
-        title="Events"
+        title="Events" art="calendar"
         description="Upcoming and recent events shared by the school."
       />
 
@@ -33,7 +34,7 @@ export default function Events() {
       ) : events.length === 0 ? (
         <Card>
           <div className="py-10 text-center">
-            <PartyPopper size={40} className="mx-auto text-slate-text/30 mb-3" />
+            <PageArtwork name="calendar" size={64} className="mx-auto mb-4" />
             <p className="text-[15px] font-semibold text-ink">No events announced</p>
             <p className="text-[13px] text-slate-text/70 mt-1">School events and competitions will appear here.</p>
           </div>

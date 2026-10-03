@@ -174,7 +174,25 @@ async function resolveTeacherScope({ tenantId, user }) {
     return allScopes.some((s) => s.class === c && s.section === sec);
   };
 
-  return { staff, teaching, classTeacher, allScopes, hasClassTeacher: classTeacher.length > 0, has };
+  // The exact sections of `cls` this teacher is assigned to. Used to resolve a
+  // section-less request to the single assigned section, and to constrain
+  // class-level aggregates so they can never widen past the teacher's own
+  // sections (a teacher assigned 8-A must not read 8-B rows via ?class=8).
+  const sectionsFor = (cls) => {
+    const c = cls == null ? null : String(cls).trim();
+    if (!c) return [];
+    return allScopes.filter((s) => s.class === c).map((s) => s.section);
+  };
+
+  return {
+    staff,
+    teaching,
+    classTeacher,
+    allScopes,
+    hasClassTeacher: classTeacher.length > 0,
+    has,
+    sectionsFor,
+  };
 }
 
 module.exports = {

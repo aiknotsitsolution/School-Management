@@ -12,6 +12,7 @@ const { liveness, readiness } = require("@school-erp/shared/src/health");
 
 const bookRoutes = require("./routes/bookRoutes");
 const issueRoutes = require("./routes/issueRoutes");
+const digitalRoutes = require("./routes/digitalRoutes");
 
 const app = express();
 const PORT = process.env.LIBRARY_SERVICE_PORT || 5007;
@@ -44,6 +45,7 @@ app.get("/health", liveness("library-service"));
 app.get("/health/ready", readiness("library-service", mongoose));
 app.use("/api/library/books", bookRoutes);
 app.use("/api/library/issues", issueRoutes);
+app.use("/api/library/digital", digitalRoutes);
 
 app.use((err, req, res, next) =>
 {

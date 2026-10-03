@@ -12,8 +12,7 @@
     "docker:down": "docker-compose down",
     "docker:logs": "docker-compose logs -f",
     "db:clean": "node scripts/clean-db.js",
-    "bootstrap:super-admin": "node scripts/bootstrap-super-admin.js",
-    "test": "node --test services/auth-service/test/*.test.js services/fee-service/test/*.test.js services/staff-service/test/*.test.js services/student-service/test/*.test.js services/academic-service/test/*.test.js services/accounting-service/test/*.test.js services/communication-service/test/*.test.js"
+    "bootstrap:super-admin": "node scripts/bootstrap-super-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

@@ -132,7 +132,7 @@ export default function ForgotPassword() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-paper">
-      <div className="relative hidden lg:flex flex-col justify-between p-12 bg-ink text-white overflow-hidden">
+      <div className="relative hidden lg:flex flex-col justify-between p-12 bg-ink text-white overflow-hidden dark:bg-slate-200 dark:text-ink">
         <img
           src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1200&h=1400&fit=crop"
           alt=""
@@ -147,32 +147,32 @@ export default function ForgotPassword() {
           />
           <div>
             <p className="font-display font-bold text-lg leading-tight">{brand.name}</p>
-            <p className="text-white/50 text-[12.5px]">{brand.tagline}</p>
+            <p className="text-white/50 dark:text-ink/50 text-[12.5px]">{brand.tagline}</p>
           </div>
         </div>
         <div className="relative z-10 max-w-md">
           <h2 className="font-display text-4xl font-bold leading-tight">
             Account recovery <span className="text-primary">your way.</span>
           </h2>
-          <p className="text-white/60 mt-4 text-[14.5px] leading-relaxed">
+          <p className="text-white/60 dark:text-ink/60 mt-4 text-[14.5px] leading-relaxed">
             Reset your password securely using a one-time OTP sent to your email address.
           </p>
           <div className="flex gap-4 mt-8 pt-8 border-t border-white/10 text-[13px]">
-            <div className="flex items-center gap-2 text-white/50">
+            <div className="flex items-center gap-2 text-white/50 dark:text-ink/50">
               <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[11px] font-bold">1</div>
               Enter email
             </div>
-            <div className="flex items-center gap-2 text-white/50">
+            <div className="flex items-center gap-2 text-white/50 dark:text-ink/50">
               <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[11px] font-bold">2</div>
               Verify OTP
             </div>
-            <div className="flex items-center gap-2 text-white/50">
+            <div className="flex items-center gap-2 text-white/50 dark:text-ink/50">
               <div className="w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-[11px] font-bold">3</div>
               New password
             </div>
           </div>
         </div>
-        <p className="relative z-10 text-white/35 text-[12px]">{brand.affiliation}</p>
+        <p className="relative z-10 text-white/35 dark:text-ink/35 text-[12px]">{brand.affiliation}</p>
       </div>
 
       <div className="relative flex items-center justify-center p-6 sm:p-12 overflow-hidden">

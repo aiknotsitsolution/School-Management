@@ -9,6 +9,10 @@ const userSchema = new mongoose.Schema(
     refId: { type: String, index: true },
     role: { type: String, index: true },
     designation: { type: String, default: null },
+    // Display name. The field exists on the auth-service User document, but
+    // this schema is `strict`, so it has to be declared here or the directory
+    // search in the messaging service cannot read it.
+    name: { type: String, default: "" },
     isActive: { type: Boolean, default: true },
     // parent accounts carry their linked children (admissionNos) in the JWT;
     // mirrored here so class-tagged fan-out and broadcast can reach parents

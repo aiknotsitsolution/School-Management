@@ -3,6 +3,11 @@ const mongoose = require("mongoose");
 const studentSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the student is enrolled at. This is the anchor for everything else:
+    // their attendance, fees, report cards and bus route all resolve through
+    // the student, so a branch roster is just a filter on this field. null =
+    // school-wide (single-campus default, and rows predating branch scoping).
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     admissionNo: { type: String, required: true },
     userId: { type: String, default: null }, // link to auth-service User._id
     name: { type: String, required: true },

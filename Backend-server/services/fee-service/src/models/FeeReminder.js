@@ -7,6 +7,9 @@ const mongoose = require("mongoose");
 // when the notification push fails, so the next run can retry delivery.
 const feeReminderSchema = new mongoose.Schema(
   {
+    // Campus this record belongs to. null = school-wide, or a row
+    // that predates branch scoping.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: "FeeInvoice", required: true },
     studentId: { type: String, required: true },
@@ -17,6 +20,8 @@ const feeReminderSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+feeReminderSchema.index({ schoolId: 1, branchId: 1, createdAt: -1 });
 
 feeReminderSchema.index({ schoolId: 1, invoiceId: 1, channel: 1, kind: 1 }, { unique: true });
 

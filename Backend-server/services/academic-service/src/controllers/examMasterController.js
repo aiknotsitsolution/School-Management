@@ -114,6 +114,8 @@ const SUBJECT_KIND = {
   // rows; every new subject is written as a plain tenant row (scope "tenant").
   defaults: (req) => ({ scope: "tenant" }),
   seeds: () => SUBJECT_SEEDS.map((name) => ({ name, className: "" })),
+  // Campus-owned: each branch can run its own subject list.
+  branchScoped: true,
 };
 
 const MASTERS = {
@@ -146,6 +148,7 @@ const MASTERS = {
       return name ? { key: name } : null;
     },
     seeds: () => CLASS_SEEDS.map((name) => ({ name })),
+    branchScoped: true,
   },
   sections: {
     label: "Section",
@@ -164,9 +167,12 @@ const MASTERS = {
       CLASS_SEEDS.flatMap((className) =>
         SECTION_SEEDS.map((name) => ({ className, name })),
       ),
+    branchScoped: true,
   },
   subjects: SUBJECT_KIND,
   "time-slots": {
+    // Deliberately school-wide: a shared bell schedule is one per school, so
+    // every branch's timetables resolve against the same period boundaries.
     label: "Time slot",
     model: TimeSlot,
     sort: { startTime: 1, endTime: 1 },
@@ -240,6 +246,7 @@ const MASTERS = {
       return name ? { key: name } : null;
     },
     seeds: () => ROOM_SEEDS.map((name) => ({ name })),
+    branchScoped: true,
   },
   "attendance-statuses": {
     label: "Attendance status",
@@ -355,8 +362,9 @@ const controller = createMasterController({
 // compatibility leniency).
 const validateRefs = async (req, res) => {
   try {
-    const missing = await findMissingMasterRefs({
-      schoolId: req.tenantId,
+      const missing = await findMissingMasterRefs({
+        schoolId: req.tenantId,
+        branchId: req.branchId,
       class: req.body.class,
       section: req.body.section,
       subject: req.body.subject,

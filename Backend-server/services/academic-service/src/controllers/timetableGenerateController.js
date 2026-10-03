@@ -10,6 +10,7 @@
 // dryRun  -> returns the computed plan without writing
 // overwrite=false (default) -> days that already have a timetable are skipped
 
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Timetable = require("../models/Timetable");
 const TimeSlot = require("../models/TimeSlot");
 const {
@@ -61,7 +62,7 @@ const generateTimetable = async (req, res) => {
         .json({ success: false, message: `days must include at least one of: ${DAYS.join(", ")}` });
     }
 
-    const slots = await TimeSlot.find({ schoolId: req.tenantId, active: true })
+    const slots = await TimeSlot.find(scopeQuery(TimeSlot, req, { schoolId: req.tenantId, active: true }))
       .sort({ startTime: 1 })
       .lean();
     if (!slots.length) {
@@ -97,22 +98,22 @@ const generateTimetable = async (req, res) => {
     const plannedByDay = new Map();
 
     for (const day of requestedDays) {
-      const existing = await Timetable.findOne({
+      const existing = await Timetable.findOne(scopeQuery(Timetable, req, {
         schoolId: req.tenantId,
         class: cls,
         section,
         day,
-      }).lean();
+      })).lean();
       if (existing && !overwrite) {
         skipped.push(day);
         continue;
       }
 
-      const others = await Timetable.find({
+      const others = await Timetable.find(scopeQuery(Timetable, req, {
         schoolId: req.tenantId,
         day,
         _id: existing ? { $ne: existing._id } : { $ne: null },
-      }).lean();
+      })).lean();
       const otherDocs = others.map((d) => ({
         label: `${d.class}-${d.section}`,
         periods: d.periods,
@@ -171,8 +172,9 @@ const generateTimetable = async (req, res) => {
     for (const { day, periods } of plan) {
       const { existing } = plannedByDay.get(day);
       const found = await findCrossClassConflicts({
-        schoolId: req.tenantId,
-        day,
+            schoolId: req.tenantId,
+            branchId: req.branchId,
+            day,
         periods,
         currentId: existing ? existing._id : null,
       });
@@ -188,8 +190,8 @@ const generateTimetable = async (req, res) => {
     const updated = [];
     for (const { day, periods } of plan) {
       const { existing } = plannedByDay.get(day);
-      await Timetable.findOneAndUpdate(
-        { schoolId: req.tenantId, class: cls, section, day },
+      await Timetable.findOneAndUpdate(scopeQuery(Timetable, req, 
+        { schoolId: req.tenantId, class: cls, section, day }),
         { class: cls, section, day, periods, schoolId: req.tenantId },
         { new: true, upsert: true, runValidators: true }
       );

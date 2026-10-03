@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Event = require("../models/Event");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
@@ -24,7 +25,7 @@ const createEvent = async (req, res) => {
 
 const getEvents = async (req, res) => {
   try {
-    const filter = { schoolId: req.tenantId, $or: [{ audience: req.user.role }, { audience: "all" }] };
+    const filter = scopeQuery(Event, req, { schoolId: req.tenantId, $or: [{ audience: req.user.role }, { audience: "all" }] })
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
       Event.find(filter).sort({ date: 1 }).skip(skip).limit(limit),
@@ -38,8 +39,8 @@ const getEvents = async (req, res) => {
 
 const updateEvent = async (req, res) => {
   try {
-    const event = await Event.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const event = await Event.findOneAndUpdate(scopeQuery(Event, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       pick(req.body, EVENT_FIELDS),
       { new: true, runValidators: true },
     );
@@ -55,7 +56,7 @@ const updateEvent = async (req, res) => {
 
 const deleteEvent = async (req, res) => {
   try {
-    const event = await Event.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const event = await Event.findOneAndDelete(scopeQuery(Event, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!event) return res.status(404).json({ success: false, message: "Event not found" });
     res.json({ success: true, message: "Event deleted" });
   } catch (err) {

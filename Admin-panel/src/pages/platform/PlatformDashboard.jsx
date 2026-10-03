@@ -148,12 +148,12 @@ export default function PlatformDashboard() {
   if (error || !data) {
     return (
       <div className="space-y-5">
-        <HeroBanner
-          gradient="ink"
-          eyebrow="Platform Owner"
-          name="Platform"
-          title="Platform Dashboard"
-          meta="Network analytics are unavailable right now"
+<HeroBanner
+    gradient="ink"
+    eyebrow="Platform Owner"
+    name="Platform"
+    title="Platform Dashboard"
+    meta="Network analytics are unavailable right now"
         />
         <Panel>
           <EmptyPanel
@@ -195,11 +195,11 @@ export default function PlatformDashboard() {
   return (
     <div className="space-y-5 sm:space-y-6">
       {/* ── Hero ──────────────────────────────────────────────────── */}
-      <HeroBanner
-        gradient="ink"
-        eyebrow={greeting()}
-        name="Platform Owner"
-        title="Platform Dashboard"
+<HeroBanner
+    gradient="ink"
+    eyebrow={greeting()}
+    name="Platform Owner"
+    title="Platform Dashboard"
         meta="Live snapshot across the entire multi-tenant network — growth, subscriptions, revenue, onboarding and operator attention items."
         dateLabel={new Date().toLocaleDateString("en-IN", {
           weekday: "long",
@@ -292,6 +292,8 @@ export default function PlatformDashboard() {
           icon={TrendingUp}
           iconTone={ACCENTS.primary.icon}
           subtitle="New schools onboarded over the last 12 months"
+          decor="trend"
+          decorTone={ACCENTS.success.text}
         >
           {growth.length ? (
             <ResponsiveContainer width="100%" height={250}>
@@ -341,6 +343,8 @@ export default function PlatformDashboard() {
           icon={Layers}
           iconTone={ACCENTS.teal.icon}
           subtitle="Every school by lifecycle state"
+          decor="stack"
+          decorTone={ACCENTS.info.text}
         >
           {!subDistribution.length ? (
             <EmptyPanel
@@ -408,6 +412,8 @@ export default function PlatformDashboard() {
           icon={Route}
           iconTone={ACCENTS.violet.icon}
           subtitle="Schools per subscription plan"
+          decor="ledger"
+          decorTone={ACCENTS.violet.text}
         >
           {planBars.length ? (
             <ResponsiveContainer width="100%" height={230}>
@@ -444,6 +450,8 @@ export default function PlatformDashboard() {
           icon={Server}
           iconTone={ACCENTS.info.icon}
           subtitle="Where schools drop out during setup"
+          decor="funnel"
+          decorTone={ACCENTS.warn.text}
         >
           {funnel.length ? (
             <BarList
@@ -470,6 +478,8 @@ export default function PlatformDashboard() {
           icon={CreditCard}
           iconTone={ACCENTS.success.icon}
           subtitle="Invoiced vs realised"
+          decor="coins"
+          decorTone={ACCENTS.success.text}
         >
           <div className="space-y-4">
             <div className="grid grid-cols-2 gap-3">
@@ -532,6 +542,8 @@ export default function PlatformDashboard() {
               <Pill tone="info">{exp.in30} in 30d</Pill>
             </div>
           }
+          decor="hourglass"
+          decorTone={ACCENTS.alert.text}
         >
           {exp.items?.length ? (
             <>
@@ -578,6 +590,8 @@ export default function PlatformDashboard() {
           icon={Activity}
           iconTone={ACCENTS.info.icon}
           subtitle="Audit trail of operator actions"
+          decor="pulse"
+          decorTone={ACCENTS.neutral.text}
         >
           {activity.length ? (
             <>

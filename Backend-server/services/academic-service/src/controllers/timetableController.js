@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Timetable = require("../models/Timetable");
 const {
   findMissingMasterRefs,
@@ -72,13 +73,15 @@ const upsertTimetable = async (req, res) => {
     // Referential integrity: class/section/period-subjects/period-rooms must
     // resolve to active masters when this school has configured the catalogs.
     const missing = [
-      ...(await findMissingMasterRefs({ schoolId: req.tenantId, class: cls, section })),
-      ...(await findMissingSubjects({
-        schoolId: req.tenantId,
-        subjects: check.periods.map((p) => p.subject),
-      })),
-      ...(await findMissingRooms({
-        schoolId: req.tenantId,
+      ...(await findMissingMasterRefs({ schoolId: req.tenantId, branchId: req.branchId, class: cls, section })),
+        ...(await findMissingSubjects({
+          schoolId: req.tenantId,
+          branchId: req.branchId,
+          subjects: check.periods.map((p) => p.subject),
+        })),
+        ...(await findMissingRooms({
+          schoolId: req.tenantId,
+          branchId: req.branchId,
         // The catalog resolves by key/name, so validate the denormalised
         // roomName (an _id-only period is left unvalidated, like empty refs).
         rooms: check.periods.map((p) => p.roomName),
@@ -97,12 +100,13 @@ const upsertTimetable = async (req, res) => {
         .json({ success: false, message: "Scheduling conflict detected", conflicts: intraDay });
     }
 
-    const existing = await Timetable.findOne({ schoolId: req.tenantId, class: cls, section, day }).lean();
+    const existing = await Timetable.findOne(scopeQuery(Timetable, req, { schoolId: req.tenantId, class: cls, section, day })).lean();
     const currentId = existing ? existing._id : null;
 
     const crossConflicts = await findCrossClassConflicts({
-      schoolId: req.tenantId,
-      day,
+        schoolId: req.tenantId,
+        branchId: req.branchId,
+        day,
       periods: check.periods,
       currentId,
     });
@@ -115,8 +119,8 @@ const upsertTimetable = async (req, res) => {
     }
 
     const payload = { class: cls, section, day, periods: check.periods };
-    const timetable = await Timetable.findOneAndUpdate(
-      { schoolId: req.tenantId, class: cls, section, day },
+    const timetable = await Timetable.findOneAndUpdate(scopeQuery(Timetable, req, 
+      { schoolId: req.tenantId, class: cls, section, day }),
       { ...pick(payload, TIMETABLE_FIELDS), schoolId: req.tenantId },
       { new: true, upsert: true, runValidators: true },
     );
@@ -134,7 +138,7 @@ const upsertTimetable = async (req, res) => {
 const getTimetable = async (req, res) => {
   try {
     const { class: cls, section, day } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Timetable, req, { schoolId: req.tenantId })
     if (cls) filter.class = cls;
     if (section) filter.section = section;
     if (day) filter.day = day;
@@ -149,7 +153,7 @@ const deleteTimetable = async (req, res) => {
   try {
     // Teachers may only delete records for their own assigned classes/sections.
     if (req.teacherScope) {
-      const slot = await Timetable.findOne({ _id: req.params.id, schoolId: req.tenantId }).lean();
+      const slot = await Timetable.findOne(scopeQuery(Timetable, req, { _id: req.params.id, schoolId: req.tenantId })).lean();
       if (!slot) return res.status(404).json({ success: false, message: "Timetable slot not found" });
       if (!req.teacherScope.has(slot.class, slot.section)) {
         return res.status(403).json({
@@ -158,7 +162,7 @@ const deleteTimetable = async (req, res) => {
         });
       }
     }
-    const slot = await Timetable.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const slot = await Timetable.findOneAndDelete(scopeQuery(Timetable, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!slot) return res.status(404).json({ success: false, message: "Timetable slot not found" });
     res.json({ success: true, message: "Timetable slot removed" });
   } catch (err) {

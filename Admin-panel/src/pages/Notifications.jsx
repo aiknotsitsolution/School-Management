@@ -6,7 +6,6 @@ import {
   FileClock,
   Wallet,
   Megaphone,
-  Inbox,
   UserRound,
   Briefcase,
   BookOpen,
@@ -15,6 +14,7 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { PageIntro, Card, Button, Pill, toast } from "../components/UI";
+import PageArtwork from "../components/PageArtwork";
 import { api } from "../lib/api";
 
 const KIND_META = {
@@ -96,7 +96,7 @@ export default function Notifications() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="Inbox"
-        title="Notifications"
+        title="Notifications" art="notices"
         description={
           unreadCount > 0
             ? `You have ${unreadCount} unread notification${unreadCount === 1 ? "" : "s"}.`
@@ -132,7 +132,7 @@ export default function Notifications() {
           <p className="text-[13px] text-slate-text py-10 text-center">Loading…</p>
         ) : visible.length === 0 ? (
           <div className="py-14 text-center">
-            <Inbox size={40} className="mx-auto text-slate-text/30 mb-3" />
+            <PageArtwork name="notices" size={64} className="mx-auto mb-4" />
             <p className="text-[15px] font-semibold text-ink">No notifications</p>
             <p className="text-[13px] text-slate-text/70 mt-1">
               {filter === "unread" ? "You're all caught up." : "New updates will appear here."}

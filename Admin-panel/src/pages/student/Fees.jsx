@@ -1,6 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { CreditCard, Wallet, FileClock } from "lucide-react";
 import { PageIntro, Card, Pill } from "../../components/UI";
+import {
+  BarRowChart,
+  Donut,
+  ProgressRing,
+  Sparkline,
+} from "../../components/studentcharts/StudentCharts";
 import { api } from "../../lib/api";
 import { fmtDate, fmtMoney } from "./useStudentContext";
 
@@ -40,23 +46,97 @@ export default function Fees() {
     [payments],
   );
 
+  /** How much of each invoice is settled, for the per-invoice bar chart. */
+  const invoiceBars = useMemo(
+    () =>
+      sortedInvoices.map((inv) => {
+        const amount = Number(inv.amount || 0);
+        const paid = Number(inv.paidAmount || 0);
+        return {
+          id: inv._id,
+          label: inv.title || "Invoice",
+          value: amount ? Math.round((paid / amount) * 100) : 0,
+          obtained: paid,
+          maxMarks: amount,
+          paid,
+          amount,
+        };
+      }),
+    [sortedInvoices],
+  );
+
+  /** Paid vs pending split, coloured so the balance is readable at a glance. */
+  const paymentSplit = useMemo(() => {
+    const list = [
+      { name: "Paid", value: totals.paid, color: "success" },
+      { name: "Pending", value: totals.due, color: "warning" },
+    ];
+    return list.filter((d) => d.value > 0);
+  }, [totals]);
+
+  const paidShare = totals.total ? Math.round((totals.paid / totals.total) * 100) : 0;
+
   return (
     <div className="space-y-6">
       <PageIntro
         eyebrow="Finance"
         title="Fees & Payments"
+        art="fees"
         description="Your fee invoices and payment history."
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-        <Card className="col-span-1 sm:col-span-2">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card>
+          <div className="flex flex-col items-center gap-3 py-2">
+            <ProgressRing
+              value={paidShare}
+              size={150}
+              stroke={13}
+              color={totals.due > 0 ? "warning" : "success"}
+              label="Settled"
+              sublabel={`of ${fmtMoney(totals.total)}`}
+              ariaLabel={`${paidShare} percent of fees settled`}
+            />
+            {paymentSplit.length > 0 && (
+              <Donut data={paymentSplit} height={124} centerValue={invoices.length} centerLabel="Invoices" />
+            )}
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-2" title="Settlement by Invoice" subtitle="How much of each invoice is paid">
+          <BarRowChart
+            data={invoiceBars}
+            height={Math.max(170, invoiceBars.length * 36)}
+            color="success"
+            colorFor={(d) => (d.value >= 100 ? "success" : d.value > 0 ? "warning" : "alert")}
+            tooltipLabel="Paid"
+            footerFor={(d) => `${fmtMoney(d.paid)} of ${fmtMoney(d.amount)}`}
+          />
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+        <Card>
           <div className="p-1">
             <p className="font-display text-3xl font-bold text-ink">{fmtMoney(totals.due)}</p>
             <p className="text-[11px] text-slate-text/60 mt-1">Outstanding balance</p>
           </div>
         </Card>
-        <Card><p className="font-display text-xl font-bold text-success">{fmtMoney(totals.paid)}</p><p className="text-[11px] text-slate-text/60 mt-1">Paid</p></Card>
-        <Card><p className="font-display text-xl font-bold text-ink">{fmtMoney(totals.total)}</p><p className="text-[11px] text-slate-text/60 mt-1">Total invoiced</p></Card>
+        <Card>
+          <p className="font-display text-xl font-bold text-success">{fmtMoney(totals.paid)}</p>
+          <p className="text-[11px] text-slate-text/60 mt-1">Paid</p>
+        </Card>
+        <Card>
+          <p className="font-display text-xl font-bold text-ink">{fmtMoney(totals.total)}</p>
+          <p className="text-[11px] text-slate-text/60 mt-1">Total invoiced</p>
+        </Card>
+        <Card>
+          <p className="text-[11px] font-semibold text-slate-text/60">Receipts</p>
+          <p className="mt-1.5 font-display text-xl font-bold text-ink">{payments.length}</p>
+          <div className="mt-2">
+            <Sparkline data={sortedPayments.slice(0, 8).reverse().map((p) => ({ value: Number(p.amount) || 0 }))} color="success" height={26} />
+          </div>
+        </Card>
       </div>
 
       <Card title={`Invoices (${invoices.length})`}>

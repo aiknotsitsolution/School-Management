@@ -22,14 +22,15 @@ const prepare = async (req, res) => {
       return res.status(400).json({ success: false, message: "fromSession and toSession are required to prepare a rollover" });
     }
 
-    const classes = await enrolledClasses({ schoolId: req.tenantId });
+    const classes = await enrolledClasses({ schoolId: req.tenantId, branchId: req.branchId });
     const perClass = [];
     for (const cls of classes) {
-      const roster = await rosterFor({ schoolId: req.tenantId, class: cls, fromSession });
+      const roster = await rosterFor({ schoolId: req.tenantId, branchId: req.branchId, class: cls, fromSession });
       const rows = await Promise.all(
         roster.map(async (student) => {
           const summary = await computeStudentSummary({
             schoolId: req.tenantId,
+            branchId: req.branchId,
             studentId: student.admissionNo,
             session: fromSession,
             class: student.class,

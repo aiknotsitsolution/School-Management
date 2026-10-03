@@ -2,70 +2,13 @@
 
 import { Children, useEffect, useRef, useState } from "react";
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
+import PageArtwork from "./PageArtwork";
+import { MetricCard } from "./dashboard/DashKit";
 
-const STAT_TONES = {
-  blue: {
-    card: "bg-blue-50/70 border-blue-100 hover:border-blue-200",
-    icon: "bg-white text-blue-600 shadow-[0_4px_14px_rgba(37,99,235,0.12)]",
-  },
-  emerald: {
-    card: "bg-emerald-50/70 border-emerald-100 hover:border-emerald-200",
-    icon: "bg-white text-emerald-600 shadow-[0_4px_14px_rgba(16,185,129,0.12)]",
-  },
-  amber: {
-    card: "bg-amber-50/70 border-amber-100 hover:border-amber-200",
-    icon: "bg-white text-amber-500 shadow-[0_4px_14px_rgba(245,158,11,0.14)]",
-  },
-  rose: {
-    card: "bg-rose-50/70 border-rose-100 hover:border-rose-200",
-    icon: "bg-white text-rose-500 shadow-[0_4px_14px_rgba(225,29,72,0.12)]",
-  },
-  slate: {
-    card: "bg-slate-50/70 border-slate-200 hover:border-slate-300",
-    icon: "bg-white text-slate-600 shadow-[0_4px_14px_rgba(15,23,42,0.10)]",
-  },
-};
-
-const ACCENT_TONE = {
-  primary: "blue",
-  success: "emerald",
-  info: "amber",
-  alert: "rose",
-  neutral: "slate",
-};
-
-export function StatCard({ icon: Icon, label, value, sub, accent = "primary", tone, bars }) {
-  const t = STAT_TONES[tone] || STAT_TONES[ACCENT_TONE[accent]] || STAT_TONES.blue;
-  return (
-    <div
-      className={`relative overflow-hidden rounded-2xl border p-4 transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_10px_28px_-16px_rgba(15,23,42,0.35)] ${t.card}`}
-    >
-      <div className="flex items-center gap-3">
-        {Icon && (
-          <span className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${t.icon}`} aria-hidden="true">
-            <Icon size={19} />
-          </span>
-        )}
-        <div className="min-w-0">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-slate-text/70">{label}</p>
-          <p className="mt-1.5 truncate font-display text-[26px] font-bold leading-none text-ink">{value}</p>
-        </div>
-      </div>
-      {sub && <p className="mt-2.5 text-[11.5px] leading-snug text-slate-text/70">{sub}</p>}
-      {bars && bars.length > 0 && (
-        <div className="mt-3 flex h-6 items-end gap-1" aria-hidden="true">
-          {bars.map((b, i) => (
-            <span
-              key={`${b.color}-${i}`}
-              className={`w-2.5 rounded-sm ${b.color}`}
-              style={{ height: `${b.height}px` }}
-            />
-          ))}
-        </div>
-      )}
-      <span className="pointer-events-none absolute -bottom-7 -right-6 h-16 w-16 rounded-full bg-white/50" aria-hidden="true" />
-    </div>
-  );
+// The stat card lives in the dashboard kit so every metric surface shares one
+// design. Re-exported here because module pages already import it from UI.
+export function StatCard(props) {
+  return <MetricCard {...props} />;
 }
 
 export function Card({
@@ -77,11 +20,22 @@ export function Card({
   bodyClassName = "p-5",
   headerClassName = "px-5 py-4 border-b border-slate-200",
   titleClassName = "font-display font-semibold text-ink text-[15px]",
+  decor,
+  decorTone = "text-teal-600",
 }) {
   return (
-    <div className={`bg-white rounded-2xl border border-slate-200 shadow-sm ${className}`}>
+    <div className={`relative overflow-hidden bg-white rounded-2xl border border-slate-200 shadow-sm ${className}`}>
+      {/* Texture from PageArtwork's vector decorations, behind header and body. */}
+      {decor && (
+        <span
+          className={`pointer-events-none absolute inset-y-0 right-0 w-[42%] opacity-[0.13] ${decorTone}`}
+          aria-hidden="true"
+        >
+          <PageArtwork name={decor} className="h-full w-full" />
+        </span>
+      )}
       {title && (
-        <div className={`flex items-center justify-between gap-3 ${headerClassName}`}>
+        <div className={`relative flex items-center justify-between gap-3 ${headerClassName}`}>
           <div className="min-w-0">
             <h3 className={`${titleClassName}${typeof title === "string" ? " truncate" : ""}`}>{title}</h3>
             {subtitle && <p className="mt-1 text-[12.5px] text-slate-text/70">{subtitle}</p>}
@@ -89,7 +43,7 @@ export function Card({
           {action}
         </div>
       )}
-      <div className={bodyClassName}>{children}</div>
+      <div className={`relative ${bodyClassName}`}>{children}</div>
     </div>
   );
 }
@@ -154,13 +108,20 @@ export function Avatar({ src, name, size = 32, className = "" }) {
   );
 }
 
-export function PageIntro({ eyebrow, title, description, descriptionClassName = "max-w-xl", right }) {
+export function PageIntro({ eyebrow, title, description, descriptionClassName = "max-w-xl", right, art, artSize = 64 }) {
   return (
     <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 mb-5">
-      <div>
-        {eyebrow && <p className="text-[12.5px] font-semibold text-primary-dark mb-1">{eyebrow}</p>}
-        <h2 className="font-display text-2xl font-bold text-ink">{title}</h2>
-        {description && <p className={`text-slate-text text-[13.5px] mt-1 ${descriptionClassName}`}>{description}</p>}
+      <div className="flex items-start gap-4">
+        {art ? (
+          <div className="mt-0.5 flex h-[74px] w-[74px] shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-primary-light/60 ring-1 ring-inset ring-primary-border/60 shadow-[0_12px_28px_-16px_rgba(12,71,207,0.45)]">
+            <PageArtwork name={art} size={artSize} />
+          </div>
+        ) : null}
+        <div className="min-w-0">
+          {eyebrow && <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-primary-dark mb-1.5">{eyebrow}</p>}
+          <h2 className="font-display text-[26px] font-bold tracking-tight text-ink">{title}</h2>
+          {description && <p className={`text-slate-text text-[13.5px] mt-2 ${descriptionClassName}`}>{description}</p>}
+        </div>
       </div>
       {right}
     </div>
@@ -417,9 +378,9 @@ export function toast(message, tone = "success") {
   _activeToasts.add(message);
   const tones = {
     success: { bg: "#16A34A", icon: "✓" },
-    error: { bg: "#DC2626", icon: "✕" },
-    info: { bg: "#2563EB", icon: "ℹ" },
-    primary: { bg: "#4F46E5", icon: "!" },
+    error: { bg: "#E9424E", icon: "✕" },
+    info: { bg: "#0C47CF", icon: "ℹ" },
+    primary: { bg: "#0C47CF", icon: "!" },
   };
   const t = tones[tone] || tones.success;
   const el = document.createElement("div");

@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Homework = require("../models/Homework");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 const {
@@ -7,9 +8,10 @@ const {
 const { notifyByRefIds, notifyClassStudents } = require("../utils/notify");
 const { tryStudentModel } = require("../services/academicYearService");
 
-async function assertRefs(tenantId, body) {
+async function assertRefs(tenantId, body, branchId) {
   const missing = await findMissingMasterRefs({
     schoolId: tenantId,
+    branchId,
     class: body.class,
     section: body.section,
     subject: body.subject,
@@ -38,18 +40,20 @@ const createHomework = async (req, res) => {
       if (!String(req.body.class || "").trim()) {
         return res.status(400).json({ success: false, message: "Class is required for student homework" });
       }
-      await assertRefs(req.tenantId, req.body);
+      await assertRefs(req.tenantId, req.body, req.branchId);
     }
     const homework = await Homework.create({
       ...pick(req.body, HOMEWORK_FIELDS),
       assignType,
       schoolId: req.tenantId,
+      branchId: branchIdForWrite(req),
       assignedBy: req.user.name,
     });
     if (assignType === "student") {
-      notifyClassStudents({
-        schoolId: req.tenantId,
-        class: homework.class,
+        notifyClassStudents({
+          schoolId: req.tenantId,
+          branchId: req.branchId,
+          class: homework.class,
         section: homework.section,
         title: "New Homework",
         message: `${homework.title} — ${homework.subject || ""} assigned by ${req.user.name}.`,
@@ -76,16 +80,18 @@ const createHomework = async (req, res) => {
 // homework list can be scoped to exactly those classes. Fail-secure: when the
 // student mirror is unavailable or no child has a class, the caller matches
 // nothing instead of falling back to a school-wide list.
-async function childClassPairs(schoolId, linkedStudentIds) {
-  const ids = (linkedStudentIds || []).map(String).filter(Boolean);
-  if (!ids.length) return [];
-  const Student = await tryStudentModel();
-  if (!Student) return [];
-  const rows = await Student.find({
-    schoolId,
-    admissionNo: { $in: ids },
-    status: { $in: ["Active", "Inactive"] },
-  })
+  async function childClassPairs(schoolId, branchId, linkedStudentIds) {
+    const ids = (linkedStudentIds || []).map(String).filter(Boolean);
+    if (!ids.length) return [];
+    const Student = await tryStudentModel();
+    if (!Student) return [];
+    const filter = {
+      schoolId,
+      ...(branchId ? { branchId } : {}),
+      admissionNo: { $in: ids },
+      status: { $in: ["Active", "Inactive"] },
+    };
+    const rows = await Student.find(filter)
     .select("class section")
     .lean();
   return rows
@@ -96,11 +102,11 @@ async function childClassPairs(schoolId, linkedStudentIds) {
 const getHomework = async (req, res) => {
   try {
     const { class: cls, section, subject, assignType } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Homework, req, { schoolId: req.tenantId })
     // Parents are read-only but must never see the whole school's list:
     // restrict to the classes of their linked children.
     if (req.user.role === "parent") {
-      const pairs = await childClassPairs(req.tenantId, req.user.linkedStudentIds);
+      const pairs = await childClassPairs(req.tenantId, req.branchId, req.user.linkedStudentIds);
       // Fail-secure: MongoDB rejects an empty $or, and an unscoped parent
       // query would leak the whole school — so match nothing instead.
       if (pairs.length) filter.$or = pairs;
@@ -123,7 +129,7 @@ const getHomework = async (req, res) => {
 
 const updateHomework = async (req, res) => {
   try {
-    const existing = await Homework.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const existing = await Homework.findOne(scopeQuery(Homework, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!existing) return res.status(404).json({ success: false, message: "Homework not found" });
     if (req.teacherScope && !req.teacherScope.has(existing.class, existing.section)) {
       return res.status(403).json({ success: false, message: "You can only manage homework in your assigned classes and sections" });
@@ -139,11 +145,11 @@ const updateHomework = async (req, res) => {
           check[key] = updates[key];
         }
       }
-      if (Object.keys(check).length) await assertRefs(req.tenantId, check);
+      if (Object.keys(check).length) await assertRefs(req.tenantId, check, req.branchId);
     }
 
-    const hw = await Homework.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const hw = await Homework.findOneAndUpdate(scopeQuery(Homework, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       updates,
       { new: true },
     );
@@ -167,12 +173,12 @@ const updateHomework = async (req, res) => {
 
 const deleteHomework = async (req, res) => {
   try {
-    const existing = await Homework.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const existing = await Homework.findOne(scopeQuery(Homework, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!existing) return res.status(404).json({ success: false, message: "Homework not found" });
     if (req.teacherScope && !req.teacherScope.has(existing.class, existing.section)) {
       return res.status(403).json({ success: false, message: "You can only manage homework in your assigned classes and sections" });
     }
-    const hw = await Homework.findOneAndDelete({ _id: existing._id, schoolId: req.tenantId });
+    const hw = await Homework.findOneAndDelete(scopeQuery(Homework, req, { _id: existing._id, schoolId: req.tenantId }));
     if (!hw) return res.status(404).json({ success: false, message: "Homework not found" });
     res.json({ success: true, message: "Homework deleted" });
   } catch (err) {

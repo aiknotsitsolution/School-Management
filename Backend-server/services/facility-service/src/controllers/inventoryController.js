@@ -1,3 +1,7 @@
+const {
+  scopeQuery,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const InventoryItem = require("../models/InventoryItem");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
@@ -10,7 +14,11 @@ const pick = (obj, keys) =>
 
 const addItem = async (req, res) => {
   try {
-    const item = await InventoryItem.create({ ...pick(req.body, ITEM_FIELDS), schoolId: req.tenantId });
+      const item = await InventoryItem.create({
+        ...pick(req.body, ITEM_FIELDS),
+        schoolId: req.tenantId,
+        branchId: branchIdForWrite(req),
+      });
     res.status(201).json({ success: true, data: item });
   } catch (err) {
     if (err.code === 11000) {
@@ -23,7 +31,7 @@ const addItem = async (req, res) => {
 const getItems = async (req, res) => {
   try {
     const { category } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(InventoryItem, req, { schoolId: req.tenantId })
     if (category) filter.category = category;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
@@ -38,8 +46,8 @@ const getItems = async (req, res) => {
 
 const updateItem = async (req, res) => {
   try {
-    const item = await InventoryItem.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const item = await InventoryItem.findOneAndUpdate(scopeQuery(InventoryItem, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       pick(req.body, ITEM_FIELDS),
       { new: true },
     );
@@ -55,7 +63,7 @@ const updateItem = async (req, res) => {
 
 const deleteItem = async (req, res) => {
   try {
-    const item = await InventoryItem.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const item = await InventoryItem.findOneAndDelete(scopeQuery(InventoryItem, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!item) return res.status(404).json({ success: false, message: "Item not found" });
     res.json({ success: true, message: "Item removed" });
   } catch (err) {

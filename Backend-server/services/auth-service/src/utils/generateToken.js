@@ -19,6 +19,7 @@ const generateAccessToken = (user) =>
       designation: user.designation || null,
       class: user.class || null,
       section: user.section || null,
+      branchId: user.branchId || null,
       linkedStudentIds: user.linkedStudentIds || [],
     },
     getJwtSecret(),

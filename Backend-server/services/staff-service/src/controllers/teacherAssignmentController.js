@@ -1,3 +1,7 @@
+const {
+  scopeQuery,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const mongoose = require("mongoose");
 const TeacherAssignment = require("../models/TeacherAssignment");
 const Staff = require("../models/Staff");
@@ -25,21 +29,25 @@ const requireAdmin = (req, res) => {
 // Resolve the staff record that belongs to an authenticated non-admin user.
 // Existing linkage is best-effort: Staff.userId (set by onboarding), staff email
 // (matches the account email), or user.refId (Staff._id when populated).
-const resolveStaffForUser = async (schoolId, user) => {
+const resolveStaffForUser = async (schoolId, branchId, user) => {
   if (!user) return null;
+  // A school can employ the same person at more than one campus (and the same
+  // email can be reused across campuses), so an unfiltered lookup can resolve to
+  // another branch's staff row and expose their assignments.
+  const scoped = { schoolId, ...(branchId ? { branchId } : {}) };
   if (user.refId && mongoose.isValidObjectId(user.refId)) {
-    const byRef = await Staff.findOne({ _id: user.refId, schoolId }).lean();
+    const byRef = await Staff.findOne({ _id: user.refId, ...scoped }).lean();
     if (byRef) return byRef;
   }
   if (user.email) {
     const byEmail = await Staff.findOne({
-      schoolId,
+      ...scoped,
       email: String(user.email).toLowerCase(),
     }).lean();
     if (byEmail) return byEmail;
   }
   if (user.id) {
-    const byUser = await Staff.findOne({ schoolId, userId: String(user.id) }).lean();
+    const byUser = await Staff.findOne({ ...scoped, userId: String(user.id) }).lean();
     return byUser || null;
   }
   return null;
@@ -99,8 +107,19 @@ const conflictMessage = (type, session, cls, section) =>
 
 // Check uniqueness of an active assignment, treating `excludeId` as the record
 // being edited (it may already match and must be skipped).
-const assertNoConflict = async ({ schoolId, staffId, session, type, subject, class: cls, section, excludeId }) => {
-  const base = { schoolId, session, type, class: cls, section, status: "active" };
+const assertNoConflict = async ({ schoolId, branchId, staffId, session, type, subject, class: cls, section, excludeId }) => {
+  // The same teacher holding an identical assignment in another campus is not a
+  // conflict, and neither is a duplicate row in another campus: both would be
+  // false positives that block a legitimate assignment.
+  const base = {
+    schoolId,
+    ...(branchId ? { branchId } : {}),
+    session,
+    type,
+    class: cls,
+    section,
+    status: "active",
+  };
   if (excludeId) base._id = { $ne: excludeId };
   if (type === "teaching") base.subject = subject;
 
@@ -126,7 +145,7 @@ const createAssignment = async (req, res) => {
     if (!staffId || !mongoose.isValidObjectId(staffId)) {
       return res.status(400).json({ success: false, message: "staffId (a valid teacher id) is required" });
     }
-    const staff = await Staff.findOne({ _id: staffId, schoolId: req.tenantId }).lean();
+    const staff = await Staff.findOne(scopeQuery(Staff, req, { _id: staffId, schoolId: req.tenantId })).lean();
     if (!staff) {
       return res.status(404).json({ success: false, message: "Staff member not found in this school" });
     }
@@ -146,9 +165,10 @@ const createAssignment = async (req, res) => {
       values: { class: value.class, section: value.section, subject: value.subject },
     });
 
-    await assertNoConflict({ schoolId: req.tenantId, staffId, ...value });
+      await assertNoConflict({ schoolId: req.tenantId, branchId: req.branchId, staffId, ...value });
 
-    const doc = await TeacherAssignment.create(value);
+      value.branchId = branchIdForWrite(req);
+      const doc = await TeacherAssignment.create(value);
     return res.status(201).json({ success: true, data: doc });
   } catch (err) {
     if (err.code === 11000) {
@@ -160,12 +180,12 @@ const createAssignment = async (req, res) => {
 
 const listAssignments = async (req, res) => {
   try {
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(TeacherAssignment, req, { schoolId: req.tenantId })
     const { staffId, session, type, status } = req.query;
 
     // Non-admins may only read their own assignments through this endpoint.
     if (!["school_admin", "super_admin"].includes(req.user.role)) {
-      const own = await resolveStaffForUser(req.tenantId, req.user);
+      const own = await resolveStaffForUser(req.tenantId, req.branchId, req.user);
       if (!own) {
         return res.json({ success: true, count: 0, total: 0, data: [] });
       }
@@ -193,14 +213,14 @@ const listAssignments = async (req, res) => {
 
 const listMyAssignments = async (req, res) => {
   try {
-    const staff = await resolveStaffForUser(req.tenantId, req.user);
+    const staff = await resolveStaffForUser(req.tenantId, req.branchId, req.user);
     if (!staff) {
       return res.json({
         success: true,
         data: { staff: null, classTeacher: [], teaching: [], referrals: [] },
       });
     }
-    const records = await TeacherAssignment.find({ schoolId: req.tenantId, staffId: staff._id })
+    const records = await TeacherAssignment.find(scopeQuery(TeacherAssignment, req, { schoolId: req.tenantId, staffId: staff._id }))
       .sort({ createdAt: -1 })
       .lean();
 
@@ -242,7 +262,7 @@ const listMyAssignments = async (req, res) => {
 
 const getAssignmentById = async (req, res) => {
   try {
-    const doc = await TeacherAssignment.findOne({ _id: req.params.id, schoolId: req.tenantId }).lean();
+    const doc = await TeacherAssignment.findOne(scopeQuery(TeacherAssignment, req, { _id: req.params.id, schoolId: req.tenantId })).lean();
     if (!doc) return res.status(404).json({ success: false, message: "Assignment not found" });
     res.json({ success: true, data: doc });
   } catch (err) {
@@ -255,7 +275,7 @@ const updateAssignment = async (req, res) => {
     const admin = requireAdmin(req, res);
     if (!admin.ok) return res.status(403).json(admin.body);
 
-    const doc = await TeacherAssignment.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const doc = await TeacherAssignment.findOne(scopeQuery(TeacherAssignment, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!doc) return res.status(404).json({ success: false, message: "Assignment not found" });
 
     const editable = ["session", "type", "subject", "class", "section", "status", "staffId"];
@@ -274,7 +294,7 @@ const updateAssignment = async (req, res) => {
 
     let staffId = doc.staffId;
     if (changes.staffId && mongoose.isValidObjectId(changes.staffId)) {
-      const staff = await Staff.findOne({ _id: changes.staffId, schoolId: req.tenantId }).lean();
+      const staff = await Staff.findOne(scopeQuery(Staff, req, { _id: changes.staffId, schoolId: req.tenantId })).lean();
       if (!staff) return res.status(404).json({ success: false, message: "Staff member not found in this school" });
       if (staff.role !== "teacher") {
         return res.status(400).json({ success: false, message: "Only teaching staff can receive assignments" });
@@ -303,8 +323,9 @@ const updateAssignment = async (req, res) => {
       if (changes.section !== undefined) refValues.section = next.section;
       if (changes.subject !== undefined) refValues.subject = next.subject;
       await assertAcademicRefs({ req, values: refValues });
-      await assertNoConflict({
-        schoolId: req.tenantId,
+        await assertNoConflict({
+          schoolId: req.tenantId,
+          branchId: req.branchId,
         staffId: next.staffId,
         session: next.session,
         type: next.type,
@@ -315,8 +336,8 @@ const updateAssignment = async (req, res) => {
       });
     }
 
-    const updated = await TeacherAssignment.findOneAndUpdate(
-      { _id: id, schoolId: req.tenantId },
+    const updated = await TeacherAssignment.findOneAndUpdate(scopeQuery(TeacherAssignment, req, 
+      { _id: id, schoolId: req.tenantId }),
       { $set: { ...next, endedAt: changes.status === "active" ? null : doc.endedAt ?? (changes.status === "ended" ? changes.endedAt : null) } },
       { new: true, runValidators: true },
     );
@@ -336,13 +357,13 @@ const endAssignment = async (req, res) => {
     const admin = requireAdmin(req, res);
     if (!admin.ok) return res.status(403).json(admin.body);
 
-    const doc = await TeacherAssignment.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId, status: "active" },
+    const doc = await TeacherAssignment.findOneAndUpdate(scopeQuery(TeacherAssignment, req, 
+      { _id: req.params.id, schoolId: req.tenantId, status: "active" }),
       { $set: { status: "ended", endedAt: new Date() } },
       { new: true, runValidators: true },
     );
     if (!doc) {
-      const existing = await TeacherAssignment.findOne({ _id: req.params.id, schoolId: req.tenantId }).lean();
+      const existing = await TeacherAssignment.findOne(scopeQuery(TeacherAssignment, req, { _id: req.params.id, schoolId: req.tenantId })).lean();
       if (!existing) return res.status(404).json({ success: false, message: "Assignment not found" });
       return res.status(400).json({ success: false, message: "Assignment is already ended" });
     }
@@ -357,14 +378,15 @@ const startAssignment = async (req, res) => {
     const admin = requireAdmin(req, res);
     if (!admin.ok) return res.status(403).json(admin.body);
 
-    const doc = await TeacherAssignment.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const doc = await TeacherAssignment.findOne(scopeQuery(TeacherAssignment, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!doc) return res.status(404).json({ success: false, message: "Assignment not found" });
     if (doc.status === "active") {
       return res.status(400).json({ success: false, message: "Assignment is already active" });
     }
     if (doc.type === "class_teacher") {
-      await assertNoConflict({
-        schoolId: req.tenantId,
+        await assertNoConflict({
+          schoolId: req.tenantId,
+          branchId: req.branchId,
         staffId: doc.staffId,
         session: doc.session,
         type: doc.type,

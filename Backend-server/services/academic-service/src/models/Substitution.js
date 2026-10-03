@@ -6,6 +6,9 @@ const mongoose = require("mongoose");
 // creation time so a substitution can never drift from the published schedule.
 const substitutionSchema = new mongoose.Schema(
   {
+    // Campus this record belongs to. null = school-wide, or a row
+    // that predates branch scoping.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     date: {
       type: String,

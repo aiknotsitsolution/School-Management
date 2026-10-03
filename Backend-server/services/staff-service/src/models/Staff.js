@@ -3,12 +3,15 @@ const mongoose = require("mongoose");
 const staffSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus this staff member works at. null = school-wide (a principal or
+    // central office role that covers every campus).
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     employeeId: { type: String, required: true },
     userId: { type: String, default: null },
     name: { type: String, required: true },
     designation: { type: String, required: true }, // Principal, PGT Physics, TGT Maths, etc.
     department: { type: String },
-    role: { type: String, enum: ["teacher", "admin-staff", "support"], default: "teacher" },
+    role: { type: String, enum: ["teacher", "staff"], default: "teacher" },
     subjects: [{ type: String }],
     classesAssigned: [{ class: String, section: String }],
     qualification: { type: String },

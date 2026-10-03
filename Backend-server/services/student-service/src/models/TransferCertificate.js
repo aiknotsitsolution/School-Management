@@ -6,6 +6,9 @@ const mongoose = require("mongoose");
 // school — a reprint re-downloads the same tcNumber's PDF.
 const transferCertificateSchema = new mongoose.Schema(
   {
+    // Campus this record belongs to. null = school-wide, or a row
+    // that predates branch scoping.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     tcNumber: { type: String, required: true, trim: true },
     studentId: { type: String, required: true, index: true }, // admissionNo (refId)
@@ -30,6 +33,7 @@ const transferCertificateSchema = new mongoose.Schema(
   },
   { timestamps: true },
 );
+transferCertificateSchema.index({ schoolId: 1, branchId: 1, createdAt: -1 });
 transferCertificateSchema.index({ schoolId: 1, tcNumber: 1 }, { unique: true });
 transferCertificateSchema.index({ schoolId: 1, studentId: 1 }, { unique: true });
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
-import { BookOpen, FileText, Download, ExternalLink, Search, Filter } from "lucide-react";
+import { FileText, Download, ExternalLink, Search, Filter } from "lucide-react";
 import { PageIntro, Card, Pill, Button } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
 
 const TYPE_CONFIG = {
@@ -49,7 +50,7 @@ export default function StudyMaterials() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="Learning"
-        title="Study Materials"
+        title="Study Materials" art="syllabus"
         description="Access notes, worksheets and study resources shared by your teachers."
       />
 
@@ -115,9 +116,7 @@ export default function StudyMaterials() {
       {!error && !loading && filtered.length === 0 && (
         <Card>
           <div className="py-14 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-ink/[0.04] flex items-center justify-center mx-auto mb-3">
-              <BookOpen size={24} className="text-slate-text/30" />
-            </div>
+            <PageArtwork name="syllabus" size={64} className="mx-auto mb-4" />
             <p className="text-[14px] font-semibold text-ink">
               {materials.length === 0 ? "No materials yet" : "No matches found"}
             </p>

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   GraduationCap,
@@ -8,7 +8,6 @@ import {
   Bell,
   ClipboardList,
   PartyPopper,
-  BookOpen,
   CalendarDays,
   ShieldAlert,
   Megaphone,
@@ -18,9 +17,14 @@ import {
   Trophy,
   Zap,
   MessageSquare,
+  Bus,
+  MapPin,
+  Navigation,
+  Clock,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { StatCard, Avatar } from "../components/UI";
+import FleetMap, { hasFix } from "../components/FleetMap";
 import {
   HeroBanner,
   GlassStat,
@@ -40,32 +44,52 @@ function fmtDate(value) {
   return value ? new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—";
 }
 
+// Matches the fleet view's poll cadence in BusTracking.jsx.
+const BUS_REFRESH_MS = 30000;
+
 const CHILD_ACTIONS = [
-  { label: "Attendance", icon: CalendarCheck, tone: ACCENTS.success.icon },
-  { label: "Results", icon: Trophy, tone: ACCENTS.warn.icon },
-  { label: "Homework", icon: BookOpenCheck, tone: ACCENTS.violet.icon },
-  { label: "Notices", icon: Megaphone, tone: ACCENTS.alert.icon },
-  { label: "Diary", icon: BookOpen, tone: ACCENTS.teal.icon },
+  { label: "Attendance", icon: CalendarCheck },
+  { label: "Results", icon: Trophy },
+  { label: "Homework", icon: BookOpenCheck },
+  { label: "Notices", icon: Megaphone },
 ];
 
 export default function ParentDashboard() {
-  const [data, setData] = useState({ children: [], diary: [], notices: [], notifications: [] });
+  const [data, setData] = useState({ children: [], notices: [], notifications: [], busRoutes: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+
+  // The bus panel is a live view, so it refreshes on its own timer; the rest of
+  // the dashboard is a one-shot load. Only the scoped /transport/me endpoint is
+  // re-read, so a parent polling this page costs one small request.
+  const loadBus = useCallback((silent = false) => {
+    if (silent && document.visibilityState !== "visible") return;
+    if (silent && typeof navigator.onLine !== "undefined" && !navigator.onLine) return;
+    return api.transport
+      .mine()
+      .then(({ data: routes }) => {
+        setData((prev) => ({ ...prev, busRoutes: routes || [] }));
+      })
+      .catch(() => {
+        /* keep the last known position rather than blanking the panel */
+      });
+  }, []);
 
   useEffect(() => {
     Promise.allSettled([
       api.students.list(),
-      api.diary.list("limit=5"),
       api.notices.list(),
       api.notifications.list("limit=5"),
+      // Scoped server-side from the parent's token (linked children only), so
+      // this cannot be widened into the whole fleet.
+      api.transport.mine(),
     ]).then((results) => {
       const value = (i) => (results[i].status === "fulfilled" ? results[i].value.data : []);
       const children = value(0) || [];
-      const diary = value(1) || [];
-      const notices = value(2) || [];
-      const notifications = value(3) || [];
-      setData({ children, diary, notices, notifications });
+      const notices = value(1) || [];
+      const notifications = value(2) || [];
+      const busRoutes = value(3) || [];
+      setData({ children, notices, notifications, busRoutes });
       if (results.some((r) => r.status === "rejected" && results.indexOf(r) === 0)) {
         setError("Some data could not be loaded. Please try again.");
       }
@@ -73,7 +97,15 @@ export default function ParentDashboard() {
     });
   }, []);
 
-  const { children, diary, notices, notifications } = data;
+  useEffect(() => {
+    const timer = setInterval(() => loadBus(true), BUS_REFRESH_MS);
+    return () => clearInterval(timer);
+  }, [loadBus]);
+
+  const { children, notices, notifications, busRoutes } = data;
+  const busRoute = busRoutes[0] || null;
+  const busLive = busRoute?.live || {};
+  const busLocated = hasFix(busRoute);
   const unread = useMemo(
     () => (notifications || []).filter((n) => !n.read).length,
     [notifications],
@@ -94,20 +126,19 @@ export default function ParentDashboard() {
 
   const quickLinks = children.length === 0
     ? [
-        { to: "/notice-board", icon: ClipboardList, label: "Notices", tone: ACCENTS.alert.icon },
-        { to: "/events", icon: PartyPopper, label: "Events", tone: ACCENTS.violet.icon },
-        { to: "/online-payment", icon: Wallet, label: "Fees & Payments", tone: ACCENTS.success.icon },
-        { to: "/messages", icon: CalendarDays, label: "Message Teacher", tone: ACCENTS.info.icon },
+        { to: "/notice-board", icon: ClipboardList, label: "Notices", accent: "alert" },
+        { to: "/events", icon: PartyPopper, label: "Events", accent: "violet" },
+        { to: "/online-payment", icon: Wallet, label: "Fees & Payments", accent: "success" },
+        { to: "/messages", icon: CalendarDays, label: "Message Teacher", accent: "info" },
       ]
     : [
-        { to: "/attendance", icon: CalendarCheck, label: "Attendance", tone: ACCENTS.success.icon },
-        { to: "/report-card", icon: BookOpenCheck, label: "Results & Report Card", tone: ACCENTS.warn.icon },
-        { to: "/notice-board", icon: ClipboardList, label: "Notices", tone: ACCENTS.alert.icon },
-        { to: "/diary", icon: BookOpen, label: "Class Diary", tone: ACCENTS.teal.icon },
-        { to: "/events", icon: PartyPopper, label: "Events", tone: ACCENTS.violet.icon },
-        { to: "/online-payment", icon: Wallet, label: "Fees & Payments", tone: ACCENTS.success.icon },
-        { to: "/messages", icon: CalendarDays, label: "Message Teacher", tone: ACCENTS.info.icon },
-        { to: "/notifications", icon: Bell, label: "Notifications", tone: ACCENTS.info.icon },
+        { to: "/attendance", icon: CalendarCheck, label: "Attendance", accent: "success" },
+        { to: "/report-card", icon: BookOpenCheck, label: "Results & Report Card", accent: "warn" },
+        { to: "/notice-board", icon: ClipboardList, label: "Notices", accent: "alert" },
+        { to: "/events", icon: PartyPopper, label: "Events", accent: "violet" },
+        { to: "/online-payment", icon: Wallet, label: "Fees & Payments", accent: "success" },
+        { to: "/messages", icon: CalendarDays, label: "Message Teacher", accent: "info" },
+        { to: "/notifications", icon: Bell, label: "Notifications", accent: "info" },
       ];
 
   const heroTitle = children.length
@@ -172,7 +203,6 @@ export default function ParentDashboard() {
           </Link>
         }
         items={quickLinks}
-        columns={8}
       />
 
       {loading ? (
@@ -204,13 +234,6 @@ export default function ParentDashboard() {
               accent="info"
             />
             <StatCard
-              icon={BookOpen}
-              label="Diary Entries"
-              value={String(diary.length)}
-              sub="recent class diary"
-              accent="success"
-            />
-            <StatCard
               icon={Bell}
               label="Unread"
               value={String(unread)}
@@ -235,6 +258,8 @@ export default function ParentDashboard() {
                 ? `${children.length} child${children.length === 1 ? "" : "ren"} linked to this account`
                 : "No children linked yet"
             }
+            decor="people"
+            decorTone={ACCENTS.teal.text}
           >
             {children.length === 0 ? (
               <EmptyPanel
@@ -287,38 +312,124 @@ export default function ParentDashboard() {
             )}
           </Panel>
 
-          {/* ── Diary + notices ───────────────────────────────────── */}
-          <div className="grid gap-5 lg:grid-cols-2">
-            <Panel
-              title="Latest Class Diary"
-              icon={BookOpen}
-              iconTone={ACCENTS.teal.icon}
-              subtitle="What happened in class recently"
-              action={<ViewLink to="/diary">View all</ViewLink>}
-            >
-              {diary.length === 0 ? (
-                <EmptyPanel
-                  icon={BookOpen}
-                  iconTone={ACCENTS.teal.icon}
-                  title="No diary entries yet"
-                  text="Class teachers' daily diary entries will appear here."
-                />
-              ) : (
-                <div className="space-y-2.5">
-                  {diary.slice(0, 5).map((d) => (
-                    <ListRow
-                      key={d._id}
-                      icon={BookOpen}
-                      iconTone={ACCENTS.teal.icon}
-                      title={d.title}
-                      description={d.body}
-                      meta={`${fmtDate(d.date)} · Class ${d.class}-${d.section}`}
-                    />
-                  ))}
+          {/* ── School Bus ─────────────────────────────────────── */}
+          <Panel
+            title="School Bus"
+            icon={Bus}
+            iconTone={ACCENTS.teal.icon}
+            subtitle={
+              busRoute
+                ? `Route ${busRoute.routeNo}${busRoute.vehicleNo ? ` · ${busRoute.vehicleNo}` : ""}`
+                : "No route assigned"
+            }
+            decor="bus"
+            decorTone={ACCENTS.teal.text}
+          >
+            {!busRoute ? (
+              <EmptyPanel
+                icon={Bus}
+                iconTone={ACCENTS.teal.icon}
+                title="No bus route assigned"
+                text="If your child uses school transport, contact the transport department."
+              />
+            ) : (
+              <div className="grid gap-4 lg:grid-cols-2">
+                <div className="overflow-hidden rounded-2xl border border-slate-200">
+                  <FleetMap
+                    className="min-h-[300px]"
+                    routes={busLocated ? [busRoute] : []}
+                    stops={busRoute.stops || []}
+                    activeStopIndex={busLive.nextStopIndex ?? -1}
+                  />
                 </div>
-              )}
-            </Panel>
+                <div className="space-y-3">
+                  <div className="grid grid-cols-2 gap-2.5">
+                    <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                      <p className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-text/60">
+                        <Navigation size={11} /> Status
+                      </p>
+                      <p className="mt-0.5 font-display text-[14px] font-bold text-ink">
+                        {!busLocated ? "No signal" : busLive.stale ? "Last known" : "On the way"}
+                      </p>
+                    </div>
+                    <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                      <p className="flex items-center gap-1.5 text-[11px] font-semibold text-slate-text/60">
+                        <Clock size={11} /> ETA next stop
+                      </p>
+                      <p className="mt-0.5 font-display text-[14px] font-bold text-ink">
+                        {busLive.etaMinutes != null ? `${busLive.etaMinutes} min` : "—"}
+                      </p>
+                    </div>
+                  </div>
 
+                  <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold text-slate-text/60">Next stop</p>
+                    <p className="mt-0.5 text-[13.5px] font-bold text-ink">
+                      {busLive.nextStop || "Not published"}
+                    </p>
+                    {busLive.distanceKm != null ? (
+                      <p className="mt-0.5 text-[12px] text-slate-text/70">
+                        {busLive.distanceKm} km away
+                      </p>
+                    ) : null}
+                  </div>
+
+                  <div className="rounded-xl bg-slate-50 px-3 py-2.5">
+                    <p className="text-[11px] font-semibold text-slate-text/60">Driver</p>
+                    <div className="mt-1 flex items-center justify-between gap-2">
+                      <span className="truncate text-[13.5px] font-bold text-ink">
+                        {busRoute.driverName || "Not assigned"}
+                      </span>
+                      {busRoute.driverContact ? (
+                        <a
+                          href={`tel:${busRoute.driverContact.replace(/\s/g, "")}`}
+                          className="shrink-0 inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11.5px] font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
+                        >
+                          <Phone size={11} /> Call
+                        </a>
+                      ) : null}
+                    </div>
+                  </div>
+
+                  {busRoute.stops?.length ? (
+                    <ol className="space-y-1.5">
+                      {busRoute.stops.map((stop, i) => (
+                        <li
+                          key={`${stop.sequence ?? i}-${stop.name}-${i}`}
+                          className={`flex items-center gap-2.5 rounded-lg px-2.5 py-1.5 ${
+                            busLive.nextStopIndex === i ? "bg-violet-50" : "bg-slate-50"
+                          }`}
+                        >
+                          <span
+                            className={`w-5 h-5 shrink-0 rounded-full text-white text-[10px] font-bold flex items-center justify-center ${
+                              busLive.nextStopIndex === i ? "bg-violet-500" : "bg-slate-400"
+                            }`}
+                          >
+                            {i + 1}
+                          </span>
+                          <span className="flex-1 truncate text-[12.5px] font-semibold text-ink">
+                            {stop.name}
+                          </span>
+                          {stop.time ? (
+                            <span className="shrink-0 text-[11px] text-slate-text/60">
+                              {stop.time}
+                            </span>
+                          ) : null}
+                        </li>
+                      ))}
+                    </ol>
+                  ) : (
+                    <p className="flex items-center gap-2 text-[12px] text-slate-text/70">
+                      <MapPin size={12} /> Stops have not been published for this route.
+                    </p>
+                  )}
+                </div>
+              </div>
+            )}
+          </Panel>
+
+          {/* ── Notices ──────────────────────────────────────────── */}
+          <div>
             <Panel
               title="Recent Notices"
               icon={Megaphone}
@@ -329,6 +440,8 @@ export default function ParentDashboard() {
                   : "Circulars and announcements"
               }
               action={<ViewLink to="/notice-board">View all</ViewLink>}
+              decor="broadcast"
+              decorTone={ACCENTS.alert.text}
             >
               {notices.length === 0 ? (
                 <EmptyPanel
@@ -370,6 +483,8 @@ export default function ParentDashboard() {
             iconTone={ACCENTS.info.icon}
             subtitle="Updates pushed to you by the school"
             action={<ViewLink to="/notifications">All notifications</ViewLink>}
+            decor="envelope"
+            decorTone={ACCENTS.info.text}
           >
             {notifications.length === 0 ? (
               <EmptyPanel

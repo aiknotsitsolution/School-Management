@@ -1,3 +1,7 @@
+const {
+  scopeQuery,
+  withBranchScope,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const { v4: uuidv4 } = require("uuid");
 const mongoose = require("mongoose");
 const FeeInvoice = require("../models/FeeInvoice");
@@ -15,7 +19,7 @@ const recordPayment = async (req, res) => {
   try {
     const { invoiceId, amount, mode, transactionId, receivedRef, chequeNo, chequeDate, bankName } = req.body;
     const amt = Number(amount);
-    const invoice = await FeeInvoice.findOne({ _id: invoiceId, schoolId: req.tenantId });
+    const invoice = await FeeInvoice.findOne(scopeQuery(FeeInvoice, req, { _id: invoiceId, schoolId: req.tenantId }));
     if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
     if (!(amt > 0)) return res.status(400).json({ success: false, message: "Payment amount must be greater than 0" });
     if (amt > invoice.amount - invoice.paidAmount)
@@ -35,6 +39,10 @@ const recordPayment = async (req, res) => {
         transactionId: transactionId || uuidv4(),
         collectedBy: req.user.name,
         schoolId: req.tenantId,
+        // Copied from the invoice, not from the acting branch: the money belongs
+        // to the campus that raised the bill even if another campus's admin
+        // collected it (head-office fee collection).
+        branchId: invoice.branchId,
         receivedRef: receivedRef ? String(receivedRef).trim() : undefined,
         // Cheques enter the clearance lifecycle as Pending (CLIENT-REQ-039).
         ...(mode === "Cheque"
@@ -72,7 +80,7 @@ const recordPayment = async (req, res) => {
 const getPayments = async (req, res) => {
   try {
     const { studentId, mode, clearanceStatus } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Payment, req, { schoolId: req.tenantId })
     if (studentId) filter.studentId = studentId;
     if (mode) filter.mode = mode;
     if (clearanceStatus) filter.clearanceStatus = clearanceStatus;
@@ -101,7 +109,7 @@ const canViewReceipt = (req, payment) => {
 // Everything the receipt UI/PDF needs (school + student + invoice context),
 // resolved fail-soft so a missing mirror never breaks receipt retrieval.
 const buildReceiptView = async (req, payment) => {
-  const invoice = await FeeInvoice.findOne({ _id: payment.invoiceId, schoolId: req.tenantId }).lean();
+  const invoice = await FeeInvoice.findOne(scopeQuery(FeeInvoice, req, { _id: payment.invoiceId, schoolId: req.tenantId })).lean();
   let school = {};
   const SchoolModel = mongoose.models.School;
   if (SchoolModel) {
@@ -114,7 +122,7 @@ const buildReceiptView = async (req, payment) => {
   try {
     const { getStudentModel } = require("../db/studentDb");
     const Student = await getStudentModel();
-    const s = await Student.findOne({ schoolId: req.tenantId, admissionNo: payment.studentId })
+    const s = await Student.findOne(scopeQuery(Student, req, { schoolId: req.tenantId, admissionNo: payment.studentId }))
       .select("name")
       .lean();
     studentName = (s && s.name) || "";
@@ -127,7 +135,7 @@ const buildReceiptView = async (req, payment) => {
 const getReceipt = async (req, res) => {
   try {
     const { receiptNo } = req.params;
-    const payment = await Payment.findOne({ receiptNo, schoolId: req.tenantId });
+    const payment = await Payment.findOne(scopeQuery(Payment, req, { receiptNo, schoolId: req.tenantId }));
     if (!payment) return res.status(404).json({ success: false, message: "Receipt not found" });
     if (!canViewReceipt(req, payment)) {
       return res.status(403).json({ success: false, message: "You can only view your own receipts" });
@@ -167,7 +175,7 @@ const getReceipt = async (req, res) => {
 const getReceiptPdf = async (req, res) => {
   try {
     const { receiptNo } = req.params;
-    const payment = await Payment.findOne({ receiptNo, schoolId: req.tenantId });
+    const payment = await Payment.findOne(scopeQuery(Payment, req, { receiptNo, schoolId: req.tenantId }));
     if (!payment) return res.status(404).json({ success: false, message: "Receipt not found" });
     if (!canViewReceipt(req, payment)) {
       return res.status(403).json({ success: false, message: "You can only view your own receipts" });
@@ -194,8 +202,11 @@ const getFeeReports = async (req, res) => {
   try {
     const { from, to, class: className, feeType, session } = req.query;
     const schoolId = new mongoose.Types.ObjectId(req.tenantId);
+    // Aggregations bypass scopeQuery(), so the branch has to be added to every
+    // $match by hand or a branch admin's fee report would include every campus.
+    const branchClause = req.branchId ? { branchId: new mongoose.Types.ObjectId(req.branchId) } : {};
 
-    const paymentMatch = { schoolId };
+    const paymentMatch = { schoolId, ...branchClause };
     if (from || to) {
       paymentMatch.paidOn = {};
       if (from) paymentMatch.paidOn.$gte = new Date(from);
@@ -223,6 +234,7 @@ const getFeeReports = async (req, res) => {
         {
           $match: {
             schoolId,
+            ...branchClause,
             $expr: { $lt: ["$paidAmount", "$amount"] },
             ...(className ? { class: className } : {}),
             ...(feeType ? { feeType } : {}),
@@ -283,7 +295,7 @@ const getFeeReports = async (req, res) => {
 const getReconciliation = async (req, res) => {
   try {
     const { from, to } = req.query;
-    const match = { schoolId: req.tenantId };
+    const match = withBranchScope(req, { schoolId: req.tenantId });
     if (from || to) {
       match.paidOn = {};
       if (from) match.paidOn.$gte = new Date(from);
@@ -354,7 +366,7 @@ const getReconciliation = async (req, res) => {
 const setChequeClearance = async (req, res) => {
   try {
     const { action, reason } = req.body;
-    const payment = await Payment.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const payment = await Payment.findOne(scopeQuery(Payment, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!payment) return res.status(404).json({ success: false, message: "Payment not found" });
     if (payment.mode !== "Cheque") {
       return res.status(400).json({ success: false, message: "Clearance applies only to cheque payments" });
@@ -364,8 +376,8 @@ const setChequeClearance = async (req, res) => {
       if (payment.clearanceStatus === "Bounced") {
         return res.status(400).json({ success: false, message: "A bounced cheque cannot be cleared" });
       }
-      const updated = await Payment.findOneAndUpdate(
-        { _id: payment._id, schoolId: req.tenantId, clearanceStatus: { $ne: "Cleared" } },
+      const updated = await Payment.findOneAndUpdate(scopeQuery(Payment, req, 
+        { _id: payment._id, schoolId: req.tenantId, clearanceStatus: { $ne: "Cleared" } }),
         { $set: { clearanceStatus: "Cleared", clearedAt: new Date(), clearedBy: req.user.name } },
         { new: true },
       );
@@ -378,8 +390,8 @@ const setChequeClearance = async (req, res) => {
         return res.status(409).json({ success: false, message: "Cheque already bounced" });
       }
       // Mark first (only one bounce can win), then retract the credit.
-      const bounced = await Payment.findOneAndUpdate(
-        { _id: payment._id, schoolId: req.tenantId, clearanceStatus: { $ne: "Bounced" } },
+      const bounced = await Payment.findOneAndUpdate(scopeQuery(Payment, req, 
+        { _id: payment._id, schoolId: req.tenantId, clearanceStatus: { $ne: "Bounced" } }),
         {
           $set: {
             clearanceStatus: "Bounced",
@@ -396,8 +408,8 @@ const setChequeClearance = async (req, res) => {
       if (!invoice) {
         // Credit could not be retracted (invoice vanished) — put the cheque
         // back to its previous state so ledger and invoice stay consistent.
-        await Payment.updateOne(
-          { _id: payment._id, schoolId: req.tenantId },
+        await Payment.updateOne(scopeQuery(Payment, req, 
+          { _id: payment._id, schoolId: req.tenantId }),
           {
             $set: {
               clearanceStatus: payment.clearanceStatus || "Pending",

@@ -704,7 +704,7 @@ export default function Library() {
                       size={14}
                       className="text-slate-text/50 group-hover:text-info transition-colors cursor-help"
                     />
-                    <span className="hidden group-hover:block absolute z-20 top-full left-1/2 -translate-x-1/2 mt-1 w-max max-w-[220px] px-3 py-1.5 rounded-lg bg-ink text-white text-[11px] font-normal leading-snug shadow-lg">
+                    <span className="hidden group-hover:block absolute z-20 top-full left-1/2 -translate-x-1/2 mt-1 w-max max-w-[220px] px-3 py-1.5 rounded-lg bg-ink text-white text-[11px] font-normal leading-snug shadow-lg dark:bg-slate-200 dark:text-ink">
                       International Standard Book Number — 10 or 13 digit unique
                       identifier of the book edition.
                     </span>

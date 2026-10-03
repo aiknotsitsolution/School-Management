@@ -4,23 +4,32 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   Menu,
   Search,
-  Bell,
   CheckCheck,
   ChevronDown,
-  LogOut,
   Inbox,
   UserRound,
   Settings,
   School,
   ShieldCheck,
-  Users,
   GraduationCap,
   Briefcase,
-  LayoutDashboard,
 } from "lucide-react";
+// The topbar's four action buttons use MUI's Rounded icons — the same set the
+// sidebar navigation uses (see SidebarMui) — rather than the outline Lucide
+// set, so the shell reads as one family. Rounded is still solid, which is what
+// a stroked 9x9 glyph in a circular button lacked.
+import ChatRoundedIcon from "@mui/icons-material/ChatRounded";
+import NotificationsRoundedIcon from "@mui/icons-material/NotificationsRounded";
+import DarkModeRoundedIcon from "@mui/icons-material/DarkModeRounded";
+import LightModeRoundedIcon from "@mui/icons-material/LightModeRounded";
+import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import { selectRole, selectUser } from "../store/selectors";
-import { logout } from "../store/authSlice";
+import { logout, setActiveSchoolId } from "../store/authSlice";
+import { hasPermission, legacyRole } from "../lib/permissions";
+import { useThemeMode } from "../hooks/useThemeMode.jsx";
+import BranchSwitcher from "./BranchSwitcher.jsx";
 import { api } from "../lib/api";
+import { onSocket } from "../lib/socket";
 
 const roleLabel = (role, designation) => {
   if (role === "super_admin") return "Platform Owner";
@@ -58,29 +67,13 @@ function prettify(segment) {
 }
 
 function routeTitle(path) {
-  if (path === "/") return "Dashboard";
+  if (path === "/" || path === "/dashboard") return "Dashboard";
   const segments = path.split("/").filter(Boolean);
   let last = segments[segments.length - 1];
   if (/^[0-9a-f]{24}$/i.test(last) || /^\d+$/.test(last)) {
     last = segments[segments.length - 2];
   }
   return prettify(last);
-}
-
-function routeIcon(path) {
-  if (path.startsWith("/student")) return <GraduationCap size={17} />;
-  if (path.startsWith("/teacher")) return <Users size={17} />;
-  if (path.startsWith("/platform")) return <ShieldCheck size={17} />;
-  if (
-    path.startsWith("/staff") ||
-    path.startsWith("/accountant") ||
-    path.startsWith("/librarian") ||
-    path.startsWith("/transport") ||
-    path.startsWith("/reception")
-  ) {
-    return <Briefcase size={17} />;
-  }
-  return <LayoutDashboard size={17} />;
 }
 
 function InitialsAvatar({ name }) {
@@ -104,9 +97,19 @@ export default function Topbar({ onMenuClick }) {
   const { pathname } = useLocation();
   const user = useSelector(selectUser);
   const role = useSelector(selectRole);
+  // A tenant switcher is deliberately not rendered for the platform owner, so a
+  // school picked in an earlier session is dropped instead of silently keeping
+  // the platform user inside someone else's tenant.
+  const activeSchoolId = useSelector((s) => s.auth?.activeSchoolId);
+  const { mode, toggle: toggleTheme } = useThemeMode();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
+  // The Thread model stores no read/unread flag (see
+  // communication-service/src/models/Thread.js), so "unread" is derived on the
+  // client: a thread counts as new while its lastMessageAt is newer than the
+  // moment we last looked at the inbox.
+  const [unreadMessages, setUnreadMessages] = useState(0);
   const dropdownRef = useRef(null);
   const [profileOpen, setProfileOpen] = useState(false);
   const profileRef = useRef(null);
@@ -116,6 +119,12 @@ export default function Topbar({ onMenuClick }) {
   const [searchLoading, setSearchLoading] = useState(false);
   const searchRef = useRef(null);
   const searchTimerRef = useRef(null);
+
+  // The global search queries the student AND staff directories in one box, so
+  // it is offered only to roles holding both read permissions. super_admin's
+  // wildcard bundle passes; student/parent bundles hold neither.
+  const canSearchDirectory =
+    hasPermission(user, "students:read") && hasPermission(user, "staff:read");
 
   const refresh = useCallback(async () => {
     try {
@@ -132,15 +141,72 @@ export default function Topbar({ onMenuClick }) {
 
   useEffect(() => {
     refresh();
-    const timer = setInterval(refresh, 45000);
-    const unsubscribe = api.notifications.subscribe({
-      onData: () => refresh(),
-    });
+    // Push-only: notification:new arrives over the socket, so the list and the
+    // badge update the moment one is created. The slow interval is kept only as
+    // a reconciliation net for the case where a push was missed while the tab
+    // was suspended (socket reconnect drops nothing, but a dropped network does).
+    const reconcile = setInterval(refresh, 5 * 60 * 1000);
+    const offNotification = onSocket("notification:new", () => refresh());
     return () => {
-      clearInterval(timer);
-      unsubscribe();
+      clearInterval(reconcile);
+      offNotification();
     };
   }, [refresh]);
+
+  // Unread messages badge.
+  //
+  // The count is server-derived: each conversation participant carries their own
+  // lastReadAt, so the number is correct per user and survives a device change.
+  // A push keeps it current — no polling, and no localStorage clock that would
+  // wrongly mark pre-existing threads as unread on a first visit.
+
+  // /messages is wrapped in RequireRole for these roles only, so the badge is
+  // gated to match — otherwise the button would dead-end for other roles.
+  const canMessage = [
+    "student",
+    "parent",
+    "teacher",
+    "staff",
+    "school_admin",
+    "admin",
+    "super_admin",
+  ].includes(role);
+
+  const refreshMessages = useCallback(async () => {
+    if (!canMessage) return;
+    try {
+      const { data } = await api.conversations.list();
+      const list = Array.isArray(data) ? data : [];
+      setUnreadMessages(list.reduce((sum, c) => sum + (c.unread || 0), 0));
+    } catch {
+      /* communications unavailable — leave the badge as it was */
+    }
+  }, [canMessage]);
+
+  useEffect(() => {
+    if (!canMessage) return;
+    refreshMessages();
+    // Pushed updates only: an incoming message re-counts without a poll, and a
+    // conversation the user has open in another tab stays in sync because the
+    // reply endpoint marks the sender's receipt server-side.
+    const offMessage = onSocket("conversation:message", () => refreshMessages());
+    const offCreated = onSocket("conversation:created", () => refreshMessages());
+    return () => {
+      offMessage();
+      offCreated();
+    };
+  }, [refreshMessages, canMessage]);
+
+  // Opening the inbox is what marks it read — the list endpoint is what clears
+  // each participant's receipt, so re-reading it is what zeroes the badge.
+  useEffect(() => {
+    if (pathname !== "/messages" || !canMessage) return;
+    // eslint-disable-next-line react/set-state-in-effect -- the badge must clear
+    // the moment the inbox opens, not after the round trip resolves.
+    setUnreadMessages(0);
+    const timer = setTimeout(refreshMessages, 500);
+    return () => clearTimeout(timer);
+  }, [pathname, canMessage, refreshMessages]);
 
   useEffect(() => {
     const onClickOutside = (e) => {
@@ -184,6 +250,13 @@ export default function Topbar({ onMenuClick }) {
   }, [searchOpen]);
 
   useEffect(() => {
+    // Only roles that may read the student and staff directories get a search
+    // box at all. A student/parent has neither permission, so the two list
+    // calls below would 403 and the widget would be permanently empty.
+    // Bailing out here is the actual fix: no directory request is ever issued.
+    // The widget is unmounted by the `canSearchDirectory` gate below, so any
+    // leftover query/results stay invisible and need no clearing.
+    if (!canSearchDirectory) return;
     if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     const q = searchQuery.trim();
     if (q.length < 2) {
@@ -205,7 +278,7 @@ export default function Topbar({ onMenuClick }) {
       });
     }, 350);
     return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
-  }, [searchQuery]);
+  }, [searchQuery, canSearchDirectory]);
 
   const handleMarkAllRead = async () => {
     await api.notifications.markAllRead().catch(() => {});
@@ -238,19 +311,30 @@ export default function Topbar({ onMenuClick }) {
     navigate("/login", { replace: true });
   };
 
-  const legacyRole = { admin: "school_admin", parent: "student" }[role] || role;
+  // The platform owner is platform-scope only: no tenant switcher, no campus
+  // switcher, so a stale school from a previous session must not linger.
+  useEffect(() => {
+    if (role === "super_admin" && activeSchoolId) {
+      dispatch(setActiveSchoolId(null));
+    }
+  }, [role, activeSchoolId, dispatch]);
+
+  // One source of truth: `legacyRole` comes from lib/permissions and only
+  // normalises the legacy "admin" role. Do not redeclare a role map here — a
+  // local `parent: "student"` mapping sent parents to a /student/* route that
+  // RequireRole then rejected, bouncing them through the landing gate.
   const profileTarget = {
     school_admin: "/profile",
     super_admin: "/profile",
     staff: "/staff/profile",
     teacher: "/teacher/profile",
     student: "/student/profile",
-  }[legacyRole] || "/profile";
-  const settingsTarget = legacyRole === "super_admin" ? "/platform/settings" : "/settings";
+  }[legacyRole(role)] || "/profile";
+  const settingsTarget = legacyRole(role) === "super_admin" ? "/platform/settings" : "/settings";
   const manageItem =
-    legacyRole === "super_admin"
+    legacyRole(role) === "super_admin"
       ? { label: "Manage Platform", icon: ShieldCheck, to: "/platform" }
-      : legacyRole === "school_admin"
+      : legacyRole(role) === "school_admin"
         ? { label: "Manage School", icon: School, to: "/manage-school" }
         : null;
 
@@ -267,18 +351,14 @@ export default function Topbar({ onMenuClick }) {
         <button onClick={onMenuClick} className="lg:hidden text-ink p-1 -ml-1" aria-label="Open navigation">
           <Menu size={22} />
         </button>
-        <div className="flex min-w-0 items-center gap-2.5">
-          <span
-            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border border-info/15 bg-info-light text-info"
-            aria-hidden="true"
-          >
-            {routeIcon(pathname)}
-          </span>
-          <p className="truncate text-[16px] font-bold text-ink">{pageTitle}</p>
-        </div>
+        {/* The page name lives in the sidebar and the browser tab; the topbar
+            keeps only the accessible name so the row does not repeat itself. */}
+        <span className="sr-only">{pageTitle}</span>
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
+        <BranchSwitcher />
+        {canSearchDirectory ? (
         <div className="hidden md:block relative" ref={searchRef}>
           <div className="flex items-center gap-2 bg-paper rounded-full px-4 py-2 w-64 border border-slate-200 focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/15 transition-all">
             <Search size={16} className="text-slate-text/60" />
@@ -356,6 +436,36 @@ export default function Topbar({ onMenuClick }) {
             </div>
           )}
         </div>
+        ) : null}
+
+        <button
+          onClick={toggleTheme}
+          className="w-9 h-9 rounded-full bg-paper border border-slate-200 flex items-center justify-center hover:bg-primary/10 transition-colors"
+          aria-label={`Switch to ${mode === "dark" ? "light" : "dark"} mode`}
+          title={`Switch to ${mode === "dark" ? "light" : "dark"} mode`}
+        >
+          {mode === "dark" ? (
+            <DarkModeRoundedIcon sx={{ fontSize: 18 }} className="text-ink" />
+          ) : (
+            <LightModeRoundedIcon sx={{ fontSize: 18 }} className="text-ink" />
+          )}
+        </button>
+
+        {canMessage ? (
+        <button
+          onClick={() => navigate("/messages")}
+          className="relative w-9 h-9 rounded-full bg-paper border border-slate-200 flex items-center justify-center hover:bg-primary/10 transition-colors"
+          aria-label="Communications"
+          title="Communications"
+        >
+          <ChatRoundedIcon sx={{ fontSize: 18 }} className="text-ink" />
+          {unreadMessages > 0 && (
+            <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-primary text-white text-[10px] font-semibold flex items-center justify-center">
+              {unreadMessages > 9 ? "9+" : unreadMessages}
+            </span>
+          )}
+        </button>
+        ) : null}
 
         <div className="relative" ref={dropdownRef}>
           <button
@@ -363,7 +473,7 @@ export default function Topbar({ onMenuClick }) {
             className="relative w-9 h-9 rounded-full bg-paper border border-slate-200 flex items-center justify-center hover:bg-primary/10 transition-colors"
             aria-label="Notifications"
           >
-            <Bell size={17} className="text-ink" />
+            <NotificationsRoundedIcon sx={{ fontSize: 18 }} className="text-ink" />
             {unreadCount > 0 && (
               <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-alert text-white text-[10px] font-semibold flex items-center justify-center">
                 {unreadCount > 9 ? "9+" : unreadCount}
@@ -519,7 +629,7 @@ export default function Topbar({ onMenuClick }) {
           title="Sign out"
           className="w-9 h-9 rounded-full bg-paper border border-slate-200 flex items-center justify-center hover:bg-alert/10 hover:text-alert transition-colors"
         >
-          <LogOut size={16} className="text-ink" />
+          <LogoutRoundedIcon sx={{ fontSize: 18 }} className="text-ink" />
         </button>
       </div>
     </header>

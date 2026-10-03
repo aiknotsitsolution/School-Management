@@ -35,6 +35,12 @@ const AUDIT_ACTIONS = [
   "invoice.updated",
   "report.generated",
   "settings.changed",
+  // Tenant impersonation by a platform owner. `actorId` is the super_admin and
+  // `context.xSchoolId` is the tenant being entered or left, so the trail
+  // answers "which admin was inside which school, and in which mode".
+  "impersonation.started",
+  "impersonation.write_enabled",
+  "impersonation.ended",
   // Master-data lifecycle events (academic-service school-owned masters).
   "master.created",
   "master.updated",

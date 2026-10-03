@@ -5,14 +5,23 @@ const mongoose = require("mongoose");
 // identity for X-School-Id must be a real ObjectId.
 const OBJECT_ID_REGEX = /^[0-9a-fA-F]{24}$/;
 
-// Resolves the effective tenant for a request. Normal users inherit it from
-// the token; platform (super_admin) can impersonate a school via the
-// X-School-Id header, but only when the header is a valid ObjectId — and,
-// wherever the School model is registered (auth-service), the school must
-// actually exist. Guards against:
-//  - arbitrary strings leaking into tenant-scoped queries,
-//  - malformed ObjectIds producing CastError 500s,
-//  - impersonating a school id that does not exist.
+// Methods that cannot mutate tenant state. DELETE is deliberately absent:
+// soft delete writes deletedAt, which is still a write.
+const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
+
+/**
+ * Guardrail for platform impersonation, NOT a trust boundary.
+ *
+ * A super_admin holds the wildcard permission set and can always impersonate a
+ * tenant, so this cannot stop a determined caller — it only has to stop the
+ * ordinary case of a support session mutating a real school's payroll by
+ * muscle memory. That is worth doing: soft delete makes a mistaken delete
+ * recoverable, but a fee or payroll edit is not.
+ *
+ * It is enforced here because resolveTenant is the single choke point every
+ * service router passes through (router.use(verifyToken, resolveTenant, ...)),
+ * so one change covers every module instead of one per service.
+ */
 const resolveTenant = async (req, res, next) => {
   try {
     let schoolId = req.user.schoolId || null;
@@ -30,6 +39,15 @@ const resolveTenant = async (req, res, next) => {
         }
       }
       schoolId = candidate;
+      // Absent header means read-only: a client that never heard of the mode
+      // must not be able to write by omission.
+      if (!SAFE_METHODS.has(req.method) && req.header("X-Impersonate-Mode") !== "write") {
+        return res.status(403).json({
+          success: false,
+          message:
+            "Impersonation session is read-only. Re-enable editing in the tenant switcher to make changes.",
+        });
+      }
     }
     req.tenantId = schoolId;
     next();

@@ -21,6 +21,7 @@ import {
   StatCard,
   toast,
 } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
 import AttachmentLinks from "../../components/upload/AttachmentLinks";
 import { useTeacherContext, fmtDate } from "./useTeacherContext";
@@ -182,7 +183,7 @@ export default function Homework() {
     return (
       <Card>
         <div className="py-16 text-center">
-          <BookOpenCheck size={40} className="mx-auto text-slate-text/30 mb-3" />
+          <PageArtwork name="homework" size={64} className="mx-auto mb-4" />
           <p className="text-[15px] font-semibold text-ink">
             No class assigned yet
           </p>
@@ -198,7 +199,7 @@ export default function Homework() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="My Teaching"
-        title="Homework & Assignments"
+        title="Homework & Assignments" art="homework"
         description={`Assignments set for ${assignment}.`}
         right={
           <Button variant="primary" onClick={openAdd}>

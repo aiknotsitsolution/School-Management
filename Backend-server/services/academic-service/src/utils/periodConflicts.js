@@ -5,7 +5,7 @@
 const Timetable = require("../models/Timetable");
 const { findCrossDocConflicts } = require("./periodConflictLib");
 
-async function findCrossClassConflicts({ schoolId, day, periods, currentId }) {
+async function findCrossClassConflicts({ schoolId, branchId, day, periods, currentId }) {
   const committed = (periods || []).filter((p) => p.startTime && (p.teacherId || p.roomId));
   if (!committed.length) return [];
 
@@ -23,6 +23,9 @@ async function findCrossClassConflicts({ schoolId, day, periods, currentId }) {
       ...(roomIds.length ? [{ periods: { $elemMatch: { roomId: { $in: roomIds } } } }] : []),
     ],
   };
+  // Rooms and teachers are campus-scoped: an identical room number in another
+  // branch is a different physical room, so cross-branch rows are not conflicts.
+  if (branchId) query.branchId = branchId;
 
   const docs = await Timetable.find(query).lean();
   const conflicts = findCrossDocConflicts(

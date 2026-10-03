@@ -6,7 +6,7 @@
 import { useSelector } from "react-redux";
 import { selectUser } from "../store/selectors";
 
-const legacyRole = (role) => (role === "admin" ? "school_admin" : role);
+export const legacyRole = (role) => (role === "admin" ? "school_admin" : role);
 
 // Kept in sync with the backend TEACHING_PERMISSIONS bundle.
 const TEACHING_PERMISSIONS = [
@@ -15,6 +15,7 @@ const TEACHING_PERMISSIONS = [
   "timetable:read", "timetable:write", "homework:read", "homework:write",
   "exams:read", "marks:read", "notices:read", "notices:publish",
   "leaves:apply", "payroll:view",
+  "library:read",
   "promotion:read", "transfer:read", "rollover:read",
   "health:read", "health:write", "conduct:read", "conduct:write",
   "achievements:read", "achievements:write",
@@ -70,6 +71,7 @@ const ROLE_PERMISSIONS = {
     "transport:read", "transport:update", "inventory:read", "inventory:write",
     "payroll:view", "payroll:admin", "leaves:apply", "leaves:approve",
     "hostel:read", "hostel:manage", "users:manage", "school:settings",
+    "branches:read", "branches:write",
     "payments:settings", "sessions:read", "sessions:write",
     "promotion:read", "promotion:write", "transfer:read", "transfer:write",
     "rollover:read", "rollover:write",
@@ -78,9 +80,11 @@ const ROLE_PERMISSIONS = {
   ],
   teacher: [...TEACHING_PERMISSIONS],
   staff: [
+    "dashboard:view",
     "staff:read", "attendance:read", "attendance:mark",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
+    "library:read",
   ],
   student: [
     "dashboard:view", "attendance:read", "homework:read",
@@ -104,7 +108,7 @@ export function permissionsFor(user) {
   const perms = user.permissions;
   if (Array.isArray(perms)) return perms;
   const role = legacyRole(user.role);
-  if (role === "staff") return STAFF_PERMISSIONS[user.designation] || [];
+  if (role === "staff") return STAFF_PERMISSIONS[user.designation] || ROLE_PERMISSIONS["staff"];
   return ROLE_PERMISSIONS[role] || [];
 }
 

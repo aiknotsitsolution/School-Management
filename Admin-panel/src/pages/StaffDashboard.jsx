@@ -36,7 +36,6 @@ import {
 import { selectUser, selectSchool } from "../store/selectors";
 import { useSelector } from "react-redux";
 import { isPersonaStaff, resolvePersona } from "../lib/persona";
-import AttendanceCheckinModal from "../components/AttendanceCheckinModal";
 import {
   HeroBanner,
   GlassStat,
@@ -85,7 +84,6 @@ export default function StaffDashboard() {
   const [error, setError] = useState("");
 
   const persona = isPersonaStaff(user) ? resolvePersona(user) : null;
-  const [showCheckin, setShowCheckin] = useState(!persona);
 
   useEffect(() => {
     if (persona) return;
@@ -153,22 +151,15 @@ export default function StaffDashboard() {
   const totalPayroll = payroll.reduce((s, p) => s + Number(p.netPay || 0), 0);
 
   const quickActions = [
-    { to: "/leave", icon: CalendarClock, label: "Apply for Leave", tone: ACCENTS.warn.icon },
-    { to: "/staff/my-attendance", icon: Clock, label: "My Attendance", tone: ACCENTS.info.icon },
-    { to: "/staff/profile", icon: UserCog, label: "My Profile", tone: ACCENTS.violet.icon },
-    { to: "/payroll", icon: Banknote, label: "My Payslips", tone: ACCENTS.success.icon },
-    { to: "/notice-board", icon: Megaphone, label: "Notice Board", tone: ACCENTS.alert.icon },
+    { to: "/leave", icon: CalendarClock, label: "Apply for Leave", accent: "warn" },
+    { to: "/staff/my-attendance", icon: Clock, label: "My Attendance", accent: "info" },
+    { to: "/staff/profile", icon: UserCog, label: "My Profile", accent: "violet" },
+    { to: "/payroll", icon: Banknote, label: "My Payslips", accent: "success" },
+    { to: "/notice-board", icon: Megaphone, label: "Notice Board", accent: "alert" },
   ];
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {showCheckin && (
-        <AttendanceCheckinModal
-          userName={user?.name || "Staff"}
-          onDone={() => setShowCheckin(false)}
-        />
-      )}
-
       {/* ── Hero ──────────────────────────────────────────────────── */}
       <HeroBanner
         gradient="slate"
@@ -265,6 +256,8 @@ export default function StaffDashboard() {
               iconTone={ACCENTS.info.icon}
               subtitle="Employment details from the school records"
               action={<ViewLink to="/staff/profile">Edit profile</ViewLink>}
+              decor="people"
+              decorTone={ACCENTS.violet.text}
             >
               {staff ? (
                 <div>
@@ -358,6 +351,8 @@ export default function StaffDashboard() {
                 iconTone={ACCENTS.teal.icon}
                 subtitle="Recent check-ins"
                 action={<ViewLink to="/staff/my-attendance">All</ViewLink>}
+                decor="attend"
+                decorTone={ACCENTS.info.text}
               >
                 {attendance.length === 0 ? (
                   <EmptyPanel
@@ -448,6 +443,8 @@ export default function StaffDashboard() {
               iconTone={ACCENTS.success.icon}
               subtitle={payroll.length ? `${payroll.length} payslips released` : "No payslips yet"}
               action={<ViewLink to="/payroll">All payslips</ViewLink>}
+              decor="coins"
+              decorTone={ACCENTS.success.text}
             >
               {payroll.length === 0 ? (
                 <EmptyPanel

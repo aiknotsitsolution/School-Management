@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 
 const issueSchema = new mongoose.Schema(
   {
+    // Campus this record belongs to. null = school-wide, or a row
+    // that predates branch scoping.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     bookId: { type: mongoose.Schema.Types.ObjectId, ref: "Book", required: true },
     borrowerId: { type: String, required: true }, // studentId or staffId

@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 
 const staffAttendanceSchema = new mongoose.Schema(
   {
+    // Campus this record belongs to. null = school-wide, or a row
+    // that predates branch scoping.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     staffId: { type: String, required: true },
     date: { type: String, required: true }, // YYYY-MM-DD
@@ -22,6 +25,8 @@ const staffAttendanceSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+staffAttendanceSchema.index({ schoolId: 1, branchId: 1, createdAt: -1 });
 
 staffAttendanceSchema.index({ schoolId: 1, staffId: 1, date: 1 }, { unique: true });
 

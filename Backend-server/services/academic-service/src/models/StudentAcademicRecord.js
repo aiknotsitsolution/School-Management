@@ -8,6 +8,8 @@ const mongoose = require("mongoose");
 const recordSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the move happened at. Fixed forever: the row is immutable history.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     studentId: { type: String, required: true }, // admissionNo (canonical identity)
     studentName: { type: String },
     session: { type: String }, // the academic year the move occurred in (optional for in-year transfers)

@@ -4,6 +4,10 @@ const { computeResultWith, resolveScale } = require("../utils/grading");
 const marksSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the mark belongs to. The unique key below is already per student
+    // (who is branch-tagged), so this is for scoping report cards and class
+    // result sheets to one campus.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     studentId: { type: String, required: true }, // admissionNo (canonical student identity)
     examId: { type: mongoose.Schema.Types.ObjectId, ref: "Exam", required: true },
     examName: { type: String, required: true },
@@ -25,8 +29,8 @@ const marksSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-marksSchema.index({ schoolId: 1, studentId: 1, examId: 1, subject: 1 }, { unique: true });
-marksSchema.index({ schoolId: 1, examId: 1 });
+marksSchema.index({ schoolId: 1, branchId: 1, studentId: 1, examId: 1, subject: 1 }, { unique: true });
+marksSchema.index({ schoolId: 1, branchId: 1, examId: 1 });
 marksSchema.index({ schoolId: 1, session: 1 });
 
 // Derive grade/pct/passed from the tenant's ACTIVE grading scale so seeded

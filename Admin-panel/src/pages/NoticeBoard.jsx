@@ -632,7 +632,7 @@ export default function NoticeBoard() {
                   )}
                   {n.pinned && (
                     <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-primary-dark">
-                      <Pin size={12} fill="#4F46E5" /> Pinned
+                      <Pin size={12} fill="#0C47CF" /> Pinned
                     </span>
                   )}
                 </div>
@@ -867,7 +867,7 @@ export default function NoticeBoard() {
 //           <Card key={n.id}>
 //             <div className="flex items-start justify-between mb-2">
 //               <Pill tone={categoryTone[n.category] || "neutral"}>{n.category}</Pill>
-//               {n.pinned && <Pin size={14} className="text-primary-dark" fill="#4F46E5" />}
+//               {n.pinned && <Pin size={14} className="text-primary-dark" fill="#0C47CF" />}
 //             </div>
 //             <h3 className="font-display font-bold text-ink text-[15.5px] leading-snug">{n.title}</h3>
 //             <p className="text-[13px] text-slate-text mt-2 leading-relaxed">{n.body}</p>

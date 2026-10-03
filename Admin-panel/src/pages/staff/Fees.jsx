@@ -112,7 +112,7 @@ export default function Fees() {
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-2 rounded-lg text-[13px] font-semibold transition-colors ${
-              tab === t ? "bg-ink text-white" : "bg-white text-slate-text hover:bg-paper border border-slate-200"
+              tab === t ? "bg-ink text-white dark:bg-slate-200 dark:text-ink" : "bg-white text-slate-text hover:bg-paper border border-slate-200"
             }`}
           >
             {t}

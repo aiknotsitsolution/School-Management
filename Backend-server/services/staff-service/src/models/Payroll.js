@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 
 const payrollSchema = new mongoose.Schema(
   {
+    // Campus this record belongs to. null = school-wide, or a row
+    // that predates branch scoping.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     staffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff", required: true },
     month: { type: String, required: true }, // e.g. "September"
@@ -21,6 +24,8 @@ const payrollSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+payrollSchema.index({ schoolId: 1, branchId: 1, createdAt: -1 });
 
 payrollSchema.index({ schoolId: 1, staffId: 1, month: 1, year: 1 }, { unique: true });
 

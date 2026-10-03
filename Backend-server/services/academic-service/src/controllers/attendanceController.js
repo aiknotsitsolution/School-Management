@@ -1,3 +1,9 @@
+const {
+  scopeQuery,
+  withBranchScope,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
+const mongoose = require("mongoose");
 const Attendance = require("../models/Attendance");
 const { getStudentModel } = require("../db/studentDb");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
@@ -67,11 +73,65 @@ const markAttendance = async (req, res) => {
     for (const pair of pairs) {
       const [cls, section] = pair.split("||");
       missing.push(
-        ...(await findMissingMasterRefs({ schoolId: req.tenantId, class: cls, section })),
+        ...(await findMissingMasterRefs({ schoolId: req.tenantId, branchId: req.branchId, class: cls, section })),
       );
     }
     if (missing.length) {
       return res.status(400).json({ success: false, message: missingMessage(missing), missing });
+    }
+
+    // Every studentId must belong to THIS school (and, for a campus-pinned
+    // caller, to THIS campus) before we write. The upsert below cannot match on
+    // branchId (see comment there), so this check is what enforces isolation.
+    const submittedIds = [...new Set(records.map((r) => String(r.studentId || "").trim()).filter(Boolean))];
+    if (submittedIds.length > 0) {
+      let Student;
+      try {
+        Student = await getStudentModel();
+      } catch (err) {
+        return res.status(503).json({ success: false, message: "Student enrollment check unavailable: " + err.message });
+      }
+      // A record's studentId may be an admissionNo or a student _id, so match
+      // whichever form is valid. Casting a non-ObjectId into _id throws.
+      const asObjectIds = submittedIds.filter((id) => mongoose.isValidObjectId(id));
+      const or = [{ admissionNo: { $in: submittedIds } }];
+      if (asObjectIds.length > 0) or.push({ _id: { $in: asObjectIds } });
+      const studentFilter = { schoolId: req.tenantId, $or: or };
+      if (req.branchId) studentFilter.branchId = req.branchId;
+      const owned = await Student.find(studentFilter).select("_id admissionNo").lean();
+      const ownedIds = new Set();
+      for (const s of owned) {
+        ownedIds.add(String(s._id));
+        if (s.admissionNo) ownedIds.add(String(s.admissionNo));
+      }
+      const notMine = submittedIds.filter((id) => !ownedIds.has(id));
+      if (notMine.length > 0) {
+        console.error(
+          "[OWNERSHIP-DEBUG]",
+          JSON.stringify({
+            tenantId: req.tenantId,
+            branchId: req.branchId,
+            role: req.user && req.user.role,
+            submittedIds,
+            filter: studentFilter,
+            ownedCount: owned.length,
+            collection: Student.collection && Student.collection.collectionName,
+            dbName: Student.db && Student.db.name,
+            uriTail: (process.env.STUDENT_MONGODB_URI || "").slice(-30),
+            mongooseVer: mongoose.version,
+            strictQuery: Student.schema.options.strictQuery,
+            bySchoolOnly: await Student.countDocuments({ schoolId: req.tenantId }),
+            byAdmNo: await Student.countDocuments({ admissionNo: { $in: submittedIds } }),
+          }),
+        );
+        return res.status(400).json({
+          success: false,
+          message: req.branchId
+            ? "Some studentIds do not belong to this campus"
+            : "Some studentIds do not belong to this school",
+          invalidStudentIds: notMine,
+        });
+      }
     }
 
     const ops = records.map((r) => {
@@ -89,6 +149,9 @@ const markAttendance = async (req, res) => {
         status,
         date,
         schoolId: req.tenantId,
+        // Stamped because upsert:true builds a brand new row from these fields;
+        // without it the new row could never be matched by a branch filter.
+        branchId: branchIdForWrite(req),
         markedBy: req.user.name,
       };
       if (typeof r.remarks === "string" && String(r.remarks).trim() !== "") {
@@ -96,6 +159,12 @@ const markAttendance = async (req, res) => {
       }
       return {
         updateOne: {
+          // Match ONLY the unique index {schoolId, studentId, date}. branchId is
+          // deliberately absent: it is not part of that index, so including it
+          // made the lookup miss rows whose branchId is null (or another
+          // campus), and the upsert then tried an INSERT and died on E11000.
+          // Campus isolation for these writes is enforced by the student
+          // ownership check above; branchId is still stamped on the row below.
           filter: { schoolId: req.tenantId, studentId, date },
           update: { $set: set },
           upsert: true,
@@ -114,6 +183,7 @@ const markAttendance = async (req, res) => {
       const dateStr = first.date ? new Date(first.date).toISOString().split("T")[0] : null;
       const pushPayload = {
         schoolId: req.tenantId,
+        branchId: req.branchId,
         class: classLabel,
         section: section || null,
         date: dateStr,
@@ -143,7 +213,7 @@ const markAttendance = async (req, res) => {
 const getAttendance = async (req, res) => {
   try {
     const { studentId, class: cls, section, from, to } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Attendance, req, { schoolId: req.tenantId })
     if (studentId) filter.studentId = studentId;
     if (cls) filter.class = cls;
     if (section) filter.section = section;
@@ -174,7 +244,7 @@ const getAttendance = async (req, res) => {
 const getAttendanceReport = async (req, res) => {
   try {
     const { from, to, class: cls, section, studentId } = req.query;
-    const match = { schoolId: req.tenantId };
+      const match = withBranchScope(req, { schoolId: req.tenantId });
     if (cls) match.class = cls;
     if (section) match.section = section;
     if (studentId) match.studentId = studentId;

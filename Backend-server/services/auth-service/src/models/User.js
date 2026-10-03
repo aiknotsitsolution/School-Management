@@ -34,6 +34,14 @@ const userSchema = new mongoose.Schema(
     },
     class: { type: String, default: null },
     section: { type: String, default: null },
+    // Campus this account belongs to. null = school-wide (the usual case for a
+    // school admin, and every account created before branch scoping existed).
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      default: null,
+      index: true,
+    },
     phone: { type: String },
     avatar: { type: String, default: null },
     refId: { type: String, default: null },

@@ -1,3 +1,7 @@
+const {
+  scopeQuery,
+  withBranchScope,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const Homework = require("../models/Homework");
 const HomeworkSubmission = require("../models/HomeworkSubmission");
 const imagekit = require("@school-erp/shared/src/config/imagekit");
@@ -25,10 +29,10 @@ const submitHomework = async (req, res) => {
       return res.status(403).json({ success: false, message: "No student identity on this account" });
     }
 
-    const homework = await Homework.findOne({
+    const homework = await Homework.findOne(scopeQuery(Homework, req, {
       _id: req.params.homeworkId,
       schoolId: req.tenantId,
-    });
+    }));
     if (!homework) {
       return res.status(404).json({ success: false, message: "Homework not found" });
     }
@@ -39,11 +43,11 @@ const submitHomework = async (req, res) => {
 
     // A reviewed submission is final: re-submitting would flip it back to
     // "Submitted" while silently keeping the teacher's marks/feedback.
-    const prior = await HomeworkSubmission.findOne({
+    const prior = await HomeworkSubmission.findOne(scopeQuery(HomeworkSubmission, req, {
       schoolId: req.tenantId,
       homeworkId: homework._id,
       admissionNo,
-    })
+    }))
       .select("status")
       .lean();
     if (prior && prior.status === "Reviewed") {
@@ -101,8 +105,8 @@ const submitHomework = async (req, res) => {
         ? "Late"
         : "Submitted";
 
-    const submission = await HomeworkSubmission.findOneAndUpdate(
-      { schoolId: req.tenantId, homeworkId: homework._id, admissionNo },
+    const submission = await HomeworkSubmission.findOneAndUpdate(scopeQuery(HomeworkSubmission, req, 
+      { schoolId: req.tenantId, homeworkId: homework._id, admissionNo }),
       {
         $set: {
           schoolId: req.tenantId,
@@ -135,7 +139,7 @@ const getMySubmissions = async (req, res) => {
     if (!admissionNo) {
       return res.status(403).json({ success: false, message: "No student identity on this account" });
     }
-    const filter = { schoolId: req.tenantId, admissionNo };
+    const filter = scopeQuery(HomeworkSubmission, req, { schoolId: req.tenantId, admissionNo })
     if (req.params.homeworkId) filter.homeworkId = req.params.homeworkId;
     // If a homeworkId is provided from the query, ensure it belongs to the student's class.
     if (req.query.homeworkId) filter.homeworkId = req.query.homeworkId;
@@ -153,19 +157,19 @@ const getMySubmissions = async (req, res) => {
 // Teacher reviews submissions for their assigned class/section.
 const reviewSubmission = async (req, res) => {
   try {
-    const submission = await HomeworkSubmission.findOne({
+    const submission = await HomeworkSubmission.findOne(scopeQuery(HomeworkSubmission, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
-    });
+    }));
     if (!submission) {
       return res.status(404).json({ success: false, message: "Submission not found" });
     }
 
     // Teacher must be scoped to the class/section of the homework this submission belongs to.
-    const homework = await Homework.findOne({
+    const homework = await Homework.findOne(scopeQuery(Homework, req, {
       _id: submission.homeworkId,
       schoolId: req.tenantId,
-    });
+    }));
     if (!homework) {
       return res.status(404).json({ success: false, message: "Homework not found" });
     }
@@ -216,13 +220,13 @@ const listSubmissionsForClass = async (req, res) => {
     if (["student", "parent"].includes(req.user.role)) {
       return res.status(403).json({ success: false, message: "Only school staff can list class submissions" });
     }
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(HomeworkSubmission, req, { schoolId: req.tenantId })
     if (req.query.status) filter.status = req.query.status;
 
     if (req.query.homeworkId) {
       // Honor ?homeworkId= (previously it was silently overwritten below) and
       // verify the target homework is inside the caller's scope.
-      const target = await Homework.findOne({ _id: req.query.homeworkId, schoolId: req.tenantId })
+      const target = await Homework.findOne(scopeQuery(Homework, req, { _id: req.query.homeworkId, schoolId: req.tenantId }))
         .select("_id class section")
         .lean();
       if (!target) return res.json({ success: true, count: 0, total: 0, data: [] });
@@ -231,10 +235,14 @@ const listSubmissionsForClass = async (req, res) => {
       }
       filter.homeworkId = target._id;
     } else {
-      const homeworkFilter = { schoolId: req.tenantId };
+const homeworkFilter = withBranchScope(req, { schoolId: req.tenantId });
       if (req.teacherScope) {
         homeworkFilter.class = req.teacherScope.class;
         if (req.teacherScope.section) homeworkFilter.section = req.teacherScope.section;
+        else if (req.teacherScope.sections) {
+          // Section-less class aggregate: cover the sections the teacher owns.
+          homeworkFilter.section = { $in: req.teacherScope.sections };
+        }
       } else if (req.query.class) {
         homeworkFilter.class = req.query.class;
         if (req.query.section) homeworkFilter.section = req.query.section;

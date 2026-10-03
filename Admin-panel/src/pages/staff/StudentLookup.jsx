@@ -1,6 +1,7 @@
 import { useState } from "react";
-import { Search, UserRound, MapPin, Phone, UserCheck } from "lucide-react";
+import { Search, MapPin, Phone, UserCheck } from "lucide-react";
 import { PageIntro, Card, Input, Pill, toast } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
 
 export default function StudentLookup() {
@@ -45,7 +46,7 @@ export default function StudentLookup() {
           </div>
           <button
             onClick={run}
-            className="px-4 py-2.5 rounded-lg bg-ink text-white text-[13px] font-semibold hover:bg-ink-light"
+            className="px-4 py-2.5 rounded-lg bg-ink text-white text-[13px] font-semibold hover:bg-ink-light dark:bg-slate-200 dark:text-ink dark:hover:bg-slate-300"
           >
             Search
           </button>
@@ -57,7 +58,7 @@ export default function StudentLookup() {
       ) : searched && results.length === 0 ? (
         <Card>
           <div className="py-10 text-center">
-            <UserRound size={40} className="mx-auto text-slate-text/30 mb-3" />
+            <PageArtwork name="students" size={64} className="mx-auto mb-4" />
             <p className="text-[15px] font-semibold text-ink">No students found</p>
             <p className="text-[13px] text-slate-text/70 mt-1">Try a different name or admission number.</p>
           </div>

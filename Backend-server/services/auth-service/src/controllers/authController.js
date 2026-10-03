@@ -3,11 +3,13 @@ const jwt = require("jsonwebtoken");
 const crypto = require("crypto");
 const User = require("../models/User");
 const School = require("../models/School");
+const Branch = require("../models/Branch");
 const OtpToken = require("../models/OtpToken");
 const PaymentGateway = require("../models/PaymentGateway");
 const { validatePassword } = require("../utils/password");
 const { sendEmail } = require("../utils/email");
 const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
+const { branchIdForWrite, assertBranchAssignable } = require("@school-erp/shared/src/middleware/branchScope");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 const { generateAccessToken, generateRefreshToken } = require("../utils/generateToken");
 const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
@@ -23,9 +25,19 @@ const SCHOOL_ADMIN_CREATABLE = ["teacher", "staff", "student", "parent"];
 
 // Failure responses never dump raw error/debug text (stack traces, DB paths,
 // index/duplicate details) to the client. Details go to the server log only.
-const unexpectedError = (res, err) => {
-  if (err.code === 11000) {
+const unexpectedError = (res, err) =>
+{
+  if (err.code === 11000)
+  {
     return res.status(409).json({ success: false, message: "Duplicate entry violates a unique constraint" });
+  }
+  // Validation helpers (assertBranchAssignable and friends) throw an httpError
+  // whose message is written for the caller. Degrading it into a 500 would hide
+  // the reason — e.g. "not a branch of this school" — behind "Something went
+  // wrong", so those statuses are passed straight through.
+  if ([400, 403, 404, 409].includes(err?.status))
+  {
+    return res.status(err.status).json({ success: false, message: err.message });
   }
   console.error("[auth] unexpected error:", err?.stack || err.message);
   return res.status(500).json({ success: false, message: "Something went wrong" });
@@ -61,27 +73,43 @@ const SCHOOL_EDITABLE_FIELDS = [
 // the shell it resolves to, or fails with a clear status when the shell does
 // not exist / is already owned by another active account (which rolls the
 // account back).
-const ensureStudentLink = async ({ schoolId, admissionId, userId }) => {
-  try {
+const ensureStudentLink = async ({ schoolId, admissionId, userId }) =>
+{
+  try
+  {
     const { getStudentModel } = require("../db/studentDb");
     const Student = await getStudentModel();
 
     const existing = await Student.findOne({ schoolId, admissionNo: admissionId, deletedAt: null });
-    if (!existing) {
+    if (!existing)
+    {
       return {
         status: 400,
         message: "No pending student profile exists for this Admission ID in this school — confirm the admission first",
       };
     }
-    if (existing.userId) {
+    if (existing.userId)
+    {
       const linked = await User.findById(existing.userId).lean();
-      if (linked && !linked.deletedAt && String(linked._id) !== String(userId)) {
+      if (linked && !linked.deletedAt && String(linked._id) !== String(userId))
+      {
         return { status: 409, message: "This Admission ID is already linked to another active account" };
       }
     }
     await Student.updateOne({ _id: existing._id }, { $set: { userId: String(userId) } });
-    return { linked: existing._id };
-  } catch (err) {
+    // The person record, not the acting admin, is the authority on which campus
+    // this account belongs to — and equally on its class/section, which the
+    // admin never types (they only pick the Admission ID). Returning them lets
+    // createUser denormalise them, so the very first login already carries the
+    // class the student's timetable/homework/exams reads scope off.
+    return {
+      linked: existing._id,
+      branch: existing.branchId || null,
+      cls: existing.class || null,
+      section: existing.section || null,
+    };
+  } catch (err)
+  {
     return { status: 503, message: `Cannot link student profile: ${err.message}` };
   }
 };
@@ -89,8 +117,10 @@ const ensureStudentLink = async ({ schoolId, admissionId, userId }) => {
 // True when the given Admission ID already maps to a student record in this
 // school. Non-fatal on infrastructure failure so it only ever *prevents* an
 // unsafe assignment, never blocks legitimate school operations.
-const studentExistsFor = async (schoolId, admissionNo) => {
-  try {
+const studentExistsFor = async (schoolId, admissionNo) =>
+{
+  try
+  {
     const { getStudentModel } = require("../db/studentDb");
     const Student = await getStudentModel();
     return Boolean(
@@ -98,7 +128,8 @@ const studentExistsFor = async (schoolId, admissionNo) => {
         .select("_id")
         .lean(),
     );
-  } catch {
+  } catch
+  {
     return null;
   }
 };
@@ -106,13 +137,17 @@ const studentExistsFor = async (schoolId, admissionNo) => {
 // Parent → child links (CLIENT-REQ-052): linkedStudentIds are admissionNo
 // strings of EXISTING active students in the SAME school. Returns a cleaned,
 // de-duplicated array or an error message.
-const cleanAndValidateLinkedStudents = async (schoolId, linkedStudentIds) => {
-  if (!Array.isArray(linkedStudentIds)) {
+const cleanAndValidateLinkedStudents = async (schoolId, linkedStudentIds) =>
+{
+  if (!Array.isArray(linkedStudentIds))
+  {
     return { error: "linkedStudentIds must be an array of Admission IDs" };
   }
   const ids = [...new Set(linkedStudentIds.map((s) => String(s || "").trim()).filter(Boolean))];
-  for (const id of ids) {
-    if (!(await studentExistsFor(schoolId, id))) {
+  for (const id of ids)
+  {
+    if (!(await studentExistsFor(schoolId, id)))
+    {
       return { error: `No active student with Admission ID "${id}" in this school` };
     }
   }
@@ -130,21 +165,25 @@ const cleanAndValidateLinkedStudents = async (schoolId, linkedStudentIds) => {
 const STAFF_LINK_ROLES = ["teacher", "staff"];
 const STAFF_LINK_OK = {
   teacher: ["teacher"],
-  staff: ["admin-staff", "support"],
+  staff: ["staff"],
 };
 
 const staffLinkRequired = (role) => STAFF_LINK_ROLES.includes(role);
 
-const staffRecordFor = async (schoolId, employeeId) => {
-  try {
+const staffRecordFor = async (schoolId, employeeId) =>
+{
+  try
+  {
     const { getStaffModel } = require("../db/staffDb");
     const Staff = await getStaffModel();
     const record = await Staff.findOne({ schoolId, employeeId }).lean();
-    if (!record) {
+    if (!record)
+    {
       console.error(`[staffRecordFor] No record found — schoolId=${schoolId} employeeId=${employeeId}`);
     }
     return record;
-  } catch (err) {
+  } catch (err)
+  {
     console.error("[staffRecordFor] DB error:", err.message);
     return null;
   }
@@ -153,29 +192,84 @@ const staffRecordFor = async (schoolId, employeeId) => {
 const NO_PENDING_STAFF_MSG =
   "No pending Teacher/Staff record exists for this Staff ID in this school — create the record in Teachers & Staff first";
 
-const ensureStaffLink = async ({ schoolId, employeeId, userRole, userId }) => {
-  try {
+const ensureStaffLink = async ({ schoolId, employeeId, userRole, userId }) =>
+{
+  try
+  {
     const { getStaffModel } = require("../db/staffDb");
     const Staff = await getStaffModel();
 
     const existing = await Staff.findOne({ schoolId, employeeId });
     if (!existing) return { status: 400, message: NO_PENDING_STAFF_MSG };
-    if (!STAFF_LINK_OK[userRole].includes(existing.role)) {
+    if (!STAFF_LINK_OK[userRole].includes(existing.role))
+    {
       return {
         status: 400,
         message: `This Staff ID belongs to a ${existing.role} record — it cannot be linked to a ${userRole} account`,
       };
     }
-    if (existing.userId) {
+    if (existing.userId)
+    {
       const linked = await User.findById(existing.userId).lean();
-      if (linked && !linked.deletedAt && String(linked._id) !== String(userId)) {
+      if (linked && !linked.deletedAt && String(linked._id) !== String(userId))
+      {
         return { status: 409, message: "This Staff ID is already linked to another active account" };
       }
     }
     await Staff.updateOne({ _id: existing._id }, { $set: { userId: String(userId) } });
-    return { linked: existing._id };
-  } catch (err) {
+    // See ensureStudentLink: the person record decides the account's campus.
+    return { linked: existing._id, branch: existing.branchId || null };
+  } catch (err)
+  {
     return { status: 503, message: `Cannot link staff profile: ${err.message}` };
+  }
+};
+
+// Campus for a NEW account. Only roles that no person record owns pick one in the
+// UI (a parent, another school admin); a teacher/staff/student account inherits
+// the campus of the record it links to. A parent is deliberately left
+// school-wide when nothing is chosen: children can sit in different campuses,
+// and pinning the parent to the admin's active campus would hide the rest.
+const accountCampusFor = async (req, role) =>
+{
+  if (!["parent", "school_admin"].includes(role)) return branchIdForWrite(req);
+  const requested = req.body.branchId;
+  return requested ? assertBranchAssignable(req, requested) : null;
+};
+
+// Moves the linked person record to a new campus, so an account and the record
+// behind it can never disagree about where the person belongs (a mismatch would
+// scope the account to a campus its own record is not in). Returns null when no
+// record could be reached — the caller must not then save a half-applied move.
+const movePersonCampus = async (user, branchId) =>
+{
+  try
+  {
+    if (user.role === "student")
+    {
+      const { getStudentModel } = require("../db/studentDb");
+      const Student = await getStudentModel();
+      const moved = await Student.updateOne(
+        { schoolId: user.schoolId, admissionNo: user.refId },
+        { $set: { branchId } },
+      );
+      return moved.matchedCount ? { moved: true } : null;
+    }
+    if (staffLinkRequired(user.role))
+    {
+      const { getStaffModel } = require("../db/staffDb");
+      const Staff = await getStaffModel();
+      const moved = await Staff.updateOne(
+        { schoolId: user.schoolId, _id: user.refId },
+        { $set: { branchId } },
+      );
+      return moved.matchedCount ? { moved: true } : null;
+    }
+    return { moved: false };
+  } catch (err)
+  {
+    console.error("[movePersonCampus] DB error:", err.message);
+    return null;
   }
 };
 
@@ -185,6 +279,12 @@ const toPublicUser = (user) => ({
   email: user.email,
   role: user.role,
   schoolId: user.schoolId || null,
+  // Which campus this account belongs to. Null means school-wide. Accounts are
+  // campus-scoped now, so user management has to be able to show and filter by
+  // this; without it a branch admin cannot tell whose account they are looking
+  // at. Safe to expose: a branch admin only ever receives their own branch's
+  // users, because listUsers filters on the same branch.
+  branchId: user.branchId || null,
   designation: user.designation || null,
   class: user.class || null,
   section: user.section || null,
@@ -201,46 +301,91 @@ const toPublicUser = (user) => ({
   permissions: user.deletedAt ? [] : getPermissionsFor(user),
 });
 
+// `User.avatar` is only ever written by a self-service upload. A student's
+// canonical photo lives on the Student record — that is what the onboarding
+// form writes, and what the ID card and every admin surface already read — so a
+// student onboarded with a photo would otherwise show initials in the top bar
+// and on their own profile. Resolving it here means consumers only ever look at
+// `avatar` and never have to know the second field exists.
+//
+// `toPublicUser` deliberately stays synchronous: the admin surfaces that return
+// OTHER users (create / status / restore / campus move) never need this, and
+// they are not worth an extra cross-service read per row.
+const toPublicUserWithAvatar = async (user) =>
+{
+  const pub = toPublicUser(user);
+  // An explicitly self-uploaded avatar wins — it is written after the onboarding
+  // photo, so it is the more recent of the two.
+  if (pub.avatar || pub.role !== "student" || !pub.refId) return pub;
+  try
+  {
+    const { getStudentModel } = require("../db/studentDb");
+    const Student = await getStudentModel();
+    const doc = await Student.findOne(
+      { schoolId: pub.schoolId, admissionNo: pub.refId },
+    ).lean();
+    return doc?.photoUrl ? { ...pub, avatar: doc.photoUrl } : pub;
+  } catch (err)
+  {
+    // A profile photo must never fail a login: fall back to the initials
+    // avatar instead of breaking the response.
+    console.error("[toPublicUserWithAvatar] resolve failed:", err.message);
+    return pub;
+  }
+};
+
 // Admin-only user creation (no public self-register). Enforces privilege
 // hierarchy so a school admin can never create admins or touch other schools.
-const createUser = async (req, res) => {
-  try {
+const createUser = async (req, res) =>
+{
+  try
+  {
     const { name, email, password, role, phone, refId, linkedStudentIds = [], designation, section } = req.body;
     const cls = req.body.class;
     const creator = req.user;
 
-    if (!name || !email || !password || !role) {
+    if (!name || !email || !password || !role)
+    {
       return res.status(400).json({ success: false, message: "name, email, password and role are required" });
     }
-    if (!EMAIL_RE.test(String(email || "").trim())) {
+    if (!EMAIL_RE.test(String(email || "").trim()))
+    {
       return res.status(400).json({ success: false, message: "Please enter a valid email address" });
     }
-    if (phone !== undefined && String(phone).trim() !== "" && !PHONE_RE.test(String(phone).trim())) {
+    if (phone !== undefined && String(phone).trim() !== "" && !PHONE_RE.test(String(phone).trim()))
+    {
       return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
     }
     const passErr = validatePassword(password);
     if (passErr) return res.status(400).json({ success: false, message: passErr });
-    if (!VALID_ROLES.includes(role)) {
+    if (!VALID_ROLES.includes(role))
+    {
       return res.status(400).json({ success: false, message: `role must be one of: ${VALID_ROLES.join(", ")}` });
     }
 
     let schoolId;
-    if (creator.role === "super_admin") {
+    if (creator.role === "super_admin")
+    {
       schoolId = role === "super_admin" ? null : req.body.schoolId || req.header("X-School-Id") || null;
-      if (!schoolId && role !== "super_admin") {
+      if (!schoolId && role !== "super_admin")
+      {
         return res.status(400).json({ success: false, message: "schoolId is required for school-scoped roles" });
       }
-    } else {
-      if (!SCHOOL_ADMIN_CREATABLE.includes(role)) {
+    } else
+    {
+      if (!SCHOOL_ADMIN_CREATABLE.includes(role))
+      {
         return res.status(403).json({ success: false, message: "School admin cannot create this role" });
       }
       schoolId = creator.schoolId;
-      if (!schoolId) {
+      if (!schoolId)
+      {
         return res.status(403).json({ success: false, message: "School admin must belong to a school" });
       }
     }
 
-    if (role === "staff" && !designation) {
+    if (role === "staff" && !designation)
+    {
       return res.status(400).json({ success: false, message: "designation is required for staff role" });
     }
     // A teacher account's class/section is an optional PRIMARY teaching scope.
@@ -248,7 +393,8 @@ const createUser = async (req, res) => {
     // (type="teaching" | "class_teacher").
 
     const admissionId = role === "student" ? String(refId || "").trim() : null;
-    if (role === "student" && !admissionId) {
+    if (role === "student" && !admissionId)
+    {
       return res.status(400).json({ success: false, message: "Admission ID (refId) is required for student accounts" });
     }
 
@@ -259,9 +405,11 @@ const createUser = async (req, res) => {
       role === "staff" &&
       designation === "admission_counsellor" &&
       String(refId || "").trim()
-    ) {
+    )
+    {
       const collides = await studentExistsFor(schoolId, String(refId).trim());
-      if (collides) {
+      if (collides)
+      {
         return res.status(409).json({
           success: false,
           message: "This ID belongs to an admitted student — it cannot be used as a counsellor's Staff ID",
@@ -276,7 +424,8 @@ const createUser = async (req, res) => {
     // a random/nonexistent Admission ID is rejected up-front so no account is
     // created (and subsequently rolled back) for an ID that cannot be linked.
     const admissionShell = role === "student" ? await studentExistsFor(schoolId, admissionId) : null;
-    if (role === "student" && !admissionShell) {
+    if (role === "student" && !admissionShell)
+    {
       return res.status(400).json({
         success: false,
         message: "No pending student profile exists for this Admission ID in this school — confirm the admission first",
@@ -287,7 +436,8 @@ const createUser = async (req, res) => {
     // same-school students — never a random or soft-deleted Admission ID.
     const links = await cleanAndValidateLinkedStudents(schoolId, linkedStudentIds);
     if (links.error) return res.status(400).json({ success: false, message: links.error });
-    if (role === "parent" && !links.ids.length) {
+    if (role === "parent" && !links.ids.length)
+    {
       return res.status(400).json({
         success: false,
         message: "At least one student must be linked to a parent account",
@@ -302,14 +452,18 @@ const createUser = async (req, res) => {
     // stores the linked Staff._id (see ensureStaffLink).
     const staffId = staffLinkRequired(role) ? String(refId || "").trim() : null;
     const staffRecord = staffId ? await staffRecordFor(schoolId, staffId) : null;
-    if (staffLinkRequired(role)) {
-      if (!staffId) {
+    if (staffLinkRequired(role))
+    {
+      if (!staffId)
+      {
         return res.status(400).json({ success: false, message: `Staff ID (refId) is required for ${role} accounts` });
       }
-      if (!staffRecord) {
+      if (!staffRecord)
+      {
         return res.status(400).json({ success: false, message: NO_PENDING_STAFF_MSG });
       }
-      if (!STAFF_LINK_OK[role].includes(staffRecord.role)) {
+      if (!STAFF_LINK_OK[role].includes(staffRecord.role))
+      {
         return res.status(400).json({
           success: false,
           message: `This Staff ID belongs to a ${staffRecord.role} record — it cannot be linked to a ${role} account`,
@@ -317,16 +471,19 @@ const createUser = async (req, res) => {
       }
       // A counsellor's Staff ID must never collide with an admitted student's
       // Admission ID (their lookup surfaces could address the wrong person).
-      if (role === "staff" && designation === "admission_counsellor") {
+      if (role === "staff" && designation === "admission_counsellor")
+      {
         const collides = await studentExistsFor(schoolId, staffId);
-        if (collides) {
+        if (collides)
+        {
           return res.status(409).json({
             success: false,
             message: "This ID belongs to an admitted student — it cannot be used as a counsellor's Staff ID",
           });
         }
       }
-      if (staffRecord.userId) {
+      if (staffRecord.userId)
+      {
         return res.status(409).json({ success: false, message: "This Staff ID is already linked to another active account" });
       }
     }
@@ -338,6 +495,11 @@ const createUser = async (req, res) => {
       password: hashed,
       role,
       schoolId,
+      // Campus the account belongs to. A staff/teacher role is pinned to the
+      // branch of the person record it links to; everyone else is placed in the
+      // campus the admin chose (see accountCampusFor) or the acting admin's
+      // active campus.
+      branchId: staffRecord?.branchId || (await accountCampusFor(req, role)),
       designation: designation || undefined,
       class: cls || undefined,
       section: section || undefined,
@@ -355,31 +517,54 @@ const createUser = async (req, res) => {
     // school (PlatformUser.refId === Student.admissionNo). Failing to link
     // (e.g. a shell claimed concurrently, duplicate ownership) rolls the
     // account back.
-    if (role === "student") {
+    if (role === "student")
+    {
       const linkResult = await ensureStudentLink({
         schoolId,
         admissionId,
         userId: user._id,
       });
-      if (linkResult.status) {
-        await User.deleteOne({ _id: user._id }).catch(() => {});
+      if (linkResult.status)
+      {
+        await User.deleteOne({ _id: user._id }).catch(() => { });
         return res.status(linkResult.status).json({ success: false, message: linkResult.message });
+      }
+      // Same authority rule, extended from campus to class/section. Built as
+      // one $set so the returned doc and the persisted row can never disagree
+      // (the response feeds toPublicUser, which is what the caller stores).
+      // `personFields` rather than `cls` on purpose: `cls` already holds
+      // req.body.class in this function.
+      const personFields = {};
+      if (linkResult.branch) personFields.branchId = linkResult.branch;
+      if (linkResult.cls) personFields.class = linkResult.cls;
+      if (linkResult.section) personFields.section = linkResult.section;
+      if (Object.keys(personFields).length)
+      {
+        Object.assign(user, personFields);
+        await User.updateOne({ _id: user._id }, { $set: personFields });
       }
     }
 
     // Staff/Teacher/Class Teacher accounts must resolve to a real person record
     // in the SAME school (user.refId === Staff._id). A concurrent claim /
     // duplicate ownership rolls the account back.
-    if (staffLinkRequired(role)) {
+    if (staffLinkRequired(role))
+    {
       const linkResult = await ensureStaffLink({
         schoolId,
         employeeId: staffId,
         userRole: role,
         userId: user._id,
       });
-      if (linkResult.status) {
-        await User.deleteOne({ _id: user._id }).catch(() => {});
+      if (linkResult.status)
+      {
+        await User.deleteOne({ _id: user._id }).catch(() => { });
         return res.status(linkResult.status).json({ success: false, message: linkResult.message });
+      }
+      if (linkResult.branch)
+      {
+        user.branchId = linkResult.branch;
+        await User.updateOne({ _id: user._id }, { $set: { branchId: linkResult.branch } });
       }
     }
 
@@ -389,15 +574,19 @@ const createUser = async (req, res) => {
       data: toPublicUser(user),
     });
     await writeAudit({ req, user: creator, action: "user.created", targetType: "user", targetId: user._id, message: `Created ${role} user ${user.email}` });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const login = async (req, res) => {
-  try {
+const login = async (req, res) =>
+{
+  try
+  {
     const { email, password } = req.body;
-    if (typeof email !== "string" || !String(email).trim() || typeof password !== "string" || !password) {
+    if (typeof email !== "string" || !String(email).trim() || typeof password !== "string" || !password)
+    {
       return res.status(400).json({ success: false, message: "email and password are required" });
     }
 
@@ -409,13 +598,16 @@ const login = async (req, res) => {
     if (!match) return res.status(401).json({ success: false, message: "Invalid credentials" });
 
     let school = null;
-    if (user.schoolId) {
+    if (user.schoolId)
+    {
       school = await School.findById(user.schoolId).lean();
-      if (!school || school.status !== "active") {
+      if (!school || school.status !== "active")
+      {
         return res.status(403).json({ success: false, message: "Your school account is inactive" });
       }
       // Block school_admin login if onboarding is not complete
-      if (user.role === "school_admin" && school.onboarding?.status !== "live") {
+      if (user.role === "school_admin" && school.onboarding?.status !== "live")
+      {
         return res.status(403).json({
           success: false,
           message: "School onboarding is not complete. Please complete the setup process.",
@@ -437,25 +629,29 @@ const login = async (req, res) => {
       data: {
         accessToken,
         refreshToken,
-        user: toPublicUser(user),
+        user: await toPublicUserWithAvatar(user),
         school: school
           ? { id: school._id, name: school.name, code: school.code, shortName: school.shortName, logo: school.logo, session: school.session, currentSession, academicConfigConfirmed: Boolean(school.academicConfigConfirmed), plan: school.plan, status: school.status, onboarding: school.onboarding?.status || "live", city: school.city, state: school.state, pincode: school.pincode, board: school.board || "", recognitionNumber: school.recognitionNumber || "", recognitionAuthority: school.recognitionAuthority || "", recognitionVerified: Boolean(school.recognitionVerified), settings: school.settings || {} }
           : null,
       },
     });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const refreshToken = async (req, res) => {
-  try {
+const refreshToken = async (req, res) =>
+{
+  try
+  {
     const { refreshToken } = req.body;
     if (!refreshToken) return res.status(400).json({ success: false, message: "refreshToken is required" });
 
     const decoded = jwt.verify(refreshToken, getJwtSecret());
     // Only refresh-typed tokens may be exchanged for a new access token.
-    if (decoded.typ !== "refresh") {
+    if (decoded.typ !== "refresh")
+    {
       return res.status(401).json({ success: false, message: "Invalid refresh token" });
     }
     const user = await User.findById(decoded.id);
@@ -463,42 +659,51 @@ const refreshToken = async (req, res) => {
     // Refresh tokens issued before the password was last changed/reset are
     // invalidated so a credential change (or compromise response) kills all
     // existing sessions.
-    if (user.passwordChangedAt && decoded.iat * 1000 <= user.passwordChangedAt.getTime()) {
+    if (user.passwordChangedAt && decoded.iat * 1000 <= user.passwordChangedAt.getTime())
+    {
       return res.status(401).json({ success: false, message: "Session expired, please log in again" });
     }
 
-    
+
     const accessToken = generateAccessToken(user);
     res.json({ success: true, data: { accessToken, refreshToken } });
-  } catch (err) {
+  } catch (err)
+  {
     res.status(401).json({ success: false, message: "Invalid or expired refresh token" });
   }
 };
 
-const getMe = async (req, res) => {
-  try {
+const getMe = async (req, res) =>
+{
+  try
+  {
     const user = await User.findById(req.user.id);
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
     let school = null;
-    if (user.schoolId) {
+    if (user.schoolId)
+    {
       const doc = await School.findById(user.schoolId)
         .select("name code shortName city state pincode logo session plan status settings")
         .lean();
-      if (doc) {
+      if (doc)
+      {
         const currentSession = await resolveCurrentSessionInfo(doc._id);
         school = { id: doc._id, name: doc.name, code: doc.code, shortName: doc.shortName, logo: doc.logo, session: doc.session, currentSession, academicConfigConfirmed: Boolean(doc.academicConfigConfirmed), plan: doc.plan, status: doc.status, city: doc.city, state: doc.state, pincode: doc.pincode, board: doc.board || "", recognitionNumber: doc.recognitionNumber || "", recognitionAuthority: doc.recognitionAuthority || "", recognitionVerified: Boolean(doc.recognitionVerified), settings: doc.settings || {} };
       }
     }
 
     res.json({ success: true, data: { user: toPublicUser(user), school } });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const changePassword = async (req, res) => {
-  try {
+const changePassword = async (req, res) =>
+{
+  try
+  {
     const { oldPassword, newPassword } = req.body;
     const user = await User.findById(req.user.id).select("+password");
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
@@ -513,36 +718,45 @@ const changePassword = async (req, res) => {
     user.passwordChangedAt = new Date();
     await user.save();
     res.json({ success: true, message: "Password updated successfully" });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
 const SELF_EDITABLE_FIELDS = ["name", "phone", "avatar"];
 
-const updateMe = async (req, res) => {
-  try {
+const updateMe = async (req, res) =>
+{
+  try
+  {
     const patch = {};
-    for (const key of SELF_EDITABLE_FIELDS) {
+    for (const key of SELF_EDITABLE_FIELDS)
+    {
       if (req.body[key] !== undefined) patch[key] = req.body[key];
     }
-    if (Object.keys(patch).length === 0) {
+    if (Object.keys(patch).length === 0)
+    {
       return res.status(400).json({ success: false, message: "No valid fields to update" });
     }
     const user = await User.findByIdAndUpdate(req.user.id, patch, { new: true });
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
-    res.json({ success: true, data: toPublicUser(user) });
-  } catch (err) {
+    res.json({ success: true, data: await toPublicUserWithAvatar(user) });
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const uploadUserPhoto = async (req, res) => {
-  try {
+const uploadUserPhoto = async (req, res) =>
+{
+  try
+  {
     if (!req.file)
       return res.status(400).json({ success: false, message: "Photo file is required" });
     const uploadErr = assertAllowedUpload(req.file);
-    if (uploadErr) {
+    if (uploadErr)
+    {
       return res.status(400).json({ success: false, message: uploadErr });
     }
     const imagekit = require("@school-erp/shared/src/config/imagekit");
@@ -556,26 +770,35 @@ const uploadUserPhoto = async (req, res) => {
       transformation: { pre: "q-80,w-800,h-800,fo-auto" },
     });
     res.status(201).json({ success: true, data: { url: uploaded.url, fileId: uploaded.fileId } });
-  } catch (err) {
+  } catch (err)
+  {
     res.status(502).json({ success: false, message: err?.message || "Image upload failed" });
   }
 };
 
-const listUsers = async (req, res) => {
-  try {
+const listUsers = async (req, res) =>
+{
+  try
+  {
     const { role, schoolId, q, page = 1, limit = 50 } = req.query;
     const filter = {};
 
-    if (req.user.role === "super_admin") {
+    if (req.user.role === "super_admin")
+    {
       const sid = schoolId || req.header("X-School-Id") || null;
       if (sid) filter.schoolId = sid;
-    } else {
+    } else
+    {
       filter.schoolId = req.user.schoolId;
     }
+    // Campus scope: a branch admin listing users must only get their own branch's
+    // accounts, not every account in the school.
+    if (req.branchId) filter.branchId = req.branchId;
     if (role) filter.role = role;
     if (req.query.includeDeleted !== "true") filter.deletedAt = null;
 
-    if (q && String(q).trim()) {
+    if (q && String(q).trim())
+    {
       const rx = new RegExp(
         String(q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"),
         "i",
@@ -592,33 +815,40 @@ const listUsers = async (req, res) => {
       User.countDocuments(filter),
     ]);
     res.json({ success: true, count: users.length, total, page: p, limit: l, pages: Math.ceil(total / l), data: users.map(toPublicUser) });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
 // Only super_admin can modify super_admin/school_admin; school admins manage
 // staff/teachers/students/parents within their own school only.
-const loadManageableUser = async (editor, targetId) => {
+const loadManageableUser = async (editor, targetId) =>
+{
   const target = await User.findById(targetId);
   if (!target) return { error: { status: 404, message: "User not found" } };
 
   if (editor.role === "super_admin") return target;
 
-  if (editor.role !== "school_admin") {
+  if (editor.role !== "school_admin")
+  {
     return { error: { status: 403, message: "Access denied for this role" } };
   }
-  if (String(target.schoolId) !== String(editor.schoolId)) {
+  if (String(target.schoolId) !== String(editor.schoolId))
+  {
     return { error: { status: 403, message: "Cannot manage user from another school" } };
   }
-  if (["super_admin", "school_admin"].includes(target.role)) {
+  if (["super_admin", "school_admin"].includes(target.role))
+  {
     return { error: { status: 403, message: "Cannot manage this role" } };
   }
   return target;
 };
 
-const updateUserStatus = async (req, res) => {
-  try {
+const updateUserStatus = async (req, res) =>
+{
+  try
+  {
     const { isActive } = req.body;
     if (typeof isActive !== "boolean") return res.status(400).json({ success: false, message: "isActive must be a boolean" });
 
@@ -630,17 +860,21 @@ const updateUserStatus = async (req, res) => {
     await target.save();
     await writeAudit({ req, user: req.user, action: isActive ? "user.activated" : "user.deactivated", targetType: "user", targetId: target._id, message: `${isActive ? "Activated" : "Deactivated"} user ${target.email}` });
     res.json({ success: true, data: toPublicUser(target) });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
 // Soft delete: preserves the record (and history) while locking access.
-const deleteUser = async (req, res) => {
-  try {
+const deleteUser = async (req, res) =>
+{
+  try
+  {
     const target = await loadManageableUser(req.user, req.params.id);
     if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
-    if (String(target._id) === String(req.user.id)) {
+    if (String(target._id) === String(req.user.id))
+    {
       return res.status(400).json({ success: false, message: "You cannot delete your own account" });
     }
 
@@ -649,14 +883,17 @@ const deleteUser = async (req, res) => {
     await target.save();
     await writeAudit({ req, user: req.user, action: "user.soft_deleted", targetType: "user", targetId: target._id, message: `Soft-deleted user ${target.email}` });
     res.json({ success: true, message: "User removed and access revoked. History is preserved." });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
 // Restore a soft-deleted user (super_admin / same-school school_admin).
-const restoreUser = async (req, res) => {
-  try {
+const restoreUser = async (req, res) =>
+{
+  try
+  {
     const target = await loadManageableUser(req.user, req.params.id);
     if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
 
@@ -665,16 +902,19 @@ const restoreUser = async (req, res) => {
     await target.save();
     await writeAudit({ req, user: req.user, action: "user.restored", targetType: "user", targetId: target._id, message: `Restored user ${target.email}` });
     res.json({ success: true, message: "User restored", data: toPublicUser(target) });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
 // Update editable profile fields for a manageable user (no roles/emails by
 // design here; role changes are a prompted, audited flow).
-const updateUser = async (req, res) => {
-  try {
-    const { designation, class: cls, section, phone, refId, name, linkedStudentIds } = req.body;
+const updateUser = async (req, res) =>
+{
+  try
+  {
+    const { designation, class: cls, section, phone, refId, name, linkedStudentIds, branchId } = req.body;
     const target = await loadManageableUser(req.user, req.params.id);
     if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
     if (target.deletedAt) return res.status(400).json({ success: false, message: "Restore the user before editing" });
@@ -683,74 +923,90 @@ const updateUser = async (req, res) => {
     if (designation !== undefined) target.designation = designation || null;
     if (cls !== undefined) target.class = cls || null;
     if (section !== undefined) target.section = section || null;
-    if (phone !== undefined && phone && !PHONE_RE.test(String(phone).trim())) {
+    if (phone !== undefined && phone && !PHONE_RE.test(String(phone).trim()))
+    {
       return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
     }
     if (phone !== undefined) target.phone = phone || null;
-    if (target.role === "student") {
+    if (target.role === "student")
+    {
       const newRef = refId !== undefined ? String(refId || "").trim() : (target.refId || "");
-      if (!newRef) {
+      if (!newRef)
+      {
         return res.status(400).json({ success: false, message: "Admission ID is required for student accounts" });
       }
-      if (newRef !== target.refId) {
+      if (newRef !== target.refId)
+      {
         const linkResult = await ensureStudentLink({
           schoolId: target.schoolId,
           admissionId: newRef,
           userId: target._id,
         });
-        if (linkResult.status) {
+        if (linkResult.status)
+        {
           return res.status(linkResult.status).json({ success: false, message: linkResult.message });
         }
       }
       target.refId = newRef;
-    } else if (staffLinkRequired(target.role) && refId !== undefined) {
+    } else if (staffLinkRequired(target.role) && refId !== undefined)
+    {
       // Staff/Teacher/Class Teacher refId changes re-link to another existing
       // person record (same school, right role, not claimed by another account).
       const trimmed = String(refId || "").trim();
-      if (!trimmed) {
+      if (!trimmed)
+      {
         return res.status(400).json({ success: false, message: `Staff ID is required for ${target.role} accounts` });
       }
-      if (trimmed !== target.refId) {
+      if (trimmed !== target.refId)
+      {
         const staffRec = await staffRecordFor(target.schoolId, trimmed);
         if (!staffRec) return res.status(400).json({ success: false, message: NO_PENDING_STAFF_MSG });
-        if (!STAFF_LINK_OK[target.role].includes(staffRec.role)) {
+        if (!STAFF_LINK_OK[target.role].includes(staffRec.role))
+        {
           return res.status(400).json({
             success: false,
             message: `This Staff ID belongs to a ${staffRec.role} record — it cannot be linked to a ${target.role} account`,
           });
         }
-        if (target.role === "staff" && (target.designation || designation) === "admission_counsellor") {
+        if (target.role === "staff" && (target.designation || designation) === "admission_counsellor")
+        {
           const collides = await studentExistsFor(target.schoolId, trimmed);
-          if (collides) {
+          if (collides)
+          {
             return res.status(409).json({
               success: false,
               message: "This ID belongs to an admitted student — it cannot be used as a counsellor's Staff ID",
             });
           }
         }
-        if (staffRec.userId && String(staffRec.userId) !== String(target._id)) {
+        if (staffRec.userId && String(staffRec.userId) !== String(target._id))
+        {
           return res.status(409).json({ success: false, message: "This Staff ID is already linked to another active account" });
         }
         const { getStaffModel } = require("../db/staffDb");
         const Staff = await getStaffModel();
-        if (target.refId) {
+        if (target.refId)
+        {
           await Staff.updateOne(
             { schoolId: target.schoolId, _id: target.refId },
             { $set: { userId: null } },
-          ).catch(() => {});
+          ).catch(() => { });
         }
         target.refId = String(staffRec._id);
-        await Staff.updateOne({ _id: staffRec._id }, { $set: { userId: String(target._id) } }).catch(() => {});
+        await Staff.updateOne({ _id: staffRec._id }, { $set: { userId: String(target._id) } }).catch(() => { });
       }
-    } else if (refId !== undefined) {
+    } else if (refId !== undefined)
+    {
       const trimmed = String(refId || "").trim();
       if (
         target.role === "staff" &&
         (target.designation || designation) === "admission_counsellor" &&
         trimmed
-      ) {
+      )
+      {
         const collides = await studentExistsFor(target.schoolId, trimmed);
-        if (collides) {
+        if (collides)
+        {
           return res.status(409).json({
             success: false,
             message: "This ID belongs to an admitted student — it cannot be used as a counsellor's Staff ID",
@@ -759,10 +1015,12 @@ const updateUser = async (req, res) => {
       }
       target.refId = trimmed || null;
     }
-    if (linkedStudentIds !== undefined) {
+    if (linkedStudentIds !== undefined)
+    {
       const links = await cleanAndValidateLinkedStudents(target.schoolId, linkedStudentIds);
       if (links.error) return res.status(400).json({ success: false, message: links.error });
-      if (target.role === "parent" && !links.ids.length) {
+      if (target.role === "parent" && !links.ids.length)
+      {
         return res.status(400).json({
           success: false,
           message: "A parent account must stay linked to at least one student",
@@ -771,10 +1029,49 @@ const updateUser = async (req, res) => {
       target.linkedStudentIds = links.ids;
     }
 
+    // Campus transfer, applied last so it follows any Admission ID / Staff ID
+    // change made in the same save. The person record moves with the account
+    // (see movePersonCampus) — the two must never disagree about which campus
+    // someone is in. An empty value means school-wide, the right default for a
+    // parent whose children sit in more than one campus.
+    let campusMoved = false;
+    let campusMovedTo = null;
+    if (branchId !== undefined)
+    {
+      const campus = branchId ? await assertBranchAssignable(req, branchId) : null;
+      const person = await movePersonCampus(target, campus);
+      if (!person)
+      {
+        return res.status(400).json({
+          success: false,
+          message:
+            "Could not reach the linked person record to move it to this campus — confirm the student / Teachers & Staff record still exists",
+        });
+      }
+      target.branchId = campus;
+      campusMoved = true;
+      campusMovedTo = campus;
+    }
+
     await target.save();
     await writeAudit({ req, user: req.user, action: "user.updated", targetType: "user", targetId: target._id, message: `Updated user ${target.email}` });
+    if (campusMoved)
+    {
+      const campusName = campusMovedTo
+        ? (await Branch.findById(campusMovedTo).lean())?.name || "another campus"
+        : "All campuses";
+      await writeAudit({
+        req,
+        user: req.user,
+        action: "user.campus_changed",
+        targetType: "user",
+        targetId: target._id,
+        message: `Moved ${target.email} to campus ${campusName}`,
+      });
+    }
     res.json({ success: true, data: toPublicUser(target) });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
@@ -784,8 +1081,10 @@ const updateUser = async (req, res) => {
 // the token to the user out-of-band (in person / phone). Access tokens are
 // never issued through this flow and no reset token is ever delivered to an
 // unauthenticated caller.
-const adminResetPassword = async (req, res) => {
-  try {
+const adminResetPassword = async (req, res) =>
+{
+  try
+  {
     const target = await loadManageableUser(req.user, req.params.id);
     if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
     if (target.deletedAt) return res.status(400).json({ success: false, message: "Restore the user before resetting the password" });
@@ -804,25 +1103,31 @@ const adminResetPassword = async (req, res) => {
       message: "Password reset link generated",
       data: { resetLink, expiresInMinutes: 15, resetUserId: String(target._id) },
     });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
 // Public endpoint: applies a reset link. The token is the only secret; links
 // are signed, short-lived and single-use (passwordChangedAt watermark).
-const resetPassword = async (req, res) => {
-  try {
+const resetPassword = async (req, res) =>
+{
+  try
+  {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ success: false, message: "token and newPassword are required" });
 
     let decoded;
-    try {
+    try
+    {
       decoded = jwt.verify(token, getJwtSecret());
-    } catch {
+    } catch
+    {
       return res.status(400).json({ success: false, message: "Invalid or expired reset link" });
     }
-    if (decoded.purpose !== "password-reset" || !decoded.sub) {
+    if (decoded.purpose !== "password-reset" || !decoded.sub)
+    {
       return res.status(400).json({ success: false, message: "Invalid or expired reset link" });
     }
 
@@ -831,18 +1136,22 @@ const resetPassword = async (req, res) => {
 
     const user = await User.findById(decoded.sub).select("+password");
     if (!user) return res.status(400).json({ success: false, message: "Invalid or expired reset link" });
-    if (!user.isActive || user.deletedAt) {
+    if (!user.isActive || user.deletedAt)
+    {
       return res.status(403).json({ success: false, message: "This account is inactive or has been removed" });
     }
-    if (user.schoolId) {
+    if (user.schoolId)
+    {
       const school = await School.findById(user.schoolId).select("status").lean();
-      if (!school || school.status !== "active") {
+      if (!school || school.status !== "active")
+      {
         return res.status(403).json({ success: false, message: "Your school account is inactive" });
       }
     }
 
     const issuedAtMs = decoded.iat * 1000;
-    if (user.passwordChangedAt && issuedAtMs <= user.passwordChangedAt.getTime()) {
+    if (user.passwordChangedAt && issuedAtMs <= user.passwordChangedAt.getTime())
+    {
       return res.status(400).json({ success: false, message: "This reset link has already been used" });
     }
 
@@ -851,7 +1160,8 @@ const resetPassword = async (req, res) => {
     await user.save();
     await writeAudit({ req, user: { id: user._id, email: user.email, role: user.role }, action: "user.password_reset", targetType: "user", targetId: user._id, message: `Password reset for ${user.email}` });
     res.json({ success: true, message: "Password updated successfully" });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
@@ -860,7 +1170,8 @@ const resetPassword = async (req, res) => {
 
 const generateOtp = () => String(Math.floor(100000 + Math.random() * 900000));
 
-const maskEmail = (email) => {
+const maskEmail = (email) =>
+{
   const [local, domain] = email.split("@");
   if (!domain) return email;
   if (local.length <= 2) return `${local[0]}***@${domain}`;
@@ -886,10 +1197,13 @@ const otpEmailHtml = (otp, name) => `
 const MAX_OTP_REQUESTS = 3;
 const OTP_WINDOW_MS = 15 * 60 * 1000;
 
-const requestPasswordReset = async (req, res) => {
-  try {
+const requestPasswordReset = async (req, res) =>
+{
+  try
+  {
     const { email } = req.body;
-    if (!email || typeof email !== "string") {
+    if (!email || typeof email !== "string")
+    {
       return res.status(400).json({ success: false, message: "email is required" });
     }
 
@@ -899,7 +1213,8 @@ const requestPasswordReset = async (req, res) => {
 
     if (!user) return res.json({ success: true, message: genericMsg });
     if (!user.isActive || user.deletedAt) return res.json({ success: true, message: genericMsg });
-    if (user.role === "super_admin") {
+    if (user.role === "super_admin")
+    {
       return res.json({ success: true, message: genericMsg });
     }
 
@@ -909,7 +1224,8 @@ const requestPasswordReset = async (req, res) => {
       purpose: "password-reset",
       createdAt: { $gte: cutoff },
     });
-    if (recentCount >= MAX_OTP_REQUESTS) {
+    if (recentCount >= MAX_OTP_REQUESTS)
+    {
       return res.status(429).json({ success: false, message: "Too many requests. Please try again after 15 minutes." });
     }
 
@@ -946,15 +1262,18 @@ const requestPasswordReset = async (req, res) => {
     });
 
     res.json({ success: true, message: genericMsg, data: { maskedEmail: maskEmail(normalizedEmail) } });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
 const MAX_OTP_ATTEMPTS = 5;
 
-const verifyResetOtp = async (req, res) => {
-  try {
+const verifyResetOtp = async (req, res) =>
+{
+  try
+  {
     const { email, otp } = req.body;
     if (!email || !otp) return res.status(400).json({ success: false, message: "email and otp are required" });
 
@@ -966,20 +1285,24 @@ const verifyResetOtp = async (req, res) => {
       expiresAt: { $gt: new Date() },
     }).sort({ createdAt: -1 });
 
-    if (!otpDoc) {
+    if (!otpDoc)
+    {
       return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
     }
 
-    if (otpDoc.attempts >= MAX_OTP_ATTEMPTS) {
+    if (otpDoc.attempts >= MAX_OTP_ATTEMPTS)
+    {
       return res.status(429).json({ success: false, message: "Too many failed attempts. Please request a new OTP." });
     }
 
     const valid = await bcrypt.compare(String(otp).trim(), otpDoc.otp);
-    if (!valid) {
+    if (!valid)
+    {
       otpDoc.attempts += 1;
       await otpDoc.save();
       const remaining = MAX_OTP_ATTEMPTS - otpDoc.attempts;
-      if (remaining <= 0) {
+      if (remaining <= 0)
+      {
         return res.status(429).json({ success: false, message: "Too many failed attempts. Please request a new OTP." });
       }
       return res.status(400).json({ success: false, message: `Invalid OTP. ${remaining} attempt(s) remaining.` });
@@ -996,23 +1319,29 @@ const verifyResetOtp = async (req, res) => {
       message: "OTP verified successfully",
       data: { resetToken, expiresInMinutes: 10 },
     });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const resetPasswordWithOtp = async (req, res) => {
-  try {
+const resetPasswordWithOtp = async (req, res) =>
+{
+  try
+  {
     const { token, newPassword } = req.body;
     if (!token || !newPassword) return res.status(400).json({ success: false, message: "token and newPassword are required" });
 
     let decoded;
-    try {
+    try
+    {
       decoded = jwt.verify(token, getJwtSecret());
-    } catch {
+    } catch
+    {
       return res.status(400).json({ success: false, message: "Invalid or expired reset token" });
     }
-    if (decoded.purpose !== "otp-verified-reset" || !decoded.sub || !decoded.otpId) {
+    if (decoded.purpose !== "otp-verified-reset" || !decoded.sub || !decoded.otpId)
+    {
       return res.status(400).json({ success: false, message: "Invalid or expired reset token" });
     }
 
@@ -1021,18 +1350,22 @@ const resetPasswordWithOtp = async (req, res) => {
 
     const user = await User.findById(decoded.sub).select("+password");
     if (!user) return res.status(400).json({ success: false, message: "Invalid or expired reset token" });
-    if (!user.isActive || user.deletedAt) {
+    if (!user.isActive || user.deletedAt)
+    {
       return res.status(403).json({ success: false, message: "This account is inactive or has been removed" });
     }
-    if (user.schoolId) {
+    if (user.schoolId)
+    {
       const school = await School.findById(user.schoolId).select("status").lean();
-      if (!school || school.status !== "active") {
+      if (!school || school.status !== "active")
+      {
         return res.status(403).json({ success: false, message: "Your school account is inactive" });
       }
     }
 
     const otpDoc = await OtpToken.findById(decoded.otpId);
-    if (!otpDoc || otpDoc.used) {
+    if (!otpDoc || otpDoc.used)
+    {
       return res.status(400).json({ success: false, message: "This reset token has already been used" });
     }
 
@@ -1053,13 +1386,16 @@ const resetPasswordWithOtp = async (req, res) => {
     });
 
     res.json({ success: true, message: "Password updated successfully" });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const adminSendResetOtp = async (req, res) => {
-  try {
+const adminSendResetOtp = async (req, res) =>
+{
+  try
+  {
     const target = await loadManageableUser(req.user, req.params.id);
     if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
     if (target.deletedAt) return res.status(400).json({ success: false, message: "Restore the user before sending OTP" });
@@ -1104,7 +1440,8 @@ const adminSendResetOtp = async (req, res) => {
       message: `OTP sent to ${maskEmail(normalizedEmail)}`,
       data: { maskedEmail: maskEmail(normalizedEmail) },
     });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
@@ -1126,19 +1463,24 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]*$/;
 const PINCODE_RE = /^[1-9][0-9]{5}$/;
 
-const createSchool = async (req, res) => {
-  try {
+const createSchool = async (req, res) =>
+{
+  try
+  {
     const { name, code, shortName, address, city, state, pincode, phone, email, logo, session, sessionStart, sessionEnd, plan, status } = req.body;
     if (!name || !code) return res.status(400).json({ success: false, message: "name and code are required" });
 
     // --- Field validation ---
-    if (email && !EMAIL_RE.test(String(email).trim())) {
+    if (email && !EMAIL_RE.test(String(email).trim()))
+    {
       return res.status(400).json({ success: false, message: "Please enter a valid school email" });
     }
-    if (phone && !PHONE_RE.test(String(phone).trim())) {
+    if (phone && !PHONE_RE.test(String(phone).trim()))
+    {
       return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
     }
-    if (pincode && !PINCODE_RE.test(String(pincode).trim())) {
+    if (pincode && !PINCODE_RE.test(String(pincode).trim()))
+    {
       return res.status(400).json({ success: false, message: "Please enter a valid 6-digit pincode" });
     }
 
@@ -1146,13 +1488,15 @@ const createSchool = async (req, res) => {
     const trimmedName = String(name).trim();
     const nameRegex = new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
     const nameClash = await School.findOne({ name: nameRegex }).lean();
-    if (nameClash) {
+    if (nameClash)
+    {
       return res.status(409).json({ success: false, message: "A school with this name already exists" });
     }
 
     // --- Code slugification (new schools only — existing codes untouched) ---
     const codeSlug = normalizeCode(code);
-    if (!codeSlug) {
+    if (!codeSlug)
+    {
       return res.status(400).json({ success: false, message: "School code must contain at least one letter or number" });
     }
     const existing = await School.findOne({ code: codeSlug });
@@ -1170,8 +1514,43 @@ const createSchool = async (req, res) => {
       logo, session, plan, status,
     });
 
+    // --- Auto-create the head-office branch ---
+    // A school cannot work under branch scoping with zero campuses: the head
+    // office is the default landing branch for admins, the fallback for records
+    // that predate scoping, and the target any backfill stamps. Minted with the
+    // same shape the backfill script uses, so a school created here and a school
+    // backfilled later are indistinguishable.
+    let headOfficeBranch = null;
+    try
+    {
+      headOfficeBranch = await Branch.create({
+        schoolId: school._id,
+        name: trimmedName,
+        shortName: shortName ? String(shortName).trim() : undefined,
+        // Branch codes are unique per school, and this school was just created,
+        // so the already-normalised school code is safe to reuse as-is.
+        code: codeSlug,
+        address: address ? String(address).trim() : undefined,
+        city: city ? String(city).trim() : undefined,
+        state: state ? String(state).trim() : undefined,
+        pincode: pincode ? String(pincode).trim() : undefined,
+        phone: phone ? String(phone).trim() : undefined,
+        email: email ? String(email).trim().toLowerCase() : undefined,
+        country: "India",
+        isHeadOffice: true,
+        isActive: true,
+      });
+    } catch (branchErr)
+    {
+      // Non-fatal, same reasoning as the session and gateway below: the school
+      // row already exists, so failing the request would leave a half-created
+      // tenant. Logged loudly because a school with no campus is broken.
+      console.error("[auth] head-office branch auto-create failed for " + codeSlug + ":", branchErr.message);
+    }
+
     // --- Auto-create Academic Session for the school ---
-    try {
+    try
+    {
       const AcademicSession = require("../models/AcademicSession");
       const rawSession = String(session || "").trim();
       const now = new Date();
@@ -1181,7 +1560,8 @@ const createSchool = async (req, res) => {
       // take priority; otherwise fall back to string inference so a bare
       // "2026-27" / "2026" still bootstraps sensibly. Dates are never assumed
       // to be April-March — the school configures its own calendar.
-      const parseDate = (value) => {
+      const parseDate = (value) =>
+      {
         if (value === undefined || value === null || value === "") return null;
         const d = new Date(String(value));
         return Number.isNaN(d.getTime()) ? null : d;
@@ -1190,19 +1570,23 @@ const createSchool = async (req, res) => {
       let endDate = parseDate(sessionEnd);
 
       let sessionName = null;
-      if (startDate && endDate) {
-        if (endDate.getTime() <= startDate.getTime()) {
+      if (startDate && endDate)
+      {
+        if (endDate.getTime() <= startDate.getTime())
+        {
           console.warn("[auth] invalid sessionStart/sessionEnd (end <= start); falling back to string inference");
           startDate = null;
           endDate = null;
-        } else {
+        } else
+        {
           sessionName = deriveSessionName(startDate, endDate);
         }
       }
 
       // Fallback: infer Apr->Mar window + canonical "2026-27" label from the
       // submitted session string (also covers empty session for a default year).
-      if (!startDate || !endDate) {
+      if (!startDate || !endDate)
+      {
         const fullRangeMatch = rawSession.match(/(\d{4})\s*[-–]\s*(\d{4})/);
         const shortRangeMatch = rawSession.match(/(\d{4})\s*[-–]\s*(\d{2})$/);
         const singleYearMatch = rawSession.match(/^(\d{4})$/);
@@ -1218,7 +1602,8 @@ const createSchool = async (req, res) => {
       if (!sessionName) sessionName = rawSession || `${currentYear}-${String((currentYear + 1) % 100).padStart(2, "0")}`;
 
       const existingSession = await AcademicSession.findOne({ schoolId: school._id, name: sessionName }).lean();
-      if (!existingSession) {
+      if (!existingSession)
+      {
         const academicSession = await AcademicSession.create({
           schoolId: school._id,
           name: sessionName,
@@ -1230,7 +1615,8 @@ const createSchool = async (req, res) => {
         // Keep legacy School.session in sync
         await School.updateOne({ _id: school._id }, { $set: { session: academicSession.name } });
       }
-    } catch (sessErr) {
+    } catch (sessErr)
+    {
       // Non-fatal: school is created but session creation failed.
       // Log clearly so operators can investigate; onboarding continues.
       console.error("[auth] academic session auto-create failed for " + codeSlug + ":", sessErr.message);
@@ -1238,23 +1624,29 @@ const createSchool = async (req, res) => {
 
     // Every school starts on the platform-hosted gateway (best-effort; the
     // startup backfill covers any failure here).
-    try {
+    try
+    {
       await PaymentGateway.create({ schoolId: school._id, mode: "platform", status: "active" });
-    } catch (gwErr) {
+    } catch (gwErr)
+    {
       console.error("[auth] gateway seed failed for " + codeSlug + ":", gwErr.message);
     }
     await writeAudit({ req, user: req.user, action: "school.created", targetType: "school", targetId: school._id, message: `Created school ${trimmedName} (${codeSlug})` });
-    res.status(201).json({ success: true, message: "School created successfully", data: school });
-  } catch (err) {
+    res.status(201).json({ success: true, message: "School created successfully", data: school, headOfficeBranch });
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const listSchools = async (req, res) => {
-  try {
+const listSchools = async (req, res) =>
+{
+  try
+  {
     const { page, limit, skip } = paginate(req.query, { fallback: 50, max: 200 });
     const filter = {};
-    if (req.query.q && String(req.query.q).trim()) {
+    if (req.query.q && String(req.query.q).trim())
+    {
       filter.name = { $regex: String(req.query.q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
     }
     const [schools, total] = await Promise.all([
@@ -1262,25 +1654,32 @@ const listSchools = async (req, res) => {
       School.countDocuments(filter),
     ]);
     res.json({ success: true, count: schools.length, total, ...pageInfo(total, page, limit), data: schools });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const getSchool = async (req, res) => {
-  try {
+const getSchool = async (req, res) =>
+{
+  try
+  {
     const school = await School.findById(req.params.id);
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
     res.json({ success: true, data: school });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const updateSchool = async (req, res) => {
-  try {
+const updateSchool = async (req, res) =>
+{
+  try
+  {
     const patch = {};
-    for (const key of SCHOOL_EDITABLE_FIELDS) {
+    for (const key of SCHOOL_EDITABLE_FIELDS)
+    {
       if (req.body[key] !== undefined) patch[key] = req.body[key];
     }
 
@@ -1288,12 +1687,14 @@ const updateSchool = async (req, res) => {
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
     await writeAudit({ req, user: req.user, action: "school.updated", targetType: "school", targetId: school._id, message: `Updated school fields: ${Object.keys(patch).join(", ") || "(none)"}` });
     res.json({ success: true, message: "School updated successfully", data: school });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const verify = async (req, res) => {
+const verify = async (req, res) =>
+{
   res.json({ success: true, data: req.user });
 };
 
@@ -1317,7 +1718,8 @@ const BOOL_RE = /^(true|false)$/i;
 
 // Logo may be an http(s) URL or an uploaded base64 data URI (capped size).
 // Returns null when invalid, "" when explicitly cleared.
-const sanitizeLogo = (logo) => {
+const sanitizeLogo = (logo) =>
+{
   if (logo == null) return "";
   if (typeof logo !== "string") return null;
   const str = logo.trim();
@@ -1356,23 +1758,30 @@ const publicSchool = (s) =>
     settings: s.settings || {},
   };
 
-const getMySchool = async (req, res) => {
-  try {
-    if (!req.tenantId) {
+const getMySchool = async (req, res) =>
+{
+  try
+  {
+    if (!req.tenantId)
+    {
       return res.status(400).json({ success: false, message: "No school context" });
     }
     const school = await School.findById(req.tenantId).lean();
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
     const currentSession = await resolveCurrentSessionInfo(req.tenantId);
     res.json({ success: true, data: { ...publicSchool(school), currentSession } });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
-const updateMySchool = async (req, res) => {
-  try {
-    if (!req.tenantId) {
+const updateMySchool = async (req, res) =>
+{
+  try
+  {
+    if (!req.tenantId)
+    {
       return res.status(400).json({ success: false, message: "No school context" });
     }
     const school = await School.findById(req.tenantId);
@@ -1380,16 +1789,20 @@ const updateMySchool = async (req, res) => {
 
     const set = {};
     if (req.body.shortName !== undefined) set.shortName = String(req.body.shortName).trim();
-    if (req.body.name !== undefined) {
+    if (req.body.name !== undefined)
+    {
       const trimmedName = String(req.body.name).trim();
-      if (!trimmedName) {
+      if (!trimmedName)
+      {
         return res.status(400).json({ success: false, message: "School name cannot be empty" });
       }
       // Duplicate name detection (skip if name unchanged)
-      if (trimmedName !== school.name) {
+      if (trimmedName !== school.name)
+      {
         const nameRegex = new RegExp(`^${trimmedName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, "i");
         const nameClash = await School.findOne({ name: nameRegex, _id: { $ne: school._id } }).lean();
-        if (nameClash) {
+        if (nameClash)
+        {
           return res.status(409).json({ success: false, message: "A school with this name already exists" });
         }
       }
@@ -1398,30 +1811,38 @@ const updateMySchool = async (req, res) => {
     if (req.body.address !== undefined) set.address = String(req.body.address).trim();
     if (req.body.city !== undefined) set.city = String(req.body.city).trim();
     if (req.body.state !== undefined) set.state = String(req.body.state).trim();
-    if (req.body.pincode !== undefined) {
+    if (req.body.pincode !== undefined)
+    {
       const pc = String(req.body.pincode).trim();
-      if (pc && !PINCODE_RE.test(pc)) {
+      if (pc && !PINCODE_RE.test(pc))
+      {
         return res.status(400).json({ success: false, message: "Please enter a valid 6-digit pincode" });
       }
       set.pincode = pc;
     }
-    if (req.body.email !== undefined) {
+    if (req.body.email !== undefined)
+    {
       const em = String(req.body.email).trim();
-      if (em && !EMAIL_RE.test(em)) {
+      if (em && !EMAIL_RE.test(em))
+      {
         return res.status(400).json({ success: false, message: "Please enter a valid school email" });
       }
       set.email = em ? em.toLowerCase() : "";
     }
-    if (req.body.phone !== undefined) {
+    if (req.body.phone !== undefined)
+    {
       const ph = String(req.body.phone).trim();
-      if (ph && !PHONE_RE.test(ph)) {
+      if (ph && !PHONE_RE.test(ph))
+      {
         return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
       }
       set.phone = ph;
     }
-    if (req.body.logo !== undefined) {
+    if (req.body.logo !== undefined)
+    {
       const logo = sanitizeLogo(req.body.logo);
-      if (logo === null) {
+      if (logo === null)
+      {
         return res.status(400).json({
           success: false,
           message: "Logo must be an image URL or an uploaded image (max 2MB)",
@@ -1429,52 +1850,67 @@ const updateMySchool = async (req, res) => {
       }
       set.logo = logo;
     }
-    if (req.body.website !== undefined) {
+    if (req.body.website !== undefined)
+    {
       const ws = String(req.body.website).trim();
-      if (ws && !/^https?:\/\/.+/i.test(ws)) {
+      if (ws && !/^https?:\/\/.+/i.test(ws))
+      {
         return res.status(400).json({ success: false, message: "Please enter a valid website URL (https://...)" });
       }
       set.website = ws;
     }
 
     const rc = req.body.reportCard;
-    if (rc && typeof rc === "object") {
-      for (const key of REPORT_CARD_SETTINGS_FIELDS) {
+    if (rc && typeof rc === "object")
+    {
+      for (const key of REPORT_CARD_SETTINGS_FIELDS)
+      {
         if (rc[key] === undefined) continue;
-        if (key === "accent") {
+        if (key === "accent")
+        {
           const value = String(rc[key] || "").trim();
-          if (!ACCENT_RE.test(value)) {
+          if (!ACCENT_RE.test(value))
+          {
             return res.status(400).json({ success: false, message: "Accent must be a hex color like #E8A33D" });
           }
           set[`settings.reportCard.${key}`] = value;
-        } else {
+        } else
+        {
           set[`settings.reportCard.${key}`] = String(rc[key] ?? "").trim();
         }
       }
     }
 
     const idc = req.body.idCard;
-    if (idc && typeof idc === "object") {
-      for (const key of ID_CARD_SETTINGS_FIELDS) {
+    if (idc && typeof idc === "object")
+    {
+      for (const key of ID_CARD_SETTINGS_FIELDS)
+      {
         if (idc[key] === undefined) continue;
         const path = `settings.idCard.${key}`;
-        if (key === "accent") {
+        if (key === "accent")
+        {
           const value = String(idc[key] || "").trim();
-          if (!ACCENT_RE.test(value)) {
+          if (!ACCENT_RE.test(value))
+          {
             return res.status(400).json({ success: false, message: "ID card accent must be a hex color like #1E2A44" });
           }
           set[path] = value;
-        } else if (key.startsWith("show") && typeof idc[key] === "boolean") {
+        } else if (key.startsWith("show") && typeof idc[key] === "boolean")
+        {
           set[path] = idc[key];
-        } else {
+        } else
+        {
           set[path] = String(idc[key] ?? "").trim();
         }
       }
     }
 
-    if (req.body.bannerImage !== undefined) {
+    if (req.body.bannerImage !== undefined)
+    {
       const banner = sanitizeLogo(req.body.bannerImage);
-      if (banner === null) {
+      if (banner === null)
+      {
         return res.status(400).json({
           success: false,
           message: "Banner image must be an image URL or an uploaded image (max 2MB)",
@@ -1483,7 +1919,8 @@ const updateMySchool = async (req, res) => {
       set["settings.bannerImage"] = banner;
     }
 
-    if (Object.keys(set).length) {
+    if (Object.keys(set).length)
+    {
       await School.updateOne({ _id: school._id }, { $set: set });
     }
 
@@ -1497,21 +1934,26 @@ const updateMySchool = async (req, res) => {
       message: "School updated branding (report card / ID card)",
     });
     res.json({ success: true, message: "School branding updated", data: publicSchool(fresh) });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };
 
 // Hard delete — permanently removes the user document. Only for super_admin
 // and only on already soft-deleted users to prevent accidental live deletions.
-const hardDeleteUser = async (req, res) => {
-  try {
-    if (req.user?.role !== "super_admin") {
+const hardDeleteUser = async (req, res) =>
+{
+  try
+  {
+    if (req.user?.role !== "super_admin")
+    {
       return res.status(403).json({ success: false, message: "Only platform owner can permanently delete users" });
     }
     const target = await loadManageableUser(req.user, req.params.id);
     if (target.error) return res.status(target.error.status).json({ success: false, message: target.error.message });
-    if (!target.deletedAt) {
+    if (!target.deletedAt)
+    {
       return res.status(400).json({ success: false, message: "User must be removed (soft-deleted) before permanent deletion" });
     }
     const email = target.email;
@@ -1519,7 +1961,8 @@ const hardDeleteUser = async (req, res) => {
     await User.deleteOne({ _id: target._id });
     await writeAudit({ req, user: req.user, action: "user.hard_deleted", targetType: "user", targetId: target._id, message: `Permanently deleted user ${email}` });
     res.json({ success: true, message: "User permanently deleted" });
-  } catch (err) {
+  } catch (err)
+  {
     return unexpectedError(res, err);
   }
 };

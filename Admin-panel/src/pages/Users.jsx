@@ -14,14 +14,16 @@ import {
   Pencil,
   Users as UsersIcon,
   UserRound,
-  GraduationCap,
+  Briefcase,
+  Building2,
 } from "lucide-react";
 import { api } from "../lib/api";
 import { isNonEmpty, isValidEmail } from "../lib/validation.js";
 import { Button, Card, Input, PageIntro, Pill, Select, toast } from "../components/UI";
 import { SegmentedTabs, Pagination } from "../components/Pagination";
 import SearchableSelect from "../components/SearchableSelect";
-import { useMasterOptions } from "../hooks/useMasterOptions";
+import BranchSelect from "../components/BranchSelect";
+import { useBranches } from "../hooks/useBranches";
 
 const ROLE_LABELS = {
   super_admin: "Platform Owner",
@@ -69,12 +71,15 @@ const initials = (name) =>
     .toUpperCase();
 
 // Reports & Analytics-style segmented tabs: the account directory is the main
-// surface; the pending-student and pending-teacher queues sit behind their own
+// surface; the pending-student and pending-staff queues sit behind their own
 // tabs (each with a live count badge) instead of stacked cards.
 const TABS = (counts) => [
   { id: "accounts", label: "Accounts", icon: UsersIcon, count: counts.total },
   { id: "students", label: "Pending Students", icon: UserRound, count: counts.pendingTotal },
-  { id: "teachers", label: "Pending Teachers", icon: GraduationCap, count: counts.pendingStaffTotal },
+  // Briefcase matches the Staff icon already used in Teachers, Attendance and
+  // Notifications. The queue is every person type awaiting an account, so a
+  // mortarboard here would have been misleading.
+  { id: "teachers", label: "Pending Staff", icon: Briefcase, count: counts.pendingStaffTotal },
 ];
 
 // refId maps to a role-specific identity field: Admission ID for students,
@@ -139,7 +144,14 @@ const emptyForm = () => ({
   refId: "",
   lockedRefId: false,
   linkedStudentIds: [],
+  branchId: "",
 });
+
+// Roles whose campus no person record owns, so the form is the only place it can
+// be chosen. A teacher/staff/student account inherits the campus of the
+// Teachers & Staff or admission record it links to, and the server enforces
+// that — showing a picker there would be a lie the API rejects.
+const CAMPUS_IS_CHOSEN_HERE = ["parent"];
 
 const toUserPayload = (form) => ({
   name: form.name.trim(),
@@ -160,11 +172,13 @@ const toUserPayload = (form) => ({
   refId: form.refId.trim() || undefined,
   // Parent accounts are defined by their children (admissionNo strings).
   linkedStudentIds: form.role === "parent" ? form.linkedStudentIds : undefined,
+  // "" is meaningful here: a parent left school-wide sees children in every
+  // campus, which is the safe default.
+  branchId:
+    CAMPUS_IS_CHOSEN_HERE.includes(form.role) ? form.branchId || undefined : undefined,
 });
 
 export default function Users() {
-  const { options: CLASS_OPTIONS } = useMasterOptions("classes", ["Nursery","LKG","UKG","1","2","3","4","5","6","7","8","9","10","11-Sci","11-Com","12-Sci","12-Com"]);
-  const { options: SECTION_OPTIONS, rawItems: rawSections } = useMasterOptions("sections", ["A","B","C"]);
   const [rows, setRows] = useState([]);
   const [total, setTotal] = useState(0);
   const [pages, setPages] = useState(0);
@@ -179,10 +193,6 @@ export default function Users() {
   const [selected, setSelected] = useState(null);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState(emptyForm());
-  const filteredSections = useMemo(() => {
-    if (!form.className) return SECTION_OPTIONS;
-    return [...new Set(rawSections.filter((s) => s.className === form.className).map((s) => s.name))];
-  }, [form.className, SECTION_OPTIONS, rawSections]);
   const [busy, setBusy] = useState(false);
   const [createdCredential, setCreatedCredential] = useState(null);
   // Pending student registrations queue: confirmed admissions produce Student
@@ -193,8 +203,9 @@ export default function Users() {
   const [pendingPage, setPendingPage] = useState(1);
   const [pendingLoading, setPendingLoading] = useState(true);
   const [viewingPending, setViewingPending] = useState(null);
-  // Pending teacher registrations queue: teachers/class-teacher person records
-  // created in Teachers & Staff (userId null) await a login account here.
+  // Pending staff registrations queue: every person record created in Teachers &
+  // Staff (userId null) — teaching and non-teaching alike — awaits a login
+  // account here. Not filtered by role, matching the tab label.
   const [pendingStaff, setPendingStaff] = useState([]);
   const [pendingStaffTotal, setPendingStaffTotal] = useState(0);
   const [pendingStaffPages, setPendingStaffPages] = useState(0);
@@ -203,6 +214,9 @@ export default function Users() {
   const [viewingStaffPending, setViewingStaffPending] = useState(null);
   // Student directory for the Parent account child-link picker.
   const [allStudents, setAllStudents] = useState([]);
+  // Campus list, shared by the parent picker in the create form, the campus
+  // column and the 360° dialog.
+  const { branches, loading: branchesLoading, nameOf: campusName } = useBranches();
 
   useEffect(() => {
     api.students
@@ -234,8 +248,12 @@ export default function Users() {
 
   useEffect(() => {
     setPendingStaffLoading(true);
+    // No `role` filter: getPendingRegistrations treats it as optional and
+    // otherwise narrows to teachers only, which hid accountants, librarians,
+    // receptionists, transport and counsellors from a tab now labelled
+    // "Pending Staff". Those records have no other way to get an account.
     api.staff
-      .pendingRegistrations(`role=teacher&page=${pendingStaffPage}&limit=10`)
+      .pendingRegistrations(`page=${pendingStaffPage}&limit=10`)
       .then((result) => {
         setPendingStaff(result.data || []);
         setPendingStaffTotal(result.total || 0);
@@ -285,13 +303,15 @@ export default function Users() {
   // admission shell. The Admission ID and role are locked — the account must
   // link to this shell (never a new student record).
   const registerPending = (shell) => {
+    // Spread emptyForm() rather than writing a literal. A literal here silently
+    // dropped linkedStudentIds, and studentLinkOptions' useMemo calls
+    // form.linkedStudentIds.includes(...) on every render regardless of role —
+    // so opening this form threw "Cannot read properties of undefined" and the
+    // error boundary replaced the entire page.
     setForm({
+      ...emptyForm(),
       name: shell.name || "",
-      email: "",
-      password: "",
       role: "student",
-      designation: "",
-      customDesignation: "",
       className: shell.class || "",
       section: shell.section || "",
       refId: shell.admissionNo || "",
@@ -300,24 +320,28 @@ export default function Users() {
     setCreating(true);
   };
 
-  // Register Teacher (shared Register User form, context-aware): locks the
-  // role to teacher and the Staff ID to the record's employeeId. The account
-  // must link to this person record — never creates a new Staff record.
-  const registerPendingStaff = (teacher) => {
+  // Register a pending person (shared Register User form, context-aware): locks
+  // the Staff ID to the record's employeeId and carries the record's own role
+  // across. The account must link to this person record — never creates a new
+  // Staff record.
+  const registerPendingStaff = (member) => {
     const first =
-      Array.isArray(teacher.classesAssigned) && teacher.classesAssigned.length
-        ? teacher.classesAssigned[0]
+      Array.isArray(member.classesAssigned) && member.classesAssigned.length
+        ? member.classesAssigned[0]
         : {};
     setForm({
-      name: teacher.name || "",
-      email: "",
-      password: "",
-      role: "teacher",
-      designation: "",
-      customDesignation: "",
+      ...emptyForm(),
+      name: member.name || "",
+      // Staff.role is enum ["teacher","staff"] and both are valid User roles, so
+      // this normally passes the value straight through. Anything else — a
+      // missing field, or a legacy "admin-staff"/"support" value from before
+      // migrate-staff-roles.js ran — falls back to "staff", which is the correct
+      // target for those anyway and the safer of the two: defaulting to
+      // "teacher" would drop a non-teaching person onto the teacher dashboard.
+      role: member.role === "teacher" ? "teacher" : "staff",
       className: first.class || "",
       section: first.section || "",
-      refId: teacher.employeeId || "",
+      refId: member.employeeId || "",
       lockedRefId: true,
     });
     setCreating(true);
@@ -536,22 +560,6 @@ export default function Users() {
                   )}
                 </>
               )}
-              {form.role === "student" && (
-                <>
-                   <SearchableSelect
-                     options={CLASS_OPTIONS}
-                     value={form.className}
-                     onChange={(val) => setForm({ ...form, className: val, section: "" })}
-                     placeholder="Select class"
-                   />
-                   <SearchableSelect
-                     options={filteredSections}
-                     value={form.section}
-                     onChange={(val) => setForm({ ...form, section: val })}
-                     placeholder="Select section"
-                   />
-                </>
-              )}
               {form.role === "parent" && (
                 <div className="sm:col-span-2 lg:col-span-3">
                   <span className="text-[11.5px] font-semibold text-slate-text/60 uppercase block mb-1">
@@ -615,7 +623,32 @@ export default function Users() {
                   onChange={(e) => setForm({ ...form, refId: e.target.value })}
                 />
               )}
+              {CAMPUS_IS_CHOSEN_HERE.includes(form.role) && (
+                <BranchSelect
+                  branches={branches}
+                  loading={branchesLoading}
+                  value={form.branchId}
+                  onChange={(val) => setForm({ ...form, branchId: val })}
+                  allOption
+                  allLabel="All campuses (school-wide)"
+                />
+              )}
             </div>
+            {form.role && !CAMPUS_IS_CHOSEN_HERE.includes(form.role) && (
+              <p className="text-[12px] text-slate-text/70 bg-paper border border-slate-200 rounded-lg px-3 py-2">
+                <Building2 size={12} className="inline -mt-0.5 mr-1" />
+                The account starts in the campus of the{" "}
+                {form.role === "student" ? "admission record" : "Teachers &amp; Staff record"}{" "}
+                it links to. Need a different campus? Register the account first, then
+                move it from the account&apos;s 360° view — the record moves with it.
+              </p>
+            )}
+            {form.role === "student" && (
+              <p className="text-[12px] text-slate-text/70 bg-paper border border-slate-200 rounded-lg px-3 py-2">
+                Class and section are not set here — they come from the admission
+                record this account links to, so they cannot drift from it.
+              </p>
+            )}
             {form.lockedRefId && (
               <p className="text-[12px] text-slate-text/70 bg-paper border border-slate-200 rounded-lg px-3 py-2">
                 This account is locked to the pre-created person record —{" "}
@@ -742,7 +775,7 @@ export default function Users() {
 
       {tab === "teachers" && (
       <Card
-        title="Pending teacher registrations"
+        title="Pending staff registrations"
         className="mb-5"
         action={
           pendingStaffTotal > 0 ? (
@@ -754,12 +787,12 @@ export default function Users() {
       >
         {pendingStaffLoading ? (
           <p className="text-[13px] text-slate-text/70 py-6 text-center">
-            Loading pending teacher registrations…
+            Loading pending staff registrations…
           </p>
         ) : pendingStaff.length === 0 ? (
           <div className="py-4">
             <p className="text-[13px] text-slate-text/70">
-              Teachers added from the{" "}
+              Teachers and staff added from the{" "}
               <span className="font-medium text-ink">Teachers &amp; Staff</span>{" "}
               module will appear here. Click <span className="font-medium text-ink">Register</span> to create their login account. Once registered, they can log in and complete their profile — and their ID card can be generated from either this page or their My Profile.
             </p>
@@ -769,7 +802,7 @@ export default function Users() {
             <table className="w-full text-left text-[13px]">
               <thead>
                 <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-slate-200">
-                  <th className="py-2.5 pr-4 font-semibold">Teacher</th>
+                  <th className="py-2.5 pr-4 font-semibold">Name</th>
                   <th className="py-2.5 pr-4 font-semibold">Staff ID</th>
                   <th className="py-2.5 pr-4 font-semibold">Class / Section</th>
                   <th className="py-2.5 pr-4 font-semibold">Profile</th>
@@ -777,22 +810,22 @@ export default function Users() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {pendingStaff.map((teacher) => {
+                {pendingStaff.map((member) => {
                   const first =
-                    Array.isArray(teacher.classesAssigned) && teacher.classesAssigned.length
-                      ? teacher.classesAssigned[0]
+                    Array.isArray(member.classesAssigned) && member.classesAssigned.length
+                      ? member.classesAssigned[0]
                       : {};
                   return (
-                    <tr key={teacher._id || teacher.id} className="hover:bg-paper/60">
+                    <tr key={member._id || member.id} className="hover:bg-paper/60">
                       <td className="py-3 pr-4">
-                        <p className="font-semibold text-ink">{teacher.name}</p>
-                        {teacher.designation && (
-                          <p className="text-[11.5px] text-slate-text/55">{teacher.designation}</p>
+                        <p className="font-semibold text-ink">{member.name}</p>
+                        {member.designation && (
+                          <p className="text-[11.5px] text-slate-text/55">{member.designation}</p>
                         )}
                       </td>
                       <td className="py-3 pr-4">
                         <span className="font-mono text-[12.5px] text-slate-text/80">
-                          {teacher.employeeId}
+                          {member.employeeId}
                         </span>
                       </td>
                       <td className="py-3 pr-4 text-slate-text/80">
@@ -801,7 +834,7 @@ export default function Users() {
                           : "—"}
                       </td>
                       <td className="py-3 pr-4">
-                        {teacher.profileStatus === "complete" ? (
+                        {member.profileStatus === "complete" ? (
                           <Pill tone="success">complete</Pill>
                         ) : (
                           <Pill tone="neutral">awaits completion</Pill>
@@ -810,21 +843,21 @@ export default function Users() {
                       <td className="py-3 text-right">
                         <div className="inline-flex items-center gap-1.5">
                           <button
-                            onClick={() => setViewingStaffPending(teacher)}
+                            onClick={() => setViewingStaffPending(member)}
                             className="inline-flex items-center gap-1 text-[12px] font-semibold text-info bg-info/10 px-2.5 py-1.5 rounded-lg hover:bg-info/20"
                           >
                             <Eye size={13} /> View
                           </button>
-                          {teacher.profileStatus !== "complete" && (
+                          {member.profileStatus !== "complete" && (
                             <a
-                              href={`/staff/complete/${teacher._id || teacher.id}`}
+                              href={`/staff/complete/${member._id || member.id}`}
                               className="inline-flex items-center gap-1 text-[12px] font-semibold text-amber-700 bg-amber-50 px-2.5 py-1.5 rounded-lg hover:bg-amber-100"
                             >
                               <Pencil size={13} /> Complete Profile
                             </a>
                           )}
                           <button
-                            onClick={() => registerPendingStaff(teacher)}
+                            onClick={() => registerPendingStaff(member)}
                             className="inline-flex items-center gap-1 text-[12px] font-semibold text-ink bg-paper px-2.5 py-1.5 rounded-lg hover:bg-black/5"
                           >
                             <Plus size={13} /> Register User
@@ -915,6 +948,7 @@ export default function Users() {
                 <tr className="text-[11.5px] uppercase tracking-wide text-slate-text/60 border-b border-slate-200">
                   <th className="py-2.5 pr-4 font-semibold">User</th>
                   <th className="py-2.5 pr-4 font-semibold">Role</th>
+                  <th className="py-2.5 pr-4 font-semibold">Campus</th>
                   <th className="py-2.5 pr-4 font-semibold">Class / Section</th>
                   <th className="py-2.5 pr-4 font-semibold">Last login</th>
                   <th className="py-2.5 pr-4 font-semibold">Status</th>
@@ -944,6 +978,13 @@ export default function Users() {
                     </td>
                     <td className="py-3 pr-4">
                       <Pill tone="info">{ROLE_LABELS[user.role] || user.role}</Pill>
+                    </td>
+                    <td className="py-3 pr-4 text-slate-text/80">
+                      {user.branchId ? (
+                        campusName(user.branchId) || "—"
+                      ) : (
+                        <span className="text-slate-text/50">All campuses</span>
+                      )}
                     </td>
                     <td className="py-3 pr-4 text-slate-text/80">
                       {user.class ? `${user.class}${user.section ? `-${user.section}` : ""}` : "—"}
@@ -1112,6 +1153,9 @@ export default function Users() {
                 onReset={resetPassword}
                 onEdit={editSelected}
                 busy={busy}
+                branches={branches}
+                branchesLoading={branchesLoading}
+                campusName={campusName}
               />
             </div>
           </div>
@@ -1191,7 +1235,7 @@ export default function Users() {
           >
             <div className="flex items-center justify-between mb-4">
               <h3 className="font-display font-bold text-ink text-lg">
-                Pending teacher
+                Pending staff registration
               </h3>
               <button
                 onClick={() => setViewingStaffPending(null)}
@@ -1206,7 +1250,7 @@ export default function Users() {
             </p>
             <div className="space-y-2.5 text-[13px]">
               <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
-                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Teacher</p>
+                <p className="text-[11px] text-slate-text/60 font-semibold uppercase">Name</p>
                 <p className="text-ink font-medium">{viewingStaffPending.name}</p>
               </div>
               <div className="rounded-xl border border-slate-300 px-3.5 py-2.5">
@@ -1264,7 +1308,20 @@ export default function Users() {
   );
 }
 
-function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore, onReset, onEdit, busy }) {
+function User360({
+  user,
+  canManage,
+  onClose,
+  onToggleActive,
+  onRemove,
+  onRestore,
+  onReset,
+  onEdit,
+  busy,
+  branches,
+  branchesLoading,
+  campusName,
+}) {
   const refField = refIdFieldFor(user.role);
   const [edit, setEdit] = useState(false);
   const [draft, setDraft] = useState({
@@ -1274,7 +1331,12 @@ function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore
     class: user.class || "",
     section: user.section || "",
     refId: user.refId || "",
+    branchId: user.branchId || "",
   });
+  // An account is either pinned to one campus or school-wide; only a parent
+  // really needs the school-wide option, since a teacher/staff/student account
+  // is scoped by the person record behind it.
+  const campusIsChoice = CAMPUS_IS_CHOSEN_HERE.includes(user.role);
 
   const saved = () => {
     setEdit(false);
@@ -1328,6 +1390,22 @@ function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore
           {refField && (
             <RefIdField field={refField} value={draft.refId} onChange={(e) => setDraft({ ...draft, refId: e.target.value })} />
           )}
+          <label className="block">
+            <span className="text-[11.5px] font-semibold text-slate-text/60 uppercase block mb-1">Campus</span>
+            <BranchSelect
+              branches={branches}
+              loading={branchesLoading}
+              value={draft.branchId}
+              onChange={(val) => setDraft({ ...draft, branchId: val })}
+              allOption={campusIsChoice}
+              allLabel="All campuses (school-wide)"
+            />
+            <span className="text-[11.5px] text-slate-text/55 block mt-1">
+              {campusIsChoice
+                ? "All campuses lets this account see every campus in the school."
+                : "Moving this also moves the linked person record, so the two never disagree."}
+            </span>
+          </label>
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
               <span className="text-[11.5px] font-semibold text-slate-text/60 uppercase block mb-1">Class</span>
@@ -1353,6 +1431,9 @@ function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore
                   class: draft.class || undefined,
                   section: draft.section || undefined,
                   refId: refField && !refField.disabled ? draft.refId || undefined : undefined,
+                  // "" clears the campus back to school-wide; the server moves
+                  // the linked person record along with the account.
+                  branchId: draft.branchId,
                 }).then(saved)
               }
             >
@@ -1365,6 +1446,12 @@ function User360({ user, canManage, onClose, onToggleActive, onRemove, onRestore
           <div>
             <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">Role</p>
             <p className="text-ink capitalize">{user.role.replace("_", " ")}</p>
+          </div>
+          <div>
+            <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">Campus</p>
+            <p className="text-ink">
+              {user.branchId ? campusName(user.branchId) || "—" : "All campuses"}
+            </p>
           </div>
           <div>
             <p className="text-[11.5px] text-slate-text/60 font-semibold uppercase">Designation</p>

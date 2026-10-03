@@ -12,6 +12,7 @@ const { liveness, readiness } = require("@school-erp/shared/src/health");
 
 const authRoutes = require("./routes/authRoutes");
 const sessionRoutes = require("./routes/sessionRoutes");
+const branchRoutes = require("./routes/branchRoutes");
 const platformRoutes = require("./routes/platformRoutes");
 const internalRoutes = require("./routes/internalRoutes");
 const ensureBillingDefaults = require("./init/ensureBillingDefaults");
@@ -59,6 +60,7 @@ app.get("/health/ready", readiness("auth-service", mongoose));
 app.use("/api/auth/internal", internalRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/auth/sessions", sessionRoutes);
+app.use("/api/branches", branchRoutes);
 app.use("/api/platform", platformRoutes);
 
 app.use((err, req, res, next) =>

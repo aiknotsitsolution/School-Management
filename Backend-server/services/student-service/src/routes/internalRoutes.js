@@ -33,15 +33,53 @@ router.get("/by-class", (req, res, next) => {
   next();
 }, async (req, res) => {
   try {
-    const { schoolId, class: cls, section } = req.query;
+    const { schoolId, branchId, class: cls, section } = req.query;
     if (!schoolId || !cls) {
       return res.status(400).json({ success: false, message: "schoolId and class are required" });
     }
+    // Class labels repeat across campuses ("Class 10" exists in every branch), so
+    // an unfiltered lookup here would return students from every branch and fan the
+    // notification out to all of them. Callers pass the acting branch; an absent
+    // branchId means a deliberate all-branches (super-admin) view.
     const filter = { schoolId, class: cls, status: "Active", deletedAt: null };
+    if (branchId) filter.branchId = branchId;
     if (section) filter.section = section;
     const students = await Student.find(filter).select("admissionNo").lean();
     const refIds = [...new Set(students.map((s) => String(s.admissionNo).trim()).filter(Boolean))];
     res.json({ success: true, count: refIds.length, refIds });
+  } catch (err) {
+    res.status(400).json({ success: false, message: err.message });
+  }
+});
+
+// Resolve a set of admission numbers to display names. BusRoute stores
+// `assignedStudents` as admission numbers, so facility-service needs this to
+// render a route roster instead of a column of raw codes. Returns only the
+// requested, tenant-scoped fields — never the whole student record.
+router.get("/by-admission", async (req, res) => {
+  const { schoolId } = req.query;
+  if (!schoolId) {
+    return res.status(400).json({ success: false, message: "schoolId is required" });
+  }
+  const admissionNos = String(req.query.admissionNos || "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .slice(0, 200);
+  if (admissionNos.length === 0) {
+    return res.json({ success: true, count: 0, students: [] });
+  }
+  try {
+    // schoolId is mandatory here: an unscoped lookup would resolve admission
+    // numbers belonging to another tenant.
+    const students = await Student.find({
+      schoolId,
+      admissionNo: { $in: admissionNos },
+      deletedAt: null,
+    })
+      .select("admissionNo name class section")
+      .lean();
+    res.json({ success: true, count: students.length, students });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }

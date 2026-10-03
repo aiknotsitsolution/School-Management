@@ -18,6 +18,9 @@ const schoolSubjectSchema = new mongoose.Schema(
     scope: { type: String, enum: ["global", "tenant"], default: "tenant", index: true },
     // Tenant-scoped subjects set schoolId; legacy global subjects leave it null.
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", default: null, index: true },
+    // Campus this subject is taught at. Each branch may run its own subject
+    // list, so it joins the uniqueness key below. null = school-wide.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     tenantId: { type: mongoose.Schema.Types.ObjectId, ref: "School", default: null, index: true },
     // "" = school-wide subject; otherwise the class code (e.g. "11-Sci") the
     // subject is scoped to. Preserves class-subject relationships where used.
@@ -47,9 +50,13 @@ schoolSubjectSchema.pre("validate", function (next) {
   next();
 });
 
-// Unique tenant-scoped name (schoolId + className + normalizedName).
+// Unique tenant-scoped name (schoolId + branchId + className + normalizedName).
+// branchId is in the key so two campuses can each offer their own syllabus.
+// Migrating an existing deployment: drop the previous
+// `{ scope, schoolId, className, normalizedName }` index first — see
+// scripts/backfill-branches.js.
 schoolSubjectSchema.index(
-  { scope: 1, schoolId: 1, className: 1, normalizedName: 1 },
+  { scope: 1, schoolId: 1, branchId: 1, className: 1, normalizedName: 1 },
   { unique: true, partialFilterExpression: { scope: "tenant" } }
 );
 // Legacy global uniqueness index (pre-migration rows only; no new global rows

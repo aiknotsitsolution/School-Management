@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Megaphone } from "lucide-react";
 import { PageIntro, Card, Pill } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
 import { fmtDate } from "./useStudentContext";
 
@@ -25,7 +26,7 @@ export default function Notices() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="Updates"
-        title="Notices"
+        title="Notices" art="notices"
         description="Announcements from the school office and your teachers."
       />
 
@@ -34,7 +35,7 @@ export default function Notices() {
       ) : notices.length === 0 ? (
         <Card>
           <div className="py-10 text-center">
-            <Megaphone size={40} className="mx-auto text-slate-text/30 mb-3" />
+            <PageArtwork name="notices" size={64} className="mx-auto mb-4" />
             <p className="text-[15px] font-semibold text-ink">No notices right now</p>
             <p className="text-[13px] text-slate-text/70 mt-1">School announcements will appear here.</p>
           </div>

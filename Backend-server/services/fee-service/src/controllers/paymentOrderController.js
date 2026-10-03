@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const FeeInvoice = require("../models/FeeInvoice");
 const PaymentOrder = require("../models/PaymentOrder");
 const Payment = require("../models/Payment");
@@ -16,7 +17,7 @@ const createOrder = async (req, res) => {
     const { invoiceId, mode } = req.body || {};
     if (!invoiceId) return res.status(400).json({ success: false, message: "invoiceId is required" });
 
-    const invoice = await FeeInvoice.findOne({ _id: invoiceId, schoolId: req.tenantId });
+    const invoice = await FeeInvoice.findOne(scopeQuery(FeeInvoice, req, { _id: invoiceId, schoolId: req.tenantId }));
     if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
 
     // Students may only create orders against their own invoices.
@@ -43,6 +44,9 @@ const createOrder = async (req, res) => {
 
     const order = await PaymentOrder.create({
       schoolId: req.tenantId,
+      // Copied from the invoice: the fee order belongs to the campus that raised
+      // the bill, which is what the later scopeQuery() lookups filter on.
+      branchId: invoice.branchId,
       invoiceId: invoice._id,
       studentId: invoice.studentId,
       admissionNo: req.user.role === "student" ? req.user.refId : invoice.studentId,
@@ -87,7 +91,7 @@ const createOrder = async (req, res) => {
 // need a concrete provider order; otherwise an honest 503 is returned.
 const initiateOrder = async (req, res) => {
   try {
-    const order = await PaymentOrder.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const order = await PaymentOrder.findOne(scopeQuery(PaymentOrder, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
     if (req.user.role === "student" && String(order.studentId) !== String(req.user.refId)) {
       return res.status(403).json({ success: false, message: "Not your payment order" });
@@ -150,7 +154,7 @@ const initiateOrder = async (req, res) => {
 // the primary path.
 const confirmOrder = async (req, res) => {
   try {
-    const order = await PaymentOrder.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const order = await PaymentOrder.findOne(scopeQuery(PaymentOrder, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
     if (order.status === "completed") {
       return res.json({ success: true, data: { order, note: "Already confirmed" } });
@@ -187,7 +191,7 @@ const confirmOrder = async (req, res) => {
 // ledger records the payer's real mode (MODE_ROUTING) plus their reference.
 const manualConfirmOrder = async (req, res) => {
   try {
-    const order = await PaymentOrder.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const order = await PaymentOrder.findOne(scopeQuery(PaymentOrder, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
     if (order.status === "completed") {
       return res.json({ success: true, data: { order }, note: "Already confirmed" });
@@ -242,7 +246,7 @@ const manualConfirmOrder = async (req, res) => {
 
 const cancelOrder = async (req, res) => {
   try {
-    const order = await PaymentOrder.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const order = await PaymentOrder.findOne(scopeQuery(PaymentOrder, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
     if (req.user.role === "student" && String(order.studentId) !== String(req.user.refId)) {
       return res.status(403).json({ success: false, message: "Not your payment order" });
@@ -260,7 +264,7 @@ const cancelOrder = async (req, res) => {
 
 const getOrders = async (req, res) => {
   try {
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(PaymentOrder, req, { schoolId: req.tenantId })
     if (req.user.role === "student") filter.studentId = req.user.refId;
     else if (req.query.studentId) filter.studentId = req.query.studentId;
     if (req.query.status) filter.status = req.query.status;

@@ -62,6 +62,7 @@ export default function SchoolsManagement() {
   const openEdit = (school) => {
     setForm({
       name: school.name || "",
+      code: school.code || "",
       shortName: school.shortName || "",
       email: school.email || "",
       phone: school.phone || "",
@@ -82,9 +83,21 @@ export default function SchoolsManagement() {
       toast("School name is required", "error");
       return;
     }
+    // Mirrors SCHOOL_CODE_RE in platformController.js. The server rejects a bad
+    // code with a 400 anyway — this just saves the round trip and keeps the
+    // message next to the field the admin is looking at.
+    const code = (form.code || "").trim().toLowerCase();
+    if (!code) {
+      toast("School code is required", "error");
+      return;
+    }
+    if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(code)) {
+      toast("School code may only contain letters, numbers and single hyphens", "error");
+      return;
+    }
     setSaving(true);
     try {
-      await api.platform.schools.update(editing._id, form);
+      await api.platform.schools.update(editing._id, { ...form, code });
       toast("School updated");
       setEditing(null);
       setRefreshKey((key) => key + 1);
@@ -513,7 +526,9 @@ export default function SchoolsManagement() {
                 </div>
                 <div>
                   <h3 className="font-display font-bold text-ink">Edit school</h3>
-                  <p className="text-[11.5px] text-slate-text/60">{editing.code}</p>
+                  {/* Mirrors the code field below so the header follows what the
+                      admin is typing rather than showing the stale saved value. */}
+                  <p className="text-[11.5px] text-slate-text/60 font-mono">{form.code || editing.code}</p>
                 </div>
               </div>
               <button onClick={() => setEditing(null)} className="p-1.5 rounded-lg hover:bg-black/5 text-slate-text/70">
@@ -525,6 +540,19 @@ export default function SchoolsManagement() {
               <div className="sm:col-span-2">
                 <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">School name</label>
                 <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">School code</label>
+                <Input
+                  className="font-mono"
+                  placeholder="e.g. brightwood-academy"
+                  value={form.code}
+                  onChange={(e) => setForm({ ...form, code: e.target.value })}
+                />
+                <p className="text-[11px] text-slate-text/60 mt-1">
+                  Used in URLs, reports and invoices. Lowercase letters, numbers and single hyphens. Changing it does not
+                  affect existing students, staff, fees or branches — those are linked by ID, not by code.
+                </p>
               </div>
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Short name</label>
@@ -561,14 +589,6 @@ export default function SchoolsManagement() {
               <div>
                 <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Pincode</label>
                 <Input value={form.pincode} onChange={(e) => setForm({ ...form, pincode: e.target.value })} />
-              </div>
-              <div>
-                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Recognition no.</label>
-                <Input value={form.recognitionNumber} onChange={(e) => setForm({ ...form, recognitionNumber: e.target.value })} />
-              </div>
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] font-semibold uppercase tracking-wide text-slate-text/60 mb-1">Recognition authority</label>
-                <SearchableDropdown category="recognition_authority" label="" value={form.recognitionAuthority} onChange={(v) => setForm({ ...form, recognitionAuthority: v })} />
               </div>
             </div>
 

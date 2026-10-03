@@ -40,7 +40,7 @@ import {
 } from "../components/UI";
 import AttendanceTrendChart from "../components/AttendanceTrendChart";
 
-const PIE_COLORS = ["#172033", "#4F46E5", "#16A34A", "#2563EB", "#DC2626"];
+const PIE_COLORS = ["#172033", "#0C47CF", "#16A34A", "#0C47CF", "#E9424E"];
 const TABS = [
   { id: "analytics", label: "Analytics", icon: BarChart3 },
   { id: "generate", label: "Generate Reports", icon: FileDown },
@@ -937,7 +937,7 @@ export default function Reports() {
                         />
                         <Bar
                           dataKey="pending"
-                          fill="#DC2626"
+                          fill="#E9424E"
                           radius={[6, 6, 0, 0]}
                           name="Pending"
                         />
@@ -1047,7 +1047,7 @@ export default function Reports() {
                             />
                             <Bar
                               dataKey="total"
-                              fill="#2563EB"
+                              fill="#0C47CF"
                               radius={[6, 6, 0, 0]}
                               name="Collected"
                             />

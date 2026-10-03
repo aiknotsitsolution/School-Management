@@ -1,3 +1,7 @@
+const {
+  scopeQuery,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const Achievement = require("../models/Achievement");
 
 const createAchievement = async (req, res) => {
@@ -16,6 +20,7 @@ const createAchievement = async (req, res) => {
 
     const record = await Achievement.create({
       schoolId: req.tenantId,
+      branchId: branchIdForWrite(req),
       studentId,
       class: cls,
       section,
@@ -38,7 +43,7 @@ const createAchievement = async (req, res) => {
 const listAchievements = async (req, res) => {
   try {
     const { studentId, class: cls, section, category, year, page = 1, limit = 50 } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Achievement, req, { schoolId: req.tenantId })
 
     if (studentId) filter.studentId = studentId;
     if (cls) filter.class = cls;
@@ -76,13 +81,13 @@ const listAchievements = async (req, res) => {
 
 const getAchievement = async (req, res) => {
   try {
-    const record = await Achievement.findOne({
+    const record = await Achievement.findOne(scopeQuery(Achievement, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
       // Students may only read their own achievements — ownership guard for
       // the :id route (the list route is scoped by scopeStudentQuery).
       ...(req.user.role === "student" ? { studentId: req.user.refId } : {}),
-    }).lean();
+    })).lean();
     if (!record) {
       return res.status(404).json({ success: false, message: "Achievement not found" });
     }
@@ -94,10 +99,10 @@ const getAchievement = async (req, res) => {
 
 const updateAchievement = async (req, res) => {
   try {
-    const existing = await Achievement.findOne({
+    const existing = await Achievement.findOne(scopeQuery(Achievement, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
-    }).lean();
+    })).lean();
     if (!existing) {
       return res.status(404).json({ success: false, message: "Achievement not found" });
     }
@@ -106,8 +111,8 @@ const updateAchievement = async (req, res) => {
         return res.status(403).json({ success: false, message: "Access denied — achievement is not in your assigned classes" });
       }
     }
-    const record = await Achievement.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const record = await Achievement.findOneAndUpdate(scopeQuery(Achievement, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       { $set: req.body },
       { new: true, runValidators: true },
     );
@@ -119,10 +124,10 @@ const updateAchievement = async (req, res) => {
 
 const deleteAchievement = async (req, res) => {
   try {
-    const existing = await Achievement.findOne({
+    const existing = await Achievement.findOne(scopeQuery(Achievement, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
-    }).lean();
+    })).lean();
     if (!existing) {
       return res.status(404).json({ success: false, message: "Achievement not found" });
     }
@@ -131,7 +136,7 @@ const deleteAchievement = async (req, res) => {
         return res.status(403).json({ success: false, message: "Access denied — achievement is not in your assigned classes" });
       }
     }
-    await Achievement.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    await Achievement.findOneAndDelete(scopeQuery(Achievement, req, { _id: req.params.id, schoolId: req.tenantId }));
     res.json({ success: true, message: "Achievement deleted" });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

@@ -1,5 +1,11 @@
+const {
+  scopeQuery,
+  withBranchScope,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
+const { resolveTeacherScope } = require("@school-erp/shared/src/utils/teacherScope");
 const StudentAcademicRecord = require("../models/StudentAcademicRecord");
-const { tryStudentModel } = require("../services/academicYearService");
+const { tryStudentModel, rosterAdmissionNosFor } = require("../services/academicYearService");
 const ObjectId = require("mongoose").Types.ObjectId;
 const { findMissingMasterRefs, missingMessage } = require("../utils/masterRefs");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
@@ -31,7 +37,9 @@ const create = async (req, res) => {
       return res.status(400).json({ success: false, message: "studentId is required" });
     }
 
-    const lookup = isObjectId(studentId) ? { _id: studentId, schoolId: req.tenantId } : { admissionNo: studentId, schoolId: req.tenantId };
+      const lookup = isObjectId(studentId)
+        ? withBranchScope(req, { _id: studentId, schoolId: req.tenantId })
+        : withBranchScope(req, { admissionNo: studentId, schoolId: req.tenantId });
     const student = await Student.findOne(lookup);
     if (!student) return res.status(404).json({ success: false, message: "Student not found in this school" });
 
@@ -39,15 +47,16 @@ const create = async (req, res) => {
       if (!toClass || String(toClass).trim() === "") {
         return res.status(400).json({ success: false, message: "toClass is required for a class/section transfer" });
       }
-      const missing = await findMissingMasterRefs({ schoolId: req.tenantId, class: toClass, section: toSection });
+      const missing = await findMissingMasterRefs({ schoolId: req.tenantId, branchId: req.branchId, class: toClass, section: toSection });
       if (missing.length) {
         return res.status(400).json({ success: false, message: missingMessage(missing), missing });
       }
     }
 
     const toSectionValue = type === "class_section" ? (toSection || student.section || "") : null;
-    const record = await StudentAcademicRecord.create({
-      schoolId: req.tenantId,
+      const record = await StudentAcademicRecord.create({
+        schoolId: req.tenantId,
+        branchId: branchIdForWrite(req),
       studentId: student.admissionNo,
       studentName: student.name,
       session: session || null,
@@ -79,8 +88,25 @@ const create = async (req, res) => {
 const history = async (req, res) => {
   try {
     const { studentId, session } = req.query;
-    const filter = { schoolId: req.tenantId, kind: "transfer" };
-    if (studentId) filter.studentId = studentId;
+    const filter = scopeQuery(StudentAcademicRecord, req, { schoolId: req.tenantId, kind: "transfer" })
+    // Transfer records carry no class/section, so a teacher's authority is
+    // resolved through the roster of their assignment union. Non-teachers get a
+    // null scope and stay unfiltered.
+    const teacherScope = await resolveTeacherScope({ tenantId: req.tenantId, user: req.user });
+    if (teacherScope && teacherScope.allScopes.length) {
+      const mine = await rosterAdmissionNosFor({
+        schoolId: req.tenantId,
+        branchId: req.branchId,
+        scopes: teacherScope.allScopes,
+      });
+      // Intersect with the requested student rather than overwriting it —
+      // otherwise `?studentId=` is ignored and the whole roster is returned.
+      filter.studentId = studentId
+        ? { $in: mine.filter((no) => String(no) === String(studentId)) }
+        : { $in: mine };
+    } else if (studentId) {
+      filter.studentId = studentId;
+    }
     if (session) filter.session = session;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([

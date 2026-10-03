@@ -12,15 +12,26 @@ const { normalizeKey } = require("@school-erp/shared/src/master-data");
 // this school) the check is skipped for that kind. This keeps the legacy
 // free-string flow working until a school adopts the master catalogs - the
 // "safe compatibility" path for existing 2026-27 data.
-async function findMissingMasterRefs({ schoolId, class: cls, section, subject, room, feeType }) {
+// Branch scoping: when the caller is acting inside one campus, the master
+// catalog it validates against must be that campus's catalog. Without this a
+// class/section/subject/room that only exists in Branch A would happily satisfy
+// a timetable or attendance record belonging to Branch B.
+//
+// branchId is only added when the request actually resolved to a campus, so
+// school-wide callers (and the pre-branch deployments) keep their old filters.
+function campus(filter, branchId) {
+  return branchId ? { ...filter, branchId } : filter;
+}
+
+async function findMissingMasterRefs({ schoolId, branchId, class: cls, section, subject, room, feeType }) {
   const missing = [];
 
   const check = async (kind, value, Model, countFilter, matchFilter) => {
     const label = String(value == null ? "" : value).trim();
     if (!label) return;
-    const activeCount = await Model.countDocuments(countFilter);
+    const activeCount = await Model.countDocuments(campus(countFilter, branchId));
     if (activeCount === 0) return;
-    const found = await Model.findOne(matchFilter).lean();
+    const found = await Model.findOne(campus(matchFilter, branchId)).lean();
     if (!found) missing.push({ kind, value: label });
   };
 
@@ -68,7 +79,7 @@ const NON_ACADEMIC_PERIODS = new Set(
 
 // Validates a LIST of subject strings (timetable periods) with one catalog
 // presence check instead of one per subject.
-async function findMissingSubjects({ schoolId, subjects }) {
+async function findMissingSubjects({ schoolId, branchId, subjects }) {
   const values = [
     ...new Set(
       (subjects || [])
@@ -77,15 +88,15 @@ async function findMissingSubjects({ schoolId, subjects }) {
     ),
   ];
   if (!values.length) return [];
-  const activeCount = await SchoolSubject.countDocuments({ schoolId, status: "active" });
+  const activeCount = await SchoolSubject.countDocuments(campus({ schoolId, status: "active" }, branchId));
   if (activeCount === 0) return [];
   const missing = [];
   for (const value of values) {
-    const found = await SchoolSubject.findOne({
+    const found = await SchoolSubject.findOne(campus({
       schoolId,
       status: "active",
       $or: [{ normalizedName: normalizeKey(value) }, { name: value }],
-    }).lean();
+    }, branchId)).lean();
     if (!found) missing.push({ kind: "subject", value });
   }
   return missing;
@@ -100,18 +111,18 @@ function missingMessage(missing) {
 // Validates a LIST of room references (timetable periods) against the tenant's
 // active Room catalog — same leniency as the other checks (skipped while the
 // catalog is empty so legacy free-string data keeps working).
-async function findMissingRooms({ schoolId, rooms }) {
+async function findMissingRooms({ schoolId, branchId, rooms }) {
   const values = [...new Set((rooms || []).map((r) => String(r).trim()).filter(Boolean))];
   if (!values.length) return [];
-  const activeCount = await Room.countDocuments({ schoolId, active: true });
+  const activeCount = await Room.countDocuments(campus({ schoolId, active: true }, branchId));
   if (activeCount === 0) return [];
   const missing = [];
   for (const value of values) {
-    const found = await Room.findOne({
+    const found = await Room.findOne(campus({
       schoolId,
       active: true,
       $or: [{ key: normalizeKey(value) }, { name: value }],
-    }).lean();
+    }, branchId)).lean();
     if (!found) missing.push({ kind: "room", value });
   }
   return missing;

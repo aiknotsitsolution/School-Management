@@ -9,6 +9,8 @@ const mongoose = require("mongoose");
 const concessionSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the concession was granted at.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     studentId: { type: String, required: true }, // admissionNo
     kind: { type: String, enum: ["Sibling", "Scholarship", "Manual"], required: true },
     name: { type: String, required: true },
@@ -31,6 +33,6 @@ const concessionSchema = new mongoose.Schema(
 
 // Lookup path for the generation-time netting query (dupes are enforced in
 // the controller so a Rejected row does not block a re-request).
-concessionSchema.index({ schoolId: 1, studentId: 1, session: 1, status: 1 });
+concessionSchema.index({ schoolId: 1, branchId: 1, studentId: 1, session: 1, status: 1 });
 
 module.exports = mongoose.model("Concession", concessionSchema);

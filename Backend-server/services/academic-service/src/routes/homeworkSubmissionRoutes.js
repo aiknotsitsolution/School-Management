@@ -5,7 +5,7 @@ const { validateObjectIdParam } = require("@school-erp/shared/src/middleware/obj
 router.param("id", validateObjectIdParam);
 router.param("homeworkId", validateObjectIdParam);
 const ctrl = require("../controllers/homeworkSubmissionController");
-const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeClassTeacher } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeClassTeacher, scopeClassTeacherAggregate } = require("../middleware/auth");
 
 // Homework attachments: JPG, JPEG, PNG, PDF, DOCX, PPTX up to 10 MB — mirrors
 // the document upload ceiling so the limits stay consistent across the product.
@@ -45,7 +45,7 @@ const runUpload = (handler) => (req, res, next) => {
 router.use(verifyToken, resolveTenant, requireTenant);
 
 // Teacher: list submissions for assigned class/section (?homeworkId= or ?class=&section=)
-router.get("/class/list", requirePermission("homework:read"), scopeClassTeacher, ctrl.listSubmissionsForClass);
+router.get("/class/list", requirePermission("homework:read"), scopeClassTeacherAggregate, ctrl.listSubmissionsForClass);
 
 // Student: view own submissions (optionally scoped to one homework via ?homeworkId=)
 router.get("/", requirePermission("homework:read"), ctrl.getMySubmissions);

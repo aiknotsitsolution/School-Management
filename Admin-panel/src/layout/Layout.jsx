@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { ThemeProvider } from "@mui/material/styles";
 import { CalendarDays } from "lucide-react";
 import SidebarMui from "./SidebarMui";
@@ -8,23 +8,13 @@ import { sidebarTheme } from "./sidebarTheme";
 import { groups, STUDENT_NAV, PARENT_NAV } from "./sidebarNavData";
 import Topbar from "./Topbar";
 import SupportChatbot from "../components/SupportChatbot";
-import { selectSchool, selectRole, selectUser } from "../store/selectors";
-import { logout } from "../store/authSlice";
+import AttendanceCheckinModal from "../components/AttendanceCheckinModal";
+import { selectSchool, selectRole, selectUser, selectImpersonating, selectImpersonateReadOnly } from "../store/selectors";
 import { canSeeNavigation } from "../lib/scope";
 import { resolvePersona, isPersonaStaff } from "../lib/persona";
 import { PERSONA_NAV } from "../lib/personaNav";
 import { sessionLabel, schoolNeedsConfig, getDismissConfigKey } from "../lib/session";
 import { useTeacherContext } from "../pages/teacher/useTeacherContext";
-
-const ROLE_LABEL = {
-  super_admin: "Platform Owner",
-  school_admin: "School Admin",
-  admin: "School Admin",
-  teacher: "Teacher",
-  staff: "Staff",
-  student: "Student / Parent",
-  parent: "Student / Parent",
-};
 
 const EMPTY_NAV = [];
 
@@ -74,10 +64,11 @@ export default function Layout() {
   const [open, setOpen] = useState(false);
   const [promptDismissed, setPromptDismissed] = useState(false);
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const school = useSelector(selectSchool);
   const user = useSelector(selectUser);
   const role = useSelector(selectRole);
+  const impersonating = useSelector(selectImpersonating);
+  const readOnly = useSelector(selectImpersonateReadOnly);
 
   const persona = isPersonaStaff(user) ? resolvePersona(user) : null;
 
@@ -104,39 +95,38 @@ export default function Layout() {
   // Persona nav is already curated, so it bypasses the permission filter the
   // same way the previous sidebar did.
   const canSee = useMemo(
-    () => (persona ? () => true : (item) => canSeeNavigation(item, user, role)),
-    [persona, user, role],
+    () =>
+      persona
+        ? () => true
+        : (item) =>
+            canSeeNavigation(item, user, role, { impersonating, readOnly }),
+    [persona, user, role, impersonating, readOnly],
   );
 
-  const legacyRole = { admin: "school_admin", parent: "student" }[role] || role;
-  const settingsTarget = legacyRole === "super_admin" ? "/platform/settings" : "/settings";
-
+  // The sidebar brands the *tenant*, not the product: once a school is resolved
+  // its own logo and name head the rail, so one ERP instance serving many
+  // schools reads as each school's own system. `logo` is deliberately left empty
+  // when the school has not uploaded one — BrandMark then falls back to the
+  // school's initials, which beats silently showing the product mark to a school
+  // that never opted into it. ZipschoolOS branding is kept for the pre-auth
+  // screens (Landing/Login/Splash), where no tenant exists yet.
+  //
+  // The subtitle is `shortName · session`: shortName is the field schools set
+  // explicitly for this spot ("Short name used in the sidebar" in School
+  // settings), so `code` is only the fallback for schools that never filled it
+  // in. Listing both would just print the same identity twice.
   const sidebarBrand = useMemo(
     () => ({
-      name: "ZipschoolOS",
+      name: school?.name || "",
       code: school
-        ? [school.code, sessionLabel(school)].filter(Boolean).join(" · ")
+        ? [school.shortName || school.code, sessionLabel(school)]
+            .filter(Boolean)
+            .join(" · ")
         : "School ERP",
-      logo: school?.logo || "/ZipschoolOS-Transparent-logo.png",
+      logo: school?.logo || "",
     }),
     [school],
   );
-
-  const sidebarUser = useMemo(
-    () => ({
-      name: user?.name,
-      avatar: user?.avatar,
-      role:
-        ROLE_LABEL[legacyRole] ||
-        (role === "staff" && user?.designation ? `Staff · ${user.designation}` : "Member"),
-    }),
-    [user, role, legacyRole],
-  );
-
-  const handleSignOut = () => {
-    dispatch(logout());
-    navigate("/login", { replace: true });
-  };
 
   const needsConfig = useMemo(() => {
     if (!["school_admin", "admin"].includes(role)) return false;
@@ -160,16 +150,27 @@ export default function Layout() {
     navigate("/account", { state: { configTab: "organization" } });
   };
 
+  // Every Staff/Teacher account (persona workspaces included) owes the school
+  // today's attendance + check-in, so the gate lives in the app shell and runs
+  // once per login rather than once per dashboard. The modal probes
+  // /staff/attendance/me/today itself and renders nothing when the record is
+  // already marked AND checked in — nothing flashes for people who are done.
+  // Platform admins and impersonated sessions are out of scope: they manage
+  // attendance rather than their own.
+  const owesCheckin =
+    !impersonating && ["teacher", "staff"].includes(role);
+
   return (
     <div className="flex h-screen overflow-hidden bg-paper">
       <ThemeProvider theme={sidebarTheme}>
         <SidebarMui
           nav={nav}
           brand={sidebarBrand}
-          user={sidebarUser}
+          // The rail footer no longer repeats the school/session block — the
+          // brand header at the top already carries the school, and printing it
+          // twice read as duplicated filler.
+          showSchoolSession={false}
           canSee={canSee}
-          onSettings={() => navigate(settingsTarget)}
-          onSignOut={handleSignOut}
           open={open}
           onClose={() => setOpen(false)}
           mobileBreakpoint="lg"
@@ -195,6 +196,7 @@ export default function Layout() {
         </main>
       </div>
       <SupportChatbot />
+      {owesCheckin && <AttendanceCheckinModal userName={user?.name || "Staff"} />}
 
       {needsConfig && (
         <div className="fixed inset-0 z-[90] flex items-center justify-center bg-black/40 p-4">

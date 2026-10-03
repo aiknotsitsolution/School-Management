@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
-import { Megaphone, Pin, CalendarDays } from "lucide-react";
+import { Pin, CalendarDays } from "lucide-react";
 import { PageIntro, Card, Pill, toast } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
 import { fmtDate } from "./useStaffContext";
 
@@ -34,7 +35,7 @@ export default function ReceptionNotices() {
       ) : sorted.length === 0 ? (
         <Card>
           <div className="py-10 text-center">
-            <Megaphone size={40} className="mx-auto text-slate-text/30 mb-3" />
+            <PageArtwork name="notices" size={64} className="mx-auto mb-4" />
             <p className="text-[15px] font-semibold text-ink">No notices yet</p>
           </div>
         </Card>

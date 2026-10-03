@@ -15,6 +15,14 @@ const initialState = {
   user: readLS("erp_user"),
   school: readLS("erp_school"),
   activeSchoolId: localStorage.getItem("erp_active_school") || null,
+  // When the platform owner impersonates a school, writes are blocked by
+  // default and must be opted into explicitly. Cross-tenant writes are the
+  // expensive mistake: soft delete makes them recoverable, but a payroll edit
+  // or a fee write is not something a support session should cause by accident.
+  impersonateReadOnly: localStorage.getItem("erp_impersonate_readonly") !== "0",
+  // Campus the user is currently looking at. Sent as X-Branch-Id on every API
+  // call; "all" means the school-wide (unfiltered) admin view.
+  activeBranchId: localStorage.getItem("erp_active_branch") || null,
   isAuthenticated: Boolean(localStorage.getItem("erp_access_token")),
 };
 
@@ -44,6 +52,37 @@ const authSlice = createSlice({
     // Platform (super_admin) impersonation: pick which school to operate on.
     setActiveSchoolId(state, action) {
       state.activeSchoolId = action.payload || null;
+      // A branch belongs to one school, so switching school invalidates it.
+      state.activeBranchId = null;
+      // Re-arm the read-only guardrail for the newly selected school rather than
+      // inheriting "editing enabled" from the previous one.
+      state.impersonateReadOnly = true;
+      try {
+        localStorage.setItem("erp_impersonate_readonly", "1");
+      } catch {
+        // private mode / storage disabled: redux state still holds it
+      }
+    },
+    setImpersonateReadOnly(state, action) {
+      state.impersonateReadOnly = Boolean(action.payload);
+      try {
+        localStorage.setItem(
+          "erp_impersonate_readonly",
+          state.impersonateReadOnly ? "1" : "0",
+        );
+      } catch {
+        // private mode / storage disabled: redux state still holds it
+      }
+    },
+    // Campus switcher selection. Persisted so a reload keeps the same campus.
+    setActiveBranchId(state, action) {
+      state.activeBranchId = action.payload || null;
+      try {
+        if (action.payload) localStorage.setItem("erp_active_branch", action.payload);
+        else localStorage.removeItem("erp_active_branch");
+      } catch {
+        // private mode / storage disabled: redux state still holds it
+      }
     },
     logout() {
       return {
@@ -52,6 +91,8 @@ const authSlice = createSlice({
         user: null,
         school: null,
         activeSchoolId: null,
+        activeBranchId: null,
+        impersonateReadOnly: true,
         isAuthenticated: false,
       };
     },
@@ -64,6 +105,8 @@ export const {
   setUser,
   setSchool,
   setActiveSchoolId,
+  setActiveBranchId,
+  setImpersonateReadOnly,
   logout,
 } = authSlice.actions;
 

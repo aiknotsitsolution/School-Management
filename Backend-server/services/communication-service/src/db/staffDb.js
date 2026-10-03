@@ -28,7 +28,7 @@ const staffSchema = new mongoose.Schema(
     userId: { type: String, default: null },
     name: { type: String, required: true },
     designation: { type: String },
-    role: { type: String, enum: ["teacher", "admin-staff", "support"] },
+    role: { type: String, enum: ["teacher", "staff"], default: "teacher" },
     contact: { type: String, default: null },
     email: { type: String, default: null },
     status: { type: String, enum: ["Active", "Inactive", "Resigned"] },

@@ -205,7 +205,7 @@ export default function SchoolOnboarding() {
                 >
                   <span
                     className={`w-6 h-6 rounded-full flex items-center justify-center text-[11px] ${
-                      past ? "bg-success/10 text-success" : active ? "bg-ink text-white" : "bg-paper text-slate-text/60"
+                      past ? "bg-success/10 text-success" : active ? "bg-ink text-white dark:bg-slate-200 dark:text-ink" : "bg-paper text-slate-text/60"
                     }`}
                   >
                     {past ? <Check size={13} /> : active ? <Icon size={13} /> : index + 1}
@@ -232,7 +232,8 @@ export default function SchoolOnboarding() {
                 className="font-mono"
               />
               <p className="text-[11px] text-slate-text/60 mt-1">
-                Unique internal code for system identification, URLs and reports. Cannot be changed later.
+                Unique internal code for system identification, URLs and reports. Only a super admin can change it
+                after onboarding.
               </p>
             </div>
             <Input placeholder="Short name" value={form.shortName} onChange={set("shortName")} />

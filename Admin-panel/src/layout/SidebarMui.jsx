@@ -10,10 +10,9 @@
 //   <SidebarMui
 //     nav={nav}
 //     brand={{ name: school?.name, code: school?.code, logo: school?.logoUrl }}
-//     user={{ name: user?.name, role: user?.role, avatar: user?.photoUrl }}
+//     schoolName={school?.name}
+//     session={sessionLabel(school)}
 //     canSee={(item) => hasPermission(user, item.permission)}
-//     onSettings={() => setAccountOpen(true)}
-//     onSignOut={handleSignOut}
 //     open={mobileOpen} onClose={() => setMobileOpen(false)}
 //   />
 //
@@ -26,7 +25,6 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link as RouterLink, useLocation } from "react-router-dom";
-import Avatar from "@mui/material/Avatar";
 import Box from "@mui/material/Box";
 import Collapse from "@mui/material/Collapse";
 import Divider from "@mui/material/Divider";
@@ -41,15 +39,16 @@ import Typography from "@mui/material/Typography";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import { alpha, useTheme } from "@mui/material/styles";
 
+import CloseRoundedIcon from "@mui/icons-material/CloseRounded";
 import KeyboardArrowDownRoundedIcon from "@mui/icons-material/KeyboardArrowDownRounded";
 import KeyboardDoubleArrowLeftRoundedIcon from "@mui/icons-material/KeyboardDoubleArrowLeftRounded";
 import KeyboardDoubleArrowRightRoundedIcon from "@mui/icons-material/KeyboardDoubleArrowRightRounded";
-import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
-import SettingsRoundedIcon from "@mui/icons-material/SettingsRounded";
+import SchoolRoundedIcon from "@mui/icons-material/SchoolRounded";
+import SearchRoundedIcon from "@mui/icons-material/SearchRounded";
 
 import useSidebarState, { isRouteActive } from "./useSidebarState";
 import { BRAND, DURATION, EASING, SB, SIDEBAR_TOKENS, SIDEBAR_TYPE, softPrimary } from "./sidebarTheme";
-import MOCK_NAV from "./sidebarNav.config";
+import PageArtwork from "../components/PageArtwork";
 
 const {
   expandedWidth,
@@ -64,6 +63,8 @@ const {
   listBottomPad,
   railIcon,
   radius,
+  searchPadY,
+  searchHeight,
 } = SIDEBAR_TOKENS;
 
 const { label: labelSize, labelNested, groupHeader, icon: iconSize, iconNested, groupHeaderIcon } = SIDEBAR_TYPE;
@@ -142,44 +143,62 @@ function NavBadge({ badge }) {
 
 /* ── Item styling ────────────────────────────────────────────────────────── */
 
+/* Active indicator: a fixed-height pill pinned to the leading edge that scales
+   up when selected. Fixed top/bottom offsets (rather than a centred translate)
+   keep the bar the same length on every row regardless of item height, which is
+   what makes it read as a rail rather than a per-item decoration. */
 const activeRailSx = {
   "&::before": {
     content: '""',
     position: "absolute",
     left: 0,
-    top: "50%",
-    width: 3,
-    height: 0,
-    borderRadius: "0 3px 3px 0",
-    bgcolor: "primary.main",
-    transform: "translateY(-50%)",
+    top: 8,
+    bottom: 8,
+    width: 4,
+    borderRadius: "0 4px 4px 0",
+bgcolor: SB.primary,
+      opacity: 0,
+    transform: "scaleY(0.35)",
+    transformOrigin: "center",
     transition: (t) =>
-      t.transitions.create("height", {
+      t.transitions.create(["opacity", "transform"], {
         duration: DURATION.normal,
         easing: EASING.emphasized,
       }),
   },
-  "&.Mui-selected::before": { height: "62%" },
+  "&.Mui-selected::before": { opacity: 1, transform: "scaleY(1)" },
 };
 
 const itemRootSx = (selected) => ({
   position: "relative",
   minHeight: itemHeight,
   borderRadius: `${radius}px`,
-  pl: 1.25,
-  pr: 1.25,
-  color: selected ? "primary.dark" : "text.secondary",
-  bgcolor: selected ? softPrimary(0.09) : "transparent",
+  pl: 1.5,
+  pr: 1.5,
+  color: selected ? SB.slate900 : SB.slate500,
+  bgcolor: selected ? softPrimary(0.14) : "transparent",
+  // A hairline keeps the active wash from bleeding into a white rail.
+  boxShadow: selected ? `inset 0 0 0 1px ${alpha(BRAND.main, 0.16)}` : "none",
   overflow: "hidden",
+  // Nudge + lift make the row feel pressable. The transition list is explicit
+  // so the transform is not cut short when a row is also being selected.
   transition: (t) =>
-    t.transitions.create(["background-color", "color", "box-shadow"], {
-      duration: DURATION.fast,
-      easing: EASING.standard,
-    }),
+    t.transitions.create(
+      ["background-color", "color", "box-shadow", "transform"],
+      { duration: DURATION.fast, easing: EASING.standard },
+    ),
   "&:hover": {
-    bgcolor: selected ? softPrimary(0.13) : SB.slate100,
-    color: selected ? "primary.dark" : SB.slate900,
-    "& .nav-icon": { color: selected ? "primary.main" : SB.slate700 },
+    // Hover tints toward the brand rather than plain grey, so an unselected row
+    // previews the colour the active state will take.
+    bgcolor: selected ? softPrimary(0.2) : softPrimary(0.07),
+    color: selected ? SB.slate900 : SB.slate900,
+    "& .nav-icon": { color: selected ? SB.primary : SB.slate700 },
+  },
+  "&:active": {
+    // Press feedback: the row settles back toward its resting position.
+    transform: "translateX(3px) scale(0.985)",
+    bgcolor: selected ? softPrimary(0.22) : softPrimary(0.11),
+    transitionDuration: "60ms",
   },
   "&.Mui-focusVisible": {
     boxShadow: `0 0 0 3px ${alpha(BRAND.main, 0.28)}`,
@@ -198,26 +217,19 @@ const iconSx = (selected, nested = false) => ({
     height: nested ? iconNested : iconSize,
     display: "block",
     flexShrink: 0,
-    color: selected ? "primary.main" : "currentColor",
-    filter: selected ? `drop-shadow(0 0 7px ${alpha(BRAND.main, 0.5)})` : "none",
+color: selected ? SB.primary : "currentColor",
+      filter: selected ? `drop-shadow(0 0 7px ${alpha(BRAND.main, 0.5)})` : "none",
+    // A small lift on hover/press, so the icon leads the interaction instead of
+    // only the row background changing.
+    transform: "scale(1)",
     transition: (t) =>
-      t.transitions.create(["color", "filter"], {
+      t.transitions.create(["color", "filter", "transform"], {
         duration: DURATION.normal,
         easing: EASING.standard,
       }),
   },
-  // Raster artwork (PNG/WebP in navPngIcons) ships with transparent padding
-  // baked into the file, so at the same box size it reads smaller than the
-  // vector glyphs. `objectFit: contain` fills the box, this lifts the visible
-  // artwork to match.
-  "img.nav-icon": {
-    transform: "scale(1.14)",
-    transition: (t) =>
-      t.transitions.create("transform", {
-        duration: DURATION.fast,
-        easing: EASING.standard,
-      }),
-  },
+  "&:hover .nav-icon": { transform: "scale(1.12)" },
+  "&:active .nav-icon": { transform: "scale(0.95)" },
 });
 
 /* ── Rail tooltip: label + sub-items ─────────────────────────────────────── */
@@ -344,10 +356,14 @@ function NavItem({
         ? {
             minHeight: nestedItemHeight,
             pl: 0.75,
+            // Tree guide, aligned to the nested label's left edge (icon box
+            // ends at ~35px with the roomy type scale) rather than the old
+            // 20px, where it disappeared behind the larger icon it used to sit
+            // under.
             "&::after": {
               content: '""',
               position: "absolute",
-              left: 20,
+              left: 37,
               top: 0,
               bottom: 0,
               width: 1,
@@ -596,7 +612,7 @@ function BrandMark({ brand }) {
         display: "grid",
         placeItems: "center",
         background:
-          "linear-gradient(135deg, #4F46E5 0%, #7C3AED 55%, #DB2777 100%)",
+          "linear-gradient(135deg, #0C47CF 0%, #7C3AED 55%, #DB2777 100%)",
         color: "#fff",
         fontWeight: 800,
         fontSize: 16,
@@ -615,6 +631,30 @@ function BrandMark({ brand }) {
       ) : (
         initialsOf(brand?.name || "School")
       )}
+    </Box>
+  );
+}
+
+/** A page motif bled off the edge of a sidebar block. Purely decorative, so it
+ *  is hidden from assistive tech and never intercepts clicks. */
+function SidebarDecor({ name, opacity = 0.08, width = 190, top, bottom, right = -46, tone }) {
+  return (
+    <Box
+      aria-hidden="true"
+      sx={{
+        position: "absolute",
+        top,
+        bottom,
+        right,
+        width,
+        height: "100%",
+        opacity,
+        pointerEvents: "none",
+        overflow: "hidden",
+        display: { xs: "none", md: "block" },
+      }}
+    >
+      <PageArtwork name={name} className={`block h-full w-full ${tone || ""}`} />
     </Box>
   );
 }
@@ -657,85 +697,74 @@ function BrandBlock({ brand, collapsed }) {
   );
 }
 
-function UserBlock({ user, collapsed, onSettings, onSignOut }) {
-  const avatar = (
-    <Avatar
-      src={user?.avatar}
-      alt=""
-      sx={{
-        width: 40,
-        height: 40,
-        fontSize: 15,
-        fontWeight: 750,
-        bgcolor: softPrimary(0.16),
-        color: "primary.dark",
-      }}
-    >
-      {initialsOf(user?.name || "User")}
-    </Avatar>
-  );
+function SchoolSessionBlock({ schoolName, session, collapsed }) {
+  const title = schoolName || "Your School";
+  const sessionText = session || "No active session";
 
   if (collapsed) {
     return (
       <Tooltip
-        title={`${user?.name || "Account"}${user?.role ? ` · ${user.role}` : ""}`}
+        title={`${title} - Session ${sessionText}`}
         placement="right"
         slotProps={fadeTransition}
       >
-        <Box sx={{ display: "grid", placeItems: "center" }}>{avatar}</Box>
+        <Box sx={{ display: "grid", placeItems: "center" }}>
+          <SchoolRoundedIcon sx={{ fontSize: 21, color: "text.secondary" }} />
+        </Box>
       </Tooltip>
     );
   }
 
   return (
-    <Box sx={{ display: "flex", alignItems: "center", gap: 1, minWidth: 0 }}>
-      {avatar}
-      <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography
-          noWrap
-          sx={{ fontSize: 13.5, fontWeight: 700, color: SB.slate900, lineHeight: 1.25 }}
-        >
-          {user?.name || "Account"}
-        </Typography>
-        <Typography noWrap sx={{ fontSize: 12, color: "text.secondary", mt: 0.15 }}>
-          {user?.role || "Member"}
-        </Typography>
+    <Box
+      sx={{
+        position: "relative",
+        display: "flex",
+        alignItems: "center",
+        gap: 1.25,
+        minWidth: 0,
+        px: 1.25,
+        py: 1.15,
+        borderRadius: 2.5,
+        overflow: "hidden",
+        // Artwork instead of a border + fill: the motif bleeds off the right
+        // edge and the text sits straight on the paper, so the block is
+        // distinguished by the drawing rather than a box around it.
+      }}
+    >
+      <PageArtwork
+        name="people"
+        className="pointer-events-none absolute right-0 top-0 h-full w-[58%] text-primary opacity-[0.18]"
+      />
+
+      <Box
+        sx={{
+          position: "relative",
+          width: 34,
+          height: 34,
+          flexShrink: 0,
+          display: "grid",
+          placeItems: "center",
+          color: "primary.dark",
+        }}
+      >
+        <SchoolRoundedIcon sx={{ fontSize: 21 }} />
       </Box>
 
-      {onSettings || onSignOut ? (
-        <Box sx={{ display: "flex", alignItems: "center", gap: 0.25 }}>
-          {onSettings ? (
-            <IconButton
-              size="small"
-              aria-label="Account settings"
-              onClick={onSettings}
-              sx={{
-                color: "text.secondary",
-                width: 34,
-                height: 34,
-                "&:hover": { bgcolor: SB.slate100, color: SB.slate900 },
-              }}
-            >
-              <SettingsRoundedIcon sx={{ fontSize: 19 }} />
-            </IconButton>
-          ) : null}
-          {onSignOut ? (
-            <IconButton
-              size="small"
-              aria-label="Sign out"
-              onClick={onSignOut}
-              sx={{
-                color: "text.secondary",
-                width: 34,
-                height: 34,
-                "&:hover": { bgcolor: alpha("#E11D48", 0.1), color: "error.main" },
-              }}
-            >
-              <LogoutRoundedIcon sx={{ fontSize: 19 }} />
-            </IconButton>
-          ) : null}
-        </Box>
-      ) : null}
+      <Box sx={{ position: "relative", minWidth: 0, flex: 1 }}>
+        <Typography
+          noWrap
+          sx={{ fontSize: 13, fontWeight: 700, color: SB.slate900, lineHeight: 1.25 }}
+        >
+          {title}
+        </Typography>
+        <Typography
+          noWrap
+          sx={{ fontSize: 11.5, color: "text.secondary", mt: 0.2, fontWeight: 550 }}
+        >
+          Session {sessionText}
+        </Typography>
+      </Box>
     </Box>
   );
 }
@@ -743,15 +772,18 @@ function UserBlock({ user, collapsed, onSettings, onSignOut }) {
 /* ── Sidebar ─────────────────────────────────────────────────────────────── */
 
 export default function SidebarMui({
-  nav = MOCK_NAV,
+  nav = [],
   brand = {},
-  user = {},
+  schoolName = "",
+  session = "",
+  // The school/session footer only means something for a school-bound user.
+  // A platform owner has no tenant, so there is nothing honest to print — they
+  // get the footer toggle only, rather than placeholder text.
+  showSchoolSession = true,
   canSee = allowAll,
   open: openProp,
   onClose,
   onToggle,
-  onSettings,
-  onSignOut,
   defaultCollapsed = false,
   persist = true,
   width = expandedWidth,
@@ -789,6 +821,35 @@ export default function SidebarMui({
         .filter((group) => group.items.length > 0),
     [normalized, canSee],
   );
+
+  // Client-side label filter. A parent whose own label misses but whose children
+  // hit is kept with the matching children only, so a search never hides a
+  // reachable route behind a collapsed parent.
+  const [query, setQuery] = useState("");
+
+  // Collapsing hides the input, so honouring a live query would silently filter
+  // the icon rail with no visible control to clear it. Derived rather than reset
+  // in an effect, so the typed text survives expand/collapse.
+  const effectiveQuery = collapsed ? "" : query;
+
+  const visible = useMemo(() => {
+    const q = effectiveQuery.trim().toLowerCase();
+    if (!q) return filtered;
+    return filtered
+      .map((group) => ({
+        ...group,
+        items: group.items
+          .map((item) => {
+            if (item.label?.toLowerCase().includes(q)) return item;
+            const kids = (item.children || []).filter((c) =>
+              c.label?.toLowerCase().includes(q),
+            );
+            return kids.length ? { ...item, children: kids } : null;
+          })
+          .filter(Boolean),
+      }))
+      .filter((group) => group.items.length > 0);
+  }, [filtered, effectiveQuery]);
 
   useEffect(() => {
     if (!state.activeGroupId) return undefined;
@@ -842,8 +903,7 @@ export default function SidebarMui({
           boxSizing: "border-box",
           overflowX: "hidden",
           borderRight: `1px solid ${SB.slate200}`,
-          backgroundImage:
-            "linear-gradient(180deg, var(--color-white) 0%, var(--color-paper) 100%)",
+          backgroundImage: `linear-gradient(180deg, ${SB.shell} 0%, ${SB.shellEdge} 100%)`,
           transition: (t) =>
             t.transitions.create("width", {
               duration: DURATION.rail,
@@ -860,17 +920,78 @@ export default function SidebarMui({
         {/* header — school branding */}
         <Box
           sx={{
+            position: "relative",
             display: "flex",
             alignItems: "center",
-            minHeight: 76,
+            minHeight: 82,
             px: collapsed ? 0 : 2,
             justifyContent: collapsed ? "center" : "flex-start",
+            overflow: "hidden",
           }}
         >
+          <SidebarDecor name="waves" tone="text-primary" opacity={0.1} right={-54} />
           <BrandBlock brand={brand} collapsed={collapsed} />
         </Box>
 
         <Divider sx={{ borderColor: SB.slate200 }} />
+
+        {/* nav filter — expanded mode only, the rail has no room for it */}
+        {collapsed ? null : (
+          <Box sx={{ px: 1.5, py: `${searchPadY}px` }}>
+            <Box
+              component="div"
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                gap: 0.75,
+                height: searchHeight,
+                px: 1.1,
+                borderRadius: 2,
+                bgcolor: SB.slate100,
+                border: `1px solid ${SB.slate200}`,
+                transition: (t) =>
+                  t.transitions.create(["border-color", "background-color"], {
+                    duration: DURATION.fast,
+                  }),
+                "&:focus-within": {
+                  bgcolor: SB.paper,
+                  borderColor: alpha(BRAND.main, 0.45),
+                },
+              }}
+            >
+              <SearchRoundedIcon sx={{ fontSize: 17, color: SB.slate500, flexShrink: 0 }} />
+              <Box
+                component="input"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                placeholder="Search navigation"
+                aria-label="Search navigation"
+                sx={{
+                  flex: 1,
+                  minWidth: 0,
+                  border: 0,
+                  outline: 0,
+                  bgcolor: "transparent",
+                  font: "inherit",
+                  fontSize: 13,
+                  fontWeight: 550,
+                  color: SB.slate900,
+                  "&::placeholder": { color: SB.slate500, opacity: 1 },
+                }}
+              />
+              {query ? (
+                <IconButton
+                  size="small"
+                  onClick={() => setQuery("")}
+                  aria-label="Clear navigation search"
+                  sx={{ p: 0.25, color: SB.slate500 }}
+                >
+                  <CloseRoundedIcon sx={{ fontSize: 15 }} />
+                </IconButton>
+              ) : null}
+            </Box>
+          </Box>
+        )}
 
         {/* scrollable navigation */}
         <Box
@@ -885,7 +1006,7 @@ export default function SidebarMui({
             ...scrollbarSx,
           }}
         >
-          {filtered.map((group) => (
+          {visible.map((group) => (
             <Box key={group.id} component="section" sx={{ mb: `${groupGap}px` }}>
               {group.header ? <GroupHeader group={group} collapsed={collapsed} /> : null}
 
@@ -916,25 +1037,53 @@ export default function SidebarMui({
             </Box>
           ))}
 
-          {filtered.length === 0 ? (
+          {visible.length === 0 ? (
             <Box sx={{ px: collapsed ? 0 : 2, py: 3, textAlign: "center" }}>
-              <Typography sx={{ fontSize: 13, color: "text.secondary" }}>
-                {collapsed ? "—" : "No navigation items available for your role."}
+              <Typography sx={{ fontSize: 12.5, color: SB.slate500 }}>
+                {collapsed
+                  ? "—"
+                  : effectiveQuery.trim()
+                    ? `Nothing matches “${effectiveQuery.trim()}”.`
+                    : "No navigation items available for your role."}
               </Typography>
             </Box>
           ) : null}
         </Box>
 
         {/* footer — user + collapse toggle */}
-        <Box sx={{ borderTop: `1px solid ${SB.slate200}`, bgcolor: "color-mix(in srgb, var(--color-white) 80%, transparent)" }}>
-          <Box sx={{ px: collapsed ? 0 : 2, py: 1.75 }}>
-            <UserBlock
-              user={user}
-              collapsed={collapsed}
-              onSettings={onSettings}
-              onSignOut={onSignOut}
-            />
-          </Box>
+        <Box
+          sx={{
+            position: "relative",
+            borderTop: `1px solid ${SB.slate200}`,
+            bgcolor: SB.paper,
+            overflow: "hidden",
+          }}
+        >
+          <SidebarDecor
+            name="waves"
+            tone="text-primary"
+            opacity={0.14}
+            right={-78}
+            bottom={2}
+            width={268}
+          />
+          <SidebarDecor
+            name="stack"
+            tone="text-slate-500"
+            opacity={0.26}
+            right={-46}
+            bottom={-20}
+            width={188}
+          />
+          {showSchoolSession ? (
+            <Box sx={{ position: "relative", px: collapsed ? 0 : 2, py: 1.75 }}>
+              <SchoolSessionBlock
+                schoolName={schoolName}
+                session={session}
+                collapsed={collapsed}
+              />
+            </Box>
+          ) : null}
 
           {showFooterToggle && !isMobile ? (
             <>

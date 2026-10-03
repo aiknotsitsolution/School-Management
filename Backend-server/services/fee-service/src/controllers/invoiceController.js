@@ -1,3 +1,8 @@
+const {
+  scopeQuery,
+  withBranchScope,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const FeeInvoice = require("../models/FeeInvoice");
 const FeeStructure = require("../models/FeeStructure");
 require("../models/School"); // registers mongoose.models.School for the PDF header
@@ -51,6 +56,7 @@ const createInvoice = async (req, res) => {
           }
         : {}),
       schoolId: req.tenantId,
+      branchId: branchIdForWrite(req),
     });
     res.status(201).json({ success: true, data: invoice });
   } catch (err) {
@@ -65,7 +71,7 @@ const createInvoice = async (req, res) => {
 const getInvoices = async (req, res) => {
   try {
     const { studentId, status, session } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(FeeInvoice, req, { schoolId: req.tenantId })
     // Parents are scoped to their linked children (CLIENT-REQ-052/066). The
     // JWT carries linkedStudentIds; students are scoped to their own refId.
     if (req.user.role === "parent") {
@@ -102,13 +108,13 @@ const generatePreview = async (req, res) => {
     }
     await assertAcademicRefs({ req, values: { class: className, feeType } });
 
-    const structure = await FeeStructure.findOne({
+    const structure = await FeeStructure.findOne(scopeQuery(FeeStructure, req, {
       schoolId: req.tenantId,
       class: className,
       feeType,
       session,
       active: true,
-    });
+    }));
     if (!structure) {
       return res.status(404).json({
         success: false,
@@ -127,19 +133,19 @@ const generatePreview = async (req, res) => {
       return res.status(503).json({ success: false, message: `Student enrollment lookup unavailable: ${err.message}` });
     }
 
-    const query = { schoolId: req.tenantId, class: className, status: "Active" };
+      const query = withBranchScope(req, { schoolId: req.tenantId, class: className, status: "Active" });
     if (section) query.section = section;
 
     const students = await Student.find(query).select("admissionNo name").lean();
 
     const admissions = students.map((s) => String(s.admissionNo));
     const existingDocs = admissions.length
-      ? await FeeInvoice.find({
+      ? await FeeInvoice.find(scopeQuery(FeeInvoice, req, {
           schoolId: req.tenantId,
           feeType,
           session,
           studentId: { $in: admissions },
-        })
+        }))
           .select("studentId")
           .lean()
       : [];
@@ -230,12 +236,14 @@ const confirmGenerate = async (req, res) => {
         const [feeType, session] = group.split("||");
         const ids = [...new Set(groupInvoices.map((inv) => String(inv.studentId)))];
         const [docs, concessionMap] = await Promise.all([
-          FeeInvoice.find({
-            schoolId: req.tenantId,
-            feeType,
-            session,
-            studentId: { $in: ids },
-          })
+          FeeInvoice.find(
+            scopeQuery(FeeInvoice, req, {
+              schoolId: req.tenantId,
+              feeType,
+              session,
+              studentId: { $in: ids },
+            }),
+          )
             .select("studentId")
             .lean(),
           findApplicableConcessions(req.tenantId, ids, { session, feeType }),
@@ -267,8 +275,11 @@ const confirmGenerate = async (req, res) => {
         concessionAmount: applied.concessionAmount,
         ...(concession ? { concessionId: concession._id } : {}),
         amount: applied.amount,
-        ...(applied.amount === 0 ? { status: "Paid" } : {}),
-        schoolId: req.tenantId,
+          ...(applied.amount === 0 ? { status: "Paid" } : {}),
+          schoolId: req.tenantId,
+          // The roster above is already branch-scoped, so the acting branch is
+          // the students' branch.
+          branchId: branchIdForWrite(req),
       });
     }
 
@@ -310,7 +321,7 @@ const downloadInvoicePdf = async (req, res) => {
     const { id } = req.params;
     if (!id) return res.status(400).json({ success: false, message: "Invoice ID is required" });
 
-    const invoice = await FeeInvoice.findOne({ _id: id, schoolId: req.tenantId }).lean();
+    const invoice = await FeeInvoice.findOne(scopeQuery(FeeInvoice, req, { _id: id, schoolId: req.tenantId })).lean();
     if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
 
     // Parents/students may only download PDFs for their own linked / own record.

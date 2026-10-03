@@ -3,6 +3,9 @@ const mongoose = require("mongoose");
 const paymentOrderSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the order was raised at. Stays null for school-level subscription
+    // upgrades, which are not tied to a campus.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     // For fee payments the order is linked to an invoice; for subscription
     // upgrades there is no invoice (created via the internal engine route).
     invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: "FeeInvoice", default: null },

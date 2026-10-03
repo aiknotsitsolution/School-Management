@@ -1,28 +1,259 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+/* Dark mode flips the SAME variable names Tailwind already emits
+   (bg-white → var(--color-white), border-slate-200 → var(--color-slate-200)),
+   so every existing utility re-themes without touching a single component. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
 @theme {
+  /* ── Brand ────────────────────────────────────────────────────────────────
+     Approved palette. Brand blue #0C47CF is the single primary across the app;
+     brand red #E9424E is reserved for destructive/alert states and brand
+     accents so it never competes with the primary. */
+  --color-primary: #0C47CF;
+  --color-primary-light: #E8EFFC;
+  --color-primary-dark: #0A39A3;
+  --color-primary-border: #B9CDF4;
+  --color-brand-red: #E9424E;
+  --color-brand-red-light: #FDEDEE;
+  --color-brand-red-dark: #C42F3A;
+
   --color-ink: #172033;
   --color-ink-light: #222D42;
   --color-ink-dark: #0F172A;
   --color-navy: #0B192C;
-  --color-primary: #4F46E5;
-  --color-primary-light: #EEF2FF;
-  --color-primary-dark: #4338CA;
-  --color-primary-border: #C7D2FE;
+  --color-line: #E2E8F0;
   --color-paper: #F8FAFC;
+
   --color-success: #16A34A;
   --color-success-light: #F0FDF4;
   --color-warning: #F59E0B;
   --color-warning-light: #FFFBEB;
-  --color-alert: #DC2626;
-  --color-alert-light: #FEF2F2;
-  --color-info: #2563EB;
-  --color-info-light: #EFF6FF;
+  --color-alert: #E9424E;
+  --color-alert-light: #FDEDEE;
+  --color-info: #0C47CF;
+  --color-info-light: #E8EFFC;
   --color-slate-text: #475569;
+
   --font-display: "Space Grotesk", sans-serif;
   --font-body: "Inter", sans-serif;
+
+  /* ── Type scale ───────────────────────────────────────────────────────────
+     Replaces ad-hoc bracket utilities (text-[12.5px], text-[13.5px]) that had
+     drifted outside Tailwind's scale. */
+  --text-2xs: 10.5px;
+  --text-xs: 12px;
+  --text-sm: 13.5px;
+  --text-base: 15px;
+  --text-lg: 17px;
+  --text-xl: 20px;
+  --text-2xl: 24px;
+  --text-3xl: 30px;
+  --text-4xl: 36px;
+
+  /* ── Radii ───────────────────────────────────────────────────────────────
+     One scale, so card/chip/pill/panel corners stay consistent. */
+  --radius-chip: 8px;
+  --radius-control: 10px;
+  --radius-card: 16px;
+  --radius-panel: 20px;
+  --radius-hero: 24px;
+
+  /* ── Elevation ────────────────────────────────────────────────────────────
+     Soft, low-contrast. Cards should read as layered paper, not as glowing. */
+  --shadow-elev-1: 0 1px 2px rgba(23, 32, 51, 0.05), 0 1px 3px rgba(23, 32, 51, 0.04);
+  --shadow-elev-2: 0 4px 12px rgba(23, 32, 51, 0.07), 0 2px 4px rgba(23, 32, 51, 0.04);
+  --shadow-elev-3: 0 12px 28px rgba(23, 32, 51, 0.1), 0 4px 8px rgba(23, 32, 51, 0.04);
+  --shadow-lift: 0 10px 24px rgba(12, 71, 207, 0.14);
+
   --animate-upload-indeterminate: upload-slide 1.3s ease-in-out infinite;
+}
+
+/* ── Dark palette ───────────────────────────────────────────────────────────
+   Only the semantic tokens get remapped. Tailwind's own slate/white scale is
+   overridden too, because `bg-white` and `border-slate-200` resolve through
+   these vars rather than a literal colour. */
+[data-theme="dark"] {
+  color-scheme: dark;
+
+  --color-white: #111827;
+  --color-white-2: #161E2D;
+  --color-paper: #0B1220;
+  --color-paper-2: #131C2B;
+
+  --color-ink: #F1F5F9;
+  --color-ink-light: #E2E8F0;
+  --color-ink-dark: #0B1220;
+  --color-slate-text: #94A3B8;
+  --color-line: #263245;
+
+  --color-slate-50: #0F172A;
+  --color-slate-100: #1A2434;
+  --color-slate-200: #263245;
+  --color-slate-300: #334155;
+  --color-slate-400: #475569;
+  --color-slate-500: #64748B;
+  --color-slate-600: #94A3B8;
+  --color-slate-700: #CBD5E1;
+  --color-slate-800: #E2E8F0;
+  --color-slate-900: #F1F5F9;
+
+  /* Accent families. These carry the dashboard language (DashKit ACCENTS/BADGE,
+     status chips, tinted panels), so leaving them at their light-mode values is
+     what makes dark mode read as misaligned: `bg-emerald-50` panels glare white
+     and `text-amber-600` goes unreadable on a dark surface.
+
+     Each ramp is inverted the same way the slate ramp above is — the low numbers
+     become dark tinted surfaces/borders and the high numbers become light text.
+     Shades are aligned to each hue's own ramp so a family stays recognisable. */
+  --color-indigo-50: #161A33;
+  --color-indigo-100: #1E2347;
+  --color-indigo-200: #2A3060;
+  --color-indigo-300: #3B4488;
+  --color-indigo-400: #6E79D6;
+  --color-indigo-500: #818CF8;
+  --color-indigo-600: #A5B4FC;
+  --color-indigo-700: #C7D2FE;
+  --color-indigo-800: #E0E7FF;
+
+  --color-emerald-50: #0C2119;
+  --color-emerald-100: #12301F;
+  --color-emerald-200: #17402A;
+  --color-emerald-300: #1E6B47;
+  --color-emerald-400: #34D399;
+  --color-emerald-500: #4ADE80;
+  --color-emerald-600: #6EE7B7;
+  --color-emerald-700: #A7F3D0;
+  --color-emerald-800: #D1FAE5;
+
+  --color-sky-50: #0B1F2E;
+  --color-sky-100: #0F2C40;
+  --color-sky-200: #143A54;
+  --color-sky-300: #1A4E6E;
+  --color-sky-400: #38BDF8;
+  --color-sky-500: #7DD3FC;
+  --color-sky-600: #BAE6FD;
+  --color-sky-700: #E0F2FE;
+  --color-sky-800: #F0F9FF;
+
+  --color-amber-50: #241A05;
+  --color-amber-100: #33240A;
+  --color-amber-200: #453210;
+  --color-amber-300: #5C4214;
+  --color-amber-400: #FBBF24;
+  --color-amber-500: #FCD34D;
+  --color-amber-600: #FDE68A;
+  --color-amber-700: #FEF3C7;
+  --color-amber-800: #FFFBEB;
+
+  --color-rose-50: #2A0F16;
+  --color-rose-100: #3B151F;
+  --color-rose-200: #4E1D2A;
+  --color-rose-300: #672637;
+  --color-rose-400: #FB7185;
+  --color-rose-500: #FDA4AF;
+  --color-rose-600: #FECDD3;
+  --color-rose-700: #FFE4E6;
+  --color-rose-800: #FFF1F2;
+
+  --color-violet-50: #1C1533;
+  --color-violet-100: #261C47;
+  --color-violet-200: #33265E;
+  --color-violet-300: #443178;
+  --color-violet-400: #A78BFA;
+  --color-violet-500: #C4B5FD;
+  --color-violet-600: #DDD6FE;
+  --color-violet-700: #EDE9FE;
+  --color-violet-800: #F5F3FF;
+
+  --color-teal-50: #08201F;
+  --color-teal-100: #0C2C2A;
+  --color-teal-200: #103B37;
+  --color-teal-300: #154E48;
+  --color-teal-400: #2DD4BF;
+  --color-teal-500: #5EEAD4;
+  --color-teal-600: #99F6E4;
+  --color-teal-700: #CCFBF1;
+  --color-teal-800: #F0FDFA;
+
+  --color-pink-50: #2B0F1B;
+  --color-pink-100: #3B1626;
+  --color-pink-200: #501D33;
+  --color-pink-300: #6B2743;
+  --color-pink-400: #F472B6;
+  --color-pink-500: #F9A8D4;
+  --color-pink-600: #FBCFE8;
+  --color-pink-700: #FDE2F0;
+  --color-pink-800: #FCE7F3;
+
+  --color-cyan-50: #06232B;
+  --color-cyan-100: #0A3038;
+  --color-cyan-200: #0E3F4A;
+  --color-cyan-300: #13515E;
+  --color-cyan-400: #22D3EE;
+  --color-cyan-500: #67E8F9;
+  --color-cyan-600: #A5F3FC;
+  --color-cyan-700: #CFFAFE;
+  --color-cyan-800: #ECFEFF;
+
+  --color-primary: #7BA6F5;
+  --color-primary-light: #16244A;
+  --color-primary-dark: #A9C6F9;
+  --color-primary-border: #2B4180;
+  --color-brand-red: #F08087;
+  --color-brand-red-light: #3D1418;
+  --color-brand-red-dark: #F7A2A7;
+
+  --color-success: #4ADE80;
+  --color-success-light: #052E1A;
+  --color-warning: #FBBF24;
+  --color-warning-light: #3A2A05;
+  --color-alert: #F08087;
+  --color-alert-light: #3D1418;
+  --color-info: #7BA6F5;
+  --color-info-light: #16244A;
+
+  --shadow-elev-1: 0 1px 2px rgba(0, 0, 0, 0.4);
+  --shadow-elev-2: 0 4px 12px rgba(0, 0, 0, 0.45);
+  --shadow-elev-3: 0 12px 28px rgba(0, 0, 0, 0.5);
+  --shadow-lift: 0 10px 24px rgba(0, 0, 0, 0.5);
+
+  --shadow-color: 0 0 0;
+}
+
+/* ── Reduced motion ────────────────────────────────────────────────────────
+   Honoured globally: every animation, transition and 3D float stops. Users who
+   ask the OS to reduce motion should never get parallax or continuous drift. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+  .dot-spinner .dot,
+  .rec-dot,
+  .bus-marker-pulse {
+    animation: none !important;
+    opacity: 0.75 !important;
+  }
+}
+
+/* Soft elevation for cards in dark mode — a black shadow is invisible. */
+[data-theme="dark"] .shadow-sm,
+[data-theme="dark"] .shadow,
+[data-theme="dark"] .shadow-md {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Every modal veil in the app is `bg-ink/50`, and --color-ink flips to
+   near-white in dark mode — which turns each scrim into a sheet of white fog
+   over the page. Pin the veil to black there instead. */
+[data-theme="dark"] .bg-ink\/50 {
+  background-color: rgb(2 6 20 / 0.55);
 }
 
 @keyframes upload-slide {
@@ -35,14 +266,15 @@
 html, body { margin: 0; padding: 0; }
 body {
   font-family: 'Inter', sans-serif;
-  background-color: #F8FAFC;
-  color: #0F172A;
+  background-color: var(--color-paper);
+  color: var(--color-ink);
   -webkit-font-smoothing: antialiased;
+  transition: background-color 180ms ease, color 180ms ease;
 }
 ::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #CBD5E1; border-radius: 8px; }
-::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+::-webkit-scrollbar-thumb { background: var(--color-slate-300); border-radius: 8px; }
+::-webkit-scrollbar-thumb:hover { background: var(--color-slate-400); }
 
 .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
 
@@ -74,7 +306,7 @@ body {
   display: flex; align-items: center; justify-content: center;
   transition: transform .15s ease;
 }
-.bus-marker.is-selected .bus-marker-dot { transform: scale(1.25); box-shadow: 0 0 0 5px rgba(79,70,229,.35), 0 2px 8px rgba(0,0,0,.35); }
+.bus-marker.is-selected .bus-marker-dot { transform: scale(1.25); box-shadow: 0 0 0 5px rgba(12,71,207,.35), 0 2px 8px rgba(0,0,0,.35); }
 .bus-marker-pulse {
   position: absolute; z-index: 1; left: 50%; top: 50%;
   width: 34px; height: 34px; border-radius: 50%;
@@ -90,7 +322,7 @@ body {
 /* School marker */
 .school-marker {
   width: 32px; height: 32px; border-radius: 50%;
-  background: #172033; border: 2.5px solid #4F46E5;
+  background: #172033; border: 2.5px solid #0C47CF;
   box-shadow: 0 2px 8px rgba(0,0,0,.35);
   display: flex; align-items: center; justify-content: center;
   transform: translate(-16px, -16px);
@@ -99,7 +331,7 @@ body {
 /* Rec dot animation */
 .rec-dot {
   display: inline-block; width: 8px; height: 8px; border-radius: 50%;
-  background: #DC2626; animation: recBlink 1s steps(1) infinite;
+  background: #E9424E; animation: recBlink 1s steps(1) infinite;
 }
 @keyframes recBlink { 0%,100% { opacity: 1; } 50% { opacity: .25; } }
 
@@ -178,7 +410,7 @@ body {
   width: 5px;
   height: 5px;
   border-radius: 50%;
-  background: rgba(79,70,229,0.85);
+  background: rgba(12,71,207,0.85);
   top: 50%;
   left: 50%;
   transform-origin: 0 0;
@@ -220,7 +452,7 @@ body {
 }
 .toast-item {
   display: flex; align-items: center; gap: 10px;
-  background: var(--toast-bg); color: #fff;
+  background: var(--toast-bg, #172033); color: #fff;
   padding: 11px 16px; border-radius: 12px; font-size: 13px; font-weight: 600;
   box-shadow: 0 8px 24px rgba(0,0,0,.22);
   max-width: 340px;
@@ -261,4 +493,133 @@ body {
     size: A4 landscape;
     margin: 8mm;
   }
+}
+/* Editorial cinematic base */
+@layer base {
+  h1, h2, h3 {
+    text-wrap: balance;
+  }
+}
+
+/* ── Momentum: streaks, level ring and celebrations ─────────────────── */
+@keyframes celebrate-flame {
+  0%, 100% { transform: scale(1) rotate(-2deg); opacity: 1; }
+  30% { transform: scale(1.12) rotate(3deg); opacity: 0.86; }
+  60% { transform: scale(0.96) rotate(-1deg); opacity: 1; }
+}
+.celebrate-flame {
+  animation: celebrate-flame 1.6s ease-in-out infinite;
+  transform-origin: 50% 88%;
+}
+
+@keyframes celebrate-pop {
+  0% { transform: scale(0.7); opacity: 0; }
+  60% { transform: scale(1.07); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.celebrate-pop { animation: celebrate-pop 0.44s cubic-bezier(0.22, 1.2, 0.36, 1) both; }
+
+@keyframes celebrate-dot {
+  0% { transform: scale(0.35); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.celebrate-dot { animation: celebrate-dot 0.38s cubic-bezier(0.22, 1.2, 0.36, 1) both; }
+
+.celebrate-ring { transition: stroke-dashoffset 900ms cubic-bezier(0.22, 1, 0.36, 1); }
+
+@keyframes celebrate-fall {
+  0% { transform: translate3d(0, -10vh, 0) rotate(0deg); opacity: 0; }
+  8% { opacity: 1; }
+  100% { transform: translate3d(var(--drift, 0px), 108vh, 0) rotate(var(--spin, 360deg)); opacity: 0.9; }
+}
+.celebrate-confetti {
+  animation: celebrate-fall var(--dur, 2.4s) cubic-bezier(0.25, 0.6, 0.4, 1) var(--delay, 0s) forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .celebrate-flame,
+  .celebrate-confetti,
+  .celebrate-pop,
+  .celebrate-dot {
+    animation: none;
+  }
+  .celebrate-ring { transition: none; }
+}
+
+@keyframes momentum-marquee {
+  0% { transform: translate3d(0, 0, 0); }
+  100% { transform: translate3d(-50%, 0, 0); }
+}
+.momentum-marquee { animation: momentum-marquee 34s linear infinite; }
+.momentum-marquee:hover { animation-play-state: paused; }
+.momentum-ticker-fade {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .momentum-marquee { animation: none; }
+}
+
+/* ── Landing page ─────────────────────────────────────────────────────────
+   Scroll-reveal + gentle float for the public landing page. Kept generic so
+   any section can opt in with data-reveal / animate-float. */
+[data-reveal] {
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.7s ease, transform 0.7s ease;
+}
+[data-reveal].is-revealed {
+  opacity: 1;
+  transform: none;
+}
+
+@keyframes landing-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.animate-float {
+  animation: landing-float 5s ease-in-out infinite;
+}
+
+@keyframes landing-slide-in {
+  from { opacity: 0; transform: translateY(26px); }
+  to { opacity: 1; transform: none; }
+}
+.animate-slide-in {
+  animation: landing-slide-in 0.7s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.animate-slide-in-delay { animation-delay: 0.12s; }
+.animate-slide-in-delay-2 { animation-delay: 0.24s; }
+
+@keyframes landing-kenburns {
+  from { transform: scale(1.02); }
+  to { transform: scale(1.12); }
+}
+.animate-kenburns {
+  animation: landing-kenburns 7s ease-out forwards;
+  transform-origin: center;
+}
+
+@keyframes landing-progress {
+  from { width: 0%; }
+  to { width: 100%; }
+}
+.animate-progress-fill {
+  animation: landing-progress 3s linear forwards;
+}
+.progress-paused { animation-play-state: paused; }
+
+@media (prefers-reduced-motion: reduce) {
+  [data-reveal] {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+  .animate-float { animation: none; }
+  .animate-slide-in,
+  .animate-slide-in-delay,
+  .animate-slide-in-delay-2,
+  .animate-kenburns,
+  .animate-progress-fill { animation: none; }
 }

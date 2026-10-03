@@ -9,7 +9,6 @@ import {
   Timer,
   GraduationCap,
   AlertTriangle,
-  ShieldAlert,
   Trophy,
   Megaphone,
   CheckCircle2,
@@ -34,7 +33,6 @@ import { sessionLabel } from "../lib/session";
 import { useSelector } from "react-redux";
 import { todayISO, fmtDate, useTeacherContext } from "./teacher/useTeacherContext";
 import { EmptyBlock } from "../components/StateViews";
-import AttendanceCheckinModal from "../components/AttendanceCheckinModal";
 import {
   HeroBanner,
   GlassStat,
@@ -188,11 +186,9 @@ export default function TeacherDashboard() {
   const [timetable, setTimetable] = useState([]);
   const [notices, setNotices] = useState([]);
   const [staff, setStaff] = useState(null);
-  const [behaviorRecords, setBehaviorRecords] = useState([]);
   const [achievements, setAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [showCheckin, setShowCheckin] = useState(false);
 
   const q = useMemo(
     () =>
@@ -211,7 +207,6 @@ export default function TeacherDashboard() {
       cls ? api.homework.list(q) : Promise.resolve({ data: [] }),
       cls ? api.exams.list(q) : Promise.resolve({ data: [] }),
       cls ? api.timetable.list(q) : Promise.resolve({ data: [] }),
-      cls ? api.behavior.list(`${q}&limit=50`) : Promise.resolve({ data: [] }),
       cls ? api.achievements.list(`${q}&limit=50`) : Promise.resolve({ data: [] }),
     ]).then((res) => {
       const val = (i, key = "data") =>
@@ -224,8 +219,7 @@ export default function TeacherDashboard() {
       setHomework(Array.isArray(val(4)) ? val(4) : []);
       setExams(Array.isArray(val(5)) ? val(5) : []);
       setTimetable(Array.isArray(val(6)) ? val(6) : []);
-      setBehaviorRecords(Array.isArray(val(7)) ? val(7) : []);
-      setAchievements(Array.isArray(val(8)) ? val(8) : []);
+      setAchievements(Array.isArray(val(7)) ? val(7) : []);
       setLoading(false);
     });
   }, [cls, q]);
@@ -360,7 +354,6 @@ export default function TeacherDashboard() {
     );
   }
 
-  const unresolvedBehavior = behaviorRecords.filter((r) => !r.resolved).length;
   const academicAchievements = achievements.filter((r) => r.category === "academic").length;
 
   const attentionItems = [];
@@ -378,31 +371,17 @@ export default function TeacherDashboard() {
       icon: BookOpenCheck,
     });
   }
-  if (unresolvedBehavior > 0) {
-    attentionItems.push({
-      label: `${unresolvedBehavior} behaviour record${unresolvedBehavior === 1 ? "" : "s"} unresolved`,
-      tone: "info",
-      icon: ShieldAlert,
-    });
-  }
 
   const quickActions = [
-    { to: "/teacher/attendance", icon: CalendarCheck, label: "Mark Attendance", tone: ACCENTS.success.icon },
-    { to: "/teacher/homework", icon: BookOpenCheck, label: "Assign Homework", tone: ACCENTS.violet.icon },
-    { to: "/teacher/exams", icon: ClipboardList, label: "Examinations", tone: ACCENTS.alert.icon },
-    { to: "/teacher/timetable", icon: CalendarRange, label: "My Timetable", tone: ACCENTS.warn.icon },
-    { to: "/teacher/performance", icon: Trophy, label: "Class Insights", tone: ACCENTS.primary.icon },
+    { to: "/teacher/attendance", icon: CalendarCheck, label: "Mark Attendance", accent: "success" },
+    { to: "/teacher/homework", icon: BookOpenCheck, label: "Assign Homework", accent: "violet" },
+    { to: "/teacher/exams", icon: ClipboardList, label: "Examinations", accent: "alert" },
+    { to: "/teacher/timetable", icon: CalendarRange, label: "My Timetable", accent: "warn" },
+    { to: "/teacher/performance", icon: Trophy, label: "Class Insights", accent: "primary" },
   ];
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      {showCheckin && (
-        <AttendanceCheckinModal
-          userName={user?.name || "Teacher"}
-          onDone={() => setShowCheckin(false)}
-        />
-      )}
-
       {/* ── Hero ──────────────────────────────────────────────────── */}
       <HeroBanner
         gradient="emerald"
@@ -529,28 +508,21 @@ export default function TeacherDashboard() {
             />
           </MetricGrid>
 
-          <MetricGrid columns={2}>
-            <StatCard
-              icon={ShieldAlert}
-              label="Behavior Records"
-              value={String(behaviorRecords.length)}
-              sub={`${unresolvedBehavior} unresolved`}
-              accent="alert"
-            />
-            <StatCard
-              icon={Trophy}
-              label="Achievements"
-              value={String(achievements.length)}
-              sub={`${academicAchievements} academic`}
-              accent="success"
-            />
-          </MetricGrid>
+          <StatCard
+            icon={Trophy}
+            label="Achievements"
+            value={String(achievements.length)}
+            sub={`${academicAchievements} academic`}
+            accent="success"
+          />
 
           {/* ── Today's periods ────────────────────────────────────── */}
           <Panel
             title="Today's Teaching"
             icon={CalendarDays}
             iconTone={ACCENTS.teal.icon}
+            decor="periods"
+            decorTone={ACCENTS.teal.text}
             subtitle={
               isWeekend
                 ? "Weekend — enjoy the break"
@@ -718,8 +690,10 @@ export default function TeacherDashboard() {
               icon={BookOpenCheck}
               iconTone={ACCENTS.violet.icon}
               subtitle={`${openHomework.length} open · ${overdueHomework.length} overdue`}
-              action={<ViewLink to="/teacher/homework">Manage</ViewLink>}
-            >
+            action={<ViewLink to="/teacher/homework">Manage</ViewLink>}
+            decor="tasks"
+            decorTone={ACCENTS.violet.text}
+          >
               {homework.length === 0 ? (
                 <EmptyPanel
                   icon={BookOpenCheck}

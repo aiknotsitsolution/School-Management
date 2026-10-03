@@ -1,3 +1,7 @@
+const {
+  scopeQuery,
+  assertBranchAssignable,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const Staff = require("../models/Staff");
 const TeacherAssignment = require("../models/TeacherAssignment");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
@@ -28,7 +32,20 @@ const STAFF_SELF_EDITABLE = ["dob", "gender", "contact", "address", "photoUrl"];
 // Teacher and Staff share this rule; Student keeps its own). A record is
 // complete once these identity fields exist — shared with the Complete-Profile
 // gate on both the admin and self-service UIs.
-const STAFF_PROFILE_FIELDS = ["dob", "gender", "contact", "address", "photoUrl"];
+//
+// photoUrl is deliberately NOT part of it: a school admin completing a staff
+// record has no photo to attach (neither admin form — Teachers modal, Staff
+// Complete Profile — collects one), the Staff model keeps the field optional,
+// and the ID card already falls back to the person's initials. A photo can be
+// added later from either side; only a person completing their OWN record still
+// has to supply one (see completeProfile).
+const STAFF_PROFILE_FIELDS = ["dob", "gender", "contact", "address"];
+
+// Everything the Complete-Profile endpoint accepts from the body. The wider
+// list is only for picking: photoUrl must stay writable so the self-service
+// photo picker can save through this endpoint, without becoming a completion
+// requirement.
+const STAFF_PROFILE_WRITABLE = [...STAFF_PROFILE_FIELDS, "photoUrl"];
 
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
@@ -97,7 +114,16 @@ const createStaff = async (req, res) => {
     if (payload.contact !== undefined && String(payload.contact).trim() !== "" && !PHONE_RE.test(String(payload.contact).trim())) {
       return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
     }
-    const staff = await Staff.create({ ...payload, schoolId: req.tenantId });
+    // Campus of the person record. An admin may name it explicitly (a teacher
+    // added straight into a second campus); otherwise the record lands in the
+    // campus the admin is currently working in. Moving an EXISTING record between
+    // campuses is deliberately not possible here — a linked account is scoped by
+    // its own campus, so the two are moved together from the account screen.
+    const staff = await Staff.create({
+      ...payload,
+      schoolId: req.tenantId,
+      branchId: await assertBranchAssignable(req, req.body.branchId),
+    });
     // A fully-filled record is complete immediately (admin-driven completion)
     // and auto-issues its card.
     applyProfileDerivation(staff);
@@ -123,7 +149,7 @@ const createStaff = async (req, res) => {
 const getStaff = async (req, res) => {
   try {
     const { department, role, status, search } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Staff, req, { schoolId: req.tenantId })
     const { page, limit, skip } = paginate(req.query);
     const isAdminRole = ["school_admin", "super_admin"].includes(req.user.role);
 
@@ -170,7 +196,7 @@ const getStaff = async (req, res) => {
 const getPendingRegistrations = async (req, res) => {
   try {
     const { page = 1, limit = 20, role } = req.query;
-    const filter = { schoolId: req.tenantId, userId: null };
+    const filter = scopeQuery(Staff, req, { schoolId: req.tenantId, userId: null })
     if (role) filter.role = role;
     const staff = await Staff.find(filter)
       .sort({ createdAt: -1 })
@@ -210,7 +236,7 @@ const getMyStaff = async (req, res) => {
         message: "No Staff ID linked to this account",
       });
     }
-    const staff = await Staff.findOne({ _id: req.user.refId, schoolId: req.tenantId });
+    const staff = await Staff.findOne(scopeQuery(Staff, req, { _id: req.user.refId, schoolId: req.tenantId }));
     if (!staff) {
       return res.status(404).json({
         success: false,
@@ -225,7 +251,7 @@ const getMyStaff = async (req, res) => {
 
 const getStaffById = async (req, res) => {
   try {
-    const staff = await Staff.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const staff = await Staff.findOne(scopeQuery(Staff, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
     res.json({ success: true, data: staff });
   } catch (err) {
@@ -252,7 +278,7 @@ const updateStaff = async (req, res) => {
       return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
     }
 
-    const staff = await Staff.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const staff = await Staff.findOne(scopeQuery(Staff, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
 
     staff.set(patch);
@@ -287,13 +313,20 @@ const updateStaff = async (req, res) => {
 // be satisfied before the card is auto-issued.
 const completeProfile = async (req, res) => {
   try {
-    const staff = await Staff.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const staff = await Staff.findOne(scopeQuery(Staff, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
 
-    const patch = pick(req.body, STAFF_PROFILE_FIELDS);
+    const patch = pick(req.body, STAFF_PROFILE_WRITABLE);
     staff.set(patch);
 
     const missing = applyProfileDerivation(staff);
+    // Self-service completion still wants the person's own photo — they are
+    // filling in their own card. An admin (school_admin / super_admin)
+    // completing someone else's record has no photo to attach, so for them the
+    // four identity fields above are the whole rule.
+    if (["teacher", "staff"].includes(req.user.role) && isEmpty(staff.photoUrl)) {
+      missing.push("photoUrl");
+    }
     if (missing.length) {
       return res.status(400).json({
         success: false,
@@ -308,7 +341,7 @@ const completeProfile = async (req, res) => {
     touchStaffNotice(
       req, staff,
       "Profile complete",
-      `Your staff profile is complete. Your ID card (${staff.idCardNumber}) is ready.`,
+      `Your staff profile is complete. Your ID card (${staff.employeeId || staff.idCardNumber}) is ready.`,
       "/staff",
     );
     res.json({ success: true, data: staff });
@@ -323,7 +356,7 @@ const completeProfile = async (req, res) => {
 // profile can never mint duplicate cards).
 const issueIdCard = async (req, res) => {
   try {
-    const staff = await Staff.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const staff = await Staff.findOne(scopeQuery(Staff, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
 
     if (staff.profileStatus !== "complete") {
@@ -339,7 +372,7 @@ const issueIdCard = async (req, res) => {
     touchStaffNotice(
       req, staff,
       "ID card ready",
-      `Your ID card (${staff.idCardNumber}) has been issued.`,
+      `Your ID card (${staff.employeeId || staff.idCardNumber}) has been issued.`,
       "/staff",
     );
     res.json({ success: true, data: staff });
@@ -353,16 +386,16 @@ const issueIdCard = async (req, res) => {
 // assignments and marks the record inactive (Resigned), preserving history.
 const deleteStaff = async (req, res) => {
   try {
-    const staff = await Staff.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const staff = await Staff.findOneAndUpdate(scopeQuery(Staff, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       { $set: { status: "Resigned" } },
       { new: true },
     );
     if (!staff) return res.status(404).json({ success: false, message: "Staff not found" });
 
     if (staff.role === "teacher") {
-      await TeacherAssignment.updateMany(
-        { schoolId: req.tenantId, staffId: staff._id, status: "active" },
+      await TeacherAssignment.updateMany(scopeQuery(TeacherAssignment, req, 
+        { schoolId: req.tenantId, staffId: staff._id, status: "active" }),
         { $set: { status: "ended", endedAt: new Date() } },
       );
     }

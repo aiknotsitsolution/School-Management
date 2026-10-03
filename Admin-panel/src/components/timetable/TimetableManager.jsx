@@ -3,10 +3,10 @@ import {
   AlertTriangle,
   CalendarDays,
   Clock,
+  Copy,
   Pencil,
   Plus,
   Save,
-  Sparkles,
   Trash2,
   X,
 } from "lucide-react";
@@ -39,15 +39,18 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [saving, setSaving] = useState(false);
-  const [draft, setDraft] = useState(null); // { mode, day, index, ...period }
+  const [draft, setDraft] = useState(null); // { mode, days[], index, ...period }
+  const [saveErrors, setSaveErrors] = useState([]); // per-day failures in add/edit
   const [confirmDelete, setConfirmDelete] = useState(null); // { day, index }
   const [customModal, setCustomModal] = useState(null); // { kind, label, showDescription? } | null
   const [conflicts, setConflicts] = useState([]); // 409 conflict lines from the last save
-  const [genOpen, setGenOpen] = useState(false);
-  const [genDays, setGenDays] = useState(() => [...DAYS]);
-  const [genOverwrite, setGenOverwrite] = useState(false);
-  const [genPreview, setGenPreview] = useState(null); // dry-run plan
-  const [genBusy, setGenBusy] = useState(false);
+  // Copy-a-day: clone one day's periods onto other days (the usual Monday ->
+  // rest-of-week flow, without re-entering every period by hand).
+  const [copySource, setCopySource] = useState(null); // day being copied
+  const [copyTargets, setCopyTargets] = useState([]); // days to write into
+  const [copyOverwrite, setCopyOverwrite] = useState(false);
+  const [copyBusy, setCopyBusy] = useState(false);
+  const [copyErrors, setCopyErrors] = useState([]); // per-day failures
 
   useEffect(() => {
     api.staff
@@ -101,11 +104,14 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
     [byDay],
   );
 
-  const openAdd = (day) => {
+  // `days` accepts a single day (the + on a day header) or an array (the page
+  // level Add Period button opens with the whole week ticked).
+  const openAdd = (days) => {
     setConflicts([]);
+    setSaveErrors([]);
     setDraft({
       mode: "add",
-      day,
+      days: Array.isArray(days) ? [...days] : [days],
       subject: "",
       subjectId: "",
       teacherId: "",
@@ -121,9 +127,10 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
     const period = (byDay.get(day) || [])[index];
     if (!period) return;
     setConflicts([]);
+    setSaveErrors([]);
     setDraft({
       mode: "edit",
-      day,
+      days: [day],
       index,
       subject: period.subject || "",
       subjectId: period.subjectId || "",
@@ -136,14 +143,27 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
     });
   };
 
+  const toggleDraftDay = (day) =>
+    setDraft((d) =>
+      !d || d.mode !== "add"
+        ? d
+        : {
+            ...d,
+            days: d.days.includes(day)
+              ? d.days.filter((x) => x !== day)
+              : [...d.days, day],
+          },
+    );
+
   const handleSave = async () => {
     if (!draft) return;
     if (!draft.subject.trim()) {
       toast("Subject is required", "error");
       return;
     }
-    if (!draft.day) {
-      toast("Select a day", "error");
+    const targetDays = draft.days || [];
+    if (!targetDays.length) {
+      toast("Select at least one day", "error");
       return;
     }
     if (!draft.startTime || !draft.endTime) {
@@ -155,8 +175,6 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
       return;
     }
 
-    const slot = timetable.find((t) => t.day === draft.day);
-    const base = sortPeriods(slot?.periods || []);
     const newPeriod = {
       subject: draft.subject.trim(),
       teacherId: draft.teacherId,
@@ -166,34 +184,68 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
       startTime: draft.startTime,
       endTime: draft.endTime,
     };
-    const next =
-      draft.mode === "edit"
-        ? base.map((p, i) => (i === draft.index ? newPeriod : p))
-        : [...base, newPeriod];
 
     setSaving(true);
-    try {
-      const { data } = await api.timetable.save({
-        class: cls,
-        section,
-        day: draft.day,
-        periods: sortPeriods(next),
-      });
-      setTimetable((prev) => [
-        ...prev.filter((t) => t.day !== draft.day),
-        data,
-      ]);
-      setConflicts([]);
-      toast(draft.mode === "edit" ? "Period updated" : "Period added");
-      setDraft(null);
-    } catch (requestError) {
-      if (requestError.status === 409) {
-        setConflicts(requestError.conflicts || [requestError.message]);
+    setSaveErrors([]);
+    setConflicts([]);
+    const savedDays = [];
+    const failed = [];
+    // One upsert per ticked day — a single save stamps the same lesson across
+    // the whole week. A 409 (teacher/room clash) on one day must not roll back
+    // the days that already went through.
+    for (const day of targetDays) {
+      const slot = timetable.find((t) => t.day === day);
+      const base = sortPeriods(slot?.periods || []);
+      const next =
+        draft.mode === "edit"
+          ? base.map((p, i) => (i === draft.index ? newPeriod : p))
+          : [...base, newPeriod];
+      try {
+        const { data } = await api.timetable.save({
+          class: cls,
+          section,
+          day,
+          periods: sortPeriods(next),
+        });
+        setTimetable((prev) => [...prev.filter((t) => t.day !== day), data]);
+        savedDays.push(day);
+      } catch (requestError) {
+        failed.push(`${day} — ${requestError.message}`);
+        if (requestError.status === 409 && requestError.conflicts?.length) {
+          setConflicts(requestError.conflicts);
+        }
       }
-      toast(requestError.message, "error");
-    } finally {
-      setSaving(false);
     }
+    setSaving(false);
+
+    if (failed.length) {
+      // Stay open, but leave only the failed days ticked: retrying must not
+      // append the same period a second time onto the days that took it.
+      setSaveErrors(failed);
+      setDraft((d) =>
+        d ? { ...d, days: d.days.filter((day) => !savedDays.includes(day)) } : d,
+      );
+      if (savedDays.length) {
+        toast(
+          `Saved to ${savedDays.join(", ")} — ${failed.length} day${
+            failed.length === 1 ? "" : "s"
+          } still need attention`,
+          "error",
+        );
+      } else {
+        toast(failed[0], "error");
+      }
+      return;
+    }
+
+    toast(
+      draft.mode === "edit"
+        ? "Period updated"
+        : savedDays.length > 1
+          ? `Period added to ${savedDays.join(", ")}`
+          : "Period added",
+    );
+    setDraft(null);
   };
 
   const handleConfirmDelete = async () => {
@@ -238,47 +290,71 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
     }
   };
 
-  const reloadList = () => {
-    const query = `class=${encodeURIComponent(cls)}&section=${encodeURIComponent(section)}`;
-    return api.timetable
-      .list(query)
-      .then(({ data }) => setTimetable(Array.isArray(data) ? data : []))
-      .catch((requestError) => setError(requestError.message));
-  };
-
-  const runGenerate = async (dryRun) => {
-    if (!genDays.length) {
-      toast("Select at least one day", "error");
+  // Open the copy dialog for a day that already has periods. Days that are
+  // still empty are pre-selected; days with a timetable stay locked behind the
+  // overwrite switch so a copy can never silently wipe someone else's work.
+  const openCopy = (day) => {
+    const source = byDay.get(day) || [];
+    if (!source.length) {
+      toast(`${day} has no periods to copy`, "error");
       return;
     }
-    setGenBusy(true);
-    try {
-      const { data } = await api.timetable.generate({
-        class: cls,
-        section,
-        days: genDays,
-        overwrite: genOverwrite,
-        dryRun,
-      });
-      if (dryRun) {
-        setGenPreview(data);
-      } else {
-        setGenPreview(null);
-        setGenOpen(false);
-        setConflicts([]);
-        toast(
-          `Timetable generated — ${data.created.length} created, ${data.updated.length} updated, ${data.skipped.length} skipped`,
-        );
-        reloadList();
+    setConflicts([]);
+    setCopyErrors([]);
+    setCopyOverwrite(false);
+    setCopySource(day);
+    setCopyTargets(DAYS.filter((d) => d !== day && (byDay.get(d) || []).length === 0));
+  };
+
+  const toggleCopyTarget = (day) =>
+    setCopyTargets((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
+    );
+
+  const runCopy = async () => {
+    if (!copySource) return;
+    if (!copyTargets.length) {
+      toast("Select at least one day to copy into", "error");
+      return;
+    }
+    const periods = sortPeriods(byDay.get(copySource) || []);
+    if (!periods.length) {
+      toast(`${copySource} has no periods to copy`, "error");
+      return;
+    }
+
+    setCopyBusy(true);
+    setCopyErrors([]);
+    setConflicts([]);
+    const copied = [];
+    const failed = [];
+    // One request per day, in order — the server upserts per day and answers
+    // 409 when a teacher/room clash is found, which must not abort the rest.
+    for (const day of copyTargets) {
+      try {
+        const { data } = await api.timetable.save({
+          class: cls,
+          section,
+          day,
+          periods,
+        });
+        setTimetable((prev) => [...prev.filter((t) => t.day !== day), data]);
+        copied.push(day);
+      } catch (requestError) {
+        failed.push(`${day} — ${requestError.message}`);
+        if (requestError.status === 409 && requestError.conflicts?.length) {
+          setConflicts(requestError.conflicts);
+        }
       }
-    } catch (requestError) {
-      if (requestError.status === 409) {
-        setConflicts(requestError.conflicts || [requestError.message]);
-        setGenOpen(false);
-      }
-      toast(requestError.message, "error");
-    } finally {
-      setGenBusy(false);
+    }
+    setCopyBusy(false);
+
+    if (copied.length) toast(`Copied ${copySource} to ${copied.join(", ")}`);
+    if (failed.length) {
+      setCopyErrors(failed); // stay open so the reasons are readable
+    } else {
+      setCopySource(null);
+      setCopyTargets([]);
     }
   };
 
@@ -310,7 +386,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
             <AlertTriangle size={16} className="text-alert mt-0.5 shrink-0" />
             <div className="min-w-0">
               <p className="text-[13px] font-semibold text-alert">
-                Scheduling conflict — nothing was saved
+                Scheduling conflict — the affected day was not saved
               </p>
               <ul className="mt-1.5 space-y-1">
                 {conflicts.map((line, i) => (
@@ -340,17 +416,7 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
             </div>
             {canWrite && (
               <div className="flex items-center gap-2">
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setGenPreview(null);
-                    setGenOpen(true);
-                  }}
-                  disabled={saving || genBusy}
-                >
-                  <Sparkles size={15} /> Auto-generate
-                </Button>
-                <Button variant="primary" onClick={() => openAdd("Monday")} disabled={saving}>
+                <Button variant="primary" onClick={() => openAdd(DAYS)} disabled={saving}>
                   <Plus size={15} /> Add Period
                 </Button>
               </div>
@@ -384,18 +450,31 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                     key={day}
                     className="rounded-xl border border-slate-200 overflow-hidden"
                   >
-                    <div className="flex items-center justify-between bg-ink text-white px-4 py-2.5">
+                    <div className="flex items-center justify-between bg-ink text-white px-4 py-2.5 dark:bg-slate-200 dark:text-ink">
                       <span className="font-semibold text-[12.5px]">{day}</span>
                       {canWrite && (
-                        <button
-                          type="button"
-                          onClick={() => openAdd(day)}
-                          className="p-1 rounded-md hover:bg-white/15 text-white/80"
-                          title={`Add period on ${day}`}
-                          aria-label={`Add period on ${day}`}
-                        >
-                          <Plus size={14} />
-                        </button>
+                        <div className="flex items-center gap-1">
+                          {periods.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => openCopy(day)}
+                              className="p-1 rounded-md hover:bg-white/15 text-white/80 dark:text-ink/70 dark:hover:bg-ink/10"
+                              title={`Copy ${day}'s timetable to other days`}
+                              aria-label={`Copy ${day}'s timetable to other days`}
+                            >
+                              <Copy size={13} />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => openAdd(day)}
+                            className="p-1 rounded-md hover:bg-white/15 text-white/80 dark:text-ink/70 dark:hover:bg-ink/10"
+                            title={`Add period on ${day}`}
+                            aria-label={`Add period on ${day}`}
+                          >
+                            <Plus size={14} />
+                          </button>
+                        </div>
                       )}
                     </div>
                     {periods.length === 0 ? (
@@ -475,6 +554,8 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                 </h3>
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">
                   Class {cls} - {section}
+                  {draft.mode === "add" &&
+                    ` · ${draft.days.length} day${draft.days.length === 1 ? "" : "s"} selected`}
                 </p>
               </div>
               <button
@@ -490,7 +571,8 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
               {conflicts.length > 0 && (
                 <div className="rounded-lg bg-alert/10 border border-alert/30 px-3.5 py-3">
                   <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-alert">
-                    <AlertTriangle size={14} /> Scheduling conflict — nothing was saved
+                    <AlertTriangle size={14} /> Scheduling conflict — the
+                    affected day was not saved
                   </p>
                   <ul className="mt-1.5 space-y-1">
                     {conflicts.map((line, i) => (
@@ -502,20 +584,97 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                 </div>
               )}
 
+              {saveErrors.length > 0 && (
+                <div className="rounded-lg bg-alert/10 border border-alert/30 px-3.5 py-3">
+                  <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-alert">
+                    <AlertTriangle size={14} /> Could not save every selected day
+                  </p>
+                  <ul className="mt-1.5 space-y-1">
+                    {saveErrors.map((line) => (
+                      <li key={line} className="text-[12px] text-alert/90">
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-[11.5px] text-alert/80 mt-1.5">
+                    Only the failed days are still ticked — press{" "}
+                    {draft.mode === "edit" ? "Update" : "Add"} to retry them.
+                  </p>
+                </div>
+              )}
+
               <div>
-                <label className="block text-[12.5px] font-medium text-ink mb-1.5">
-                  Day
-                </label>
-                <Select
-                  value={draft.day}
-                  onChange={(e) => setDraft((d) => ({ ...d, day: e.target.value }))}
-                >
-                  {DAYS.map((d) => (
-                    <option key={d} value={d}>
-                      {d}
-                    </option>
-                  ))}
-                </Select>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[12.5px] font-medium text-ink">
+                    {draft.mode === "edit" ? "Day" : "Days"}
+                  </label>
+                  {draft.mode === "add" && (
+                    <div className="flex items-center gap-3 text-[11.5px]">
+                      <button
+                        type="button"
+                        onClick={() => setDraft((d) => ({ ...d, days: [...DAYS] }))}
+                        className="text-primary-dark hover:underline"
+                      >
+                        All days
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setDraft((d) => ({ ...d, days: [] }))}
+                        className="text-slate-text hover:underline"
+                      >
+                        Clear
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {DAYS.map((day) => {
+                    const checked = draft.days.includes(day);
+                    return (
+                      <label
+                        key={day}
+                        className={`flex items-center gap-1.5 rounded-lg border px-2.5 py-2 text-[12.5px] transition-colors ${
+                          draft.mode === "edit"
+                            ? "border-primary bg-primary/10 text-primary-dark font-semibold"
+                            : checked
+                              ? "border-primary bg-primary/10 text-primary-dark font-semibold cursor-pointer"
+                              : "border-slate-200 text-slate-text hover:border-slate-300 cursor-pointer"
+                        }`}
+                        title={
+                          draft.mode === "edit"
+                            ? "An existing period belongs to one day"
+                            : `Add this period on ${day}`
+                        }
+                      >
+                        <input
+                          type="checkbox"
+                          className="accent-primary"
+                          checked={checked}
+                          disabled={draft.mode === "edit"}
+                          onChange={() => toggleDraftDay(day)}
+                        />
+                        {day.slice(0, 3)}
+                      </label>
+                    );
+                  })}
+                </div>
+                {draft.mode === "add" ? (
+                  <p className="text-[11.5px] text-slate-text/60 mt-1.5 leading-snug">
+                    Tick every day this lesson repeats on — one save creates it on
+                    all of them.
+                    {draft.days.length > 1 && (
+                      <span className="font-medium text-ink">
+                        {" "}
+                        ({draft.days.length} days selected)
+                      </span>
+                    )}
+                  </p>
+                ) : (
+                  <p className="text-[11.5px] text-slate-text/60 mt-1.5 leading-snug">
+                    Editing a period on {draft.days[0]} — open Add Period to put
+                    the same lesson on other days.
+                  </p>
+                )}
               </div>
 
               <div>
@@ -683,8 +842,8 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
         </div>
       )}
 
-      {/* Auto-generate modal */}
-      {genOpen && (
+      {/* Copy day modal */}
+      {copySource && (
         <div
           className="fixed inset-0 z-50 flex items-center justify-center p-4"
           role="dialog"
@@ -692,21 +851,23 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
         >
           <div
             className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
-            onClick={() => !genBusy && setGenOpen(false)}
+            onClick={() => !copyBusy && setCopySource(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
                 <h3 className="font-display font-semibold text-ink text-[17px]">
-                  Auto-generate timetable
+                  Copy {copySource} timetable
                 </h3>
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">
-                  Class {cls} - {section} · fills the school time slots with this
-                  class&apos;s subject teachers
+                  Class {cls} - {section} ·{" "}
+                  {(byDay.get(copySource) || []).length} period
+                  {(byDay.get(copySource) || []).length === 1 ? "" : "s"} cloned
+                  with the same subjects, teachers, rooms and times
                 </p>
               </div>
               <button
-                onClick={() => !genBusy && setGenOpen(false)}
+                onClick={() => !copyBusy && setCopySource(null)}
                 className="p-2 rounded-lg hover:bg-paper text-slate-text"
                 aria-label="Close"
               >
@@ -716,62 +877,94 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
 
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
               <div>
-                <label className="block text-[12.5px] font-medium text-ink mb-1.5">
-                  Days
-                </label>
-                <div className="grid grid-cols-3 gap-2">
-                  {DAYS.map((day) => (
-                    <label
-                      key={day}
-                      className="flex items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-2 text-[12.5px] text-ink cursor-pointer hover:border-slate-300"
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-[12.5px] font-medium text-ink">
+                    Copy into
+                  </label>
+                  <div className="flex items-center gap-3 text-[11.5px]">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setCopyTargets(
+                          DAYS.filter(
+                            (d) =>
+                              d !== copySource &&
+                              (copyOverwrite || (byDay.get(d) || []).length === 0),
+                          ),
+                        )
+                      }
+                      className="text-primary-dark hover:underline"
                     >
-                      <input
-                        type="checkbox"
-                        checked={genDays.includes(day)}
-                        onChange={(e) =>
-                          setGenDays((prev) =>
-                            e.target.checked
-                              ? [...prev, day]
-                              : prev.filter((d) => d !== day),
-                          )
+                      Select all
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCopyTargets([])}
+                      className="text-slate-text hover:underline"
+                    >
+                      Clear
+                    </button>
+                  </div>
+                </div>
+                <div className="grid grid-cols-3 gap-2">
+                  {DAYS.filter((d) => d !== copySource).map((day) => {
+                    const existing = (byDay.get(day) || []).length;
+                    const locked = existing > 0 && !copyOverwrite;
+                    return (
+                      <label
+                        key={day}
+                        className={`rounded-lg border px-2.5 py-2 text-[12.5px] ${
+                          locked
+                            ? "border-slate-200 text-slate-text/45 cursor-not-allowed"
+                            : "border-slate-200 text-ink cursor-pointer hover:border-slate-300"
+                        }`}
+                        title={
+                          locked
+                            ? `${day} already has a timetable — turn on "Replace" below to overwrite it`
+                            : undefined
                         }
-                      />
-                      {day.slice(0, 3)}
-                    </label>
-                  ))}
+                      >
+                        <span className="flex items-center gap-2">
+                          <input
+                            type="checkbox"
+                            disabled={locked}
+                            checked={copyTargets.includes(day)}
+                            onChange={() => toggleCopyTarget(day)}
+                          />
+                          {day.slice(0, 3)}
+                        </span>
+                        <span className="block text-[11px] text-slate-text/60 mt-0.5">
+                          {existing
+                            ? `${existing} period${existing === 1 ? "" : "s"}`
+                            : "empty"}
+                        </span>
+                      </label>
+                    );
+                  })}
                 </div>
               </div>
 
               <label className="flex items-center gap-2 text-[12.5px] text-ink cursor-pointer">
                 <input
                   type="checkbox"
-                  checked={genOverwrite}
-                  onChange={(e) => setGenOverwrite(e.target.checked)}
+                  checked={copyOverwrite}
+                  onChange={(e) => setCopyOverwrite(e.target.checked)}
                 />
                 Replace days that already have a timetable
-                <span className="text-slate-text/60">(otherwise they are skipped)</span>
+                <span className="text-slate-text/60">
+                  (otherwise they stay locked)
+                </span>
               </label>
 
-              {genPreview && (
-                <div className="rounded-lg bg-paper border border-slate-200 px-3.5 py-3">
-                  <p className="text-[12.5px] font-semibold text-ink mb-1.5">
-                    Preview — nothing saved yet
+              {copyErrors.length > 0 && (
+                <div className="rounded-lg bg-alert/10 border border-alert/30 px-3.5 py-3">
+                  <p className="flex items-center gap-1.5 text-[12.5px] font-semibold text-alert">
+                    <AlertTriangle size={14} /> Could not copy into every day
                   </p>
-                  <ul className="space-y-1">
-                    {genPreview.days.map((d) => {
-                      const unassigned = d.periods.filter((p) => !p.teacherId).length;
-                      return (
-                        <li key={d.day} className="text-[12px] text-slate-text/80">
-                          {d.day}: {d.periods.length} period
-                          {d.periods.length === 1 ? "" : "s"}
-                          {unassigned ? `, ${unassigned} need a teacher` : ""}
-                          {d.replaced ? " · replaces existing" : ""}
-                        </li>
-                      );
-                    })}
-                    {genPreview.skipped.map((day) => (
-                      <li key={day} className="text-[12px] text-slate-text/50">
-                        {day}: skipped (timetable exists)
+                  <ul className="mt-1.5 space-y-1">
+                    {copyErrors.map((line) => (
+                      <li key={line} className="text-[12px] text-alert/90">
+                        {line}
                       </li>
                     ))}
                   </ul>
@@ -780,15 +973,22 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
             </div>
 
             <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setGenOpen(false)} disabled={genBusy}>
+              <Button
+                variant="outline"
+                onClick={() => setCopySource(null)}
+                disabled={copyBusy}
+              >
                 Cancel
               </Button>
-              <Button variant="outline" onClick={() => runGenerate(true)} disabled={genBusy}>
-                {genBusy ? "Working..." : "Preview"}
-              </Button>
-              <Button variant="primary" onClick={() => runGenerate(false)} disabled={genBusy}>
-                <Sparkles size={15} />
-                {genBusy ? "Generating..." : genPreview ? "Apply plan" : "Generate"}
+              <Button
+                variant="primary"
+                onClick={runCopy}
+                disabled={copyBusy || copyTargets.length === 0}
+              >
+                <Copy size={15} />
+                {copyBusy
+                  ? "Copying..."
+                  : `Copy to ${copyTargets.length} day${copyTargets.length === 1 ? "" : "s"}`}
               </Button>
             </div>
           </div>

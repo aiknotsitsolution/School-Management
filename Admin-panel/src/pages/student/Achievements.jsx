@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Trophy, Medal, Star, Award } from "lucide-react";
-import { PageIntro, Card, Pill, StatCard } from "../../components/UI";
+import { Trophy, Medal, Star, Award, CalendarCheck, Target } from "lucide-react";
+import { PageIntro, Card, Pill } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
 import useStudentContext from "./useStudentContext";
 
@@ -13,6 +14,14 @@ const CAT_ICONS = {
   academic: Star, sports: Medal, arts: Award,
   citizenship: Trophy, attendance: Trophy, other: Trophy,
 };
+
+const SKILLS = [
+  { key: "academic", label: "Academic", icon: Star, color: "#0C47CF" },
+  { key: "sports", label: "Sports", icon: Medal, color: "#16A34A" },
+  { key: "arts", label: "Arts", icon: Award, color: "#E9424E" },
+  { key: "citizenship", label: "Citizenship", icon: Trophy, color: "#F59E0B" },
+  { key: "attendance", label: "Attendance", icon: CalendarCheck, color: "#14B8A6" },
+];
 
 function fmtDate(d) {
   if (!d) return "—";
@@ -44,16 +53,58 @@ export default function StudentAchievements() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="My Profile"
-        title="My Achievements"
+        title="My Achievements" art="achievements"
         description="Track your accomplishments across academics, sports, arts and more."
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Trophy} label="Total" value={String(counts.total)} sub="All achievements" accent="success" />
-        <StatCard icon={Star} label="Academic" value={String(counts.academic || 0)} sub="Academic excellence" accent="info" />
-        <StatCard icon={Medal} label="Sports" value={String(counts.sports || 0)} sub="Sports & games" accent="success" />
-        <StatCard icon={Award} label="Arts" value={String(counts.arts || 0)} sub="Arts & culture" accent="primary" />
-      </div>
+      <section aria-label="Skill areas">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-[0.16em] text-primary">
+              <Target size={13} aria-hidden="true" />
+              Skill areas
+            </p>
+            <h2 className="mt-1.5 font-display text-[19px] font-bold leading-tight tracking-tight text-ink sm:text-[21px]">
+              Where your strengths are showing
+            </h2>
+          </div>
+          <Pill tone={counts.total ? "success" : "neutral"}>
+            {counts.total} {counts.total === 1 ? "record" : "records"}
+          </Pill>
+        </div>
+
+        <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-5">
+          {SKILLS.map((s) => {
+            const n = counts[s.key] || 0;
+            const share = counts.total ? Math.round((n / counts.total) * 100) : 0;
+            const Icon = s.icon;
+            return (
+              <div
+                key={s.key}
+                className="group flex flex-col items-center rounded-3xl border border-ink/10 bg-white px-4 py-6 text-center transition-all hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[0_20px_44px_-32px_rgba(11,25,44,0.75)]"
+              >
+                <span
+                  className="flex h-12 w-12 items-center justify-center rounded-2xl transition-transform group-hover:scale-105"
+                  style={{ background: `${s.color}14`, color: s.color }}
+                  aria-hidden="true"
+                >
+                  <Icon size={22} strokeWidth={2} />
+                </span>
+                <p className="mt-3 font-display text-[26px] font-bold leading-none text-ink">{n}</p>
+                <p className="mt-1.5 text-[11.5px] font-bold uppercase tracking-wide text-slate-text">
+                  {s.label}
+                </p>
+                <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-ink/8">
+                  <div
+                    className="h-full rounded-full transition-[width] duration-700 ease-out"
+                    style={{ width: `${n ? Math.max(6, share) : 0}%`, background: s.color }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </section>
 
       <Card title="Achievement Records">
         {loading ? (

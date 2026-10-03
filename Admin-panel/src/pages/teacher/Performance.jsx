@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  BarChart3,
   TrendingUp,
   AlertTriangle,
   Users,
@@ -17,6 +16,7 @@ import {
   Input,
   toast,
 } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import {
   AreaChart,
   Area,
@@ -121,7 +121,7 @@ export default function Performance() {
     return (
       <Card>
         <div className="py-16 text-center">
-          <BarChart3 size={40} className="mx-auto text-slate-text/30 mb-3" />
+          <PageArtwork name="chart" size={64} className="mx-auto mb-4" />
           <p className="text-[15px] font-semibold text-ink">
             No class assigned yet
           </p>
@@ -137,7 +137,7 @@ export default function Performance() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="My Teaching"
-        title="Class Performance"
+        title="Class Performance" art="chart"
         description={`Attendance and academic performance for ${assignment}.`}
       />
 

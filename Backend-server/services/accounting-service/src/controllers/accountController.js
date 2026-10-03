@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Account = require("../models/Account");
 const JournalEntry = require("../models/JournalEntry");
 const { ensureSystemAccounts } = require("../services/coaSeed");
@@ -6,7 +7,7 @@ const { ACCOUNT_TYPES } = require("../utils/accounts");
 const getAccounts = async (req, res) => {
   try {
     await ensureSystemAccounts(req.tenantId);
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Account, req, { schoolId: req.tenantId })
     if (req.query.type) filter.type = req.query.type;
     if (req.query.active === "true") filter.active = true;
     const data = await Account.find(filter).sort({ code: 1 }).lean();
@@ -55,7 +56,7 @@ const updateAccount = async (req, res) => {
   try {
     const error = validateAccountBody(req.body, { partial: true });
     if (error) return res.status(400).json({ success: false, message: error });
-    const account = await Account.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const account = await Account.findOne(scopeQuery(Account, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!account) return res.status(404).json({ success: false, message: "Account not found" });
     if (account.isSystem) {
       return res.status(400).json({ success: false, message: "System accounts cannot be modified" });
@@ -76,7 +77,7 @@ const updateAccount = async (req, res) => {
 
 const deleteAccount = async (req, res) => {
   try {
-    const account = await Account.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const account = await Account.findOne(scopeQuery(Account, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!account) return res.status(404).json({ success: false, message: "Account not found" });
     if (account.isSystem) {
       return res.status(400).json({ success: false, message: "System accounts cannot be deleted" });

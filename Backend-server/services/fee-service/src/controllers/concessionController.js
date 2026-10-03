@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Concession = require("../models/Concession");
 
 // Concession workflow (CLIENT-REQ-045/046/047): created as Requested,
@@ -23,7 +24,7 @@ const validate = (body) => {
 const getConcessions = async (req, res) => {
   try {
     const { studentId, status, kind, session } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Concession, req, { schoolId: req.tenantId })
     if (studentId) filter.studentId = studentId;
     if (status) filter.status = status;
     if (kind) filter.kind = kind;
@@ -43,13 +44,13 @@ const createConcession = async (req, res) => {
     const { studentId, kind, session } = req.body;
     // One live (Requested/Active) row per student+kind+session — a Rejected
     // row must not block a fresh request.
-    const live = await Concession.findOne({
+    const live = await Concession.findOne(scopeQuery(Concession, req, {
       schoolId: req.tenantId,
       studentId: String(studentId).trim(),
       kind,
       session: String(session).trim(),
       status: { $ne: "Rejected" },
-    })
+    }))
       .select("_id")
       .lean();
     if (live) {
@@ -61,7 +62,8 @@ const createConcession = async (req, res) => {
 
     const doc = await Concession.create({
       schoolId: req.tenantId,
-      studentId: String(studentId).trim(),
+
+      branchId: branchIdForWrite(req),      studentId: String(studentId).trim(),
       kind,
       name: String(req.body.name).trim(),
       type: req.body.type,
@@ -81,7 +83,7 @@ const createConcession = async (req, res) => {
 
 const decideConcession = (action) => async (req, res) => {
   try {
-    const doc = await Concession.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const doc = await Concession.findOne(scopeQuery(Concession, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!doc) return res.status(404).json({ success: false, message: "Concession not found" });
     if (doc.status !== "Requested") {
       return res.status(409).json({ success: false, message: `Concession already ${doc.status.toLowerCase()}` });
@@ -106,7 +108,7 @@ const decideConcession = (action) => async (req, res) => {
 // already carry their own concession snapshot.
 const removeConcession = async (req, res) => {
   try {
-    const doc = await Concession.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const doc = await Concession.findOneAndDelete(scopeQuery(Concession, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!doc) return res.status(404).json({ success: false, message: "Concession not found" });
     res.json({ success: true, data: { deleted: 1 } });
   } catch (err) {

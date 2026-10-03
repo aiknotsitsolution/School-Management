@@ -50,6 +50,11 @@ export default function OnboardedStudentsSection({
   onOnboardNow,
   reloadToken = 0,
   onTotalChange,
+  // `selected` is lifted to AddStudent: the Onboarding Form lives in a sibling
+  // tab, and it opens this modal with the record it just saved. Holding the
+  // state here would mean the modal can never be opened from that tab.
+  selected,
+  onSelect,
 }) {
   const dispatch = useDispatch();
   const school = useSelector(selectSchool);
@@ -59,7 +64,6 @@ export default function OnboardedStudentsSection({
   const [loading, setLoading] = useState(true);
   const [term, setTerm] = useState("");
   const [page, setPage] = useState(1);
-  const [selected, setSelected] = useState(null);
   const [issuingId, setIssuingId] = useState(null);
   const [customizing, setCustomizing] = useState(false);
   const [savingCustom, setSavingCustom] = useState(false);
@@ -111,7 +115,7 @@ export default function OnboardedStudentsSection({
       setRows((prev) =>
         prev.map((s) => (s._id === student._id ? { ...s, ...data } : s)),
       );
-      setSelected((prev) => (prev?._id === student._id ? { ...prev, ...data } : prev));
+      onSelect((prev) => (prev?._id === student._id ? { ...prev, ...data } : prev));
       toast(`ID card issued — ${data.idCardNumber}`);
     } catch (err) {
       toast(err.message, "error");
@@ -228,7 +232,7 @@ export default function OnboardedStudentsSection({
                   <Button
                     variant="outline"
                     className="!py-2 !px-3 !text-[12px]"
-                    onClick={() => setSelected(student)}
+                    onClick={() => onSelect(student)}
                   >
                     <Eye size={13} /> View Onboard Student
                   </Button>
@@ -247,7 +251,7 @@ export default function OnboardedStudentsSection({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" role="dialog" aria-modal="true">
           <div
             className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
-            onClick={() => !issuingId && setSelected(null)}
+            onClick={() => !issuingId && onSelect(null)}
           />
           <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden max-h-[90vh] flex flex-col">
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
@@ -258,7 +262,7 @@ export default function OnboardedStudentsSection({
                 </p>
               </div>
               <button
-                onClick={() => setSelected(null)}
+                onClick={() => onSelect(null)}
                 className="p-2 rounded-lg hover:bg-paper text-slate-text"
                 aria-label="Close"
               >

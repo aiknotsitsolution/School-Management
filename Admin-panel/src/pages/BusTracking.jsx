@@ -1,5 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import L from "leaflet";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bus,
   Phone,
@@ -10,6 +9,7 @@ import {
   Search,
   RefreshCw,
   Headset,
+  Gauge,
 } from "lucide-react";
 import {
   PageIntro,
@@ -19,8 +19,10 @@ import {
   Select,
   Pill,
   StatCard,
+  toast,
 } from "../components/UI";
 import { LoadingBlock, EmptyBlock, ErrorBlock } from "../components/StateViews";
+import FleetMap, { hasFix } from "../components/FleetMap";
 import { useSelector } from "react-redux";
 import { selectSchool } from "../store/selectors";
 import { api } from "../lib/api";
@@ -28,63 +30,23 @@ import { api } from "../lib/api";
 const STATUS_LIVE = "Live GPS";
 const STATUS_NO_GPS = "No GPS signal";
 const STATUS_FILTERS = ["All", STATUS_LIVE, STATUS_NO_GPS];
-const STATUS_COLOR = { [STATUS_LIVE]: "#16A34A", [STATUS_NO_GPS]: "#94A3B8" };
 const STATUS_TONE = { [STATUS_LIVE]: "success", [STATUS_NO_GPS]: "neutral" };
 
 // How often the fleet view re-polls for bus positions. Every poll is served from
 // the cached OSRM route plan, so this stays cheap.
 const LIVE_REFRESH_MS = 30000;
 
-// Neutral fallback centre (geographic centre of India). Used only when the
-// school profile carries no coordinates and no bus has reported a GPS fix yet —
-// it is a map viewport default, not a claimed school location.
-const FALLBACK_CENTER = { lat: 20.5937, lng: 78.9629 };
+// Neutral fallback centre (geographic centre of India) and the Leaflet map itself
+// now live in components/FleetMap.jsx, shared with the route planner and the
+// student/parent bus view.
 
-function makeBusIcon(color) {
-  return L.divIcon({
-    className: "",
-    html: `
-      <div class="bus-marker" style="--marker-color:${color}">
-        <div class="bus-marker-dot"><span>🚌</span></div>
-      </div>`,
-    iconSize: [34, 34],
-    iconAnchor: [17, 17],
-  });
-}
-
-function makeSchoolIcon() {
-  return L.divIcon({
-    className: "",
-    html: `
-      <div class="school-marker"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 22v-4a2 2 0 0 0-4 0v4"/><path d="m18 10 3.447 1.724a1 1 0 0 1-.553 1.895H.106a1 1 0 0 1-.553-1.895L3 10"/><path d="M5 17V9L12 4l7 5v8"/><path d="M9 17v-3.5a1.5 1.5 0 0 1 3 0V17"/></svg></div>`,
-    iconSize: [32, 32],
-    iconAnchor: [16, 16],
-  });
-}
-
-function hasFix(route) {
-  const loc = route?.currentLocation;
-  return (
-    !!loc && typeof loc.lat === "number" && typeof loc.lng === "number"
-  );
-}
-
-function formatPing(value) {
+// Same wording as the student/parent bus view in pages/student/Transport.jsx, so
+// a ping reads identically wherever it is shown. PlatformDashboard.jsx keeps its
+// own "just now" variant for audit timelines.
+const timeAgo = (value) => {
   if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "—";
-  return d.toLocaleString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function timeAgo(value) {
-  if (!value) return null;
   const t = new Date(value).getTime();
-  if (Number.isNaN(t)) return null;
+  if (Number.isNaN(t)) return "—";
   const s = Math.max(0, Math.floor((Date.now() - t) / 1000));
   if (s < 60) return `${s}s ago`;
   const m = Math.floor(s / 60);
@@ -92,127 +54,20 @@ function timeAgo(value) {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
-}
+};
 
-function FleetMap({
-  routes,
-  selected,
-  onSelect,
-  schoolLocation = null,
-  schoolName = "School",
-}) {
-  const containerRef = useRef(null);
-  const mapRef = useRef(null);
-  const markersRef = useRef({});
-
-  const located = useMemo(
-    () => routes.filter(hasFix).map((r) => [r.currentLocation.lat, r.currentLocation.lng]),
-    [routes],
-  );
-
-  useEffect(() => {
-    if (!containerRef.current || mapRef.current) return;
-    const center = located[0] || [schoolLocation?.lat, schoolLocation?.lng] || [
-      FALLBACK_CENTER.lat,
-      FALLBACK_CENTER.lng,
-    ];
-    const map = L.map(containerRef.current, { center, zoom: 12 });
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 19,
-      attribution: "&copy; OpenStreetMap contributors",
-    }).addTo(map);
-    if (schoolLocation && typeof schoolLocation.lat === "number") {
-      L.marker([schoolLocation.lat, schoolLocation.lng], {
-        icon: makeSchoolIcon(),
-        zIndexOffset: 1000,
-      })
-        .addTo(map)
-        .bindTooltip(schoolName || "School", { direction: "top", offset: [0, -20] });
-    }
-    mapRef.current = map;
-    return () => {
-      map.remove();
-      mapRef.current = null;
-      markersRef.current = {};
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  useEffect(() => {
-    if (!mapRef.current || located.length === 0) return;
-    mapRef.current.fitBounds(located, { padding: [50, 50] });
-  }, [located]);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    const seen = new Set();
-    routes.forEach((r) => {
-      if (!hasFix(r)) return;
-      seen.add(r.id);
-      const pos = [r.currentLocation.lat, r.currentLocation.lng];
-      if (markersRef.current[r.id]) {
-        markersRef.current[r.id].setLatLng(pos);
-      } else {
-        const marker = L.marker(pos, {
-          icon: makeBusIcon(STATUS_COLOR[STATUS_LIVE]),
-          riseOnHover: true,
-        });
-        marker.bindTooltip(
-          `${r.id} · last ping ${timeAgo(r.currentLocation.updatedAt) || "—"}${
-            r.live?.etaMinutes ? ` · ${r.live.etaMinutes} min to ${r.live.nextStop || "next stop"}` : ""
-          }`,
-          {
-            direction: "top",
-            offset: [0, -22],
-          },
-        );
-        marker.on("click", () => onSelect(r));
-        marker.addTo(mapRef.current);
-        markersRef.current[r.id] = marker;
-      }
-    });
-    Object.keys(markersRef.current).forEach((id) => {
-      if (!seen.has(id)) {
-        mapRef.current.removeLayer(markersRef.current[id]);
-        delete markersRef.current[id];
-      }
-    });
-  }, [routes, onSelect]);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-    Object.entries(markersRef.current).forEach(([id, m]) => {
-      const el = m.getElement();
-      if (el) {
-        const dot = el.querySelector(".bus-marker");
-        if (dot) dot.classList.toggle("is-selected", !!selected && id === selected.id);
-      }
-    });
-  }, [selected]);
-
-  return (
-    <div className="relative flex-1 min-h-[520px]">
-      <div ref={containerRef} className="absolute inset-0" />
-      <div className="absolute top-3 left-3 z-[400] bg-white/95 backdrop-blur rounded-xl shadow px-3 py-2 text-[11px] font-semibold text-ink">
-        {located.length > 0
-          ? `${located.length} bus${located.length === 1 ? "" : "es"} reporting GPS`
-          : "No GPS positions reported yet"}
-      </div>
-      <div className="absolute bottom-3 left-3 z-[400] bg-white/95 backdrop-blur rounded-xl shadow px-3 py-2 text-[11px] space-y-1">
-        <div className="flex items-center gap-2 text-slate-text">
-          <span
-            className="w-3 h-3 rounded-full inline-block"
-            style={{ background: STATUS_COLOR[STATUS_LIVE] }}
-          />
-          Live GPS position
-        </div>
-        <div className="text-slate-text/70">
-          Positions are shown as last reported by the vehicle.
-        </div>
-      </div>
-    </div>
-  );
-}
+const formatPing = (value) => {
+  if (!value) return "—";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime())
+    ? "—"
+    : d.toLocaleString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        hour: "2-digit",
+        minute: "2-digit",
+      });
+};
 
 function ContactRow({ icon: Icon, label, name, phone, highlighted }) {
   const tel = (phone || "").replace(/\s/g, "");
@@ -336,6 +191,26 @@ export default function BusTracking() {
   const [selected, setSelected] = useState(null);
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [providers, setProviders] = useState(null);
+
+  // Which telematics providers the backend has configured. Fetched once and
+  // only to decide whether the GPS controls are meaningful — it carries no
+  // credentials, and the UI degrades to manual-only tracking when nothing is
+  // configured rather than pretending live data exists.
+  useEffect(() => {
+    let cancelled = false;
+    api.transport
+      .trackingStatus()
+      .then(({ data }) => {
+        if (!cancelled) setProviders(data?.providers || null);
+      })
+      .catch(() => {
+        if (!cancelled) setProviders(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const load = useCallback(async (silent = false) => {
     if (!silent) setLoading(true);
@@ -359,6 +234,11 @@ export default function BusTracking() {
           stopCount: route.stops?.length || 0,
           live: route.live || null,
           routePlan: route.routePlan || null,
+          // Provenance of the current fix: "traccar" (provider poll) or
+          // "manual" (an operator used Update location). Shown so the operator
+          // can tell a real device fix from a hand-entered one.
+          fixSource: route.currentLocation?.source || null,
+          speedKmh: route.live?.speedKmh ?? null,
         };
       });
       setRoutes(loaded);
@@ -425,6 +305,41 @@ export default function BusTracking() {
     };
   }, [routes]);
 
+  // GPS provider wiring, surfaced honestly. When no provider is configured the
+// fleet page must not imply live tracking: positions then come only from manual
+// updates, and the map says so.
+  const gpsState = (() => {
+    const traccar = providers?.traccar;
+    if (!traccar) return null;
+    if (traccar.enabled && traccar.configured) {
+      return { ok: true, label: "GPS provider connected", tone: "success" };
+    }
+    if (traccar.enabled && !traccar.configured) {
+      return {
+        ok: false,
+        label: "GPS provider enabled but not configured — positions are manual only",
+        tone: "alert",
+      };
+    }
+    return { ok: false, label: "No GPS provider configured — manual positions only", tone: "neutral" };
+  })();
+
+  // On-demand sync for a route that has a device bound, so an operator does not
+  // have to wait out the poll interval.
+  const [syncing, setSyncing] = useState(false);
+  const syncSelected = async () => {
+    if (!selected?._id || syncing) return;
+    setSyncing(true);
+    try {
+      await api.transport.sync(selected._id);
+      await load(true);
+    } catch (err) {
+      toast(err.message || "Could not sync with the GPS provider", "error");
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const renderBody = () => {
     if (loading) return <LoadingBlock label="Loading transport routes…" />;
     if (error) return <ErrorBlock message={error} onRetry={load} />;
@@ -444,9 +359,16 @@ export default function BusTracking() {
         title="Fleet Tracking"
         description="Route status, driver contacts and the last GPS position reported by each bus."
         right={
-          <Button variant="outline" onClick={load} disabled={loading}>
-            <RefreshCw size={14} /> Refresh
-          </Button>
+          <div className="flex items-center gap-2">
+            {gpsState && (
+              <Pill tone={gpsState.tone === "success" ? "success" : "neutral"}>
+                {gpsState.label}
+              </Pill>
+            )}
+            <Button variant="outline" onClick={load} disabled={loading}>
+              <RefreshCw size={14} /> Refresh
+            </Button>
+          </div>
         }
       />
 
@@ -488,11 +410,36 @@ export default function BusTracking() {
           <div className="grid lg:grid-cols-3 gap-5 items-start">
             <Card className="lg:col-span-2" bodyClassName="p-0">
               <FleetMap
+                className="min-h-[520px]"
                 routes={routes}
                 selected={selected}
                 onSelect={setSelected}
                 schoolLocation={school?.location || null}
                 schoolName={school?.name}
+                stops={selected?.stops || []}
+                activeStopIndex={selected?.live?.nextStopIndex ?? -1}
+                overlay={
+                  <>
+                    <div className="absolute top-3 left-3 z-[400] bg-white/95 backdrop-blur rounded-xl shadow px-3 py-2 text-[11px] font-semibold text-ink">
+                      {stats.live > 0
+                        ? `${stats.live} bus${stats.live === 1 ? "" : "es"} reporting GPS`
+                        : "No GPS positions reported yet"}
+                    </div>
+                    <div className="absolute bottom-3 left-3 z-[400] bg-white/95 backdrop-blur rounded-xl shadow px-3 py-2 text-[11px] space-y-1">
+                      <div className="flex items-center gap-2 text-slate-text">
+                        <span className="w-3 h-3 rounded-full inline-block" style={{ background: "#16A34A" }} />
+                        Bus position
+                      </div>
+                      <div className="flex items-center gap-2 text-slate-text">
+                        <span className="w-3 h-3 rounded-full inline-block bg-ink" />
+                        Stop
+                      </div>
+                      <div className="text-slate-text/70">
+                        Positions are shown as last reported by the vehicle.
+                      </div>
+                    </div>
+                  </>
+                }
               />
             </Card>
 
@@ -542,7 +489,36 @@ export default function BusTracking() {
                             : "Waiting for the vehicle to report a position"}
                         </span>
                       </div>
+                      <div className="flex items-center gap-2">
+                        <Gauge size={13} className="text-slate-text/40 shrink-0" />
+                        <span>
+                          {selected.fixSource === "traccar"
+                            ? `GPS device${selected.tracking?.deviceName ? ` · ${selected.tracking.deviceName}` : ""}`
+                            : selected.fixSource === "manual"
+                              ? "Entered manually by an operator"
+                              : "Source unknown"}
+                          {Number.isFinite(selected.speedKmh) && selected.speedKmh > 0
+                            ? ` · ${selected.speedKmh} km/h`
+                            : ""}
+                        </span>
+                      </div>
                     </div>
+
+                    {selected.tracking?.deviceId ? (
+                      <div className="mt-2 flex items-center justify-between gap-2 rounded-lg bg-paper px-3 py-2">
+                        <span className="text-[11.5px] text-slate-text/70">
+                          Device <span className="font-mono">{selected.tracking.deviceId}</span> bound
+                        </span>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={syncSelected}
+                          disabled={syncing}
+                        >
+                          <RefreshCw size={12} /> {syncing ? "Syncing…" : "Sync now"}
+                        </Button>
+                      </div>
+                    ) : null}
 
                     <LiveProgress live={selected.live} plan={selected.routePlan} />
                   </>

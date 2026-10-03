@@ -11,6 +11,7 @@ import {
   RotateCcw,
   Sparkles,
   Clock,
+  TrendingUp,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "../../components/UI";
@@ -28,9 +29,16 @@ import {
   ListRow,
   EmptyPanel,
   DashboardSkeleton,
+  AlertStrip,
   ACCENTS,
   greeting,
+  monthlyTrend,
 } from "../../components/dashboard/DashKit";
+import {
+  Sparkline,
+  BarRowChart,
+  StatusStrip,
+} from "../../components/studentcharts/StudentCharts";
 
 const QUICK_LINKS = [
   { to: "/librarian/books", icon: BookPlus, label: "Add a book", tone: ACCENTS.primary.icon },
@@ -38,6 +46,12 @@ const QUICK_LINKS = [
   { to: "/librarian/circulation", icon: RotateCcw, label: "Record returns", tone: ACCENTS.success.icon },
   { to: "/librarian/books", icon: BookOpen, label: "Browse catalogue", tone: ACCENTS.info.icon },
 ];
+
+// IssueRecord.borrowerType is a lowercase enum ("student" | "staff"), so the
+// comparison has to be case-insensitive — matching "Staff" never fired and left
+// every staff borrower rendered with the student tone.
+const borrowerIsStaff = (r) =>
+  String(r.borrowerType || "").toLowerCase() === "staff";
 
 export default function LibrarianDashboard() {
   const { school } = useStaffContext();
@@ -84,6 +98,72 @@ export default function LibrarianDashboard() {
     (r) => r.dueDate && dateOf(r.dueDate) >= today,
   ).length;
 
+  const outOfStock = books.filter((b) => Number(b.availableCopies || 0) === 0).length;
+
+  /** Loans created per month — IssueRecord only carries timestamps, no issuedOn. */
+  const circulationTrend = useMemo(
+    () => monthlyTrend(issues, { dateKey: "createdAt" }),
+    [issues],
+  );
+
+  /** Who borrows: students versus staff, as a share of all issues. */
+  const borrowerSplit = useMemo(() => {
+    const students = issues.filter((r) => !borrowerIsStaff(r)).length;
+    const staff = issues.length - students;
+    return [
+      { name: "Students", value: students, color: "info" },
+      { name: "Staff", value: staff, color: "violet" },
+    ].filter((d) => d.value > 0);
+  }, [issues]);
+
+  /** Busiest titles, for the "what do they actually read" bar chart. */
+  const topTitles = useMemo(() => {
+    const counts = new Map();
+    issues.forEach((r) => {
+      const title = r.bookId?.title;
+      if (!title) return;
+      counts.set(title, (counts.get(title) || 0) + 1);
+    });
+    return [...counts.entries()]
+      .map(([label, value]) => ({ label, value }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 6);
+  }, [issues]);
+
+  /** Newest circulation events as status pips. */
+  const recentCirculation = useMemo(
+    () =>
+      [...issues]
+        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+        .slice(0, 8)
+        .map((r, i) => ({
+          id: `${r._id}-${i}`,
+          color: r.status === "Issued" ? "warning" : "success",
+          label: `${fmtDate(r.createdAt)} · ${r.bookId?.title || "Book"}`,
+        })),
+    [issues],
+  );
+
+  /** Shelf/risk facts a librarian can act on, nothing else. */
+  const alerts = useMemo(() => {
+    const list = [];
+    if (stats.overdue > 0) {
+      list.push({ label: `${stats.overdue} book${stats.overdue === 1 ? "" : "s"} overdue`, tone: "alert" });
+    }
+    if (outOfStock > 0) {
+      list.push({ label: `${outOfStock} title${outOfStock === 1 ? "" : "s"} out of stock`, tone: "warning" });
+    } else if (lowStock.length > 0) {
+      list.push({ label: `${lowStock.length} title${lowStock.length === 1 ? "" : "s"} running low`, tone: "warning" });
+    }
+    if (stats.returnedToday > 0) {
+      list.push({ label: `${stats.returnedToday} returned today`, tone: "success" });
+    }
+    if (stats.issued === 0 && books.length > 0) {
+      list.push({ label: "Every copy is on the shelf", tone: "success" });
+    }
+    return list;
+  }, [stats.overdue, stats.returnedToday, stats.issued, books.length, lowStock.length, outOfStock]);
+
   return (
     <div className="space-y-5 sm:space-y-6">
       <HeroBanner
@@ -112,9 +192,8 @@ export default function LibrarianDashboard() {
       <QuickActions
         title="Library Shortcuts"
         icon={Sparkles}
-        columns={4}
-        action={
-          <button
+          action={
+            <button
             type="button"
             onClick={() => navigate("/librarian/circulation")}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2 text-[12.5px] font-semibold text-slate-700 transition-colors hover:border-amber-200 hover:bg-amber-50"
@@ -124,6 +203,8 @@ export default function LibrarianDashboard() {
         }
         items={QUICK_LINKS}
       />
+
+      <AlertStrip items={alerts} />
 
       {loading ? (
         <DashboardSkeleton metricCols={4} />
@@ -151,6 +232,7 @@ export default function LibrarianDashboard() {
               value={stats.issued}
               sub={`${dueSoon} still within due date`}
               accent="primary"
+              chart={<Sparkline data={circulationTrend} color="primary" height={28} />}
             />
             <MetricCard
               icon={AlertTriangle}
@@ -168,6 +250,8 @@ export default function LibrarianDashboard() {
               iconTone={ACCENTS.success.icon}
               subtitle="Copies in versus out"
               className="lg:col-span-1"
+              decor="books"
+              decorTone={ACCENTS.info.text}
             >
               <div className="flex flex-col items-center gap-4">
                 <Donut
@@ -209,6 +293,8 @@ export default function LibrarianDashboard() {
                   type="button"
                   onClick={() => navigate("/librarian/circulation")}
                   className="inline-flex items-center gap-1 whitespace-nowrap text-[12.5px] font-semibold text-info transition-colors hover:text-blue-700"
+                  decor="books"
+                  decorTone={ACCENTS.warn.text}
                 >
                   Circulation <ArrowRight size={14} />
                 </button>
@@ -243,8 +329,8 @@ export default function LibrarianDashboard() {
                         meta={`${r.borrowerId || "—"} · due ${fmtDate(r.dueDate)}`}
                         trailing={
                           <>
-                            <Badge tone={r.borrowerType === "Staff" ? "info" : "neutral"}>
-                              {r.borrowerType || "Student"}
+                            <Badge tone={borrowerIsStaff(r) ? "info" : "neutral"}>
+                              {borrowerIsStaff(r) ? "Staff" : "Student"}
                             </Badge>
                             {isOverdue ? <Badge tone="alert">Overdue</Badge> : null}
                           </>
@@ -272,6 +358,8 @@ export default function LibrarianDashboard() {
                   type="button"
                   onClick={() => navigate("/librarian/books")}
                   className="inline-flex items-center gap-1 whitespace-nowrap text-[12.5px] font-semibold text-info transition-colors hover:text-blue-700"
+                  decor="stack"
+                  decorTone={ACCENTS.alert.text}
                 >
                   Manage books <ArrowRight size={14} />
                 </button>
@@ -315,6 +403,8 @@ export default function LibrarianDashboard() {
               icon={Clock}
               iconTone={ACCENTS.info.icon}
               subtitle="Returns processed today"
+              decor="clock"
+              decorTone={ACCENTS.success.text}
             >
               <div className="grid gap-3 sm:grid-cols-2">
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-4">
@@ -343,6 +433,69 @@ export default function LibrarianDashboard() {
               </div>
             </Panel>
           </div>
+        <div className="grid gap-5 lg:grid-cols-2">
+            <Panel
+              title="Most borrowed titles"
+              icon={TrendingUp}
+              iconTone={ACCENTS.violet.icon}
+              subtitle="All-time issue counts"
+              decor="stack"
+              decorTone={ACCENTS.violet.text}
+            >
+              {topTitles.length === 0 ? (
+                <EmptyPanel
+                  icon={TrendingUp}
+                  iconTone={ACCENTS.neutral.icon}
+                  title="No loans recorded yet"
+                  text="Ranked titles will appear here once books start going out."
+                />
+              ) : (
+                <BarRowChart
+                  data={topTitles}
+                  height={Math.max(140, topTitles.length * 34)}
+                  max={Math.max(1, ...topTitles.map((t) => t.value))}
+                  color="violet"
+                  suffix=""
+                  tooltipLabel="Issues"
+                />
+              )}
+            </Panel>
+
+            <Panel
+              title="Who borrows"
+              icon={BookUp}
+              iconTone={ACCENTS.info.icon}
+              subtitle="Students versus staff"
+              decor="books"
+              decorTone={ACCENTS.info.text}
+            >
+              {borrowerSplit.length === 0 ? (
+                <EmptyPanel
+                  icon={BookUp}
+                  iconTone={ACCENTS.neutral.icon}
+                  title="No borrowers yet"
+                  text="The split between student and staff loans appears here."
+                />
+              ) : (
+                <Donut
+                  data={borrowerSplit}
+                  height={188}
+                  centerValue={issues.length}
+                  centerLabel="Loans"
+                />
+              )}
+            </Panel>
+          </div>
+
+          <Panel
+            title="Circulation activity"
+            icon={RotateCcw}
+            iconTone={ACCENTS.neutral.icon}
+            subtitle="Newest loans and returns"
+            className="mt-5"
+          >
+            <StatusStrip items={recentCirculation} emptyText="No circulation yet" />
+          </Panel>
         </>
       )}
     </div>

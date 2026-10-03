@@ -1,55 +1,55 @@
 // Navigation data for the school ERP shell.
 //
-// Kept separate from `Sidebar.jsx` so the same definitions can be rendered by
-// either sidebar implementation (see `SidebarMui.jsx` + `Layout.jsx`) and so
-// this module stays free of React component code.
+// Kept separate from `SidebarMui.jsx` so this module stays free of React
+// component code: `Layout.jsx` picks the tree and hands it to the sidebar,
+// with `canSee` deciding which leaves render.
 //
 // A group is `{ label, items, teacherOnly? }`; a leaf is
 // `{ to, label, icon, end?, perm?, roles?, scope?, designation? }`. Visibility
 // is decided by `canSeeNavigation` in `lib/scope.js`.
 
 // Navigation icons: MUI Material Design *Filled* set (no extra dependency).
+// Vectors only — they stay crisp at the 84px rail size and inherit `currentColor`,
+// so the active/hover recolouring in SidebarMui works without a per-icon override.
 import AccountBalance from "@mui/icons-material/AccountBalance";
-import AccountBalanceWallet from "@mui/icons-material/AccountBalanceWallet";
+import Analytics from "@mui/icons-material/Analytics";
 import Apartment from "@mui/icons-material/Apartment";
 import Article from "@mui/icons-material/Article";
 import Assignment from "@mui/icons-material/Assignment";
 import AssignmentTurnedIn from "@mui/icons-material/AssignmentTurnedIn";
-import BarChart from "@mui/icons-material/BarChart";
-import BusinessCenter from "@mui/icons-material/BusinessCenter";
-import Celebration from "@mui/icons-material/Celebration";
+import AutoStories from "@mui/icons-material/AutoStories";
+import Campaign from "@mui/icons-material/Campaign";
+import CalendarMonth from "@mui/icons-material/CalendarMonth";
 import Comment from "@mui/icons-material/Comment";
 import CreditCard from "@mui/icons-material/CreditCard";
-import Dashboard from "@mui/icons-material/Dashboard";
 import Description from "@mui/icons-material/Description";
 import DirectionsBus from "@mui/icons-material/DirectionsBus";
 import EmojiEvents from "@mui/icons-material/EmojiEvents";
 import Engineering from "@mui/icons-material/Engineering";
 import Event from "@mui/icons-material/Event";
-import EventAvailable from "@mui/icons-material/EventAvailable";
 import FactCheck from "@mui/icons-material/FactCheck";
 import Groups from "@mui/icons-material/Groups";
 import InsertChart from "@mui/icons-material/InsertChart";
 import Inventory2 from "@mui/icons-material/Inventory2";
 import KingBed from "@mui/icons-material/KingBed";
 import ManageAccounts from "@mui/icons-material/ManageAccounts";
-import MenuBook from "@mui/icons-material/MenuBook";
 import Money from "@mui/icons-material/Money";
-import Notifications from "@mui/icons-material/Notifications";
+import Payment from "@mui/icons-material/Payment";
 import PersonAdd from "@mui/icons-material/PersonAdd";
-import School from "@mui/icons-material/School";
+import Quiz from "@mui/icons-material/Quiz";
 import Send from "@mui/icons-material/Send";
+import SpaceDashboard from "@mui/icons-material/SpaceDashboard";
 import SwapHoriz from "@mui/icons-material/SwapHoriz";
 import Sync from "@mui/icons-material/Sync";
 import Tune from "@mui/icons-material/Tune";
-import Warning from "@mui/icons-material/Warning";
+import WorkspacePremium from "@mui/icons-material/WorkspacePremium";
 export const groups = [
   {
     label: "Platform",
     items: [
       {
         to: "/platform",
-        icon: Dashboard,
+        icon: SpaceDashboard,
         label: "Dashboard",
         end: true,
         scope: "platform",
@@ -102,7 +102,7 @@ export const groups = [
     items: [
       {
         to: "/platform/reports",
-        icon: BarChart,
+        icon: Analytics,
         label: "Reports",
         scope: "platform",
       },
@@ -123,39 +123,35 @@ export const groups = [
     label: "My Dashboards",
     items: [
       {
-        to: "/",
-        icon: Dashboard,
+        to: "/dashboard",
+        icon: SpaceDashboard,
         label: "Admin Dashboard",
         end: true,
-        roles: ["super_admin", "school_admin"],
+        // /dashboard is guarded to school_admin (App.jsx RequireRole). A
+        // super_admin lands on /platform instead, so listing it here produced a
+        // dead link that bounced the user to /platform. Super admins also sit in
+        // PLATFORM_SCOPE, which hides school modules until a school is selected.
+        //
+        // super_admin stays in the list on purpose: `selectRole` reports the
+        // signed-in role even while impersonating a school (selectors.js:7), and
+        // `canReachSchoolScope` lets an impersonating platform owner through the
+        // school check. Dropping super_admin here would empty the admin
+        // navigation for an impersonation session, which is the opposite of what
+        // support needs. Every allow-list below follows the same rule.
+        roles: ["school_admin", "super_admin"],
       },
       {
         to: "/staff-dashboard",
-        icon: Dashboard,
+        icon: SpaceDashboard,
         label: "My Dashboard",
         end: true,
         roles: ["staff"],
       },
-      {
-        to: "/admission-counsellor",
-        icon: Assignment,
-        label: "Counsellor Workspace",
-        end: true,
-        roles: ["staff"],
-        designation: "admission_counsellor",
-      },
-      {
-        to: "/teacher-dashboard",
-        icon: ManageAccounts,
-        label: "Class Teacher",
-        roles: ["teacher"],
-      },
-      {
-        to: "/student-dashboard",
-        icon: School,
-        label: "Student / Parent",
-        roles: ["student"],
-      },
+      // /admission-counsellor and /student-dashboard were removed from this
+      // tree. Both were unreachable: Layout.jsx:74-79 hands counsellors
+      // PERSONA_NAV and students STUDENT_NAV before `groups` is ever consulted,
+      // so these entries could only render for a role that never sees this file.
+      // Both routes still exist in App.jsx and are linked from their dashboards.
     ],
   },
   {
@@ -163,13 +159,13 @@ export const groups = [
     items: [
       {
         to: "/staff/my-attendance",
-        icon: EventAvailable,
+        icon: FactCheck,
         label: "My Attendance",
         roles: ["staff", "teacher"],
       },
       {
         to: "/notifications",
-        icon: Notifications,
+        icon: Campaign,
         label: "Notifications",
         roles: ["staff"],
       },
@@ -181,7 +177,7 @@ export const groups = [
     items: [
       {
         to: "/teacher-dashboard",
-        icon: Dashboard,
+        icon: SpaceDashboard,
         label: "Dashboard",
         end: true,
         roles: ["teacher"],
@@ -194,39 +190,42 @@ export const groups = [
       },
       {
         to: "/teacher/attendance",
-        icon: EventAvailable,
+        icon: FactCheck,
         label: "Student Attendance",
         roles: ["teacher"],
       },
       {
         to: "/teacher/timetable",
-        icon: Event,
+        icon: CalendarMonth,
         label: "Timetable",
         roles: ["teacher"],
       },
       {
         to: "/teacher/homework",
-        icon: FactCheck,
+        icon: Assignment,
         label: "Homework & Assignments",
         roles: ["teacher"],
       },
       {
         to: "/teacher/exams",
-        icon: Assignment,
+        icon: Quiz,
         label: "Examinations",
         roles: ["teacher"],
       },
       {
         to: "/teacher/performance",
-        icon: BarChart,
+        icon: Analytics,
         label: "Class Performance",
         roles: ["teacher"],
       },
       {
-        to: "/notice-board",
-        icon: Notifications,
+        to: "/teacher/notices",
+        icon: Campaign,
         label: "Notices",
-        perm: "notices:publish",
+        // Teacher-scoped page (App.jsx:480, RequireRole teacher) rather than the
+        // school-wide /notice-board. TeacherDashboard already links here
+        // ("View all"), so this is the notice surface teachers actually use;
+        // the generic duplicate is restricted to admin roles below.
         roles: ["teacher"],
       },
     ],
@@ -235,12 +234,6 @@ export const groups = [
     label: "Students",
     teacherOnly: true,
     items: [
-      {
-        to: "/behavior",
-        icon: Warning,
-        label: "Behavior Log",
-        roles: ["teacher"],
-      },
       {
         to: "/achievements",
         icon: EmojiEvents,
@@ -253,18 +246,12 @@ export const groups = [
     label: "My Account",
     teacherOnly: true,
     items: [
-      {
-        to: "/staff/my-attendance",
-        icon: AssignmentTurnedIn,
-        label: "My Attendance",
-        roles: ["teacher"],
-      },
-      {
-        to: "/leave",
-        icon: Description,
-        label: "Leave Request",
-        roles: ["teacher"],
-      },
+      // /staff/my-attendance is intentionally NOT repeated here: "Staff Tools"
+      // above already lists it for staff and teacher alike, so a second copy
+      // under a different group gave teachers the same route twice.
+      // /leave is likewise not repeated: the Human Resources entry is gated on
+      // leaves:apply, which teachers already hold, and it serves both
+      // self-service apply and admin approval.
       {
         to: "/payroll",
         icon: Money,
@@ -284,16 +271,15 @@ export const groups = [
       },
       {
         to: "/notice-board",
-        icon: Notifications,
+        icon: Campaign,
         label: "Notice Board",
         perm: "notices:read",
-      },
-      {
-        to: "/diary",
-        icon: MenuBook,
-        label: "Class Diary",
-        perm: "notices:read",
-        roles: ["school_admin", "super_admin", "teacher", "parent"],
+        // Teachers are excluded: they get the teacher-scoped /teacher/notices
+        // under "My Teaching". Listing both showed the same notice surface twice.
+        // staff stays for the custom-designation fallback, where school notices
+        // are a legitimate read-only responsibility; the five known personas have
+        // their own entry in PERSONA_NAV.
+        roles: ["school_admin", "super_admin", "staff"],
       },
       {
         to: "/messages",
@@ -311,7 +297,7 @@ export const groups = [
       },
       {
         to: "/events",
-        icon: Celebration,
+        icon: CalendarMonth,
         label: "Events",
         perm: "events:read",
       },
@@ -331,24 +317,28 @@ export const groups = [
         icon: Groups,
         label: "Student Database",
         perm: "students:read",
+        roles: ["school_admin", "super_admin"],
       },
       {
         to: "/attendance",
-        icon: EventAvailable,
+        icon: FactCheck,
         label: "Attendance",
         perm: "attendance:read",
+        roles: ["school_admin", "super_admin"],
       },
       {
         to: "/timetable",
-        icon: Event,
+        icon: CalendarMonth,
         label: "Timetable",
         perm: "timetable:read",
+        roles: ["school_admin", "super_admin"],
       },
       {
         to: "/examination",
-        icon: Assignment,
+        icon: Quiz,
         label: "Examination",
         perm: "exams:read",
+        roles: ["school_admin", "super_admin"],
       },
       {
         to: "/marks-entry",
@@ -364,13 +354,14 @@ export const groups = [
       },
       {
         to: "/grading-scales",
-        icon: BarChart,
+        icon: Analytics,
         label: "Grading Scales",
         perm: "exams:read",
+        roles: ["school_admin", "super_admin"],
       },
       {
         to: "/syllabus",
-        icon: Article,
+        icon: Description,
         label: "Syllabus",
         perm: "homework:read",
       },
@@ -382,19 +373,21 @@ export const groups = [
       },
       {
         to: "/promotions",
-        icon: School,
+        icon: WorkspacePremium,
         label: "Promotions",
         perm: "promotion:read",
+        roles: ["school_admin", "super_admin"],
       },
       {
         to: "/transfers",
         icon: SwapHoriz,
         label: "Transfers",
         perm: "transfer:read",
+        roles: ["school_admin", "super_admin"],
       },
       {
         to: "/academic-sessions",
-        icon: Event,
+        icon: CalendarMonth,
         label: "Academic Sessions",
         perm: "sessions:read",
       },
@@ -403,6 +396,7 @@ export const groups = [
         icon: Sync,
         label: "Academic Rollover",
         perm: "rollover:read",
+        roles: ["school_admin", "super_admin"],
       },
     ],
   },
@@ -429,9 +423,14 @@ export const groups = [
       },
       {
         to: "/library",
-        icon: MenuBook,
-        label: "Library Management",
+        icon: AutoStories,
+        // Teachers keep this as a browse-only catalogue (they hold library:read
+        // but not library:manage, and the page hides write actions accordingly).
+        // Generic staff no longer see it: an unknown designation proves no
+        // library responsibility.
+        label: "Library",
         perm: "library:read",
+        roles: ["school_admin", "super_admin", "teacher"],
       },
     ],
   },
@@ -440,20 +439,24 @@ export const groups = [
     items: [
       {
         to: "/teachers",
-        icon: School,
-        label: "Teachers",
+        icon: PersonAdd,
+        label: "Add Staff",
         perm: "staff:write",
       },
       {
         to: "/homework",
-        icon: BusinessCenter,
+        icon: Assignment,
         label: "Assign Work",
         perm: "homework:read",
+        roles: ["school_admin", "super_admin"],
       },
       {
         to: "/leave",
         icon: InsertChart,
-        label: "Leave Management",
+        // Neutral label: the route is gated on leaves:apply and serves BOTH
+        // self-service apply (teacher/staff) and approval (school_admin).
+        // "Leave Management" overstated what leaves:apply grants.
+        label: "Leave",
         perm: "leaves:apply",
       },
       {
@@ -461,6 +464,11 @@ export const groups = [
         icon: Money,
         label: "Payroll / Salary",
         perm: "payroll:view",
+        // Teachers reach their own payslip through the teacher-only "My Account"
+        // entry above, so listing it here too showed them the same route twice.
+        // payrollController.js scopes staff/teacher reads to req.user.refId, so
+        // this is the admin-facing surface.
+        roles: ["school_admin", "super_admin"],
       },
     ],
   },
@@ -469,7 +477,7 @@ export const groups = [
     items: [
       {
         to: "/fees-collection",
-        icon: AccountBalanceWallet,
+        icon: Payment,
         label: "Fees Collection",
         perm: "fees:collect",
       },
@@ -498,21 +506,18 @@ export const groups = [
     items: [
       {
         to: "/reports",
-        icon: BarChart,
+        icon: Analytics,
         label: "Reports",
         perm: "reports:view",
-      },
-      {
-        to: "/behavior",
-        icon: Warning,
-        label: "Behavior Log",
-        perm: "conduct:read",
       },
       {
         to: "/achievements",
         icon: EmojiEvents,
         label: "Achievements",
         perm: "achievements:read",
+        // Teachers get the teacher-only "Students" entry above; this copy is the
+        // admin-facing view of the whole school.
+        roles: ["school_admin", "super_admin"],
       },
     ],
   },
@@ -532,6 +537,12 @@ export const groups = [
         perm: "users:manage",
       },
       {
+        to: "/branches",
+        icon: Apartment,
+        label: "Branches",
+        perm: "branches:read",
+      },
+      {
         to: "/subscription",
         icon: CreditCard,
         label: "Subscription & Upgrade",
@@ -547,20 +558,20 @@ export const STUDENT_NAV = [
     items: [
       {
         to: "/student-dashboard",
-        icon: Dashboard,
+        icon: SpaceDashboard,
         label: "Dashboard",
         end: true,
         roles: ["student"],
       },
       {
         to: "/student/attendance",
-        icon: EventAvailable,
+        icon: FactCheck,
         label: "My Attendance",
         roles: ["student"],
       },
       {
         to: "/student/timetable",
-        icon: Event,
+        icon: CalendarMonth,
         label: "My Timetable",
         roles: ["student"],
       },
@@ -570,12 +581,6 @@ export const STUDENT_NAV = [
         label: "My Achievements",
         roles: ["student"],
       },
-      {
-        to: "/student/behavior",
-        icon: Warning,
-        label: "My Behavior Log",
-        roles: ["student"],
-      },
     ],
   },
   {
@@ -583,32 +588,43 @@ export const STUDENT_NAV = [
     items: [
       {
         to: "/student/homework",
-        icon: FactCheck,
+        icon: Assignment,
         label: "Homework & Assignments",
         roles: ["student"],
       },
       {
         to: "/student/exams",
-        icon: Assignment,
+        icon: Quiz,
         label: "Examinations",
         roles: ["student"],
       },
       {
         to: "/student/results",
-        icon: BarChart,
+        icon: Analytics,
         label: "Results & Report Card",
         roles: ["student"],
       },
       {
         to: "/student/study-materials",
-        icon: MenuBook,
+        icon: Description,
         label: "Study Materials",
         roles: ["student"],
       },
       {
         to: "/student/syllabus",
-        icon: Article,
+        icon: Description,
         label: "Syllabus",
+        roles: ["student"],
+      },
+    ],
+  },
+  {
+    label: "Communication",
+    items: [
+      {
+        to: "/messages",
+        icon: Comment,
+        label: "Messages",
         roles: ["student"],
       },
     ],
@@ -618,7 +634,7 @@ export const STUDENT_NAV = [
     items: [
       {
         to: "/student/fees",
-        icon: AccountBalanceWallet,
+        icon: Payment,
         label: "Fees & Payments",
         roles: ["student"],
       },
@@ -630,32 +646,26 @@ export const STUDENT_NAV = [
       },
       {
         to: "/student/notifications",
-        icon: Notifications,
+        icon: Campaign,
         label: "Notifications",
         roles: ["student"],
       },
       {
         to: "/student/notices",
-        icon: Notifications,
+        icon: Campaign,
         label: "Notices",
         roles: ["student"],
       },
       {
-        to: "/diary",
-        icon: MenuBook,
-        label: "Class Diary",
-        roles: ["student"],
-      },
-      {
         to: "/student/library",
-        icon: MenuBook,
+        icon: AutoStories,
         label: "My Library",
         roles: ["student"],
       },
       {
         to: "/student/transport",
         icon: DirectionsBus,
-        label: "My Transport",
+        label: "My School Bus",
         roles: ["student"],
       },
       {
@@ -672,7 +682,7 @@ export const STUDENT_NAV = [
       },
       {
         to: "/student/events",
-        icon: Celebration,
+        icon: CalendarMonth,
         label: "Events",
         roles: ["student"],
       },
@@ -686,15 +696,9 @@ export const PARENT_NAV = [
     items: [
       {
         to: "/parent-dashboard",
-        icon: Dashboard,
+        icon: SpaceDashboard,
         label: "Dashboard",
         end: true,
-        roles: ["parent"],
-      },
-      {
-        to: "/diary",
-        icon: MenuBook,
-        label: "Class Diary",
         roles: ["parent"],
       },
       {
@@ -705,7 +709,7 @@ export const PARENT_NAV = [
       },
       {
         to: "/notifications",
-        icon: Notifications,
+        icon: Campaign,
         label: "Notifications",
         roles: ["parent"],
       },
@@ -716,19 +720,19 @@ export const PARENT_NAV = [
     items: [
       {
         to: "/notice-board",
-        icon: Assignment,
+        icon: Campaign,
         label: "Notices",
         roles: ["parent"],
       },
       {
         to: "/events",
-        icon: Celebration,
+        icon: CalendarMonth,
         label: "Events",
         roles: ["parent"],
       },
       {
         to: "/online-payment",
-        icon: AccountBalanceWallet,
+        icon: Payment,
         label: "Fees & Payments",
         roles: ["parent"],
       },

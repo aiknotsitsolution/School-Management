@@ -65,7 +65,7 @@ function compressImage(file) {
 
 export default function Profile() {
   const dispatch = useDispatch();
-  const { user, school, assignment, hasClassTeacher } = useTeacherContext();
+  const { user, school, assignment, hasClassTeacher, cls, section, allScopes } = useTeacherContext();
   const [staff, setStaff] = useState(null);
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ dob: "", gender: "", contact: "", address: "" });
@@ -117,6 +117,18 @@ export default function Profile() {
   const roleLabel = hasClassTeacher ? "Class Teacher" : "Teacher";
   const profileComplete = staff?.profileStatus === "complete";
 
+  // TeacherAssignment records are the authority on a teacher's classes
+  // (TeacherAssignment.js: "decided by ASSIGNMENTS, not by the auth role").
+  // Staff.classesAssigned is a legacy mirror that createAssignment never
+  // writes, so it was permanently empty and "Classes Assigned" always
+  // rendered "—" — even for an assigned Class Teacher. Both shapes carry
+  // { class, section }, so the legacy array stays as a fallback only.
+  const legacyClasses = Array.isArray(staff?.classesAssigned) ? staff.classesAssigned : [];
+  const classList = (allScopes.length ? allScopes : legacyClasses).map(
+    (c) => `Class ${c.class}${c.section ? `-${c.section}` : ""}`,
+  );
+  const assignedClasses = classList.length ? classList.join(", ") : "—";
+
   const handleComplete = async (event) => {
     event.preventDefault();
     if (!staff) return;
@@ -140,7 +152,7 @@ export default function Profile() {
         contact: data?.contact || "",
         address: data?.address || "",
       });
-      toast(data?.idCardNumber ? `Profile complete · ID card ${data.idCardNumber} issued` : "Profile complete");
+      toast(data?.idCardNumber ? `Profile complete · ID card for ${data.employeeId || "—"} issued` : "Profile complete");
     } catch (err) {
       toast(err.message, "error");
     } finally {
@@ -186,15 +198,20 @@ export default function Profile() {
           <div className="grid sm:grid-cols-2 gap-4">
             <Detail icon={UserRoundCog} label="Role" value={roleLabel} />
             <Detail icon={Mail} label="Email" value={user?.email || "—"} />
+            {/* `cls`/`section` come from the assignment (useTeacherContext's
+                primaryScope), not the auth account. Teacher class/section is
+                decided by TeacherAssignment records and is deliberately never
+                denormalised onto User — so reading user.class here rendered
+                "—" for every teacher, including an assigned Class Teacher. */}
             <Detail
               icon={GraduationCap}
               label="Class"
-              value={user?.class ? `Class ${user.class}` : "—"}
+              value={cls ? `Class ${cls}` : "—"}
             />
             <Detail
               icon={Building2}
               label="Section"
-              value={user?.section ? `Section ${user.section}` : "—"}
+              value={section ? `Section ${section}` : "—"}
             />
             <Detail icon={BadgeCheck} label="Account Status" value={user?.isActive === false ? "Inactive" : "Active"} />
             <Detail
@@ -234,13 +251,7 @@ export default function Profile() {
             <Detail
               icon={Users}
               label="Classes Assigned"
-              value={
-                Array.isArray(staff.classesAssigned) && staff.classesAssigned.length
-                  ? staff.classesAssigned
-                      .map((c) => `Class ${c.class}${c.section ? `-${c.section}` : ""}`)
-                      .join(", ")
-                  : "—"
-              }
+              value={assignedClasses}
             />
             <Detail icon={Phone} label="Contact" value={staff.contact || "—"} />
             <Detail
@@ -330,8 +341,8 @@ export default function Profile() {
             <div>
               <p className="font-semibold">Profile complete</p>
               <p className="text-[12.5px] mt-0.5">
-                {staff.idCardNumber
-                  ? `${staff.idCardNumber} · issued ${fmtDate(staff.idCardIssuedAt)}`
+                {staff.idCardIssuedAt
+                  ? `Employee ID ${staff.employeeId || "—"} · issued ${fmtDate(staff.idCardIssuedAt)}`
                   : "Your staff ID card will be issued by the school admin."}
               </p>
             </div>

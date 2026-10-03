@@ -1,6 +1,11 @@
+const {
+  scopeQuery,
+  withBranchScope,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const mongoose = require("mongoose");
 const StaffAttendance = require("../models/StaffAttendance");
 const Staff = require("../models/Staff");
+const { hasPermission } = require("@school-erp/shared/src/utils/permissions");
 
 const VALID_STATUSES = ["Present", "Absent", "Leave", "Late", "Half Day"];
 
@@ -18,21 +23,52 @@ const markAttendance = async (req, res) => {
     if (!targetStaffId) {
       return res.status(400).json({ success: false, message: "No staff record linked to this account" });
     }
-    if (req.user.role === "school_admin" || req.user.role === "super_admin") {
-      if (!mongoose.isValidObjectId(targetStaffId)) {
-        return res.status(400).json({ success: false, message: "staffId must reference a real staff member" });
-      }
-      const exists = await Staff.findOne({ _id: targetStaffId, schoolId: req.tenantId }).select("_id").lean();
-      if (!exists) {
+    // Marking your OWN row is self-service — the login check-in popup and the
+    // My Attendance page both depend on it, and several persona bundles
+    // (Accountant, Librarian, Receptionist, Transport) deliberately carry no
+    // attendance powers, so gating on `attendance:mark` here locked those staff
+    // out of their own check-in with a 403. `attendance:mark` means "may write
+    // SOMEONE ELSE's row"; teacher/staff are pinned to their own record below
+    // regardless of what staffId they send.
+    if (!isSelf && !hasPermission(req.user, "attendance:mark")) {
+      return res.status(403).json({ success: false, message: "Access denied for this role" });
+    }
+    // A check-in the caller didn't send is stamped with the CURRENT time: the
+    // admin's staff sheet, My Attendance's empty draft and any API client all
+    // mark "now" instead of leaving the row with an empty arrival time (which
+    // would send the person straight back into the check-in popup). Rows dated
+    // any other day stay empty — "now" would be meaningless on them.
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, "0");
+    const nowTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+    const todayISO = new Date(now.getTime() - now.getTimezoneOffset() * 60000)
+      .toISOString()
+      .slice(0, 10);
+    const resolvedCheckIn = checkIn || (date === todayISO ? nowTime : null);
+    // A staff member lives in exactly one campus, so their attendance row is
+    // unambiguously that campus'. The staff lookup below is branch-scoped, which
+    // is what proves the caller may touch this staff member.
+    const staffScope = scopeQuery(Staff, req, { schoolId: req.tenantId, _id: targetStaffId });
+    let targetBranchId = null;
+    if (mongoose.isValidObjectId(targetStaffId)) {
+      const staffDoc = await Staff.findOne(staffScope).select("_id branchId").lean();
+      if (!staffDoc) {
         return res.status(400).json({ success: false, message: "No staff record found for this school" });
       }
+      targetBranchId = staffDoc.branchId || null;
+    } else if (req.user.role === "school_admin" || req.user.role === "super_admin") {
+      return res.status(400).json({ success: false, message: "staffId must reference a real staff member" });
     }
+    // Match ONLY the unique index {schoolId, staffId, date}. Adding branchId here
+    // made the lookup miss rows whose branchId is null (or another campus), so
+    // the upsert fell through to an INSERT and tripped E11000 on that index.
     const record = await StaffAttendance.findOneAndUpdate(
       { schoolId: req.tenantId, staffId: targetStaffId, date },
       {
         $set: {
+          branchId: targetBranchId,
           status,
-          checkIn: checkIn || null,
+          checkIn: resolvedCheckIn,
           checkOut: checkOut || null,
           note: note || null,
           markedBy: req.user.refId || req.user.name || req.user.id,
@@ -43,6 +79,12 @@ const markAttendance = async (req, res) => {
     );
     res.status(201).json({ success: true, data: record });
   } catch (err) {
+    if (err && err.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "An attendance record already exists for this staff member on this date",
+      });
+    }
     res.status(400).json({ success: false, message: err.message });
   }
 };
@@ -50,7 +92,7 @@ const markAttendance = async (req, res) => {
 const getAttendance = async (req, res) => {
   try {
     const { staffId, date, status, page = 1, limit = 50 } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(StaffAttendance, req, { schoolId: req.tenantId })
     if (req.user.role === "staff" || req.user.role === "teacher") {
       filter.staffId = req.user.refId;
     } else if (staffId) {
@@ -84,11 +126,11 @@ const getMyToday = async (req, res) => {
     const local = new Date(now.getTime() - offset * 60000);
     const today = local.toISOString().slice(0, 10);
 
-    const record = await StaffAttendance.findOne({
+    const record = await StaffAttendance.findOne(scopeQuery(StaffAttendance, req, {
       schoolId: req.tenantId,
       staffId,
       date: today,
-    }).lean();
+    })).lean();
 
     res.json({ success: true, data: record || null, date: today });
   } catch (err) {
@@ -103,12 +145,12 @@ const getTodayAll = async (req, res) => {
     const local = new Date(now.getTime() - offset * 60000);
     const today = local.toISOString().slice(0, 10);
 
-    const records = await StaffAttendance.find({
+    const records = await StaffAttendance.find(scopeQuery(StaffAttendance, req, {
       schoolId: req.tenantId,
       date: today,
-    }).lean();
+    })).lean();
 
-    const allStaff = await Staff.find({ schoolId: req.tenantId, status: "Active" })
+    const allStaff = await Staff.find(scopeQuery(Staff, req, { schoolId: req.tenantId, status: "Active" }))
       .select("name designation role userId")
       .lean();
 
@@ -167,10 +209,10 @@ const getMonthlySummary = async (req, res) => {
     const monthStr = String(monthNum).padStart(2, "0");
     const datePrefix = `${yearNum}-${monthStr}`;
 
-    const filter = {
+    const filter = scopeQuery(StaffAttendance, req, {
       schoolId: req.tenantId,
       date: { $regex: `^${datePrefix}` },
-    };
+    })
     if (staffId) {
       filter.staffId = staffId;
     } else if (req.user.role === "staff" || req.user.role === "teacher") {
@@ -179,7 +221,7 @@ const getMonthlySummary = async (req, res) => {
 
     const records = await StaffAttendance.find(filter).lean();
 
-    const staffFilter = { schoolId: req.tenantId, status: "Active" };
+      const staffFilter = withBranchScope(req, { schoolId: req.tenantId, status: "Active" });
     if (staffId) {
       staffFilter._id = staffId;
     } else if (req.user.role === "staff" || req.user.role === "teacher") {
@@ -234,7 +276,7 @@ const correctAttendance = async (req, res) => {
     if (!VALID_STATUSES.includes(status)) {
       return res.status(400).json({ success: false, message: `status must be one of: ${VALID_STATUSES.join(", ")}` });
     }
-    const record = await StaffAttendance.findOne({ _id: id, schoolId: req.tenantId });
+    const record = await StaffAttendance.findOne(scopeQuery(StaffAttendance, req, { _id: id, schoolId: req.tenantId }));
     if (!record) {
       return res.status(404).json({ success: false, message: "Attendance record not found" });
     }

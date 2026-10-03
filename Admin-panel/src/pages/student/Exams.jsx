@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { ClipboardList, Clock, MapPin } from "lucide-react";
 import { PageIntro, Card, Pill } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
+import { BarRowChart, Donut, ProgressRing } from "../../components/studentcharts/StudentCharts";
 import { api } from "../../lib/api";
 import useStudentContext, { fmtDate, dateOf } from "./useStudentContext";
 
@@ -8,14 +10,20 @@ export default function Exams() {
   const { user } = useStudentContext();
   const [exams, setExams] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A rejected class-scoped fetch is not an empty schedule — see Timetable.jsx.
+  const [error, setError] = useState("");
 
   useEffect(() => {
     const cls = user?.class || "";
     setLoading(true);
+    setError("");
     api.exams
       .list(`class=${encodeURIComponent(cls)}`)
       .then(({ data }) => setExams(data || []))
-      .catch(() => setExams([]))
+      .catch((err) => {
+        setError(err?.message || "We couldn't load your exams.");
+        setExams([]);
+      })
       .finally(() => setLoading(false));
   }, [user?.class]);
 
@@ -29,16 +37,43 @@ export default function Exams() {
     [exams, today],
   );
 
+  /** How many exams remain per subject, busiest subject first. */
+  const upcomingBySubject = useMemo(() => {
+    const counts = new Map();
+    upcoming.forEach((e) => counts.set(e.subject, (counts.get(e.subject) || 0) + 1));
+    return [...counts.entries()]
+      .map(([label, total]) => ({ label, value: total }))
+      .sort((a, b) => b.value - a.value);
+  }, [upcoming]);
+
+  const examSplit = useMemo(
+    () =>
+      [
+        { name: "Upcoming", value: upcoming.length, color: "info" },
+        { name: "Completed", value: past.length, color: "success" },
+      ].filter((d) => d.value > 0),
+    [upcoming.length, past.length],
+  );
+
+  const doneShare = exams.length ? Math.round((past.length / exams.length) * 100) : 0;
+
   return (
     <div className="space-y-6">
       <PageIntro
         eyebrow="Academics"
-        title="My Examinations"
+        title="My Examinations" art="exams"
         description={user?.class ? `Exam schedule for Class ${user.class}.` : "Your exam schedule."}
       />
 
       {loading ? (
         <div className="space-y-3">{[0, 1, 2].map((i) => <div key={i} className="h-16 bg-white rounded-2xl border border-slate-200 animate-pulse" />)}</div>
+      ) : error ? (
+        <Card>
+          <div className="py-10 text-center">
+            <p className="text-[15px] font-semibold text-ink">Couldn&apos;t load your exams</p>
+            <p className="text-[13px] text-red-500 mt-1">{error}</p>
+          </div>
+        </Card>
       ) : exams.length === 0 ? (
         <Card>
           <div className="py-10 text-center">
@@ -49,6 +84,36 @@ export default function Exams() {
         </Card>
       ) : (
         <>
+          <div className="grid gap-4 lg:grid-cols-3">
+            <Card>
+              <div className="flex flex-col items-center gap-3 py-2">
+                <ProgressRing
+                  value={doneShare}
+                  size={150}
+                  stroke={13}
+                  color="violet"
+                  label="Completed"
+                  sublabel={`${upcoming.length} still ahead`}
+                  ariaLabel={`${doneShare} percent of exams completed`}
+                />
+                {examSplit.length > 0 && (
+                  <Donut data={examSplit} height={120} centerValue={exams.length} centerLabel="Exams" />
+                )}
+              </div>
+            </Card>
+
+            <Card className="lg:col-span-2" title="Upcoming by Subject" subtitle="How many exams remain in each subject">
+              <BarRowChart
+                data={upcomingBySubject}
+                height={Math.max(160, upcomingBySubject.length * 34)}
+                color="violet"
+                tooltipLabel="Exams left"
+                suffix=""
+                max={Math.max(1, ...upcomingBySubject.map((d) => d.value))}
+              />
+            </Card>
+          </div>
+
           <Card title={`Upcoming Exams (${upcoming.length})`}>
             {upcoming.length === 0 ? (
               <p className="text-[13px] text-slate-text py-4 text-center">Nothing scheduled ahead.</p>

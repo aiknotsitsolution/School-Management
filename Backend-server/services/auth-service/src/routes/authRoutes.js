@@ -7,7 +7,13 @@ router.param("homeworkId", validateObjectIdParam);
 const ctrl = require("../controllers/authController");
 const tenantCtrl = require("../controllers/tenantController");
 const gatewayCtrl = require("../controllers/paymentGatewayController");
-const { verifyToken, resolveTenant, requirePermission, authorizeRoles } = require("../middleware/auth");
+const {
+  verifyToken,
+  resolveTenant,
+  requirePermission,
+  authorizeRoles,
+  resolveBranch,
+} = require("../middleware/auth");
 
 const photoUpload = multer({
   storage: multer.memoryStorage(),
@@ -60,14 +66,17 @@ router.post("/users/:id/send-reset-otp", verifyToken, resolveTenant, requirePerm
 
 // User management - admin only (no public self-register).
 // /register kept as an alias for backwards compat but requires auth + permission.
-router.post("/register", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.createUser);
-router.post("/users", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.createUser);
-router.get("/users", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.listUsers);
-router.patch("/users/:id/status", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.updateUserStatus);
-router.patch("/users/:id", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.updateUser);
-  router.delete("/users/:id", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.deleteUser);
-  router.delete("/users/:id/permanent", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.hardDeleteUser);
-  router.post("/users/:id/restore", verifyToken, resolveTenant, requirePermission("users:manage"), ctrl.restoreUser);
+// User management is campus-scoped: a branch admin with users:manage must only
+// ever see and touch the accounts assigned to their own branch, so these routes
+// resolve the X-Branch-Id scope before the handler runs.
+router.post("/register", verifyToken, resolveTenant, resolveBranch, requirePermission("users:manage"), ctrl.createUser);
+router.post("/users", verifyToken, resolveTenant, resolveBranch, requirePermission("users:manage"), ctrl.createUser);
+router.get("/users", verifyToken, resolveTenant, resolveBranch, requirePermission("users:manage"), ctrl.listUsers);
+router.patch("/users/:id/status", verifyToken, resolveTenant, resolveBranch, requirePermission("users:manage"), ctrl.updateUserStatus);
+router.patch("/users/:id", verifyToken, resolveTenant, resolveBranch, requirePermission("users:manage"), ctrl.updateUser);
+router.delete("/users/:id", verifyToken, resolveTenant, resolveBranch, requirePermission("users:manage"), ctrl.deleteUser);
+router.delete("/users/:id/permanent", verifyToken, resolveTenant, resolveBranch, requirePermission("users:manage"), ctrl.hardDeleteUser);
+router.post("/users/:id/restore", verifyToken, resolveTenant, resolveBranch, requirePermission("users:manage"), ctrl.restoreUser);
 
 // School / tenant management - platform owner only
 router.post("/schools", verifyToken, authorizeRoles("super_admin"), ctrl.createSchool);

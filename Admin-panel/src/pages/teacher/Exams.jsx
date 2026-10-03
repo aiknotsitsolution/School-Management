@@ -57,6 +57,7 @@ export default function Exams() {
       <PageIntro
         eyebrow="My Teaching"
         title="Examinations"
+        art="exams"
         description={`Exam schedule for ${assignment}. Marks entry is handled by the school office.`}
       />
 

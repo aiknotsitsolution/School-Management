@@ -110,7 +110,10 @@ export default function Profile() {
     parentName: profile?.parentName || "",
     parentContact: profile?.parentContact || "",
     house: profile?.house || "",
-    avatar: user?.avatar || "",
+    // Same two-field split as initialSrc above. The ID card reads photoUrl
+    // (from the ...profile spread) so this is currently unused — aligned so a
+    // future consumer cannot silently pick the wrong one.
+    avatar: user?.avatar || profile?.photoUrl || "",
     idCardNumber: profile?.idCardNumber || "",
     idCardIssuedAt: profile?.idCardIssuedAt || null,
   };
@@ -146,7 +149,14 @@ export default function Profile() {
                 <ProfilePhotoPicker
                   name={profile?.name || user?.name || "Student"}
                   file={photoFile}
-                  initialSrc={user?.avatar}
+                  // `user.avatar` first: it carries a self-uploaded photo (the
+                  // profile-page upload writes User.avatar) and, since login,
+                  // the onboarding photo resolved from Student.photoUrl. The
+                  // profile fetch is the fallback for sessions opened before
+                  // that resolve existed. Reading only user.avatar was the bug
+                  // — the onboarding form writes Student.photoUrl, which is why
+                  // the ID card showed the photo and this did not.
+                  initialSrc={user?.avatar || profile?.photoUrl || ""}
                   disabled={photoSaving}
                   onFileChange={handlePhotoChange}
                 />

@@ -56,8 +56,17 @@ export const PERSONA_BY_DESIGNATION = Object.values(STAFF_PERSONAS).reduce(
   {},
 );
 
-// Which staff designations get a persona-restricted workspace.
-const PERSONA_DESIGNATIONS = ["accountant", "librarian", "receptionist", "transport"];
+// Which staff designations get a persona-restricted workspace. Admission
+// counsellor is included: it has its own landing (/admission-counsellor) and its
+// own permission bundle (STAFF_PERMISSIONS.admission_counsellor), so it belongs
+// with the other persona workspaces rather than inheriting the admin nav tree.
+const PERSONA_DESIGNATIONS = [
+  "admission_counsellor",
+  "accountant",
+  "librarian",
+  "receptionist",
+  "transport",
+];
 
 export function isPersonaStaff(user) {
   return (

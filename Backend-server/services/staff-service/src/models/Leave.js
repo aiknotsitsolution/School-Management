@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 
 const leaveSchema = new mongoose.Schema(
   {
+    // Campus this record belongs to. null = school-wide, or a row
+    // that predates branch scoping.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     staffId: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
     // Students are keyed by admissionNo (User.refId), same as every other

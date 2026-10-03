@@ -10,7 +10,7 @@ import { usePermission } from "../lib/permissions";
 import { sessionLabel } from "../lib/session";
 
 const ACCENT_RE = /^#[0-9a-fA-F]{6}$/;
-const DEFAULT_ACCENT = "#4F46E5";
+const DEFAULT_ACCENT = "#0C47CF";
 
 // CCE co-scholastic (CLIENT-REQ-027): CBSE default areas + 6-point grade scale.
 const DEFAULT_CCE_AREAS = ["Work Education", "Art Education", "Health & Physical Education"];
@@ -344,7 +344,7 @@ export default function ReportCard() {
   const saveCustom = async () => {
     if (!customDraft) return;
     if (!ACCENT_RE.test(customDraft.accent)) {
-      toast("Accent must be a hex color like #4F46E5", "error");
+      toast("Accent must be a hex color like #0C47CF", "error");
       return;
     }
     setSavingCustom(true);
@@ -589,7 +589,7 @@ export default function ReportCard() {
           <div className="overflow-x-auto rounded-xl border border-slate-200 mb-6">
             <table className="w-full text-[13px]">
               <thead>
-                <tr className="bg-ink text-white text-left text-[11.5px] uppercase tracking-wide">
+                <tr className="bg-ink text-white text-left text-[11.5px] uppercase tracking-wide dark:bg-slate-200 dark:text-ink">
                   <th className="px-4 py-3 font-semibold">Subject</th>
                   <th className="px-4 py-3 font-semibold text-center">
                     Max Marks
@@ -707,7 +707,7 @@ export default function ReportCard() {
               <div className="overflow-x-auto rounded-xl border border-slate-200">
                 <table className="w-full text-[13px]">
                   <thead>
-                    <tr className="bg-ink text-white text-left text-[11.5px] uppercase tracking-wide">
+                    <tr className="bg-ink text-white text-left text-[11.5px] uppercase tracking-wide dark:bg-slate-200 dark:text-ink">
                       <th className="px-4 py-2.5 font-semibold">Area</th>
                       <th className="px-4 py-2.5 font-semibold text-center">Grade</th>
                       <th className="px-4 py-2.5 font-semibold">Remark</th>
@@ -914,7 +914,7 @@ export default function ReportCard() {
                       setCustomDraft((d) => ({ ...d, accent: e.target.value }))
                     }
                     className="w-28 font-mono"
-                    placeholder="#4F46E5"
+                    placeholder="#0C47CF"
                   />
                 </div>
                 <p className="text-[11.5px] text-slate-text/50 mt-1.5">

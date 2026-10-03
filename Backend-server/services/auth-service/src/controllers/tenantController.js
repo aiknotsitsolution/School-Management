@@ -2,6 +2,7 @@ const Plan = require("../models/Plan");
 const Subscription = require("../models/Subscription");
 const { CURRENT_SUBSCRIPTION_STATUSES, SCHEDULED_STATUSES } = require("../models/Subscription");
 const School = require("../models/School");
+const Branch = require("../models/Branch");
 const User = require("../models/User");
 const BillingInvoice = require("../models/BillingInvoice");
 const { writeAudit } = require("../utils/audit");
@@ -66,18 +67,20 @@ const listPublicPlans = async (req, res) => {
 };
 
 // Live usage vs plan limits. Counts platform user accounts inside this school
-// (the same measure the tenant's plan limits are expressed against).
+// (the same measure the tenant's plan limits are expressed against), plus the
+// campuses in use so the branches cap can be shown next to the others.
 const getMyUsage = async (req, res) => {
   try {
     const filter = { schoolId: req.tenantId, deletedAt: null };
-    const [students, teachers, staff, adminUsers, total] = await Promise.all([
+    const [students, teachers, staff, adminUsers, total, branches] = await Promise.all([
       User.countDocuments({ ...filter, role: "student" }),
       User.countDocuments({ ...filter, role: "teacher" }),
       User.countDocuments({ ...filter, role: "staff" }),
       User.countDocuments({ ...filter, role: "school_admin" }),
       User.countDocuments(filter),
+      Branch.countDocuments({ schoolId: req.tenantId, isDeleted: false }),
     ]);
-    res.json({ success: true, data: { students, teachers, staff, adminUsers, total } });
+    res.json({ success: true, data: { students, teachers, staff, adminUsers, total, branches } });
   } catch (err) {
     rawError(res, err);
   }

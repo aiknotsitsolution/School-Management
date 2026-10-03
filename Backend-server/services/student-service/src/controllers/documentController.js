@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const StudentDocument = require("../models/StudentDocument");
 const Student = require("../models/Student");
 const imagekit = require("@school-erp/shared/src/config/imagekit");
@@ -47,7 +48,8 @@ const uploadDocument = async (req, res) => {
 
     const doc = await StudentDocument.create({
       schoolId: req.tenantId,
-      studentId: String(targetStudentId).trim(),
+
+      branchId: branchIdForWrite(req),      studentId: String(targetStudentId).trim(),
       title: String(title).trim(),
       category,
       fileName: req.file.originalname,
@@ -80,19 +82,19 @@ const uploadDocument = async (req, res) => {
 // teacher's scope is verified against the student's class/section.
 const getDocuments = async (req, res) => {
   try {
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(StudentDocument, req, { schoolId: req.tenantId })
     if (req.user.role === "student") {
       filter.studentId = req.user.refId;
     } else if (req.query.studentId) {
       // For teachers, verify the student belongs to an assigned class/section.
       if (req.user.role === "teacher" && req.teacherScope) {
-        const student = await Student.findOne({
+        const student = await Student.findOne(scopeQuery(Student, req, {
           schoolId: req.tenantId,
           $or: [
             { admissionNo: req.query.studentId },
             { _id: req.query.studentId },
           ],
-        }).lean();
+        })).lean();
         if (!student || !req.teacherScope.has(student.class, student.section)) {
           return res.status(403).json({ success: false, message: "Access denied — student is not in your assigned classes" });
         }
@@ -116,7 +118,7 @@ const getDocuments = async (req, res) => {
 // in-tenant document.
 const deleteDocument = async (req, res) => {
   try {
-    const filter = { _id: req.params.id, schoolId: req.tenantId };
+    const filter = scopeQuery(StudentDocument, req, { _id: req.params.id, schoolId: req.tenantId })
     if (req.user.role === "student") filter.studentId = req.user.refId;
 
     const doc = await StudentDocument.findOneAndDelete(filter);

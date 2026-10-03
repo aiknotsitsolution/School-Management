@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const mongoose = require("mongoose");
 const Notification = require("../models/Notification");
 const { getUserModel } = require("../models/userLite");
@@ -54,11 +55,11 @@ const getNotifications = async (req, res) => {
       Notification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
       Notification.countDocuments(filter),
     ]);
-    const unreadCount = await Notification.countDocuments({
+    const unreadCount = await Notification.countDocuments(scopeQuery(Notification, req, {
       schoolId: req.tenantId,
       userId: String(req.user.id),
       read: false,
-    });
+    }));
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), unreadCount, data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });

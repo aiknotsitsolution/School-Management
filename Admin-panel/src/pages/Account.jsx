@@ -15,12 +15,15 @@ import {
   ArrowRight,
   Zap,
   Camera,
+  Trash2,
+  ImageOff,
 } from "lucide-react";
 import { PageIntro, Card, Pill, Input, Button, PasswordInput, toast } from "../components/UI";
 import { SegmentedTabs } from "../components/Pagination";
 import { selectUser, selectSchool } from "../store/selectors";
 import { setUser, setSchool as setSchoolAction } from "../store/authSlice";
 import { api } from "../lib/api";
+import { hasPermission } from "../lib/permissions";
 import { clearDismissConfigKey } from "../lib/session";
 import ProfilePhotoPicker from "../components/upload/ProfilePhotoPicker";
 
@@ -100,11 +103,33 @@ export default function Account() {
   const [currentSession, setCurrentSession] = useState(null);
   const [sessionForm, setSessionForm] = useState({ name: "", startDate: "", endDate: "" });
   const [sessionSaving, setSessionSaving] = useState(false);
+  // Distinct from "no session exists": GET /auth/sessions/current returns
+  // 200 {data:null} when the school has no session, but 403 when the caller
+  // lacks sessions:read. Collapsing both into `currentSession === null` told
+  // every teacher/student "No academic session defined yet" and offered a
+  // Create Session button that could only ever 403.
+  const [sessionError, setSessionError] = useState(null);
+  const [schoolError, setSchoolError] = useState(null);
 
   const [logoSaving, setLogoSaving] = useState(false);
   const [photoSaving, setPhotoSaving] = useState(false);
 
   const reduxSchool = useSelector(selectSchool);
+
+  // Backend guards (auth-service/src/routes/authRoutes.js:43-44 and
+  // sessionRoutes.js:23,25):
+  //   GET  /auth/school/me          -> verifyToken only (every tenant user)
+  //   PATCH /auth/school/me         -> school:settings
+  //   GET  /auth/sessions/current   -> sessions:read
+  //   POST/PATCH /auth/sessions     -> sessions:write
+  // So the org profile is readable by all, but nothing under it is editable
+  // without school:settings, and the session card must not even be requested
+  // without sessions:read.
+  const can = (permission) =>
+    hasPermission(reduxUser, permission) || hasPermission(profileData?.user, permission);
+  const canEditSchool = can("school:settings");
+  const canReadSessions = can("sessions:read");
+  const canWriteSessions = can("sessions:write");
 
   const confirmAcademicConfig = (session) => {
     const base = reduxSchool?.school || reduxSchool || {};
@@ -130,15 +155,40 @@ export default function Account() {
 
   useEffect(() => {
     if (activeTab !== "organization") return;
+    let cancelled = false;
+
     setSchoolLoading(true);
+    setSchoolError(null);
+    // GET /auth/school/me needs no permission, so this is safe for every
+    // tenant user. Surface failures instead of rendering an empty profile.
     api.school
       .me()
-      .then(({ data }) => setSchoolData(data))
-      .catch(() => {})
-      .finally(() => setSchoolLoading(false));
+      .then(({ data }) => {
+        if (!cancelled) setSchoolData(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setSchoolError(err?.message || "Could not load the organization profile");
+      })
+      .finally(() => {
+        if (!cancelled) setSchoolLoading(false);
+      });
+
+    // Sessions carry their own permission; do not issue a request that is
+    // guaranteed to 403, and never let a 403 masquerade as "no session".
+    if (!canReadSessions) {
+      setCurrentSession(null);
+      setSessionError(null);
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    setSessionError(null);
     api.sessions
       .current()
       .then(({ data }) => {
+        if (cancelled) return;
+        // data === null is the genuine "no session configured" case (200).
         setCurrentSession(data);
         setSessionForm({
           name: data?.name || "",
@@ -146,8 +196,18 @@ export default function Account() {
           endDate: data?.endDate ? String(data.endDate).slice(0, 10) : "",
         });
       })
-      .catch(() => {});
-  }, [activeTab]);
+      .catch((err) => {
+        if (cancelled) return;
+        setCurrentSession(null);
+        setSessionError(err?.message || "Could not load the current academic session");
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, canReadSessions]);
+
+  
 
   const handlePhotoChange = async (file) => {
     if (!file) return;
@@ -168,6 +228,7 @@ export default function Account() {
 
   const handleLogoChange = async (file) => {
     if (!file) return;
+    if (!canEditSchool) return toast("You do not have permission to change school settings", "error");
     if (!file.type || !file.type.startsWith("image/")) {
       toast("Please choose an image file", "error");
       return;
@@ -198,6 +259,7 @@ export default function Account() {
 
   const handleBannerChange = async (file) => {
     if (!file) return;
+    if (!canEditSchool) return toast("You do not have permission to change school settings", "error");
     if (!file.type || !file.type.startsWith("image/")) {
       toast("Please choose an image file", "error");
       return;
@@ -221,6 +283,22 @@ export default function Account() {
       toast("Dashboard banner updated");
     } catch (err) {
       toast(err.message || "Banner upload failed", "error");
+    } finally {
+      setLogoSaving(false);
+    }
+  };
+
+  const handleBannerRemove = async () => {
+    if (!canEditSchool) return toast("You do not have permission to change school settings", "error");
+    setLogoSaving(true);
+    try {
+      const { data } = await api.school.update({ bannerImage: "" });
+      dispatch(setSchoolAction(data));
+      localStorage.setItem("erp_school", JSON.stringify(data));
+      setSchoolData((d) => (d ? { ...d, settings: { ...d.settings, bannerImage: "" } } : d));
+      toast("Dashboard banner removed");
+    } catch (err) {
+      toast(err.message || "Could not remove banner", "error");
     } finally {
       setLogoSaving(false);
     }
@@ -257,6 +335,7 @@ export default function Account() {
   };
 
   const openSchoolEdit = () => {
+    if (!canEditSchool) return toast("You do not have permission to change school settings", "error");
     setSchoolForm({
       name: schoolData?.name || "",
       shortName: schoolData?.shortName || "",
@@ -275,6 +354,7 @@ export default function Account() {
   };
 
   const saveSchool = async () => {
+    if (!canEditSchool) return toast("You do not have permission to change school settings", "error");
     if (!schoolForm.name?.trim()) {
       toast("School name is required", "error");
       return;
@@ -306,6 +386,8 @@ export default function Account() {
   };
 
   const saveSessionConfig = async () => {
+    if (!canWriteSessions)
+      return toast("You do not have permission to manage academic sessions", "error");
     if (!sessionForm.startDate || !sessionForm.endDate) {
       toast("Session start and end dates are required", "error");
       return;
@@ -394,6 +476,8 @@ export default function Account() {
         <OrganizationTab
           school={schoolData}
           loading={schoolLoading}
+          error={schoolError}
+          canEdit={canEditSchool}
           editMode={schoolEdit}
           form={schoolForm}
           setForm={setSchoolForm}
@@ -404,6 +488,11 @@ export default function Account() {
           onLogoChange={handleLogoChange}
           logoSaving={logoSaving}
           onBannerChange={handleBannerChange}
+          onBannerRemove={handleBannerRemove}
+          bannerSaving={logoSaving}
+          canReadSessions={canReadSessions}
+          canWriteSessions={canWriteSessions}
+          sessionError={sessionError}
           currentSession={currentSession}
           sessionForm={sessionForm}
           setSessionForm={setSessionForm}
@@ -698,8 +787,6 @@ const ORG_SECTIONS = [
     title: "Affiliation & Recognition",
     fields: [
       { key: "board", label: "Affiliation Board" },
-      { key: "recognitionNumber", label: "Recognition / Affiliation No." },
-      { key: "recognitionAuthority", label: "Issuing Authority" },
       { key: "recognitionVerified", label: "Verification Status", readOnly: true },
     ],
   },
@@ -719,8 +806,6 @@ const orgFieldIcons = {
   state: MapPin,
   pincode: MapPin,
   board: Shield,
-  recognitionNumber: BadgeCheck,
-  recognitionAuthority: Shield,
   recognitionVerified: BadgeCheck,
 };
 
@@ -733,7 +818,7 @@ const orgFieldRender = {
   ),
 };
 
-function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onSave, onCancel, saving, onLogoChange, logoSaving, onBannerChange, currentSession, sessionForm, setSessionForm, onSaveSession, sessionSaving }) {
+function OrganizationTab({ school, loading, error, canEdit, editMode, form, setForm, onEdit, onSave, onCancel, saving, onLogoChange, logoSaving, onBannerChange, onBannerRemove, bannerSaving, canReadSessions, canWriteSessions, sessionError, currentSession, sessionForm, setSessionForm, onSaveSession, sessionSaving }) {
   const logoInputRef = useRef(null);
   const bannerInputRef = useRef(null);
 
@@ -741,6 +826,15 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
     return (
       <Card>
         <p className="text-[13px] text-slate-text/70">Loading organization profile…</p>
+      </Card>
+    );
+  }
+
+  // A failed read is not the same as an empty organization — say which it was.
+  if (error) {
+    return (
+      <Card>
+        <p className="text-[13px] text-slate-text/70">{error}</p>
       </Card>
     );
   }
@@ -780,17 +874,19 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
                 <span className="text-primary text-3xl font-display font-bold">{schoolInitial}</span>
               )}
             </div>
-            <label className="absolute inset-0 rounded-full bg-ink/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer">
-              <Camera size={18} className="text-white" />
-              <span className="text-[10px] font-semibold text-white">Change</span>
-              <input
-                ref={logoInputRef}
-                type="file"
-                accept="image/png,image/jpeg,image/webp"
-                className="sr-only"
-                onChange={handleLogoPick}
-              />
-            </label>
+            {canEdit && (
+              <label className="absolute inset-0 rounded-full bg-ink/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center cursor-pointer">
+                <Camera size={18} className="text-white" />
+                <span className="text-[10px] font-semibold text-white">Change</span>
+                <input
+                  ref={logoInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp"
+                  className="sr-only"
+                  onChange={handleLogoPick}
+                />
+              </label>
+            )}
           </div>
           <div>
             <h3 className="text-[15px] font-semibold text-ink">Organization Profile</h3>
@@ -798,10 +894,14 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
               School details captured during onboarding.
             </p>
             <p className="text-[11px] text-slate-text/50 mt-1">
-              {logoSaving ? "Uploading logo…" : "Hover over the logo to change it."}
+              {!canEdit
+                ? "Read only — your role cannot change school settings."
+                : logoSaving
+                  ? "Uploading logo…"
+                  : "Hover over the logo to change it."}
             </p>
           </div>
-          {!editMode && (
+          {canEdit && !editMode && (
             <button
               onClick={onEdit}
               className="ml-auto inline-flex items-center gap-1.5 px-3 py-1.5 text-[12.5px] font-semibold text-info hover:text-ink border border-info/20 hover:border-info/40 rounded-lg transition-colors"
@@ -813,33 +913,78 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
       </Card>
 
       <Card title="Dashboard Banner">
-        <div className="relative rounded-xl overflow-hidden bg-ink group cursor-pointer" style={{ height: 140 }}>
-          <img
-            src={school?.settings?.bannerImage || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1600&h=400&q=80"}
-            alt="Dashboard banner"
-            className="absolute inset-0 w-full h-full object-cover opacity-25"
-          />
-          <div className="absolute inset-0 bg-ink/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-white">
-            <Camera size={20} />
-            <span className="text-[12px] font-semibold">Change Banner Image</span>
+        {canEdit && school?.settings?.bannerImage && (
+          <div className="mb-2.5 flex justify-end">
+            <button
+              type="button"
+              onClick={onBannerRemove}
+              disabled={bannerSaving}
+              className="inline-flex items-center gap-1.5 rounded-control border border-line px-2.5 py-1.5 text-[11.5px] font-semibold text-brand-red transition hover:border-brand-red hover:bg-brand-red-light disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Trash2 size={13} />
+              {bannerSaving ? "Removing…" : "Remove"}
+            </button>
           </div>
-          <label className="absolute inset-0 cursor-pointer">
-            <input
-              ref={bannerInputRef}
-              type="file"
-              accept="image/png,image/jpeg,image/webp"
-              className="sr-only"
-              onChange={handleBannerPick}
+        )}
+        <div className="relative rounded-xl overflow-hidden bg-ink group cursor-pointer" style={{ height: 140 }}>
+          {school?.settings?.bannerImage ? (
+            <img
+              src={school.settings.bannerImage}
+              alt="Dashboard banner"
+              className="absolute inset-0 w-full h-full object-cover opacity-25"
             />
-          </label>
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-primary/30 via-ink to-ink text-white/60">
+              <ImageOff size={20} />
+              <span className="text-[12px] font-semibold">No banner image — plain gradient</span>
+            </div>
+          )}
+          {canEdit && (
+            <div className="absolute inset-0 bg-ink/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-white">
+              <Camera size={20} />
+              <span className="text-[12px] font-semibold">
+                {bannerSaving
+                  ? "Uploading…"
+                  : school?.settings?.bannerImage
+                    ? "Change Banner Image"
+                    : "Upload Banner Image"}
+              </span>
+            </div>
+          )}
+          {canEdit && (
+            <label className="absolute inset-0 cursor-pointer">
+              <input
+                ref={bannerInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp"
+                className="sr-only"
+                onChange={handleBannerPick}
+              />
+            </label>
+          )}
         </div>
         <p className="text-[11px] text-slate-text/50 mt-2">
-          This image appears as the background on the Admin Dashboard.
+          {!school?.settings?.bannerImage
+            ? "No image set — dashboards show the default gradient."
+            : canEdit
+              ? "Shown as the background on the Admin, Teacher, Staff and Parent dashboards."
+              : "Shown as the background on the Admin, Teacher, Staff and Parent dashboards. Read only — your role cannot change it."}
         </p>
       </Card>
 
-      <Card title="Academic Configuration">
-        <p className="text-[12.5px] text-slate-text/60 mb-4">
+      {/* Sessions are a separate permission from the org profile. Without
+          sessions:read the endpoint 403s, so the card is omitted entirely
+          rather than shown as an empty "create your first session" form the
+          user cannot use. */}
+        {canReadSessions && (
+          <Card title="Academic Configuration">
+            {sessionError ? (
+              <p className="text-[13px] text-slate-text/70">
+                Could not load the current academic session — {sessionError}
+              </p>
+            ) : (
+              <>
+            <p className="text-[12.5px] text-slate-text/60 mb-4">
           Defines the school year calendar. The session label is derived from the
           dates (e.g. 01 Apr 2026 – 31 Mar 2027 → "2026-27"). Once a session is
           live its name is locked because fees, assignments and marks reference
@@ -880,13 +1025,15 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
                 />
               </div>
             </div>
-            <button
-              onClick={onSaveSession}
-              disabled={sessionSaving}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
-            >
-              {sessionSaving ? "Saving…" : "Save Session"}
-            </button>
+            {canWriteSessions && (
+              <button
+                onClick={onSaveSession}
+                disabled={sessionSaving}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
+              >
+                {sessionSaving ? "Saving…" : "Save Session"}
+              </button>
+            )}
           </div>
         ) : (
           <div className="space-y-3.5">
@@ -911,16 +1058,25 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
                 />
               </div>
             </div>
-            <button
-              onClick={onSaveSession}
-              disabled={sessionSaving}
-              className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
-            >
-              {sessionSaving ? "Saving…" : "Create Session"}
-            </button>
+            {canWriteSessions ? (
+              <button
+                onClick={onSaveSession}
+                disabled={sessionSaving}
+                className="inline-flex items-center gap-1.5 px-3.5 py-2 text-[13px] font-semibold bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors disabled:opacity-50"
+              >
+                {sessionSaving ? "Saving…" : "Create Session"}
+              </button>
+            ) : (
+              <p className="text-[11px] text-slate-text/50">
+                Read only — your role cannot manage academic sessions.
+              </p>
+            )}
           </div>
         )}
-      </Card>
+              </>
+            )}
+          </Card>
+        )}
 
       {ORG_SECTIONS.map((section) => (
         <Card key={section.title} title={section.title}>
@@ -928,12 +1084,15 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
             {section.fields.map(({ key, label, type, required, readOnly }) => {
               const Icon = orgFieldIcons[key] || BadgeCheck;
               const value = school[key];
+              // Without school:settings the row is display-only even if a stale
+              // editMode were somehow still true.
+              const editable = canEdit && editMode && !readOnly;
 
               return (
                 <div key={key} className="flex items-center gap-3 py-3">
                   <Icon size={16} className="text-slate-text/50 shrink-0" />
                   <span className="text-[12px] text-slate-text/70 w-32 shrink-0">{label}</span>
-                  {editMode && !readOnly ? (
+                  {editable ? (
                     <Input
                       type={type || "text"}
                       value={form[key] || ""}
@@ -946,7 +1105,7 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
                   ) : (
                     <span className="text-[13px] font-medium text-ink break-words">{value || "—"}</span>
                   )}
-                  {key === "plan" && !editMode && (
+                  {key === "plan" && !editable && (
                     <Link
                       to="/subscription"
                       className={`inline-flex items-center gap-1.5 ml-auto text-[12px] font-semibold px-3 py-1.5 rounded-lg transition-colors shrink-0 ${
@@ -969,7 +1128,7 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
                       Read only
                     </span>
                   )}
-                  {required && editMode && !readOnly && (
+                  {required && editable && (
                     <span className="text-[10px] text-alert">*</span>
                   )}
                 </div>
@@ -979,7 +1138,7 @@ function OrganizationTab({ school, loading, editMode, form, setForm, onEdit, onS
         </Card>
       ))}
 
-      {editMode && (
+      {canEdit && editMode && (
         <div className="flex items-center gap-2">
           <button
             onClick={onCancel}

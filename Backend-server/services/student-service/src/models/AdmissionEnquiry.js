@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const enquirySchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the enquiry was received at.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     childName: { type: String, required: true, trim: true, minlength: 2 },
     parentName: { type: String, required: true, trim: true, minlength: 2 },
     classApplied: { type: String, required: true, trim: true },

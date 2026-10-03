@@ -9,7 +9,6 @@ import {
   Users,
   BarChart3,
   Heart,
-  ShieldAlert,
   Trophy,
 } from "lucide-react";
 import { Avatar, Pill, Card, toast } from "../../components/UI";
@@ -24,7 +23,6 @@ const TABS = [
   { key: "homework", label: "Homework", icon: ClipboardList },
   { key: "documents", label: "Documents", icon: FileText },
   { key: "health", label: "Health", icon: Heart },
-  { key: "behavior", label: "Behavior", icon: ShieldAlert },
   { key: "achievements", label: "Achievements", icon: Trophy },
   { key: "teachers", label: "Teachers", icon: Users },
 ];
@@ -112,7 +110,6 @@ export default function StudentDetailModal({ studentId, onClose }) {
               {tab === "homework" && <HomeworkTab student={student} />}
               {tab === "documents" && <DocumentsTab studentId={student.admissionNo || studentId} />}
               {tab === "health" && <HealthTab studentId={student.admissionNo || studentId} />}
-              {tab === "behavior" && <BehaviorTab student={student} />}
               {tab === "achievements" && <AchievementsTab student={student} />}
               {tab === "teachers" && <TeachersTab student={student} />}
             </div>
@@ -611,55 +608,6 @@ function HealthTab({ studentId }) {
           {health.notes && <Row label="Notes" value={health.notes} />}
         </>
       )}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
-/*  Behavior Tab                                                        */
-/* ------------------------------------------------------------------ */
-function BehaviorTab({ student }) {
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const [records, setRecords] = useState([]);
-
-  useEffect(() => {
-    if (!student) return;
-    setLoading(true);
-    api.behavior
-      .list(`studentId=${student.admissionNo}`)
-      .then(({ data }) => setRecords(Array.isArray(data) ? data : data?.data || []))
-      .catch((e) => setError(e.message))
-      .finally(() => setLoading(false));
-  }, [student]);
-
-  if (loading) return <LoadingBlock />;
-  if (error) return <ErrorBlock message={error} />;
-  if (records.length === 0) return <EmptyBlock message="No behavior records found." />;
-
-  const typeTone = {
-    incident: "alert", positive: "success", warning: "primary",
-    detention: "alert", suspension: "alert", other: "neutral",
-  };
-  const severityTone = { low: "info", medium: "primary", high: "alert", critical: "alert" };
-
-  return (
-    <div className="space-y-3">
-      {records.map((r) => (
-        <div key={r._id} className="px-4 py-3 rounded-xl bg-paper/60 border border-slate-100">
-          <div className="flex items-center justify-between gap-2 mb-1">
-            <p className="text-[13px] font-semibold text-ink">{r.title}</p>
-            <div className="flex gap-1.5 shrink-0">
-              <Pill tone={typeTone[r.type] || "neutral"}>{r.type}</Pill>
-              <Pill tone={severityTone[r.severity] || "neutral"}>{r.severity}</Pill>
-            </div>
-          </div>
-          <p className="text-[11.5px] text-slate-text/60">{fmtDate(r.date)}</p>
-          {r.description && <p className="text-[12px] text-slate-text/80 mt-1">{r.description}</p>}
-          {r.actionTaken && <p className="text-[12px] text-slate-text/80 mt-1"><span className="font-semibold">Action:</span> {r.actionTaken}</p>}
-          {r.resolved && <Pill tone="success">Resolved</Pill>}
-        </div>
-      ))}
     </div>
   );
 }

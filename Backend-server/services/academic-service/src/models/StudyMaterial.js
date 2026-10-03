@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const studyMaterialSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the material is published to.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     title: { type: String, required: true, trim: true },
     description: { type: String, default: "" },
     subject: { type: String, required: true, trim: true },
@@ -19,6 +21,6 @@ const studyMaterialSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-studyMaterialSchema.index({ schoolId: 1, class: 1, subject: 1 });
+studyMaterialSchema.index({ schoolId: 1, branchId: 1, class: 1, subject: 1 });
 
 module.exports = mongoose.model("StudyMaterial", studyMaterialSchema);

@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+﻿import { useState, useEffect } from "react";
 import { ScrollText, CheckCircle2, Circle, Clock } from "lucide-react";
 import { PageIntro, Card, Pill } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
 
 const STATUS_ICON = {
@@ -50,7 +51,7 @@ export default function Syllabus() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="Learning"
-        title="Syllabus"
+        title="Syllabus" art="syllabus"
         description="View your complete syllabus for all subjects."
       />
 
@@ -82,9 +83,7 @@ export default function Syllabus() {
       {!error && !loading && syllabus.length === 0 && (
         <Card>
           <div className="py-14 text-center">
-            <div className="w-14 h-14 rounded-2xl bg-ink/[0.04] flex items-center justify-center mx-auto mb-3">
-              <ScrollText size={24} className="text-slate-text/30" />
-            </div>
+            <PageArtwork name="syllabus" size={64} className="mx-auto mb-4" />
             <p className="text-[14px] font-semibold text-ink">No syllabus available</p>
             <p className="text-[12.5px] text-slate-text/60 mt-1 max-w-xs mx-auto">
               Syllabus for your class will appear here once uploaded by the school.

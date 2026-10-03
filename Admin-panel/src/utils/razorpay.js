@@ -39,7 +39,7 @@ export async function openRazorpayCheckout({ keyId, orderId, amount, currency = 
       order_id: orderId,
       name,
       description,
-      theme: { color: "#4f46e5" },
+      theme: { color: "#0c47cf" },
       handler: (payload) =>
         resolve({
           razorpay_order_id: payload.razorpay_order_id,

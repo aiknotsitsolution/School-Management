@@ -3,6 +3,10 @@ const mongoose = require("mongoose");
 const attendanceSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the student was marked at. Students are branch-tagged, so this is
+    // normally the student's own branch; recorded explicitly because a student
+    // can be marked in at a branch they are visiting.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     studentId: { type: String, required: true },
     class: { type: String, required: true },
     section: { type: String, required: true },

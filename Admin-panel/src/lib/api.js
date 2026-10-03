@@ -1,191 +1,13 @@
 import { store } from "../store";
-import { setTokens, logout } from "../store/authSlice";
+import { logout } from "../store/authSlice";
+import { onSocket } from "./socket";
+import { refreshAccessToken, scheduleRefresh } from "./tokenRefresh";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
   "https://school-management-production-e239.up.railway.app/api";
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
-
-// ── Centralised token refresh ──────────────────────────────────────────────
-// Render cold-starts can take 30-60 s.  We retry with exponential back-off
-// and coalesce concurrent callers so only ONE network request is in flight.
-
-let refreshPromise = null;
-let refreshTimer = null;
-let refreshRetries = 0;
-const MAX_REFRESH_RETRIES = 6;
-
-function doRefresh(refreshToken) {
-  if (!refreshToken)
-    return Promise.resolve({ ok: false, body: { success: false, message: "No refresh token" } });
-  if (!refreshPromise) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 30_000);
-    refreshPromise = fetch(`${API_BASE_URL}/auth/refresh-token`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ refreshToken }),
-      signal: controller.signal,
-    })
-      .then((r) => r.json().then((body) => ({ ok: r.ok, body })))
-      .catch(() => ({ ok: false, body: { success: false, message: "Refresh timeout" } }))
-      .finally(() => { clearTimeout(timeout); refreshPromise = null; });
-  }
-  return refreshPromise;
-}
-
-async function refreshAccessToken() {
-  const rt = store.getState().auth.refreshToken || localStorage.getItem("erp_refresh_token");
-  if (!rt) return false;
-  try {
-    const { ok, body } = await doRefresh(rt);
-    if (ok && body.data?.accessToken) {
-      store.dispatch(setTokens({
-        accessToken: body.data.accessToken,
-        refreshToken: body.data.refreshToken,
-      }));
-      refreshRetries = 0;
-      scheduleRefresh();
-      return true;
-    }
-  } catch {
-    // network / timeout — fall through to retry
-  }
-  return false;
-}
-
-function scheduleRefresh() {
-  if (refreshTimer) clearTimeout(refreshTimer);
-  refreshTimer = null;
-  const { auth } = store.getState();
-  const token = auth.accessToken;
-  if (!token) return;
-  try {
-    const payload = JSON.parse(atob(token.split(".")[1]));
-    const msUntilExpiry = payload.exp * 1000 - Date.now();
-    if (msUntilExpiry <= 0) {
-      refreshAccessToken().then((ok) => {
-        if (!ok) {
-          refreshRetries++;
-          if (refreshRetries < MAX_REFRESH_RETRIES) {
-            const delay = Math.min(5000 * Math.pow(1.5, refreshRetries - 1), 60_000);
-            setTimeout(() => scheduleRefresh(), delay);
-          }
-        }
-      });
-      return;
-    }
-    const refreshIn = Math.max(msUntilExpiry - 5 * 60 * 1000, 10_000);
-    refreshTimer = setTimeout(async () => {
-      const ok = await refreshAccessToken();
-      if (!ok) {
-        refreshRetries++;
-        if (refreshRetries < MAX_REFRESH_RETRIES) {
-          const delay = Math.min(5000 * Math.pow(1.5, refreshRetries - 1), 60_000);
-          setTimeout(() => scheduleRefresh(), delay);
-        }
-      }
-    }, refreshIn);
-  } catch {
-    // malformed token — will be caught by 401 handler
-  }
-}
-scheduleRefresh();
-
-// SSE subscriber built on fetch + ReadableStream so the Authorization header is
-// sent (EventSource cannot set headers). Auto-reconnects on error/timeout.
-function sseSubscribe(path, { onData, onStatus, delay = 3000 } = {})
-{
-  const controller = new AbortController();
-  let running = true;
-  let timer = null;
-
-  const connect = async () =>
-  {
-    if (controller.signal.aborted) return;
-    try
-    {
-      let { auth } = store.getState();
-      let token = auth.accessToken || localStorage.getItem("erp_access_token");
-      const user =
-        auth.user || JSON.parse(localStorage.getItem("erp_user") || "null");
-      const passiveSchoolId =
-        auth.activeSchoolId || localStorage.getItem("erp_active_school");
-      const includeSchoolHeader = user?.role === "super_admin" && passiveSchoolId;
-      const response = await fetch(`${API_BASE_URL}${path}`, {
-        headers: {
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(includeSchoolHeader ? { "X-School-Id": passiveSchoolId } : {}),
-        },
-        signal: controller.signal,
-      });
-      if (response.status === 401)
-      {
-        const ok = await refreshAccessToken();
-        if (ok)
-        {
-          onStatus?.("reconnecting");
-          if (running) timer = setTimeout(connect, delay);
-          return;
-        }
-        onStatus?.("reconnecting");
-        if (running) timer = setTimeout(connect, delay);
-        return;
-      }
-      if (response.status === 400)
-      {
-        onStatus?.("error");
-        return;
-      }
-      if (!response.ok || !response.body) throw new Error(`SSE ${response.status}`);
-      onStatus?.("connected");
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = "";
-      for (; ;)
-      {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        let idx;
-        while ((idx = buffer.indexOf("\n\n")) !== -1)
-        {
-          const block = buffer.slice(0, idx);
-          buffer = buffer.slice(idx + 2);
-          const dataLine = block
-            .split("\n")
-            .find((l) => l.startsWith("data: "));
-          if (dataLine)
-          {
-            try
-            {
-              onData?.(JSON.parse(dataLine.slice(6)));
-            } catch
-            {
-              /* ignore malformed frame */
-            }
-          }
-        }
-      }
-      onStatus?.("reconnecting");
-      if (running) timer = setTimeout(connect, delay);
-    } catch (err)
-    {
-      if (controller.signal.aborted) return;
-      onStatus?.("reconnecting");
-      if (running) timer = setTimeout(connect, delay);
-    }
-  };
-
-  connect();
-  return () =>
-  {
-    running = false;
-    if (timer) clearTimeout(timer);
-    controller.abort();
-  };
-}
 
 async function request(path, options = {})
 {
@@ -218,12 +40,19 @@ async function request(path, options = {})
   // BRANCH_SCOPE=on; until then the header is accepted and ignored.
   const activeBranchId =
     auth.activeBranchId || localStorage.getItem("erp_active_branch");
+  // While impersonating a tenant the server blocks writes unless this header
+  // says "write" — see resolveTenant in shared/src/middleware/tenant.js. Absent
+  // impersonation the header is not sent at all, so a normal admin or teacher
+  // request path is byte-for-byte unchanged.
+  const impersonateMode =
+    includeSchoolHeader && auth.impersonateReadOnly === false ? "write" : "read";
   const response = await fetch(`${API_BASE_URL}${path}`, {
     ...options,
     headers: {
       ...(isFormData ? {} : { "Content-Type": "application/json" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...(includeSchoolHeader ? { "X-School-Id": passiveSchoolId } : {}),
+      ...(includeSchoolHeader ? { "X-Impersonate-Mode": impersonateMode } : {}),
       ...(activeBranchId ? { "X-Branch-Id": activeBranchId } : {}),
       ...options.headers,
     },
@@ -252,7 +81,7 @@ async function request(path, options = {})
   return body;
 }
 
-export { scheduleRefresh };
+export { scheduleRefresh, refreshAccessToken };
 
 export const api = {
   login: (credentials) => request("/auth/login", json("POST", credentials)),
@@ -318,6 +147,14 @@ export const api = {
       request(`/branches/${id}/head-office`, json("POST", {})),
     remove: (id) => request(`/branches/${id}`, { method: "DELETE" }),
   },
+  // Feature-neutral place search, used by the branch form to turn a typed place
+  // name into coordinates. Separate from transport.searchPlaces so a school
+  // admin can locate a campus without holding a transport permission.
+  places: {
+    search: (q) => request(`/places/search?q=${encodeURIComponent(q)}`),
+    reverse: (lat, lng) =>
+      request(`/places/reverse?lat=${lat}&lng=${lng}`),
+  },
   sessions: {
     list: () => request("/auth/sessions"),
     get: (id) => request(`/auth/sessions/${id}`),
@@ -349,6 +186,8 @@ export const api = {
       generate: (type, params = "") => request(`/platform/reports/${type}${params ? `?${params}` : ""}`),
     },
     auditLogs: (params = "") => request(`/platform/audit-logs${params ? `?${params}` : ""}`),
+    recordImpersonation: (action, schoolId) =>
+      request("/platform/audit/impersonation", json("POST", { action, schoolId })),
     schools: {
       list: (params = "") => request(`/platform/schools${params ? `?${params}` : ""}`),
       get360: (id) => request(`/platform/schools/${id}`),
@@ -501,12 +340,6 @@ export const api = {
     get: (studentId) => request(`/health?studentId=${studentId}`),
     upsert: (data) => request("/health", json("PUT", data)),
   },
-  behavior: {
-    list: (params = "") => request(`/behavior${params ? `?${params}` : ""}`),
-    create: (item) => request("/behavior", json("POST", item)),
-    update: (id, item) => request(`/behavior/${id}`, json("PUT", item)),
-    remove: (id) => request(`/behavior/${id}`, { method: "DELETE" }),
-  },
   achievements: {
     list: (params = "") => request(`/achievements${params ? `?${params}` : ""}`),
     create: (item) => request("/achievements", json("POST", item)),
@@ -534,7 +367,6 @@ export const api = {
     list: (params = "") => request(`/timetable${params ? `?${params}` : ""}`),
     save: (item) => request("/timetable", json("POST", item)),
     remove: (id) => request(`/timetable/${id}`, { method: "DELETE" }),
-    generate: (payload) => request("/timetable/generate", json("POST", payload)),
     substitutions: {
       list: (params = "") =>
         request(`/timetable/substitutions${params ? `?${params}` : ""}`),
@@ -833,10 +665,23 @@ export const api = {
     unreadCount: () => request("/notifications/unread-count"),
     markRead: (id) => request(`/notifications/${id}/read`, json("PATCH", {})),
     markAllRead: () => request("/notifications/read-all", json("PATCH", {})),
-    subscribe: (handlers) => sseSubscribe("/notifications/stream", handlers),
+    // Realtime delivery moved to Socket.IO (lib/socket.js). The SSE endpoint is
+    // still mounted on the service for older clients, so this is a socket
+    // subscription rather than an EventSource.
+    subscribe: (handlers) => onSocket("notification:new", (payload) => handlers.onData?.(payload)),
   },
   attendanceStream: {
-    subscribe: (handlers) => sseSubscribe("/attendance-stream/stream", handlers),
+    // Socket.IO transport. The server namespaces the broadcast event
+    // "attendance.updated" as "attendance:updated" on the wire.
+    subscribe: (handlers) => onSocket("attendance:updated", (payload) => handlers.onData?.(payload)),
+  },
+  conversations: {
+    list: (params = "") => request(`/conversations${params ? `?${params}` : ""}`),
+    people: (q, params = "") =>
+      request(`/conversations/people?q=${encodeURIComponent(q)}${params ? `&${params}` : ""}`),
+    open: (item) => request("/conversations", json("POST", item)),
+    get: (id) => request(`/conversations/${id}`),
+    reply: (id, body) => request(`/conversations/${id}/reply`, json("POST", { body })),
   },
   events: {
     list: () => request("/events"),
@@ -935,13 +780,43 @@ export const api = {
     remove: (id) => request(`/hostel/${id}`, { method: "DELETE" }),
   },
   transport: {
-    list: () => request("/transport"),
+    list: (params = "") =>
+      request(`/transport${params ? `?${params}` : ""}`),
     create: (item) => request("/transport", json("POST", item)),
     update: (id, item) => request(`/transport/${id}`, json("PATCH", item)),
     updateLocation: (id, item) =>
       request(`/transport/${id}/location`, json("PATCH", item)),
     assign: (id, item) =>
       request(`/transport/${id}/assign`, json("PATCH", item)),
+    unassign: (id, item) =>
+      request(`/transport/${id}/unassign`, json("PATCH", item)),
+    // The signed-in student's own route (a parent's linked children). Scoped
+    // server-side from the token, so this never returns the whole fleet.
+    mine: () => request("/transport/me"),
+    // Place search for the route planner. Proxied through the backend so the
+    // geocoder credentials and rate policy stay server-side.
+    searchPlaces: (q) =>
+      request(`/transport/places/search?q=${encodeURIComponent(q)}`),
+    reversePlace: (lat, lng) =>
+      request(`/transport/places/reverse?lat=${lat}&lng=${lng}`),
+    trackingStatus: () => request("/transport/tracking/status"),
+    // Devices the provider account knows about, for the binding picker. Staff
+    // only — the provider credential stays on the server.
+    devices: () => request("/transport/devices"),
+    // Pass no id to preview a route that has not been created yet; with an id
+    // the plan is also checked against that route's stored stops.
+    previewPlan: (id, stops) =>
+      request(
+        id ? `/transport/${id}/plan/preview` : "/transport/plan/preview",
+        json("POST", { stops }),
+      ),
+    bindDevice: (id, item) =>
+      request(`/transport/${id}/bind-device`, json("POST", item)),
+    unbindDevice: (id) =>
+      request(`/transport/${id}/bind-device`, { method: "DELETE" }),
+    sync: (id) => request(`/transport/${id}/sync`, json("POST", {})),
+    history: (id, params = "") =>
+      request(`/transport/${id}/history${params ? `?${params}` : ""}`),
   },
   inventory: {
     list: () => request("/inventory"),

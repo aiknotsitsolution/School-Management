@@ -5,6 +5,7 @@ const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const { resolveTenant } = require("@school-erp/shared/src/middleware/tenant");
 const { requireSchoolActive } = require("@school-erp/shared/src/middleware/requireSchoolActive");
 const { requireSubscriptionActive } = require("@school-erp/shared/src/middleware/requireSubscriptionActive");
+const { resolveBranchScope } = require("@school-erp/shared/src/middleware/branchScope");
 const JWT_SECRET = getJwtSecret();
 
 const verifyToken = async (req, res, next) => {
@@ -43,7 +44,13 @@ const requireTenant = async (req, res, next) => {
   }
   return requireSchoolActive(req, res, (err) => {
     if (err) return next(err);
-    return requireSubscriptionActive(req, res, next);
+    // Branch scope is part of school context, so it resolves here rather than
+    // per route: every router already runs requireTenant, which keeps
+    // X-Branch-Id honoured on all endpoints without touching route files.
+    return requireSubscriptionActive(req, res, (subErr) => {
+      if (subErr) return next(subErr);
+      return resolveBranchScope(req, res, next);
+    });
   });
 };
 

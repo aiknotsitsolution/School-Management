@@ -4,11 +4,13 @@ const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions"
 const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const {
   scopeClassTeacher,
+  scopeClassTeacherAggregate,
   guardClassBody,
 } = require("@school-erp/shared/src/middleware/teacherScopeAuth");
 const { resolveTenant } = require("@school-erp/shared/src/middleware/tenant");
 const { requireSchoolActive } = require("@school-erp/shared/src/middleware/requireSchoolActive");
 const { requireSubscriptionActive } = require("@school-erp/shared/src/middleware/requireSubscriptionActive");
+const { resolveBranchScope } = require("@school-erp/shared/src/middleware/branchScope");
 const JWT_SECRET = getJwtSecret();
 
 const verifyToken = async (req, res, next) => {
@@ -34,6 +36,41 @@ const verifyToken = async (req, res, next) => {
       }
     }
     req.user = decoded;
+
+    // A student's class/section live on the Student record. User.class is only
+    // a denormalised copy, older accounts never received it, and the JWT is
+    // minted from User at login — so an empty claim here silently 403s every
+    // class-scoped student read (timetable, homework, exams), empties the
+    // substitution list (substitutionController) and blocks the homework gate
+    // (homeworkSubmissionController), even though /students/me happily returns
+    // the class. Resolve from the authority so a broken account works
+    // immediately: no backfill, no re-login.
+    //
+    // Scoped to exactly the broken case and loaded lazily, so the student
+    // mirror connection is never opened for teachers/admins or for accounts
+    // whose claim is already correct.
+    if (decoded.role === "student" && !decoded.class && decoded.refId) {
+      try {
+        const { getStudentModel } = require("../db/studentDb");
+        const Student = await getStudentModel();
+        const doc = await Student.findOne({
+          schoolId: decoded.schoolId,
+          admissionNo: decoded.refId,
+        })
+          .select("class section")
+          .lean();
+        if (doc && doc.class) {
+          req.user.class = doc.class;
+          req.user.section = doc.section || null;
+        }
+      } catch (resolveErr) {
+        // Deliberately swallowed: falling through leaves the empty claim, so
+        // the route's own scope middleware answers with its clear 403 instead
+        // of this becoming a 401/500 on a cosmetic field.
+        console.error("[verifyToken] student class resolve failed:", resolveErr.message);
+      }
+    }
+
     next();
   } catch (err) {
     return res.status(401).json({ success: false, message: "Invalid or expired token" });
@@ -46,7 +83,13 @@ const requireTenant = async (req, res, next) => {
   }
   return requireSchoolActive(req, res, (err) => {
     if (err) return next(err);
-    return requireSubscriptionActive(req, res, next);
+    // Branch scope is part of school context, so it resolves here rather than
+    // per route: every router already runs requireTenant, which keeps
+    // X-Branch-Id honoured on all endpoints without touching route files.
+    return requireSubscriptionActive(req, res, (subErr) => {
+      if (subErr) return next(subErr);
+      return resolveBranchScope(req, res, next);
+    });
   });
 };
 
@@ -123,9 +166,10 @@ const scopeStudentSchedule = ({ section = false } = {}) => (req, res, next) => {
 //     allScopes:     [{ class, section }],   // deduped union
 //     hasClassTeacher,
 //     has(class, section),                   // scope membership check
-//     class, section                         // resolved single-class address
+//     sectionsFor(class),                    // assigned sections of one class
+//     class, section, sections               // resolved request address
 //   }
 //
 // guardClassBody validates write bodies against req.teacherScope.allScopes.
 
-module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery, scopeStudentSchedule, scopeClassTeacher, guardClassBody };
+module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery, scopeStudentSchedule, scopeClassTeacher, scopeClassTeacherAggregate, guardClassBody };

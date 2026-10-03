@@ -68,7 +68,7 @@ export default function StaffCompleteProfile() {
         address: form.address.trim(),
       });
       if (complete) {
-        toast(data?.idCardNumber ? `Profile complete · ID card ${data.idCardNumber} issued` : "Profile complete");
+        toast(data?.idCardNumber ? `Profile complete · ID card for ${data.employeeId || "—"} issued` : "Profile complete");
       } else {
         toast("Profile saved");
       }
@@ -127,7 +127,7 @@ export default function StaffCompleteProfile() {
       {staff.profileStatus === "complete" && (
         <div className="rounded-xl border border-success/30 bg-success/5 text-[12.5px] text-ink px-4 py-3 mb-5 flex items-center gap-2">
           <CheckCircle2 size={15} className="text-success" />
-          This profile is complete. ID card {staff.idCardNumber ? `${staff.idCardNumber} is issued.` : "will be issued on completion."}
+          This profile is complete. ID card {staff.idCardIssuedAt ? `for ${staff.employeeId || "—"} is issued.` : "will be issued on completion."}
         </div>
       )}
 

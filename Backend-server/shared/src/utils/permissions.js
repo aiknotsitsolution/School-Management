@@ -17,6 +17,7 @@ const TEACHING_PERMISSIONS = [
   "timetable:read", "timetable:write", "homework:read", "homework:write",
   "exams:read", "marks:read", "notices:read", "notices:publish",
   "leaves:apply", "payroll:view",
+  "library:read",
   "promotion:read", "transfer:read", "rollover:read",
   "health:read", "health:write", "conduct:read", "conduct:write",
   "achievements:read", "achievements:write",
@@ -70,6 +71,7 @@ const ROLE_PERMISSIONS = {
     "transport:read", "transport:update", "inventory:read", "inventory:write",
     "payroll:view", "payroll:admin", "leaves:apply", "leaves:approve",
     "hostel:read", "hostel:manage", "users:manage", "school:settings",
+    "branches:read", "branches:write",
     "payments:settings", "sessions:read", "sessions:write",
     "promotion:read", "promotion:write", "transfer:read", "transfer:write",
     "rollover:read", "rollover:write",
@@ -82,9 +84,11 @@ const ROLE_PERMISSIONS = {
   // teacher token.
   teacher: [...TEACHING_PERMISSIONS],
   staff: [
+    "dashboard:view",
     "staff:read", "attendance:read", "attendance:mark",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
+    "library:read",
   ],
   student: [
     "dashboard:view", "attendance:read", "homework:read", "exams:read",
@@ -92,7 +96,7 @@ const ROLE_PERMISSIONS = {
     "transport:read", "hostel:read", "timetable:read",
     "profile:read", "profile:update",
     // Student-portal read surfaces (own records only — routes scope by
-    // refId): hostel room, conduct/behavior history, achievements.
+    // refId): hostel room, achievements.
     "conduct:read", "achievements:read",
     "leaves:apply",
   ],

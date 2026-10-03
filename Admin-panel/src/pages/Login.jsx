@@ -6,6 +6,8 @@ import { api, scheduleRefresh } from "../lib/api";
 import { setCredentials } from "../store/authSlice";
 import { PasswordInput } from "../components/UI";
 import { HeroDecor, FormDecor } from "../components/auth/AuthBackdrop";
+import { resolvePersona } from "../lib/persona";
+import { legacyRole } from "../lib/permissions";
 
 const brand = {
   name: "Zipschool OS",
@@ -14,14 +16,27 @@ const brand = {
   affiliation: "School Administration",
 };
 
-const roleHome = {
-  super_admin: "/platform",
-  school_admin: "/",
-  teacher: "/teacher-dashboard",
-  student: "/student-dashboard",
-  parent: "/parent-dashboard",
-  staff: "/staff-dashboard",
-};
+// Where each account lands after signing in. Staff personas resolve through
+// resolvePersona so this stays identical to HomeRedirect's role routing —
+// hardcoding the persona landings here previously sent every persona except
+// admission_counsellor to the generic /staff-dashboard instead of its own
+// workspace.
+function landingFor(user) {
+  const role = legacyRole(user?.role) || "school_admin";
+  if (role === "super_admin") return "/platform";
+  if (role === "school_admin") return "/dashboard";
+  if (role === "teacher") return "/teacher-dashboard";
+  if (role === "student") return "/student-dashboard";
+  if (role === "parent") return "/parent-dashboard";
+  if (role === "staff") {
+    const persona = resolvePersona(user);
+    if (persona?.landing && persona.landing !== "/staff-dashboard") {
+      return persona.landing;
+    }
+    return "/staff-dashboard";
+  }
+  return "/dashboard";
+}
 
 export default function Login() {
   const navigate = useNavigate();
@@ -46,18 +61,7 @@ export default function Login() {
         }),
       );
       scheduleRefresh();
-      const target = (() => {
-        if (data.user?.role === "staff" && data.user?.designation === "admission_counsellor") {
-          return "/admission-counsellor";
-        }
-        return (
-          roleHome[data.user?.role] ||
-          (data.user?.role === "admin" || data.user?.role === "staff"
-            ? "/"
-            : "/student-dashboard")
-        );
-      })();
-      navigate(target, { replace: true });
+      navigate(landingFor(data.user), { replace: true });
     } catch (requestError) {
       setError(requestError.message);
     } finally {
@@ -67,7 +71,7 @@ export default function Login() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-paper">
-      <div className="relative hidden lg:flex flex-col justify-between p-12 bg-ink text-white overflow-hidden">
+      <div className="relative hidden lg:flex flex-col justify-between p-12 bg-ink text-white overflow-hidden dark:bg-slate-200 dark:text-ink">
         <img
           src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1200&h=1400&fit=crop"
           alt=""
@@ -84,14 +88,14 @@ export default function Login() {
             <p className="font-display font-bold text-lg leading-tight">
               {brand.name}
             </p>
-            <p className="text-white/50 text-[12.5px]">{brand.tagline}</p>
+            <p className="text-white/50 dark:text-ink/50 text-[12.5px]">{brand.tagline}</p>
           </div>
         </div>
         <div className="relative z-10 max-w-md">
           <h2 className="font-display text-4xl font-bold leading-tight">
             One platform to run <span className="text-primary">every part of the school day.</span>
           </h2>
-          <p className="text-white/60 mt-4 text-[14.5px] leading-relaxed">
+          <p className="text-white/60 mt-4 text-[14.5px] leading-relaxed dark:text-ink/60">
             Attendance, admissions, fees, transport and communication — brought
             together for teachers, parents and administrators.
           </p>
@@ -100,19 +104,19 @@ export default function Login() {
               <p className="font-display text-2xl font-bold text-primary">
                 1,065
               </p>
-              <p className="text-white/50 text-[12px] mt-0.5">Students</p>
+              <p className="text-white/50 dark:text-ink/50 text-[12px] mt-0.5">Students</p>
             </div>
             <div>
               <p className="font-display text-2xl font-bold text-primary">96</p>
-              <p className="text-white/50 text-[12px] mt-0.5">Faculty</p>
+              <p className="text-white/50 dark:text-ink/50 text-[12px] mt-0.5">Faculty</p>
             </div>
             <div>
               <p className="font-display text-2xl font-bold text-primary">18</p>
-              <p className="text-white/50 text-[12px] mt-0.5">Years</p>
+              <p className="text-white/50 dark:text-ink/50 text-[12px] mt-0.5">Years</p>
             </div>
           </div>
         </div>
-        <p className="relative z-10 text-white/35 text-[12px]">
+        <p className="relative z-10 text-white/35 text-[12px] dark:text-ink/35">
           {brand.affiliation}
         </p>
       </div>

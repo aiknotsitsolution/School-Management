@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const { TransferCertificate, TcCounter } = require("../models/TransferCertificate");
 const Student = require("../models/Student");
 const { generateTcPdf } = require("../utils/tcPdf");
@@ -31,19 +32,19 @@ const issueTc = async (req, res) => {
       return res.status(400).json({ success: false, message: "studentId (Admission ID) is required" });
     }
 
-    const student = await Student.findOne({
+    const student = await Student.findOne(scopeQuery(Student, req, {
       schoolId: req.tenantId,
       admissionNo: studentId,
       deletedAt: null,
-    }).lean();
+    })).lean();
     if (!student) {
       return res.status(404).json({ success: false, message: "Student not found" });
     }
 
-    const existing = await TransferCertificate.findOne({
+    const existing = await TransferCertificate.findOne(scopeQuery(TransferCertificate, req, {
       schoolId: req.tenantId,
       studentId,
-    }).lean();
+    })).lean();
     if (existing) {
       return res.status(409).json({
         success: false,
@@ -55,7 +56,8 @@ const issueTc = async (req, res) => {
     const tcNumber = await allocateTcNumber(req.tenantId);
     const tc = await TransferCertificate.create({
       schoolId: req.tenantId,
-      tcNumber,
+
+      branchId: branchIdForWrite(req),      tcNumber,
       studentId,
       issueDate: req.body.issueDate ? new Date(req.body.issueDate) : new Date(),
       leavingDate: req.body.leavingDate ? new Date(req.body.leavingDate) : null,
@@ -92,7 +94,7 @@ const getTcs = async (req, res) => {
     const { studentId } = req.query;
     const page = Math.max(1, Number(req.query.page) || 1);
     const limit = Math.min(100, Number(req.query.limit) || 20);
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(TransferCertificate, req, { schoolId: req.tenantId })
     if (studentId) filter.studentId = String(studentId).trim();
 
     const [items, total] = await Promise.all([
@@ -111,7 +113,7 @@ const getTcs = async (req, res) => {
 
 const getTc = async (req, res) => {
   try {
-    const tc = await TransferCertificate.findOne({ _id: req.params.id, schoolId: req.tenantId }).lean();
+    const tc = await TransferCertificate.findOne(scopeQuery(TransferCertificate, req, { _id: req.params.id, schoolId: req.tenantId })).lean();
     if (!tc) return res.status(404).json({ success: false, message: "Transfer Certificate not found" });
     res.json({ success: true, data: tc });
   } catch (err) {
@@ -121,7 +123,7 @@ const getTc = async (req, res) => {
 
 const downloadTcPdf = async (req, res) => {
   try {
-    const tc = await TransferCertificate.findOne({ _id: req.params.id, schoolId: req.tenantId }).lean();
+    const tc = await TransferCertificate.findOne(scopeQuery(TransferCertificate, req, { _id: req.params.id, schoolId: req.tenantId })).lean();
     if (!tc) return res.status(404).json({ success: false, message: "Transfer Certificate not found" });
 
     let school = {};

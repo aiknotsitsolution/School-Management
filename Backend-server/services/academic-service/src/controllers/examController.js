@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Exam = require("../models/Exam");
 const Marks = require("../models/Marks");
 const ExamType = require("../models/ExamType");
@@ -58,7 +59,7 @@ const ACTIVE_FILTERS = {
 
 // Verify every master reference resolves inside THIS tenant. Rejects a value a
 // school has no right to (cross-tenant leakage) and keeps exam records tenant-consistent.
-async function validateMasterRefs(schoolId, body) {
+async function validateMasterRefs(schoolId, body, branchId) {
   if (!body) return;
   const toCheck = [];
   for (const field of EXAM_REF_FIELDS) {
@@ -74,7 +75,14 @@ async function validateMasterRefs(schoolId, body) {
   for (const [field, value] of toCheck) {
     const Model = TYPE_OF[field];
     const active = ACTIVE_FILTERS[field] || { active: true };
-    const exists = await Model.findOne({ _id: value, schoolId, ...active }).lean();
+    // Not scopeQuery(): this is an ownership check, not a list view, so it must
+    // stay branch-scoped even while the BRANCH_SCOPE rollout flag is still off.
+    const exists = await Model.findOne({
+      _id: value,
+      schoolId,
+      ...active,
+      ...(branchId ? { branchId } : {}),
+    }).lean();
     if (!exists) {
       const wrong = new Error(`Referenced ${field} does not exist for this school or is inactive`);
       wrong.status = 400;
@@ -88,7 +96,7 @@ async function validateMasterRefs(schoolId, body) {
 // is empty (legacy free-string exams keep working). On update, unchanged
 // values are skipped: a legacy stored value is never re-validated, only new or
 // changed values enter the dataset through the check.
-async function assertSnapshotRefs(schoolId, body, existing) {
+async function assertSnapshotRefs(schoolId, body, existing, branchId) {
   const same = (kind) => {
     const value = body && body[kind];
     if (value == null || String(value).trim() === "") return false;
@@ -102,7 +110,7 @@ async function assertSnapshotRefs(schoolId, body, existing) {
   for (const kind of ["class", "section", "subject", "room"]) {
     if (!same(kind)) owned[kind] = body ? body[kind] : undefined;
   }
-  const missing = await findMissingMasterRefs({ schoolId, ...owned });
+  const missing = await findMissingMasterRefs({ schoolId, branchId, ...owned });
   if (missing.length) {
     const wrong = new Error(missingMessage(missing));
     wrong.status = 400;
@@ -134,8 +142,8 @@ function toRefPayload(body) {
 
 const createExam = async (req, res) => {
   try {
-    await validateMasterRefs(req.tenantId, req.body);
-    await assertSnapshotRefs(req.tenantId, req.body);
+    await validateMasterRefs(req.tenantId, req.body, req.branchId);
+    await assertSnapshotRefs(req.tenantId, req.body, null, req.branchId);
     const slot = toTimeSlotPayload(req.body) || {};
     const refs = toRefPayload(req.body);
     const payload = pick(req.body, EXAM_FIELDS);
@@ -144,6 +152,7 @@ const createExam = async (req, res) => {
       ...slot,
       ...refs,
       schoolId: req.tenantId,
+      branchId: branchIdForWrite(req),
     });
     res.status(201).json({ success: true, data: exam });
   } catch (err) {
@@ -154,9 +163,14 @@ const createExam = async (req, res) => {
 const getExams = async (req, res) => {
   try {
     const { class: cls, section, subject, status, session, kind, term, cceTool } = req.query;
-    const filter = { schoolId: req.tenantId };
-    if (cls) filter.class = cls;
-    if (section) filter.section = section;
+    const filter = scopeQuery(Exam, req, { schoolId: req.tenantId })
+    // A teacher's exam list is pinned to the assignment scope the route already
+    // resolved; admins may filter freely.
+    if (req.teacherScope) filter.class = req.teacherScope.class;
+    else if (cls) filter.class = cls;
+    if (req.teacherScope && !section && req.teacherScope.sections) {
+      filter.section = { $in: req.teacherScope.sections };
+    } else if (section) filter.section = section;
     if (subject) filter.subject = subject;
     if (status) filter.status = status;
     if (session) filter.session = session;
@@ -176,7 +190,7 @@ const getExams = async (req, res) => {
 
 const updateExam = async (req, res) => {
   try {
-    const existing = await Exam.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const existing = await Exam.findOne(scopeQuery(Exam, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!existing) return res.status(404).json({ success: false, message: "Exam not found" });
 
     if (existing.status === "published") {
@@ -186,8 +200,8 @@ const updateExam = async (req, res) => {
       });
     }
 
-    await validateMasterRefs(req.tenantId, req.body);
-    await assertSnapshotRefs(req.tenantId, req.body, existing);
+    await validateMasterRefs(req.tenantId, req.body, req.branchId);
+    await assertSnapshotRefs(req.tenantId, req.body, existing, req.branchId);
 
     // Merge snapshot times with the existing record so a ref-only update never
     // blanks times, and an explicit startTime/endTime overrides them.
@@ -199,8 +213,8 @@ const updateExam = async (req, res) => {
       ...refs,
     };
 
-    const exam = await Exam.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const exam = await Exam.findOneAndUpdate(scopeQuery(Exam, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       fields,
       { new: true, runValidators: true },
     );
@@ -212,7 +226,7 @@ const updateExam = async (req, res) => {
 
 const deleteExam = async (req, res) => {
   try {
-    const exam = await Exam.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const exam = await Exam.findOne(scopeQuery(Exam, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
     if (exam.status !== "draft") {
       return res.status(400).json({
@@ -220,7 +234,7 @@ const deleteExam = async (req, res) => {
         message: "Only draft exams can be deleted. Unpublish or revert the exam to draft first.",
       });
     }
-    await Marks.deleteMany({ schoolId: req.tenantId, examId: exam._id });
+    await Marks.deleteMany(scopeQuery(Marks, req, { schoolId: req.tenantId, examId: exam._id }));
     await Exam.deleteOne({ _id: exam._id });
     res.json({ success: true, message: "Exam deleted" });
   } catch (err) {
@@ -235,7 +249,7 @@ const updateExamStatus = async (req, res) => {
     if (!["draft", "reviewed", "published"].includes(status)) {
       return res.status(400).json({ success: false, message: "status must be draft, reviewed or published" });
     }
-    const exam = await Exam.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const exam = await Exam.findOne(scopeQuery(Exam, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
     if (exam.status === status) return res.json({ success: true, data: exam });
 
@@ -247,7 +261,7 @@ const updateExamStatus = async (req, res) => {
       });
     }
     if (status === "published") {
-      const count = await Marks.countDocuments({ schoolId: req.tenantId, examId: exam._id });
+      const count = await Marks.countDocuments(scopeQuery(Marks, req, { schoolId: req.tenantId, examId: exam._id }));
       if (count === 0) {
         return res.status(400).json({ success: false, message: "Cannot publish an exam with no marks entered." });
       }
@@ -255,9 +269,10 @@ const updateExamStatus = async (req, res) => {
     exam.status = status;
     await exam.save();
     if (status === "published") {
-      notifyClassStudents({
-        schoolId: req.tenantId,
-        class: exam.class,
+        notifyClassStudents({
+          schoolId: req.tenantId,
+          branchId: req.branchId,
+          class: exam.class,
         section: exam.section,
         title: "Results Published",
         message: `Results for ${exam.examName} (${exam.subject}) are now available.`,
@@ -277,7 +292,7 @@ const enterMarks = async (req, res) => {
     if (!Array.isArray(entries) || entries.length === 0) {
       return res.status(400).json({ success: false, message: "entries is required" });
     }
-    const exam = await Exam.findOne({ _id: examId, schoolId: req.tenantId });
+    const exam = await Exam.findOne(scopeQuery(Exam, req, { _id: examId, schoolId: req.tenantId }));
     if (!exam) return res.status(404).json({ success: false, message: "Exam not found" });
     if (exam.status === "published") {
       return res.status(400).json({
@@ -306,8 +321,8 @@ const enterMarks = async (req, res) => {
       const result = computeResultWith(scale, obtained, exam.maxMarks, passPct);
       // findOneAndUpdate skips the pre("save") grade hook, so grade/pct/passed
       // are computed here from the scale-aware grading util.
-      const doc = await Marks.findOneAndUpdate(
-        { schoolId: req.tenantId, studentId, examId, subject: exam.subject },
+      const doc = await Marks.findOneAndUpdate(scopeQuery(Marks, req, 
+        { schoolId: req.tenantId, studentId, examId, subject: exam.subject }),
         {
           schoolId: req.tenantId,
           studentId,
@@ -338,13 +353,13 @@ const enterMarks = async (req, res) => {
 const getMarks = async (req, res) => {
   try {
     const { examId, class: cls, section, session } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Marks, req, { schoolId: req.tenantId })
     if (req.user && (req.user.role === "student" || req.user.role === "parent")) {
       // Students are locked to their own records and parents to their linked
       // children, and BOTH only ever see published results (scopeStudentQuery
       // mirrors the self-scoping at the route).
       filter.studentId = req.query.studentId;
-      const published = await Exam.find({ schoolId: req.tenantId, status: "published" })
+      const published = await Exam.find(scopeQuery(Exam, req, { schoolId: req.tenantId, status: "published" }))
         .select("_id")
         .lean();
       filter.examId = { $in: published.map((e) => e._id) };
@@ -374,10 +389,11 @@ const getMarks = async (req, res) => {
 };
 
 // examId -> { status, session } map for a report card's mark rows.
-async function examStatusMap(schoolId, marks) {
-  const ids = [...new Set(marks.map((m) => String(m.examId)).filter(Boolean))];
-  if (!ids.length) return new Map();
-  const exams = await Exam.find({ _id: { $in: ids }, schoolId })
+async function examStatusMap(schoolId, branchId, marks) {
+    const ids = [...new Set(marks.map((m) => String(m.examId)).filter(Boolean))];
+    if (!ids.length) return new Map();
+    const filter = { _id: { $in: ids }, schoolId, ...(branchId ? { branchId } : {}) };
+    const exams = await Exam.find(filter)
     .select("_id status session")
     .lean();
   return new Map(exams.map((exam) => [String(exam._id), exam]));
@@ -392,19 +408,19 @@ function includeDrafts(req) {
 
 // Shared report-card builder: the JSON endpoint and the PDF endpoint both
 // render this payload so the on-screen card and the printable PDF never drift.
-async function buildReportCard(schoolId, opts) {
+async function buildReportCard(schoolId, branchId, opts) {
   const { studentId: rawStudentId, examName, session, includeDrafts: drafts, teacherScope } = opts;
   const sessionParam = session ? String(session).trim() : "";
   const studentId = await resolveStudentAdmissionNo(schoolId, rawStudentId);
 
-  const filter = { schoolId, studentId };
+    const filter = { schoolId, ...(branchId ? { branchId } : {}), studentId };
   if (teacherScope) filter.class = teacherScope.class;
   if (examName) filter.examName = examName;
   if (sessionParam) filter.session = sessionParam;
   const marks = await Marks.find(filter).sort({ subject: 1 });
 
   const seeAll = drafts;
-  const statusById = await examStatusMap(schoolId, marks);
+    const statusById = await examStatusMap(schoolId, branchId, marks);
   const visible = marks.filter((m) => {
     if (seeAll) return true;
     const exam = statusById.get(String(m.examId));
@@ -448,10 +464,11 @@ async function buildReportCard(schoolId, opts) {
   let totalStudents = 0;
   if (visible.length) {
     const anchor = visible.find((m) => m.class) || null;
-    const cohortFilter = {
-      schoolId,
-      examId: { $in: visible.map((m) => m.examId) },
-    };
+      const cohortFilter = {
+        schoolId,
+        ...(branchId ? { branchId } : {}),
+        examId: { $in: visible.map((m) => m.examId) },
+      };
     if (anchor) {
       cohortFilter.class = anchor.class;
       if (anchor.section) cohortFilter.section = anchor.section;
@@ -480,7 +497,7 @@ async function buildReportCard(schoolId, opts) {
   let attendance = null;
   {
     const window = sessEcho ? await fetchSessionWindow(schoolId, sessEcho) : null;
-    const dateFilter = { schoolId, studentId };
+      const dateFilter = { schoolId, ...(branchId ? { branchId } : {}), studentId };
     if (window && window.startDate && window.endDate) {
       const end = new Date(window.endDate);
       end.setHours(23, 59, 59, 999);
@@ -536,7 +553,7 @@ const getReportCard = async (req, res) => {
     if (!req.query.studentId) {
       return res.status(400).json({ success: false, message: "studentId is required" });
     }
-    const data = await buildReportCard(req.tenantId, {
+    const data = await buildReportCard(req.tenantId, req.branchId, {
       studentId: req.query.studentId,
       examName: req.query.examName,
       session: req.query.session,
@@ -556,7 +573,7 @@ const getReportCardPdf = async (req, res) => {
     if (!req.query.studentId) {
       return res.status(400).json({ success: false, message: "studentId is required" });
     }
-    const data = await buildReportCard(req.tenantId, {
+    const data = await buildReportCard(req.tenantId, req.branchId, {
       studentId: req.query.studentId,
       examName: req.query.examName,
       session: req.query.session,
@@ -567,7 +584,7 @@ const getReportCardPdf = async (req, res) => {
     let student = null;
     const Student = await tryStudentModel();
     if (Student) {
-      student = await Student.findOne({ schoolId: req.tenantId, admissionNo: data.studentId }).lean();
+      student = await Student.findOne(scopeQuery(Student, req, { schoolId: req.tenantId, admissionNo: data.studentId })).lean();
     }
     const buffer = await generateReportCardPdf(data, school, student);
     const rawName = (student && student.name) || data.studentId || "student";
@@ -595,14 +612,19 @@ const getClassSummary = async (req, res) => {
     if (!cls) return res.status(400).json({ success: false, message: "class is required" });
     const scale = await resolveScale(req.tenantId);
 
-    const filter = { schoolId: req.tenantId, class: cls };
+    const filter = scopeQuery(Marks, req, { schoolId: req.tenantId, class: cls })
+    if (req.teacherScope && !section && req.teacherScope.sections) {
+      // Class-level aggregate for a teacher: cover the sections they are
+      // assigned to, never every section of the class.
+      filter.section = { $in: req.teacherScope.sections };
+    }
     if (examName) filter.examName = examName;
     if (session) filter.session = session;
     const marks = await Marks.find(filter).lean();
 
     // Same publish visibility rule as the report card: students off, staff on.
     const seeAll = includeDrafts(req);
-    const statusById = await examStatusMap(req.tenantId, marks);
+    const statusById = await examStatusMap(req.tenantId, req.branchId, marks);
     const visible = marks.filter((m) => {
       if (seeAll) return true;
       const exam = statusById.get(String(m.examId));
@@ -679,8 +701,11 @@ const getTermRollup = async (req, res) => {
     if (!cls) return res.status(400).json({ success: false, message: "class is required" });
     if (!term) return res.status(400).json({ success: false, message: "term is required" });
 
-    const filter = { schoolId: req.tenantId, class: cls, term };
+    const filter = scopeQuery(Exam, req, { schoolId: req.tenantId, class: cls, term })
     if (section) filter.section = section;
+    else if (req.teacherScope && req.teacherScope.sections) {
+      filter.section = { $in: req.teacherScope.sections };
+    }
     if (session) filter.session = session;
     let exams = await Exam.find(filter)
       .select("_id examName subject status session date")
@@ -705,10 +730,10 @@ const getTermRollup = async (req, res) => {
       });
     }
 
-    const marks = await Marks.find({
+    const marks = await Marks.find(scopeQuery(Marks, req, {
       schoolId: req.tenantId,
       examId: { $in: exams.map((e) => e._id) },
-    }).lean();
+    })).lean();
     const scale = await resolveScale(req.tenantId);
 
     const byStudent = {};

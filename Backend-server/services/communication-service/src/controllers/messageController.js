@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Thread = require("../models/Thread");
 const Notification = require("../models/Notification");
 const { getUserModel } = require("../models/userLite");
@@ -96,7 +97,7 @@ const notify = async (schoolId, userIds, { title, message, link }) => {
 
 const listThreads = async (req, res) => {
   try {
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Thread, req, { schoolId: req.tenantId })
     if (req.query.studentId) filter.studentId = String(req.query.studentId);
     const role = req.user.role;
     if (role === "parent") {
@@ -110,12 +111,12 @@ const listThreads = async (req, res) => {
     } else if (role === "teacher") {
       // Teachers only see threads for children of classes they class-teach.
       const { TeacherAssignment, Staff } = await getStaffModels();
-      const mine = await TeacherAssignment.find({
+      const mine = await TeacherAssignment.find(scopeQuery(TeacherAssignment, req, {
         schoolId: req.tenantId,
         type: "class_teacher",
         status: "active",
         staffId: { $ne: null },
-      })
+      }))
         .select("staffId class section")
         .lean();
       const staffIds = [...new Set(mine.map((a) => String(a.staffId)))];
@@ -130,11 +131,11 @@ const listThreads = async (req, res) => {
         return res.json({ success: true, count: 0, total: 0, ...pageInfo(0, 1, 10), data: [] });
       }
       const Student = await getStudentModel();
-      const roster = await Student.find({
+      const roster = await Student.find(scopeQuery(Student, req, {
         schoolId: req.tenantId,
         status: "Active",
         $or: myClasses.map((a) => ({ class: a.class, section: a.section })),
-      })
+      }))
         .select("admissionNo")
         .lean();
       const admissionNos = [...new Set(roster.map((s) => String(s.admissionNo)).filter(Boolean))];
@@ -202,7 +203,7 @@ const createThread = async (req, res) => {
 
 const getThread = async (req, res) => {
   try {
-    const thread = await Thread.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const thread = await Thread.findOne(scopeQuery(Thread, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!thread) return res.status(404).json({ success: false, message: "Thread not found" });
     const allowed = await canAccessStudent(req, thread.studentId);
     if (!allowed) return res.status(403).json({ success: false, message: "Access denied" });
@@ -216,7 +217,7 @@ const replyToThread = async (req, res) => {
   try {
     const body = String(req.body.body || "").trim();
     if (!body) return res.status(400).json({ success: false, message: "body is required" });
-    const thread = await Thread.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const thread = await Thread.findOne(scopeQuery(Thread, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!thread) return res.status(404).json({ success: false, message: "Thread not found" });
     const allowed = await canAccessStudent(req, thread.studentId);
     if (!allowed) return res.status(403).json({ success: false, message: "Access denied" });

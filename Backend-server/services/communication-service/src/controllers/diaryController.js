@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const DiaryEntry = require("../models/DiaryEntry");
 const { resolveAudienceUserIds, insertFanout, visibleClassTagsFor, classTagFilters } = require("../services/audience");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
@@ -41,7 +42,7 @@ const createDiary = async (req, res) => {
 // own class-section(s).
 const listDiary = async (req, res) => {
   try {
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(DiaryEntry, req, { schoolId: req.tenantId })
     const ownTags = await visibleClassTagsFor({ tenantId: req.tenantId, user: req.user });
     if (ownTags !== null) {
       const tags = [...ownTags];
@@ -70,8 +71,8 @@ const updateDiary = async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ success: false, message: "Nothing to update" });
     }
-    const entry = await DiaryEntry.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const entry = await DiaryEntry.findOneAndUpdate(scopeQuery(DiaryEntry, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       { $set: updates },
       { new: true, runValidators: true },
     );
@@ -84,7 +85,7 @@ const updateDiary = async (req, res) => {
 
 const deleteDiary = async (req, res) => {
   try {
-    const entry = await DiaryEntry.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const entry = await DiaryEntry.findOneAndDelete(scopeQuery(DiaryEntry, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!entry) return res.status(404).json({ success: false, message: "Diary entry not found" });
     res.json({ success: true, message: "Diary entry deleted" });
   } catch (err) {

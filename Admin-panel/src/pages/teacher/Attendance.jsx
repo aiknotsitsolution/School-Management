@@ -15,6 +15,7 @@ import {
   StatCard,
   toast,
 } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import {
   AreaChart,
   Area,
@@ -179,7 +180,7 @@ export default function Attendance() {
     return (
       <Card>
         <div className="py-16 text-center">
-          <CalendarCheck size={40} className="mx-auto text-slate-text/30 mb-3" />
+          <PageArtwork name="attendance" size={64} className="mx-auto mb-4" />
           <p className="text-[15px] font-semibold text-ink">
             No class assigned yet
           </p>
@@ -195,7 +196,7 @@ export default function Attendance() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="My Teaching"
-        title="Attendance"
+        title="Attendance" art="attendance"
         description={`Daily attendance register for Class ${cls}${section ? `-${section}` : ""}.`}
       />
 

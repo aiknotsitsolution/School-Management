@@ -778,7 +778,7 @@ export default function Attendance() {
         {list.length > attPageSize && (
           <div className="flex items-center justify-between pt-4 mt-3 border-t border-slate-100">
             <p className="text-[12px] text-slate-text/55">
-              Showing {list.length === 0 ? 0 : (attSafePage - 1) * attPageSize + 1}â€“{Math.min(attSafePage * attPageSize, list.length)} of {list.length}
+              Showing {list.length === 0 ? 0 : (attSafePage - 1) * attPageSize + 1}–{Math.min(attSafePage * attPageSize, list.length)} of {list.length}
             </p>
             <div className="flex items-center gap-2">
               <Select

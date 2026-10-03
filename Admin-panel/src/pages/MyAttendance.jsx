@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import {
-  CalendarCheck,
   Clock,
+  CalendarCheck,
   CheckCircle2,
   XCircle,
   CarFront,
   Sun,
 } from "lucide-react";
 import { PageIntro, Card, Input, Button, Pill, StatCard, toast } from "../components/UI";
+import PageArtwork from "../components/PageArtwork";
 import { api } from "../lib/api";
 import useStaffContext, { fmtDate, todayISO, dateOf } from "./staff/useStaffContext";
 
@@ -101,7 +102,7 @@ export default function MyAttendance() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="Staff Tools"
-        title="My Attendance"
+        title="My Attendance" art="attendance"
         description="Mark and track your own daily attendance."
       />
 
@@ -194,7 +195,7 @@ export default function MyAttendance() {
             <p className="text-[13px] text-slate-text py-10 text-center">Loading…</p>
           ) : (records || []).length === 0 ? (
             <div className="py-10 text-center">
-              <CalendarCheck size={40} className="mx-auto text-slate-text/30 mb-3" />
+              <PageArtwork name="attendance" size={64} className="mx-auto mb-4" />
               <p className="text-[15px] font-semibold text-ink">No attendance recorded yet</p>
               <p className="text-[13px] text-slate-text/70 mt-1">Mark today&apos;s entry on the left to get started.</p>
             </div>

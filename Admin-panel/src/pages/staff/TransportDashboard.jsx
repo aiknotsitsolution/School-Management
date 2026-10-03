@@ -11,6 +11,8 @@ import {
   Navigation,
   Route as RouteIcon,
   Radio,
+  TrendingUp,
+  AlertTriangle,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "../../components/UI";
@@ -27,9 +29,15 @@ import {
   ListRow,
   EmptyPanel,
   DashboardSkeleton,
+  AlertStrip,
   ACCENTS,
   greeting,
 } from "../../components/dashboard/DashKit";
+import {
+  BarRowChart,
+  ProgressRing,
+  StatusStrip,
+} from "../../components/studentcharts/StudentCharts";
 
 const FLEET_LINKS = [
   { to: "/transport/routes", icon: MapPin, label: "Add / update routes", tone: ACCENTS.primary.icon },
@@ -79,6 +87,89 @@ export default function TransportDashboard() {
   const liveRouteIds = stats.liveRouteIds;
   const lastPing = stats.lastPing;
 
+  /** Share of the fleet currently reporting a GPS ping. */
+  const livePct = stats.routes > 0 ? (stats.live / stats.routes) * 100 : 0;
+
+  const trackedRoutes = useMemo(
+    () => routes.filter((r) => r.tracking?.enabled).length,
+    [routes],
+  );
+
+  /** Routes that are not yet operationally ready — the dispatcher's to-do list. */
+  const readiness = useMemo(
+    () => ({
+      noVehicle: routes.filter((r) => !r.vehicleNo).length,
+      noDriver: routes.filter((r) => !r.driverName).length,
+      empty: routes.filter((r) => !(r.assignedStudents?.length || 0)).length,
+      noStops: routes.filter((r) => !(r.stops?.length || 0)).length,
+    }),
+    [routes],
+  );
+
+  /** Students carried per route — shows load balance at a glance. */
+  const routeLoads = useMemo(
+    () =>
+      routes
+        .filter((r) => r.routeNo)
+        .map((r) => ({ label: `Route ${r.routeNo}`, value: r.assignedStudents?.length || 0 }))
+        .sort((a, b) => b.value - a.value)
+        .slice(0, 8),
+    [routes],
+  );
+
+  /** Mean speed across buses that are actually moving right now. */
+  const movingBuses = useMemo(
+    () => routes.filter((r) => liveRouteIds.has(r._id) && Number(r.currentLocation?.speedKmh) > 0),
+    [routes, liveRouteIds],
+  );
+  const meanSpeed = movingBuses.length
+    ? Math.round(
+        movingBuses.reduce((s, r) => s + Number(r.currentLocation.speedKmh || 0), 0) /
+          movingBuses.length,
+      )
+    : 0;
+
+  /** Planned distance across the fleet, straight from each route's computed plan. */
+  const plannedKm = useMemo(
+    () =>
+      Math.round(
+        routes.reduce((s, r) => s + Number(r.tracking?.routePlan?.totalKm || 0), 0),
+      ),
+    [routes],
+  );
+
+  /** One pip per route so the whole fleet's heartbeat is visible at once. */
+  const fleetHeartbeat = useMemo(
+    () =>
+      routes.map((r) => ({
+        id: r._id,
+        color: liveRouteIds.has(r._id) ? "success" : "slateLight",
+        label: `Route ${r.routeNo}${r.vehicleNo ? ` · ${r.vehicleNo}` : ""}`,
+      })),
+    [routes, liveRouteIds],
+  );
+
+  /** Only actionable fleet gaps — silent when everything is configured. */
+  const alerts = useMemo(() => {
+    const list = [];
+    if (stats.live === 0 && stats.routes > 0) {
+      list.push({ label: "No route is reporting live", tone: "warning" });
+    }
+    if (readiness.noDriver > 0) {
+      list.push({ label: `${readiness.noDriver} route${readiness.noDriver === 1 ? "" : "s"} without a driver`, tone: "alert" });
+    }
+    if (readiness.noVehicle > 0) {
+      list.push({ label: `${readiness.noVehicle} route${readiness.noVehicle === 1 ? "" : "s"} without a vehicle`, tone: "warning" });
+    }
+    if (readiness.empty > 0) {
+      list.push({ label: `${readiness.empty} route${readiness.empty === 1 ? "" : "s"} with no students`, tone: "info" });
+    }
+    if (stats.live > 0) {
+      list.push({ label: `${stats.live} route${stats.live === 1 ? "" : "s"} live now`, tone: "success" });
+    }
+    return list;
+  }, [stats.live, stats.routes, readiness]);
+
   return (
     <div className="space-y-5 sm:space-y-6">
       <HeroBanner
@@ -107,9 +198,8 @@ export default function TransportDashboard() {
       <QuickActions
         title="Fleet Shortcuts"
         icon={Sparkles}
-        columns={4}
-        action={
-          <button
+          action={
+            <button
             type="button"
             onClick={() => navigate("/transport/routes")}
             className="inline-flex items-center gap-2 rounded-xl bg-info px-3.5 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-blue-700"
@@ -119,6 +209,8 @@ export default function TransportDashboard() {
         }
         items={FLEET_LINKS}
       />
+
+      <AlertStrip items={alerts} />
 
       {loading ? (
         <DashboardSkeleton metricCols={4} />
@@ -157,11 +249,95 @@ export default function TransportDashboard() {
 
           <div className="grid gap-5 lg:grid-cols-3">
             <Panel
+              title="Students per route"
+              icon={TrendingUp}
+              iconTone={ACCENTS.violet.icon}
+              subtitle="Load balance across the fleet"
+              className="lg:col-span-2"
+              decor="route"
+              decorTone={ACCENTS.violet.text}
+            >
+              {routeLoads.length === 0 ? (
+                <EmptyPanel
+                  icon={TrendingUp}
+                  iconTone={ACCENTS.neutral.icon}
+                  title="No routes to compare"
+                  text="Once students are allocated, each route's load is charted here."
+                />
+              ) : (
+                <BarRowChart
+                  data={routeLoads}
+                  height={Math.max(150, routeLoads.length * 34)}
+                  max={Math.max(1, ...routeLoads.map((r) => r.value))}
+                  color="info"
+                  suffix=""
+                  tooltipLabel="Students"
+                />
+              )}
+            </Panel>
+
+            <Panel
+              title="Fleet status"
+              icon={Radio}
+              iconTone={ACCENTS.success.icon}
+              subtitle={`${trackedRoutes} of ${stats.routes} routes tracked`}
+              decor="pin"
+              decorTone={ACCENTS.success.text}
+            >
+              {stats.routes === 0 ? (
+                <EmptyPanel
+                  icon={Radio}
+                  iconTone={ACCENTS.neutral.icon}
+                  title="No fleet yet"
+                  text="Add a route to start tracking vehicles live."
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-4">
+                  <ProgressRing
+                    value={livePct}
+                    size={140}
+                    stroke={12}
+                    color={livePct > 0 ? "success" : "neutral"}
+                    label={`${Math.round(livePct)}%`}
+                    ariaLabel={`${Math.round(livePct)} percent of routes reporting live`}
+                  />
+                  <div className="grid w-full grid-cols-2 gap-2.5">
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2.5 text-center">
+                      <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-slate-text/60">
+                        Moving
+                      </p>
+                      <p className="mt-1 font-display text-[17px] font-bold text-emerald-600">
+                        {movingBuses.length}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-sky-100 bg-sky-50/70 px-3 py-2.5 text-center">
+                      <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-slate-text/60">
+                        Avg speed
+                      </p>
+                      <p className="mt-1 font-display text-[17px] font-bold text-sky-600">
+                        {meanSpeed} <span className="text-[11px] font-semibold">km/h</span>
+                      </p>
+                    </div>
+                  </div>
+                  {plannedKm > 0 && (
+                    <p className="w-full text-center text-[12px] leading-relaxed text-slate-text/60">
+                      {plannedKm} km of planned distance across all routes
+                    </p>
+                  )}
+                </div>
+              )}
+            </Panel>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            <Panel
               title="Route overview"
               icon={Bus}
               iconTone={ACCENTS.teal.icon}
               subtitle={`${stats.routes} route${stats.routes === 1 ? "" : "s"} configured`}
               className="lg:col-span-2"
+              decor="route"
+              decorTone={ACCENTS.info.text}
             >
               {routes.length === 0 ? (
                 <EmptyPanel
@@ -218,6 +394,8 @@ export default function TransportDashboard() {
                 icon={Gauge}
                 iconTone={ACCENTS.violet.icon}
                 subtitle="Common transport tasks"
+                decor="tasks"
+                decorTone={ACCENTS.violet.text}
               >
                 <div className="space-y-2.5">
                   <button
@@ -279,6 +457,8 @@ export default function TransportDashboard() {
                 icon={Radio}
                 iconTone={ACCENTS.success.icon}
                 subtitle="GPS pings from the driver app"
+                decor="pin"
+                decorTone={ACCENTS.success.text}
               >
                 <div className="space-y-3">
                   <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-slate-50/60 px-4 py-3.5">
@@ -303,10 +483,38 @@ export default function TransportDashboard() {
                     Last location received {dateOf(lastPing)} · tracks geolocation reported
                     by the driver app.
                   </p>
+                  {readiness.noDriver + readiness.noVehicle + readiness.empty + readiness.noStops > 0 && (
+                    <div className="flex items-start gap-2 rounded-xl border border-amber-100 bg-amber-50/70 px-3.5 py-2.5">
+                      <AlertTriangle size={15} className="mt-0.5 shrink-0 text-amber-500" aria-hidden="true" />
+                      <p className="text-[12px] leading-relaxed text-amber-700">
+                        {[
+                          readiness.noDriver ? `${readiness.noDriver} missing a driver` : null,
+                          readiness.noVehicle ? `${readiness.noVehicle} missing a vehicle` : null,
+                          readiness.noStops ? `${readiness.noStops} with no stops` : null,
+                          readiness.empty ? `${readiness.empty} with no students` : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" · ")}
+                      </p>
+                    </div>
+                  )}
                 </div>
               </Panel>
             </div>
           </div>
+
+          <Panel
+            title="Fleet heartbeat"
+            icon={Navigation}
+            iconTone={ACCENTS.neutral.icon}
+            subtitle="Every route, live or idle"
+            className="mt-5"
+          >
+            <StatusStrip
+              items={fleetHeartbeat}
+              emptyText="No routes configured yet"
+            />
+          </Panel>
         </>
       )}
     </div>

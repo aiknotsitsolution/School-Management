@@ -1,9 +1,15 @@
-// In-process fan-out hub for realtime notifications and events. Each
-// communication-service instance serves its own connected SSE clients, so an
-// in-memory EventEmitter is sufficient for single-instance deployments.
+// In-process fan-out hub for realtime notifications and events.
+//
+// Socket.IO is now the delivery transport (see realtime/socket.js). This module
+// stays as the single fan-out point every controller already calls into, and
+// forwards to Socket.IO rooms. The EventEmitter remains for the legacy SSE
+// routes, which are still mounted for older clients; both transports therefore
+// receive the same event from one call site.
+//
 // Channels are keyed per school + user for notifications, and per school +
 // event type for broadcast channels (attendance, etc.).
 const { EventEmitter } = require("node:events");
+const { emitToUser, emitToSchool } = require("./socket");
 
 const emitter = new EventEmitter();
 emitter.setMaxListeners(0);
@@ -13,6 +19,7 @@ const userKeyFor = (schoolId, userId) => `${String(schoolId)}:${String(userId)}`
 
 function publish(schoolId, userId, payload) {
   emitter.emit(userKeyFor(schoolId, userId), payload);
+  emitToUser(schoolId, userId, "notification:new", payload);
 }
 
 function subscribe(schoolId, userId, handler) {
@@ -29,7 +36,11 @@ const broadcastKeyFor = (schoolId, event) =>
   `school:${String(schoolId)}:event:${String(event)}`;
 
 function broadcast(schoolId, event, payload) {
-  emitter.emit(broadcastKeyFor(schoolId, event), { event, ...payload });
+  const body = { event, ...payload };
+  emitter.emit(broadcastKeyFor(schoolId, event), body);
+  // The socket event name is the domain name itself, so a client subscribes to
+  // "attendance:updated" rather than a generic envelope.
+  emitToSchool(schoolId, event.replace(/\./g, ":"), body);
 }
 
 function subscribeBroadcast(schoolId, event, handler) {

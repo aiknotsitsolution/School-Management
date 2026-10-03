@@ -20,10 +20,12 @@ import {
   toast,
 } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
+import BranchSelect from "../components/BranchSelect";
 import ProfilePhotoPicker from "../components/upload/ProfilePhotoPicker";
 import { SegmentedTabs } from "../components/Pagination";
 import { api } from "../lib/api";
 import { useMasterOptions } from "../hooks/useMasterOptions";
+import { useBranches } from "../hooks/useBranches";
 import OnboardedStudentsSection from "../components/onboard/OnboardedStudentsSection";
 
 const CLASS_OPTIONS_FALLBACK = [
@@ -68,6 +70,9 @@ const EMPTY_FORM = {
   phone: "",
   email: "",
   address: "",
+  // Empty = the campus the admin is currently working in; set it to admit a
+  // student straight into another one.
+  branchId: "",
 };
 
 function formatClassLabel(c) {
@@ -137,6 +142,7 @@ function PreviewRow({ label, value, className = "" }) {
 export default function AddStudent() {
   const { options: CLASS_OPTIONS } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
   const { options: SECTION_OPTIONS, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
+  const { branches, loading: branchesLoading } = useBranches();
   const [tab, setTab] = useState("students");
   const [addedCount, setAddedCount] = useState(0);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -145,6 +151,9 @@ export default function AddStudent() {
   const [photoFile, setPhotoFile] = useState(null);
   const [photoPreview, setPhotoPreview] = useState("");
   const [onboardingStudent, setOnboardingStudent] = useState(null);
+  // The "Onboard Student" modal (status + ID card) — opened by the students tab
+  // and, right after saving, by the form itself.
+  const [selected, setSelected] = useState(null);
   const [reloadToken, setReloadToken] = useState(0);
   const formRef = useRef(null);
   const filteredSections = useMemo(() => {
@@ -202,6 +211,9 @@ export default function AddStudent() {
     setPhotoPreview(student.photoUrl || "");
     setError("");
     setOnboardingStudent(student);
+    // Starting a fresh onboarding closes the status/ID-card modal — the admin
+    // is being taken to the form, not shown the previous record's summary.
+    setSelected(null);
     setTab("form");
     window.setTimeout(
       () => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
@@ -264,11 +276,20 @@ export default function AddStudent() {
         phone: form.phone.trim(),
         email: form.email.trim() || undefined,
         address: form.address.trim() || undefined,
+        // Campus of the admission. Only sent when the admin named one; the
+        // student otherwise lands in the campus they are currently working in.
+        ...(form.branchId ? { branchId: form.branchId } : {}),
         ...(photoUrl ? { photoUrl } : {}),
       };
 
+      // The response doubles as the modal's content: it carries the freshly
+      // computed profileStatus (and ID-card state), so "Onboard Student" opens
+      // on the exact doc just written — no refetch, and it also works for a
+      // student added straight from this form, who is not in the linked list
+      // above until they get a user account.
+      let saved = null;
       if (onboardingStudent) {
-        await api.students.update(onboardingStudent._id, {
+        const { data } = await api.students.update(onboardingStudent._id, {
           name: payload.name,
           admissionNo: payload.admissionNo,
           rollNo: payload.rollNo,
@@ -286,13 +307,22 @@ export default function AddStudent() {
           address: payload.address,
           ...(photoUrl ? { photoUrl } : {}),
         });
+        saved = data || null;
         setReloadToken((t) => t + 1);
         toast("Onboarding completed — student profile saved");
       } else {
-        await api.students.create(payload);
+        const { data } = await api.students.create(payload);
+        saved = data || null;
         toast("Student added successfully");
       }
       resetForm();
+      // Straight to the status/ID-card card: submitting the onboarding form is
+      // the moment the admin wants to issue the ID card, not to stare at a
+      // cleared form.
+      if (saved) {
+        setSelected(saved);
+        setTab("students");
+      }
     } catch (err) {
       setError(err.message || "Failed to save student. Please try again.");
     } finally {
@@ -322,7 +352,12 @@ export default function AddStudent() {
           { id: "form", label: "Onboarding Form", icon: ClipboardList },
         ]}
         active={tab}
-        onChange={setTab}
+        onChange={(id) => {
+          setTab(id);
+          // The modal belongs to the students tab; leaving that tab closes it
+          // instead of having it pop back on a later visit.
+          setSelected(null);
+        }}
       />
 
       {tab === "students" && (
@@ -330,6 +365,8 @@ export default function AddStudent() {
           onOnboardNow={startOnboarding}
           reloadToken={reloadToken}
           onTotalChange={setAddedCount}
+          selected={selected}
+          onSelect={setSelected}
         />
       )}
 
@@ -423,6 +460,21 @@ export default function AddStudent() {
                 placeholder="Select section"
               />
             </Field>
+
+            {branches.length > 1 && (
+              <Field
+                label="Campus"
+                hint="The account and every fee, attendance and report row for this student follow this campus."
+              >
+                <BranchSelect
+                  branches={branches}
+                  loading={branchesLoading}
+                  value={form.branchId}
+                  onChange={(val) => update("branchId", val)}
+                  placeholder="The campus you are working in"
+                />
+              </Field>
+            )}
 
             <Field label="Gender" required>
               <Select

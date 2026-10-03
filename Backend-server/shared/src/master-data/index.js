@@ -1,5 +1,6 @@
 const { getPermissionsFor } = require("../utils/permissions");
 const { assertAcademicRefs } = require("./assertAcademicRefs");
+const { withBranchScope, branchIdForWrite } = require("../middleware/branchScope");
 
 // ---------------------------------------------------------------------------
 // Platform-wide master-data factory.
@@ -46,6 +47,10 @@ const lifecycleOf = (ctx) => ctx.lifecycle || DEFAULT_LIFECYCLE;
 //   seeds() -> rows,                        // per-school defaults (seed on empty list)
 //   lifecycle: { field, active, inactive }, // lifecycle field contract
 //   defaults() -> extra fields,             // e.g. legacy scope:"tenant"
+//   branchScoped: boolean,                  // campus-owned master (classes,
+//                                            sections, subjects, rooms) vs a
+//                                            school-wide one (leave types,
+//                                            notice categories, time slots)
 // }
 // ---------------------------------------------------------------------------
 function createMasterController(config) {
@@ -70,13 +75,26 @@ function createMasterController(config) {
     createdBy: req.user?._id || req.user?.id || null,
   });
 
-  async function seedDefaults(ctx, schoolId) {
-    const docs = await ctx.model.countDocuments({ schoolId });
+  // Campus-owned masters additionally carry the active branch. A school-wide
+  // master (leave types, notice categories, ...) never does, so those stay
+  // shared across every campus. With no branch active the write is null, which
+  // keeps single-campus schools on exactly the pre-branch behaviour.
+  const branchOf = (req, ctx) => (ctx.branchScoped ? branchIdForWrite(req) : null);
+
+  // Read scope for one master. All branches -> no branch constraint at all.
+  const readScope = (req, ctx, extra = {}) =>
+    withBranchScope(req, { schoolId: req.tenantId, ...extra }, { allBranches: !ctx.branchScoped });
+
+  async function seedDefaults(ctx, schoolId, branchId) {
+    const base = { schoolId };
+    if (ctx.branchScoped && branchId) base.branchId = branchId;
+    const docs = await ctx.model.countDocuments(base);
     if (docs > 0) return false;
     const rows = (ctx.seeds ? ctx.seeds() : []).map((row) => ({
       ...row,
       schoolId,
       tenantId: schoolId,
+      ...(ctx.branchScoped ? { branchId: branchId || null } : {}),
     }));
     if (rows.length) {
       try {
@@ -92,8 +110,11 @@ function createMasterController(config) {
 
   // Returns the conflicting row or null. Used by create/update/restore so a
   // deactivated row still reserves its name until it is restored.
+  //
+  // Campus-owned masters only clash inside their own branch — "Grade 10" at the
+  // North campus must not be reported as a duplicate of the South campus's.
   async function findDuplicate(ctx, req, dupFilter, excludeId) {
-    const query = { schoolId: req.tenantId, ...dupFilter };
+    const query = readScope(req, ctx, { ...dupFilter });
     if (excludeId) query._id = { $ne: excludeId };
     return ctx.model.findOne(query).lean();
   }
@@ -104,9 +125,10 @@ function createMasterController(config) {
       if (!ctx) return res.status(404).json({ success: false, message: "Unknown master type" });
 
       const lc = lifecycleOf(ctx);
-      let docs = await ctx.model.find({ schoolId: req.tenantId, [lc.field]: lc.active }).sort(ctx.sort).lean();
-      if (docs.length === 0 && canWrite(req.user) && (await seedDefaults(ctx, req.tenantId))) {
-        docs = await ctx.model.find({ schoolId: req.tenantId, [lc.field]: lc.active }).sort(ctx.sort).lean();
+      const filter = readScope(req, ctx, { [lc.field]: lc.active });
+      let docs = await ctx.model.find(filter).sort(ctx.sort).lean();
+      if (docs.length === 0 && canWrite(req.user) && (await seedDefaults(ctx, req.tenantId, branchOf(req, ctx)))) {
+        docs = await ctx.model.find(filter).sort(ctx.sort).lean();
       }
       res.json({ success: true, count: docs.length, data: docs });
     } catch (err) {
@@ -152,6 +174,8 @@ function createMasterController(config) {
         ...(ctx.defaults ? ctx.defaults(req) : {}),
         ...payload,
         ...scoped(req),
+        // Stamped after the payload so a client cannot plant a foreign branchId.
+        ...(ctx.branchScoped ? { branchId: branchOf(req, ctx) } : {}),
       });
       await recordAudit(ctx, req, "created", doc);
       res.status(201).json({ success: true, data: doc });
@@ -175,7 +199,7 @@ function createMasterController(config) {
       if (!ctx) return res.status(404).json({ success: false, message: "Unknown master type" });
 
       const payload = ctx.build(req.body || {});
-      const doc = await ctx.model.findOne({ _id: req.params.id, schoolId: req.tenantId }).exec();
+      const doc = await ctx.model.findOne(readScope(req, ctx, { _id: req.params.id })).exec();
       if (!doc) return res.status(404).json({ success: false, message: `${ctx.label} not found` });
 
       const dupFilter = ctx.dupFilter ? ctx.dupFilter(payload) : null;
@@ -218,7 +242,7 @@ function createMasterController(config) {
       const lc = lifecycleOf(ctx);
       const doc = await ctx.model
         .findOneAndUpdate(
-          { _id: req.params.id, schoolId: req.tenantId },
+          readScope(req, ctx, { _id: req.params.id }),
           { [lc.field]: lc.inactive },
           { new: true },
         )
@@ -237,7 +261,7 @@ function createMasterController(config) {
       if (!ctx) return res.status(404).json({ success: false, message: "Unknown master type" });
 
       const lc = lifecycleOf(ctx);
-      const doc = await ctx.model.findOne({ _id: req.params.id, schoolId: req.tenantId }).exec();
+      const doc = await ctx.model.findOne(readScope(req, ctx, { _id: req.params.id })).exec();
       if (!doc) return res.status(404).json({ success: false, message: `${ctx.label} not found` });
 
       // Restoring brings the name back into the active set, so re-check it

@@ -1,3 +1,7 @@
+const {
+  scopeQuery,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const FeeStructure = require("../models/FeeStructure");
 const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
 
@@ -31,7 +35,11 @@ const createStructure = async (req, res) => {
   try {
     requireStructureValues(req.body);
     await assertAcademicRefs({ req, values: { class: req.body.class } });
-    const structure = await FeeStructure.create({ ...pick(req.body, STRUCTURE_FIELDS), schoolId: req.tenantId });
+      const structure = await FeeStructure.create({
+        ...pick(req.body, STRUCTURE_FIELDS),
+        schoolId: req.tenantId,
+        branchId: branchIdForWrite(req),
+      });
     res.status(201).json({ success: true, data: structure });
   } catch (err) {
     if (err.status) return res.status(err.status).json({ success: false, message: err.message });
@@ -45,7 +53,7 @@ const createStructure = async (req, res) => {
 const getStructures = async (req, res) => {
   try {
     const { class: cls, session, feeType, active } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(FeeStructure, req, { schoolId: req.tenantId })
     if (cls) filter.class = cls;
     if (session) filter.session = session;
     if (feeType) filter.feeType = feeType;
@@ -59,7 +67,7 @@ const getStructures = async (req, res) => {
 
 const updateStructure = async (req, res) => {
   try {
-    const struct = await FeeStructure.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const struct = await FeeStructure.findOne(scopeQuery(FeeStructure, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!struct) return res.status(404).json({ success: false, message: "Fee structure not found" });
 
     const updates = pick(req.body, STRUCTURE_FIELDS);
@@ -82,7 +90,7 @@ const updateStructure = async (req, res) => {
 
 const toggleActive = async (req, res) => {
   try {
-    const struct = await FeeStructure.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const struct = await FeeStructure.findOne(scopeQuery(FeeStructure, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!struct) return res.status(404).json({ success: false, message: "Fee structure not found" });
     struct.active = req.body.active !== undefined ? Boolean(req.body.active) : !struct.active;
     await struct.save();
@@ -94,7 +102,7 @@ const toggleActive = async (req, res) => {
 
 const deleteStructure = async (req, res) => {
   try {
-    const struct = await FeeStructure.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const struct = await FeeStructure.findOneAndDelete(scopeQuery(FeeStructure, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!struct) return res.status(404).json({ success: false, message: "Fee structure not found" });
     res.json({ success: true, message: "Fee structure removed" });
   } catch (err) {

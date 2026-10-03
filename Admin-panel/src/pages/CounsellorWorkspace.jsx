@@ -51,11 +51,11 @@ const today = () => new Date().toISOString().slice(0, 10);
 const isOpen = (enquiry) => !["Admitted", "Rejected"].includes(enquiry.status);
 
 const QUICK_LINKS = [
-  { to: "/addstudent", icon: UserPlus, label: "New admission", tone: ACCENTS.primary.icon },
-  { to: "/students", icon: Users, label: "All students", tone: ACCENTS.info.icon },
-  { to: "/students/complete", icon: BadgeCheck, label: "Complete profiles", tone: ACCENTS.success.icon },
-  { to: "/admission-enquiry", icon: ClipboardCheck, label: "Admission pipeline", tone: ACCENTS.violet.icon },
-  { to: "/attendance", icon: TrendingUp, label: "Track attendance", tone: ACCENTS.warn.icon },
+  { to: "/addstudent", icon: UserPlus, label: "New admission", accent: "primary" },
+  { to: "/students", icon: Users, label: "All students", accent: "info" },
+  { to: "/students/complete", icon: BadgeCheck, label: "Complete profiles", accent: "success" },
+  { to: "/admission-enquiry", icon: ClipboardCheck, label: "Admission pipeline", accent: "violet" },
+  { to: "/attendance", icon: TrendingUp, label: "Track attendance", accent: "warn" },
 ];
 
 export default function CounsellorWorkspace() {
@@ -161,9 +161,8 @@ export default function CounsellorWorkspace() {
       <QuickActions
         title="Admissions Shortcuts"
         icon={Sparkles}
-        columns={5}
-        action={
-          <Link
+          action={
+            <Link
             to="/addstudent"
             className="inline-flex items-center gap-2 rounded-xl bg-info px-3.5 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-blue-700"
           >
@@ -245,6 +244,8 @@ export default function CounsellorWorkspace() {
                   icon={TimerReset}
                   iconTone={ACCENTS.alert.icon}
                   subtitle={`${pipeline.followUpsDue} enquiry${pipeline.followUpsDue === 1 ? "" : "ies"} waiting on a call`}
+                  decor="phone"
+                  decorTone={ACCENTS.warn.text}
                 >
                   {dueFollowUps.length ? (
                     <div className="space-y-2.5">
@@ -276,6 +277,8 @@ export default function CounsellorWorkspace() {
                   icon={MapPin}
                   iconTone={ACCENTS.violet.icon}
                   subtitle={`${pipeline.scheduledVisits} famil${pipeline.scheduledVisits === 1 ? "y" : "ies"} expected on campus`}
+                  decor="pin"
+                  decorTone={ACCENTS.info.text}
                 >
                   {campusVisits.length ? (
                     <div className="space-y-2.5">
@@ -313,6 +316,8 @@ export default function CounsellorWorkspace() {
                 : `${total} result${total === 1 ? "" : "s"} · open a profile to complete it`
             }
             bodyClassName="px-5 sm:px-6 pb-5 pt-4"
+            decor="search"
+            decorTone={ACCENTS.violet.text}
           >
             <div className="relative mb-4 max-w-md">
               <Search
@@ -407,6 +412,8 @@ export default function CounsellorWorkspace() {
               icon={Sparkles}
               iconTone={ACCENTS.success.icon}
               subtitle="Fresh admissions added to the roll"
+              decor="people"
+              decorTone={ACCENTS.success.text}
             >
               <div className="grid gap-2.5 sm:grid-cols-3">
                 {stats.recent.slice(0, 3).map((s) => (

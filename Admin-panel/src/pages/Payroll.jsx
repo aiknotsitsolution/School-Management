@@ -727,7 +727,6 @@ export default function Payroll() {
               </div>
               <div className="text-right text-[11px] text-slate-text/50">
                 {school?.board && <p>Board: <span className="font-medium text-ink">{school.board}</span></p>}
-                {school?.recognitionNumber && <p>Affiliation: <span className="font-medium text-ink">{school.recognitionNumber}</span></p>}
               </div>
             </div>
 
@@ -824,8 +823,7 @@ export default function Payroll() {
               {/* Signature + footer */}
               <div className="flex items-end justify-between pt-2 border-t border-slate-200">
                 <div className="text-[12px] text-slate-text/50">
-                  {school?.recognitionAuthority && <p>Authority: {school.recognitionAuthority}</p>}
-                  <p className="mt-1">This is a computer-generated payslip.</p>
+                  <p>This is a computer-generated payslip.</p>
                 </div>
                 <div className="text-center">
                   <div className="border-t border-ink/30 w-40 pt-1 text-[12px] text-slate-text/60">

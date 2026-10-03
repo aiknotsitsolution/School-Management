@@ -1,3 +1,7 @@
+const {
+  scopeQuery,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const AdmissionEnquiry = require("../models/AdmissionEnquiry");
 const Student = require("../models/Student");
 const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
@@ -84,16 +88,17 @@ const ensureStudentShell = async ({
   classApplied,
   section,
 }) => {
-  const existing = await Student.findOne({
+  const existing = await Student.findOne(scopeQuery(Student, req, {
     schoolId: req.tenantId,
     admissionNo,
     deletedAt: null,
-  });
+  }));
   if (existing) return { shell: existing, created: false };
 
-  const data = {
-    schoolId: req.tenantId,
-    admissionNo,
+    const data = {
+      schoolId: req.tenantId,
+      branchId: branchIdForWrite(req),
+      admissionNo,
     userId: null,
     name: String(childName || "").trim() || "Pending Student",
   };
@@ -120,11 +125,11 @@ const ensureStudentShell = async ({
     // our findOne and create — the unique index won, so reuse that shell and
     // keep the confirmation idempotent instead of failing the request.
     if (isDuplicateKey(err)) {
-      const winner = await Student.findOne({
+      const winner = await Student.findOne(scopeQuery(Student, req, {
         schoolId: req.tenantId,
         admissionNo,
         deletedAt: null,
-      });
+      }));
       if (winner) return { shell: winner, created: false };
     }
     throw err;
@@ -142,18 +147,18 @@ const createEnquiry = async (req, res) => {
     if (fieldError) {
       return res.status(400).json({ success: false, message: fieldError });
     }
-    const { schoolId, status, admissionNo, id } = {
+    const check = await validateAdmission({
       schoolId: req.tenantId,
       ...req.body,
       id: undefined,
-    };
-    const check = await validateAdmission({ schoolId, status, admissionNo, id });
+    });
     if (check.error) {
       return res.status(check.error.status).json({ success: false, message: check.error.message });
     }
     const finalAdmissionNo =
       check.admissionNo !== undefined ? check.admissionNo : req.body.admissionNo || null;
 
+    const status = req.body.status;
     let createdShellId = null;
     if (status === "Admitted") {
       const admitted = await ensureStudentShell({
@@ -171,11 +176,12 @@ const createEnquiry = async (req, res) => {
 
     let enquiry;
     try {
-      enquiry = await AdmissionEnquiry.create({
-        ...pick(req.body, ENQUIRY_FIELDS),
-        schoolId: req.tenantId,
-        admissionNo: finalAdmissionNo,
-      });
+        enquiry = await AdmissionEnquiry.create({
+          ...pick(req.body, ENQUIRY_FIELDS),
+          schoolId: req.tenantId,
+          branchId: branchIdForWrite(req),
+          admissionNo: finalAdmissionNo,
+        });
     } catch (err) {
       if (createdShellId) await Student.deleteOne({ _id: createdShellId }).catch(() => {});
       throw err;
@@ -194,7 +200,7 @@ const createEnquiry = async (req, res) => {
 const getEnquiries = async (req, res) => {
   try {
     const { status } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(AdmissionEnquiry, req, { schoolId: req.tenantId })
     if (status) filter.status = status;
     const data = await AdmissionEnquiry.find(filter).sort({ createdAt: -1 });
     res.json({ success: true, count: data.length, data });
@@ -205,10 +211,10 @@ const getEnquiries = async (req, res) => {
 
 const updateEnquiry = async (req, res) => {
   try {
-    const enquiry = await AdmissionEnquiry.findOne({
+    const enquiry = await AdmissionEnquiry.findOne(scopeQuery(AdmissionEnquiry, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
-    });
+    }));
     if (!enquiry) {
       return res.status(404).json({ success: false, message: "Enquiry not found" });
     }
@@ -276,7 +282,7 @@ const updateEnquiry = async (req, res) => {
 
 const deleteEnquiry = async (req, res) => {
   try {
-    const enquiry = await AdmissionEnquiry.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const enquiry = await AdmissionEnquiry.findOneAndDelete(scopeQuery(AdmissionEnquiry, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!enquiry) return res.status(404).json({ success: false, message: "Enquiry not found" });
     res.json({ success: true, message: "Enquiry deleted" });
   } catch (err) {

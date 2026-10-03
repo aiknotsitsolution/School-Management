@@ -14,6 +14,7 @@ import {
   Inbox,
   BanknoteIcon,
   Landmark,
+  CalendarRange,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "../../components/UI";
@@ -31,14 +32,33 @@ import {
   ListRow,
   EmptyPanel,
   DashboardSkeleton,
+  AlertStrip,
   ACCENTS,
   greeting,
+  monthlyTrend,
 } from "../../components/dashboard/DashKit";
+import {
+  Sparkline,
+  TrendArea,
+  Donut,
+  ProgressRing,
+  StatusStrip,
+} from "../../components/studentcharts/StudentCharts";
+import { resolveColor } from "../../components/studentcharts/theme";
 
 const STATUS_TONE = {
   Paid: "success",
   Partial: "primary",
   Unpaid: "neutral",
+  Overdue: "alert",
+};
+
+// Invoice status → chart palette key, so the donut, the legend dots and the
+// metric accents all agree on what "Overdue" looks like.
+const STATUS_COLOR = {
+  Paid: "success",
+  Partial: "warning",
+  Unpaid: "slateLight",
   Overdue: "alert",
 };
 
@@ -121,6 +141,66 @@ export default function AccountantDashboard() {
   const collectionRate =
     invoicedTotal > 0 ? (stats.totalCollected / invoicedTotal) * 100 : 0;
 
+  /** Rupees collected per month — powers the trend area and the stat sparkline. */
+  const collectionTrend = useMemo(
+    () => monthlyTrend(payments, { dateKey: "paidOn", value: (p) => p.amount }),
+    [payments],
+  );
+
+  // TrendArea scales to `max`; give the rupee axis headroom above the best month
+  // so the area chart does not sit flush against its own ceiling.
+  const trendMax = useMemo(
+    () => Math.max(1, ...collectionTrend.map((b) => b.value)) * 1.15,
+    [collectionTrend],
+  );
+
+  const overdueCount = stats.byStatus.Overdue || 0;
+
+  /** Invoice status split for the donut; zero-count statuses are dropped. */
+  const statusSplit = useMemo(
+    () =>
+      Object.entries(stats.byStatus)
+        .filter(([, count]) => count > 0)
+        .map(([status, count]) => ({
+          name: status,
+          value: count,
+          color: STATUS_COLOR[status] || "slate",
+        })),
+    [stats.byStatus],
+  );
+
+  /** Newest payments as status pips. */
+  const paymentActivity = useMemo(
+    () =>
+      [...payments]
+        .sort((a, b) => new Date(b.paidOn || 0) - new Date(a.paidOn || 0))
+        .slice(0, 8)
+        .map((p, i) => ({
+          id: `${p._id}-${i}`,
+          color: "success",
+          label: `${fmtDate(p.paidOn)} · ${fmtMoney(p.amount)}`,
+        })),
+    [payments],
+  );
+
+  /** Only genuine desk actions — a permanently green strip is noise. */
+  const alerts = useMemo(() => {
+    const list = [];
+    if (overdueCount > 0) {
+      list.push({ label: `${overdueCount} overdue invoice${overdueCount === 1 ? "" : "s"}`, tone: "alert" });
+    }
+    if (stats.dueCount > 0) {
+      list.push({ label: `${fmtMoney(stats.outstanding)} outstanding across ${stats.dueCount} invoice${stats.dueCount === 1 ? "" : "s"}`, tone: "warning" });
+    }
+    if (invoicedTotal > 0 && collectionRate < 60) {
+      list.push({ label: `Only ${Math.round(collectionRate)}% of invoiced fees collected`, tone: "warning" });
+    }
+    if (stats.todayPaid > 0) {
+      list.push({ label: `${fmtMoney(stats.todayPaid)} collected today`, tone: "success" });
+    }
+    return list;
+  }, [overdueCount, stats.dueCount, stats.outstanding, stats.todayPaid, invoicedTotal, collectionRate]);
+
   return (
     <div className="space-y-5 sm:space-y-6">
       <HeroBanner
@@ -149,9 +229,8 @@ export default function AccountantDashboard() {
       <QuickActions
         title="Fee Desk Shortcuts"
         icon={Sparkles}
-        columns={5}
-        action={
-          <button
+          action={
+            <button
             type="button"
             onClick={() => navigate("/accountant/fees")}
             className="inline-flex items-center gap-2 rounded-xl bg-info px-3.5 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-blue-700"
@@ -161,6 +240,8 @@ export default function AccountantDashboard() {
         }
         items={QUICK_LINKS}
       />
+
+      <AlertStrip items={alerts} />
 
       {loading ? (
         <DashboardSkeleton metricCols={4} />
@@ -180,6 +261,7 @@ export default function AccountantDashboard() {
               value={fmtMoney(stats.monthPaid)}
               sub={`${monthPrefix.slice(5, 7)}/${monthPrefix.slice(0, 4)} period`}
               accent="primary"
+              chart={<Sparkline data={collectionTrend} color="primary" height={28} />}
             />
             <MetricCard
               icon={Wallet}
@@ -200,6 +282,84 @@ export default function AccountantDashboard() {
 
           <div className="grid gap-5 lg:grid-cols-3">
             <Panel
+              title="Collections by month"
+              icon={CalendarRange}
+              iconTone={ACCENTS.teal.icon}
+              subtitle="Rupees received per calendar month"
+              className="lg:col-span-2"
+              decor="ledger"
+              decorTone={ACCENTS.teal.text}
+            >
+              {collectionTrend.length === 0 ? (
+                <EmptyPanel
+                  icon={TrendingUp}
+                  iconTone={ACCENTS.neutral.icon}
+                  title="No collections recorded"
+                  text="Payments you log will build a month-by-month picture of fee income."
+                />
+              ) : (
+                <TrendArea
+                  data={collectionTrend}
+                  height={210}
+                  max={trendMax}
+                  color="teal"
+                  suffix=""
+                  tooltipLabel="Collected"
+                  footerFor={(b) => fmtMoney(b.value)}
+                />
+              )}
+            </Panel>
+
+            <Panel
+              title="Collection health"
+              icon={Wallet}
+              iconTone={ACCENTS.success.icon}
+              subtitle="Collected against invoiced"
+              decor="coins"
+              decorTone={ACCENTS.success.text}
+            >
+              {invoicedTotal === 0 ? (
+                <EmptyPanel
+                  icon={Wallet}
+                  iconTone={ACCENTS.neutral.icon}
+                  title="Nothing invoiced yet"
+                  text="Generate fee invoices to start measuring collection progress."
+                />
+              ) : (
+                <div className="flex flex-col items-center gap-4">
+                  <ProgressRing
+                    value={collectionRate}
+                    size={148}
+                    stroke={12}
+                    color={collectionRate >= 75 ? "success" : collectionRate >= 40 ? "warning" : "alert"}
+                    label={`${Math.round(collectionRate)}%`}
+                    ariaLabel={`${Math.round(collectionRate)} percent of invoiced fees collected`}
+                  />
+                  <div className="grid w-full grid-cols-2 gap-2.5">
+                    <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-3 py-2.5 text-center">
+                      <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-slate-text/60">
+                        Collected
+                      </p>
+                      <p className="mt-1 font-display text-[17px] font-bold text-emerald-600">
+                        {fmtMoney(stats.totalCollected)}
+                      </p>
+                    </div>
+                    <div className="rounded-xl border border-rose-100 bg-rose-50/70 px-3 py-2.5 text-center">
+                      <p className="text-[10.5px] font-bold uppercase tracking-[0.08em] text-slate-text/60">
+                        Outstanding
+                      </p>
+                      <p className="mt-1 font-display text-[17px] font-bold text-rose-500">
+                        {fmtMoney(stats.outstanding)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </Panel>
+          </div>
+
+          <div className="grid gap-5 lg:grid-cols-3">
+            <Panel
               title="Recent transactions"
               icon={Receipt}
               iconTone={ACCENTS.success.icon}
@@ -210,6 +370,8 @@ export default function AccountantDashboard() {
                   type="button"
                   onClick={() => navigate("/accountant/fees")}
                   className="inline-flex items-center gap-1 whitespace-nowrap text-[12.5px] font-semibold text-info transition-colors hover:text-blue-700"
+                  decor="ledger"
+                  decorTone={ACCENTS.success.text}
                 >
                   Manage fees <ArrowRight size={14} />
                 </button>
@@ -253,6 +415,8 @@ export default function AccountantDashboard() {
                 icon={Receipt}
                 iconTone={ACCENTS.violet.icon}
                 subtitle={`${invoices.length} invoice${invoices.length === 1 ? "" : "s"} on record`}
+                decor="sheet"
+                decorTone={ACCENTS.info.text}
               >
                 {invoices.length === 0 ? (
                   <EmptyPanel
@@ -262,18 +426,33 @@ export default function AccountantDashboard() {
                     text="Generate fee invoices to start tracking collections."
                   />
                 ) : (
-                  <div className="space-y-2.5">
-                    {["Paid", "Partial", "Unpaid", "Overdue"].map((s) => (
-                      <div
-                        key={s}
-                        className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5"
-                      >
-                        <Badge tone={STATUS_TONE[s]}>{s}</Badge>
-                        <span className="font-display text-[15px] font-bold text-ink">
-                          {stats.byStatus[s] || 0}
-                        </span>
-                      </div>
-                    ))}
+                  <div>
+                    <Donut
+                      data={statusSplit}
+                      height={188}
+                      centerValue={invoices.length}
+                      centerLabel="Invoices"
+                    />
+                    {/* Legend keeps the exact counts the donut can only imply, and
+                        its dots reuse STATUS_COLOR so the two never disagree. */}
+                    <div className="mt-3 space-y-1.5">
+                      {["Paid", "Partial", "Unpaid", "Overdue"].map((s) => {
+                        const count = stats.byStatus[s] || 0;
+                        return (
+                          <div key={s} className="flex items-center gap-2.5">
+                            <span
+                              className="h-2 w-2 shrink-0 rounded-full"
+                              style={{ background: resolveColor(STATUS_COLOR[s]) }}
+                              aria-hidden="true"
+                            />
+                            <Badge tone={STATUS_TONE[s]}>{s}</Badge>
+                            <span className="ml-auto font-display text-[14px] font-bold tabular-nums text-ink">
+                              {count}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </Panel>
@@ -283,6 +462,8 @@ export default function AccountantDashboard() {
                 icon={CreditCard}
                 iconTone={ACCENTS.info.icon}
                 subtitle="How families pay"
+                decor="coins"
+                decorTone={ACCENTS.violet.text}
               >
                 {Object.keys(stats.byMode).length === 0 ? (
                   <EmptyPanel
@@ -304,6 +485,15 @@ export default function AccountantDashboard() {
               </Panel>
             </div>
           </div>
+
+          <Panel
+            title="Payment activity"
+            icon={Receipt}
+            iconTone={ACCENTS.neutral.icon}
+            subtitle="Most recent receipts recorded"
+          >
+            <StatusStrip items={paymentActivity} emptyText="No payments recorded yet" />
+          </Panel>
 
           <div className="grid gap-3 sm:grid-cols-2">
             <button

@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Substitution = require("../models/Substitution");
 const Timetable = require("../models/Timetable");
 const { findCrossClassConflicts } = require("../utils/periodConflicts");
@@ -65,12 +66,12 @@ const createSubstitution = async (req, res) => {
 
     // The period must exist in the published timetable so the substitution can
     // never drift from the schedule (subject/room/teacher are derived from it).
-    const timetable = await Timetable.findOne({
+    const timetable = await Timetable.findOne(scopeQuery(Timetable, req, {
       schoolId: req.tenantId,
       class: cls,
       section,
       day: resolved.day,
-    }).lean();
+    })).lean();
     if (!timetable) {
       return res
         .status(400)
@@ -103,8 +104,9 @@ const createSubstitution = async (req, res) => {
     //      period being substituted, so it is never a double-booking).
     //  (b) against other active substitutions on the same date.
     const timetableClashes = await findCrossClassConflicts({
-      schoolId: req.tenantId,
-      day: resolved.day,
+        schoolId: req.tenantId,
+        branchId: req.branchId,
+        day: resolved.day,
       periods: [
         {
           teacherId: String(substituteTeacherId),
@@ -122,12 +124,12 @@ const createSubstitution = async (req, res) => {
         .json({ success: false, message: "Scheduling conflict detected", conflicts: timetableClashes });
     }
 
-    const otherSubs = await Substitution.find({
+    const otherSubs = await Substitution.find(scopeQuery(Substitution, req, {
       schoolId: req.tenantId,
       date,
       status: "scheduled",
       substituteTeacherId: String(substituteTeacherId),
-    }).lean();
+    })).lean();
     const subClashes = otherSubs
       .filter((o) => intervalsOverlap(o.startTime, o.endTime, startTime, endTime))
       .map(
@@ -145,7 +147,8 @@ const createSubstitution = async (req, res) => {
     try {
       created = await Substitution.create({
         schoolId: req.tenantId,
-        date,
+
+        branchId: branchIdForWrite(req),        date,
         day: resolved.day,
         class: cls,
         section,
@@ -184,9 +187,10 @@ const createSubstitution = async (req, res) => {
       kind: "system",
       link: "/teacher/timetable",
     });
-    notifyClassStudents({
-      schoolId: req.tenantId,
-      class: cls,
+      notifyClassStudents({
+        schoolId: req.tenantId,
+        branchId: req.branchId,
+        class: cls,
       section,
       title: "Teacher substitution",
       message:
@@ -207,7 +211,7 @@ const createSubstitution = async (req, res) => {
 // students only their own class; parents have no substitution view.
 const listSubstitutions = async (req, res) => {
   try {
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Substitution, req, { schoolId: req.tenantId })
     if (req.query.date) {
       filter.date = String(req.query.date);
     } else {
@@ -247,7 +251,7 @@ const setStatus = async (req, res) => {
         .status(400)
         .json({ success: false, message: "status must be 'completed' or 'cancelled'" });
     }
-    const doc = await Substitution.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const doc = await Substitution.findOne(scopeQuery(Substitution, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!doc) {
       return res.status(404).json({ success: false, message: "Substitution not found" });
     }
@@ -282,7 +286,7 @@ const setStatus = async (req, res) => {
 // DELETE /api/timetable/substitutions/:id
 const deleteSubstitution = async (req, res) => {
   try {
-    const doc = await Substitution.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const doc = await Substitution.findOne(scopeQuery(Substitution, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!doc) {
       return res.status(404).json({ success: false, message: "Substitution not found" });
     }

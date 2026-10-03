@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const MessageLog = require("../models/MessageLog");
 const { getUserModel } = require("../models/userLite");
 const { getStudentModel } = require("../db/studentDb");
@@ -218,7 +219,7 @@ const listLogs = async (req, res) => {
     const { page = 1, limit = 20 } = req.query;
     const p = Math.max(1, Number(page) || 1);
     const l = Math.min(50, Math.max(1, Number(limit) || 20));
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(MessageLog, req, { schoolId: req.tenantId })
     if (req.query.channel) filter.channel = String(req.query.channel);
     const [data, total] = await Promise.all([
       MessageLog.find(filter).sort({ createdAt: -1 }).skip((p - 1) * l).limit(l),

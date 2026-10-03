@@ -1,10 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
-import { BookOpenCheck, FileText, Send, CheckCircle2 } from "lucide-react";
+import { FileText, Send, CheckCircle2 } from "lucide-react";
 import { PageIntro, Card, Pill, Button, toast, Select } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
+import {
+  BarRowChart,
+  Donut,
+  ProgressRing,
+} from "../../components/studentcharts/StudentCharts";
+import { toneFor } from "../../components/studentcharts/theme";
 import FileDropzone from "../../components/upload/FileDropzone";
 import UploadProgress from "../../components/upload/UploadProgress";
 import AttachmentLinks from "../../components/upload/AttachmentLinks";
 import { api } from "../../lib/api";
+import { useCelebrate } from "../../components/celebration/CelebrationProvider";
+import { SUBMISSION_XP } from "../../lib/momentum";
 import useStudentContext, { fmtDate, dateOf } from "./useStudentContext";
 
 const HW_MAX_SIZE = 10 * 1024 * 1024;
@@ -22,6 +31,8 @@ export default function Homework() {
   const [items, setItems] = useState([]);
   const [submissions, setSubmissions] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A rejected class-scoped fetch is not an empty list — see Timetable.jsx.
+  const [error, setError] = useState("");
   const [subject, setSubject] = useState("all");
   const [active, setActive] = useState(null); // homework being submitted
   const [draft, setDraft] = useState("");
@@ -32,11 +43,15 @@ export default function Homework() {
     const cls = user?.class || "";
     const section = user?.section || "";
     setLoading(true);
+    setError("");
     Promise.all([
       api.homework
         .list(`class=${encodeURIComponent(cls)}&section=${encodeURIComponent(section)}`)
         .then(({ data }) => setItems(data || []))
-        .catch(() => setItems([])),
+        .catch((err) => {
+          setError(err?.message || "We couldn't load your homework.");
+          setItems([]);
+        }),
       api.homework.submissions
         .myList()
         .then(({ data }) => setSubmissions(data || []))
@@ -71,10 +86,59 @@ export default function Homework() {
   );
   const submittedCount = decorated.filter((h) => h.submission).length;
 
+  /** Submission status split for the donut. */
+  const statusSplit = useMemo(() => {
+    const counts = { Submitted: 0, Reviewed: 0, Pending: 0, Overdue: 0 };
+    decorated.forEach((h) => {
+      if (h.submission) {
+        if (h.submission.status === "Reviewed") counts.Reviewed += 1;
+        else counts.Submitted += 1;
+      } else if (h.overdue) {
+        counts.Overdue += 1;
+      } else {
+        counts.Pending += 1;
+      }
+    });
+    return [
+      { name: "Reviewed", value: counts.Reviewed, color: "success" },
+      { name: "Submitted", value: counts.Submitted, color: "info" },
+      { name: "Pending", value: counts.Pending, color: "warning" },
+      { name: "Overdue", value: counts.Overdue, color: "alert" },
+    ].filter((d) => d.value > 0);
+  }, [decorated]);
+
+  /** Share of assignments handed in — the headline number for this page. */
+  const submitRate = decorated.length ? Math.round((submittedCount / decorated.length) * 100) : 0;
+
+  /** Per-subject completion, weakest first so it reads as "what's left". */
+  const subjectProgress = useMemo(() => {
+    const buckets = new Map();
+    decorated.forEach((h) => {
+      const key = h.subject || "General";
+      if (!buckets.has(key)) buckets.set(key, { label: key, done: 0, total: 0 });
+      const b = buckets.get(key);
+      b.total += 1;
+      if (h.submission) b.done += 1;
+    });
+    return [...buckets.values()]
+      .map((b) => ({ ...b, value: b.total ? Math.round((b.done / b.total) * 100) : 0 }))
+      .sort((a, b) => a.value - b.value);
+  }, [decorated]);
+
+  /** Average marks given on reviewed work, as a percentage of max marks. */
+  const gradedPct = useMemo(() => {
+    const graded = decorated.filter((h) => h.submission?.marks != null && h.maxMarks);
+    if (!graded.length) return null;
+    const sum = graded.reduce((s, h) => s + (h.submission.marks / h.maxMarks) * 100, 0);
+    return Math.round(sum / graded.length);
+  }, [decorated]);
+
   const sorted = useMemo(
     () => [...visible].sort((a, b) => (a.dueDate || "").localeCompare(b.dueDate || "")),
     [visible],
   );
+
+  const celebrate = useCelebrate();
 
   const submit = async (hw) => {
     const text = draft.trim();
@@ -83,6 +147,8 @@ export default function Homework() {
       return;
     }
     setSaving(true);
+    const dueMs = hw?.dueDate ? new Date(hw.dueDate).getTime() : NaN;
+    const isLate = Number.isFinite(dueMs) && dueMs < Date.now();
     try {
       const { data } = await api.homework.submissions.submit(hw._id, { content: text, file });
       setSubmissions((prev) => [data, ...prev.filter((s) => String(s.homeworkId) !== String(hw._id))]);
@@ -90,6 +156,10 @@ export default function Homework() {
       setDraft("");
       setFile(null);
       toast("Submitted successfully", "success");
+      celebrate({
+        title: "Homework submitted",
+        message: `+${SUBMISSION_XP} XP · ${isLate ? "submitted, but late" : "submitted on time"} — streak safe`,
+      });
     } catch (err) {
       toast(err.message, "error");
     } finally {
@@ -101,19 +171,63 @@ export default function Homework() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="Academics"
-        title="Homework & Assignments"
+        title="Homework & Assignments" art="homework"
         description="View assignments for your class, submit your work online, and check teacher feedback."
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card>
+          <div className="flex flex-col items-center gap-3 py-2">
+            <ProgressRing
+              value={submitRate}
+              size={148}
+              stroke={13}
+              color={submitRate >= 75 ? "success" : submitRate >= 40 ? "warning" : "alert"}
+              label="Submitted"
+              sublabel={`of ${decorated.length} assignments`}
+              ariaLabel={`${submitRate} percent of assignments submitted`}
+            />
+            {statusSplit.length > 0 && (
+              <Donut data={statusSplit} height={124} centerValue={decorated.length} centerLabel="Tasks" />
+            )}
+          </div>
+        </Card>
+
+        <Card
+          className="lg:col-span-2"
+          title="Completion by Subject"
+          subtitle="Percentage of assignments handed in, weakest subject first"
+        >
+            <BarRowChart
+              data={subjectProgress}
+              height={Math.max(170, subjectProgress.length * 34)}
+              color="violet"
+              colorFor={(d) => toneFor(d.value)}
+              tooltipLabel="Submitted"
+              footerFor={(d) => `${d.done} of ${d.total} submitted`}
+            />
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <Card>
           <div className="p-1">
             <p className="font-display text-3xl font-bold text-ink">{decorated.length}</p>
             <p className="text-[11px] text-slate-text/60 mt-1">Assignments for your class</p>
           </div>
         </Card>
-        <Card><p className="font-display text-xl font-bold text-primary-dark">{submittedCount}</p><p className="text-[11px] text-slate-text/60 mt-1">Submitted</p></Card>
-        <Card><p className="font-display text-xl font-bold text-alert">{decorated.filter((h) => h.submission?.status === "Reviewed").length}</p><p className="text-[11px] text-slate-text/60 mt-1">Reviewed</p></Card>
+        <Card>
+          <p className="font-display text-xl font-bold text-primary-dark">{submittedCount}</p>
+          <p className="text-[11px] text-slate-text/60 mt-1">Submitted</p>
+        </Card>
+        <Card>
+          <p className="font-display text-xl font-bold text-alert">
+            {decorated.filter((h) => h.submission?.status === "Reviewed").length}
+          </p>
+          <p className="text-[11px] text-slate-text/60 mt-1">
+            Reviewed{gradedPct != null ? ` · avg ${gradedPct}%` : ""}
+          </p>
+        </Card>
       </div>
 
       <Card
@@ -132,9 +246,14 @@ export default function Homework() {
       >
         {loading ? (
           <p className="text-[13px] text-slate-text py-10 text-center">Loading…</p>
+        ) : error ? (
+          <div className="py-10 text-center">
+            <p className="text-[15px] font-semibold text-ink">Couldn&apos;t load your homework</p>
+            <p className="text-[13px] text-red-500 mt-1">{error}</p>
+          </div>
         ) : sorted.length === 0 ? (
           <div className="py-10 text-center">
-            <BookOpenCheck size={40} className="mx-auto text-slate-text/30 mb-3" />
+            <PageArtwork name="homework" size={64} className="mx-auto mb-4" />
             <p className="text-[15px] font-semibold text-ink">No homework assigned</p>
             <p className="text-[13px] text-slate-text/70 mt-1">New assignments from your teachers will appear here.</p>
           </div>

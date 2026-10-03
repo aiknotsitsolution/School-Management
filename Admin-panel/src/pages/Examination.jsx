@@ -345,6 +345,7 @@ export default function Examination() {
       <PageIntro
         eyebrow="Academics"
         title="Examination"
+        art="exams"
         description="Schedule and manage term examinations across all classes."
         right={
           canManageExams ? (

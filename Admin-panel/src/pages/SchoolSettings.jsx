@@ -280,30 +280,6 @@ export default function SchoolSettings() {
                     <option value="Other">Other</option>
                   </select>
                 </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Recognition / Affiliation No.</label>
-                  <Input
-                    value={form.recognitionNumber}
-                    onChange={(e) => setForm((f) => ({ ...f, recognitionNumber: e.target.value }))}
-                    placeholder="e.g. 2730456 / UGC-12345"
-                  />
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Issuing Authority</label>
-                  <select
-                    value={form.recognitionAuthority}
-                    onChange={(e) => setForm((f) => ({ ...f, recognitionAuthority: e.target.value }))}
-                    className="w-full h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  >
-                    <option value="">Select authority</option>
-                    <option value="CBSE">CBSE, New Delhi</option>
-                    <option value="CISCE">CISCE (ICSE), New Delhi</option>
-                    <option value="State Education Dept">State Education Department</option>
-                    <option value="UGC">UGC (University Grants Commission)</option>
-                    <option value="AICTE">AICTE</option>
-                    <option value="Other">Other</option>
-                  </select>
-                </div>
               </div>
               {school?.recognitionVerified && (
                 <div className="mt-2 flex items-center gap-2 text-[12px] text-success font-medium">

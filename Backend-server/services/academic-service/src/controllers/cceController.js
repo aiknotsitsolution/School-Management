@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const CoScholastic = require("../models/CoScholastic");
 const { resolveStudentAdmissionNo } = require("../services/academicYearService");
 
@@ -13,12 +14,12 @@ const getCoScholastic = async (req, res) => {
     if (!raw) return res.status(400).json({ success: false, message: "studentId is required" });
     if (!term) return res.status(400).json({ success: false, message: "term is required" });
     const studentId = await resolveStudentAdmissionNo(req.tenantId, raw);
-    const doc = await CoScholastic.findOne({
+    const doc = await CoScholastic.findOne(scopeQuery(CoScholastic, req, {
       schoolId: req.tenantId,
       studentId,
       term: String(term).trim(),
       session: session ? String(session).trim() : "",
-    }).lean();
+    })).lean();
     res.json({ success: true, data: doc || null });
   } catch (err) {
     res.status(err.status || 500).json({ success: false, message: err.message });

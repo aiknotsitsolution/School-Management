@@ -23,19 +23,23 @@ const addDays = (date, days) => new Date(date.getTime() + days * 24 * 60 * 60 * 
 // injection / ReDoS-style patterns; length-capped to bound scan cost.
 const escapeRegex = (term) =>
   String(term).slice(0, 100).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-const addMonths = (date, months) => {
+const addMonths = (date, months) =>
+{
   const d = new Date(date);
   d.setMonth(d.getMonth() + months);
   return d;
 };
 
-const generateInvoiceNumber = () => {
+const generateInvoiceNumber = () =>
+{
   const year = new Date().getUTCFullYear();
   return `INV-${year}-${crypto.randomBytes(3).toString("hex").toUpperCase()}`;
 };
 
-const asObjectId = (value, field) => {
-  if (!mongoose.Types.ObjectId.isValid(value)) {
+const asObjectId = (value, field) =>
+{
+  if (!mongoose.Types.ObjectId.isValid(value))
+  {
     const err = new Error(`${field} is invalid`);
     err.status = 400;
     throw err;
@@ -47,7 +51,8 @@ const isFiniteNumber = (v) => typeof v === "number" && Number.isFinite(v);
 const isNullableLimit = (v) => v === null || v === undefined || (isFiniteNumber(v) && v >= 0);
 
 // Build billing dates for a new subscription. Trial wins while it is running.
-const buildSubscriptionDates = (plan, startDate, durationPeriods = 1) => {
+const buildSubscriptionDates = (plan, startDate, durationPeriods = 1) =>
+{
   const start = new Date(startDate || new Date());
   const dur = Math.max(1, Math.min(99, Math.floor(Number(durationPeriods) || 1)));
   const dates = {
@@ -59,12 +64,14 @@ const buildSubscriptionDates = (plan, startDate, durationPeriods = 1) => {
     nextBillingDate: null,
     status: plan.trialDays > 0 ? "trialing" : "active",
   };
-  if (plan.trialDays > 0) {
+  if (plan.trialDays > 0)
+  {
     dates.trialStartDate = start;
     dates.trialEndDate = addDays(start, plan.trialDays);
     dates.currentPeriodEnd = dates.trialEndDate;
     dates.nextBillingDate = dates.trialEndDate;
-  } else {
+  } else
+  {
     const cycleMonths = plan.billingCycle === "yearly" ? 12 : 1;
     const totalMonths = cycleMonths * dur;
     dates.currentPeriodEnd = addMonths(start, totalMonths);
@@ -75,7 +82,8 @@ const buildSubscriptionDates = (plan, startDate, durationPeriods = 1) => {
 
 // Atomically close any current subscription for a school so the partial unique
 // index never allows two current subscriptions to coexist.
-const closeCurrentSubscriptions = async (schoolId, { reason = "superseded", extra = {} } = {}) => {
+const closeCurrentSubscriptions = async (schoolId, { reason = "superseded", extra = {} } = {}) =>
+{
   const cancelled = await Subscription.find(
     { schoolId, status: { $in: CURRENT_SUBSCRIPTION_STATUSES } },
     { _id: 1 }
@@ -93,7 +101,8 @@ const closeCurrentSubscriptions = async (schoolId, { reason = "superseded", extr
       },
     }
   );
-  if (cancelled.length) {
+  if (cancelled.length)
+  {
     const subIds = cancelled.map((s) => s._id);
     await BillingInvoice.updateMany(
       { subscriptionId: { $in: subIds }, status: "issued" },
@@ -108,7 +117,8 @@ const formatMoney = (planOrSub) => ({
   cycle: planOrSub.billingCycle,
 });
 
-const toSubscriptionJson = (raw) => {
+const toSubscriptionJson = (raw) =>
+{
   const school = raw.schoolId && raw.schoolId._id ? raw.schoolId : { _id: raw.schoolId };
   const plan = raw.planId && raw.planId._id ? raw.planId : { _id: raw.planId };
   return {
@@ -165,15 +175,18 @@ const toInvoiceJson = (raw) => ({
   createdAt: raw.createdAt,
 });
 
-const paginate = (req, defaultLimit = 25) => {
+const paginate = (req, defaultLimit = 25) =>
+{
   const page = Math.max(1, parseInt(req.query.page, 10) || 1);
   const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || defaultLimit));
   return { page, limit, skip: (page - 1) * limit };
 };
 
-const rawError = (res, err) => {
+const rawError = (res, err) =>
+{
   if (err.status) return res.status(err.status).json({ success: false, message: err.message });
-  if (err.code === 11000) {
+  if (err.code === 11000)
+  {
     return res.status(409).json({ success: false, message: "Duplicate entry violates a unique constraint" });
   }
   console.error("[platform] unexpected error:", err.message);
@@ -200,9 +213,11 @@ const PLAN_FIELDS = [
 ];
 const LIMIT_FIELDS = ["students", "staff", "teachers", "adminUsers", "branches", "storageGB"];
 
-function sanitizePlanPayload(body) {
+function sanitizePlanPayload(body)
+{
   const out = {};
-  for (const key of PLAN_FIELDS) {
+  for (const key of PLAN_FIELDS)
+  {
     if (body[key] !== undefined) out[key] = body[key];
   }
   if (out.name !== undefined) out.name = String(out.name).trim();
@@ -210,12 +225,16 @@ function sanitizePlanPayload(body) {
   if (out.description !== undefined) out.description = String(out.description).trim();
   if (out.currency !== undefined) out.currency = String(out.currency).trim().toUpperCase();
   if (out.features !== undefined) out.features = (Array.isArray(out.features) ? out.features : []).map((f) => String(f).trim()).filter(Boolean);
-  if (out.limits !== undefined) {
+  if (out.limits !== undefined)
+  {
     const clean = {};
-    for (const key of LIMIT_FIELDS) {
-      if (out.limits[key] !== undefined && out.limits[key] !== null && out.limits[key] !== "") {
+    for (const key of LIMIT_FIELDS)
+    {
+      if (out.limits[key] !== undefined && out.limits[key] !== null && out.limits[key] !== "")
+      {
         clean[key] = Number(out.limits[key]);
-      } else if (out.limits[key] !== undefined) {
+      } else if (out.limits[key] !== undefined)
+      {
         clean[key] = null;
       }
     }
@@ -224,53 +243,68 @@ function sanitizePlanPayload(body) {
   return out;
 }
 
-function validatePlanPayload(payload, { partial = false } = {}) {
-  if (!partial || payload.name !== undefined) {
-    if (!payload.name || payload.name.length < 2) {
+function validatePlanPayload(payload, { partial = false } = {})
+{
+  if (!partial || payload.name !== undefined)
+  {
+    if (!payload.name || payload.name.length < 2)
+    {
       const err = new Error("Plan name must be at least 2 characters");
       err.status = 400;
       throw err;
     }
   }
-  if (!partial || payload.code !== undefined) {
-    if (!payload.code || payload.code.length < 2) {
+  if (!partial || payload.code !== undefined)
+  {
+    if (!payload.code || payload.code.length < 2)
+    {
       const err = new Error("Plan code is required");
       err.status = 400;
       throw err;
     }
   }
-  if (payload.price !== undefined) {
-    if (!isFiniteNumber(payload.price) || payload.price < 0) {
+  if (payload.price !== undefined)
+  {
+    if (!isFiniteNumber(payload.price) || payload.price < 0)
+    {
       const err = new Error("Price must be a number >= 0");
       err.status = 400;
       throw err;
     }
   }
-  if (payload.currency !== undefined) {
-    if (!/^[A-Z]{3}$/.test(payload.currency)) {
+  if (payload.currency !== undefined)
+  {
+    if (!/^[A-Z]{3}$/.test(payload.currency))
+    {
       const err = new Error("Currency must be a 3-letter code (e.g. INR)");
       err.status = 400;
       throw err;
     }
   }
-  if (payload.billingCycle !== undefined && !["monthly", "yearly"].includes(payload.billingCycle)) {
+  if (payload.billingCycle !== undefined && !["monthly", "yearly"].includes(payload.billingCycle))
+  {
     const err = new Error("Billing cycle must be monthly or yearly");
     err.status = 400;
     throw err;
   }
-  if (payload.trialDays !== undefined && (!isFiniteNumber(payload.trialDays) || payload.trialDays < 0)) {
+  if (payload.trialDays !== undefined && (!isFiniteNumber(payload.trialDays) || payload.trialDays < 0))
+  {
     const err = new Error("Trial days must be a number >= 0");
     err.status = 400;
     throw err;
   }
-  if (payload.sortOrder !== undefined && !isFiniteNumber(payload.sortOrder)) {
+  if (payload.sortOrder !== undefined && !isFiniteNumber(payload.sortOrder))
+  {
     const err = new Error("Sort order must be a number");
     err.status = 400;
     throw err;
   }
-  if (payload.limits !== undefined) {
-    for (const key of Object.keys(payload.limits)) {
-      if (!LIMIT_FIELDS.includes(key) || !isNullableLimit(payload.limits[key])) {
+  if (payload.limits !== undefined)
+  {
+    for (const key of Object.keys(payload.limits))
+    {
+      if (!LIMIT_FIELDS.includes(key) || !isNullableLimit(payload.limits[key]))
+      {
         const err = new Error(`Invalid limit: ${key} (use a number >= 0 or null for unlimited)`);
         err.status = 400;
         throw err;
@@ -283,8 +317,10 @@ function validatePlanPayload(payload, { partial = false } = {}) {
 // Plan handlers
 // --------------------------------------------------------------------------
 
-const listPlans = async (req, res) => {
-  try {
+const listPlans = async (req, res) =>
+{
+  try
+  {
     const filter = {};
     if (req.query.status === "active") filter.isActive = true;
     if (req.query.status === "inactive") filter.isActive = false;
@@ -294,23 +330,29 @@ const listPlans = async (req, res) => {
       Plan.countDocuments(filter),
     ]);
     res.json({ success: true, count: plans.length, total, page, limit, pages: Math.ceil(total / limit), data: plans });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const getPlan = async (req, res) => {
-  try {
+const getPlan = async (req, res) =>
+{
+  try
+  {
     const plan = await Plan.findById(req.params.id).lean();
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
     res.json({ success: true, data: plan });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const createPlan = async (req, res) => {
-  try {
+const createPlan = async (req, res) =>
+{
+  try
+  {
     const payload = sanitizePlanPayload(req.body || {});
     validatePlanPayload(payload);
     const exists = await Plan.findOne({ code: payload.code });
@@ -318,13 +360,16 @@ const createPlan = async (req, res) => {
     const plan = await Plan.create(payload);
     await writeAudit({ req, user: req.user, action: "plan.created", targetType: "plan", targetId: plan._id, message: `Created plan ${payload.code}` });
     res.status(201).json({ success: true, message: "Plan created", data: plan });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const updatePlan = async (req, res) => {
-  try {
+const updatePlan = async (req, res) =>
+{
+  try
+  {
     const payload = sanitizePlanPayload(req.body || {});
     validatePlanPayload(payload, { partial: true });
     const exists = await Plan.findOne({ code: payload.code, _id: { $ne: req.params.id } });
@@ -333,23 +378,28 @@ const updatePlan = async (req, res) => {
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
     await writeAudit({ req, user: req.user, action: "plan.updated", targetType: "plan", targetId: plan._id, message: `Updated plan ${plan.code}` });
     res.json({ success: true, message: "Plan updated", data: plan });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
 // Hard delete only allowed when the plan has no subscription history at all.
-const deletePlan = async (req, res) => {
-  try {
+const deletePlan = async (req, res) =>
+{
+  try
+  {
     const plan = await Plan.findById(req.params.id);
     if (!plan) return res.status(404).json({ success: false, message: "Plan not found" });
     const used = await Subscription.exists({ planId: plan._id });
-    if (used) {
+    if (used)
+    {
       return res.status(409).json({ success: false, message: "Plan has subscription history — deactivate instead of deleting" });
     }
     await Plan.deleteOne({ _id: plan._id });
     res.json({ success: true, message: "Plan deleted" });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
@@ -358,7 +408,8 @@ const deletePlan = async (req, res) => {
 // Subscription handlers
 // --------------------------------------------------------------------------
 
-const loadSubscription = async (id) => {
+const loadSubscription = async (id) =>
+{
   const sub = await Subscription.findById(id)
     .populate("schoolId", "_id name code shortName status")
     .populate("planId", "_id name code price currency billingCycle trialDays")
@@ -366,8 +417,10 @@ const loadSubscription = async (id) => {
   return sub;
 };
 
-const listSubscriptions = async (req, res) => {
-  try {
+const listSubscriptions = async (req, res) =>
+{
+  try
+  {
     const { page, limit, skip } = paginate(req);
     const filter = {};
 
@@ -377,9 +430,11 @@ const listSubscriptions = async (req, res) => {
 
     // "Expiring within N days" — reference date is trial end (trialing) or next
     // billing date (active/past_due). Enables the operator's 7/15/30-day buckets.
-    if (req.query.expiringWithin) {
+    if (req.query.expiringWithin)
+    {
       const days = parseInt(req.query.expiringWithin, 10);
-      if (Number.isInteger(days) && days > 0) {
+      if (Number.isInteger(days) && days > 0)
+      {
         const cutoff = addDays(new Date(), days);
         filter.$or = [
           { status: "trialing", trialEndDate: { $lte: cutoff } },
@@ -388,7 +443,8 @@ const listSubscriptions = async (req, res) => {
       }
     }
 
-    if (req.query.q) {
+    if (req.query.q)
+    {
       const q = escapeRegex(String(req.query.q).trim());
       const schools = await School.find({
         $or: [
@@ -400,7 +456,8 @@ const listSubscriptions = async (req, res) => {
         .select("_id")
         .lean();
       const ids = schools.map((s) => s._id);
-      if (ids.length === 0) {
+      if (ids.length === 0)
+      {
         return res.json({ success: true, count: 0, total: 0, page, pages: 0, data: [] });
       }
       filter.schoolId = { $in: ids };
@@ -422,13 +479,16 @@ const listSubscriptions = async (req, res) => {
       pages: Math.ceil(total / limit) || 0,
       data: subs.map(toSubscriptionJson),
     });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const getSubscription = async (req, res) => {
-  try {
+const getSubscription = async (req, res) =>
+{
+  try
+  {
     const sub = await loadSubscription(req.params.id);
     if (!sub) return res.status(404).json({ success: false, message: "Subscription not found" });
     const invoices = await BillingInvoice.find({ subscriptionId: sub._id })
@@ -448,24 +508,29 @@ const getSubscription = async (req, res) => {
         history: history.map(toSubscriptionJson),
       },
     });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const loadPlanOrThrow = async (planId) => {
-  if (!mongoose.Types.ObjectId.isValid(planId)) {
+const loadPlanOrThrow = async (planId) =>
+{
+  if (!mongoose.Types.ObjectId.isValid(planId))
+  {
     const err = new Error("planId is invalid");
     err.status = 400;
     throw err;
   }
   const plan = await Plan.findById(planId);
-  if (!plan) {
+  if (!plan)
+  {
     const err = new Error("Plan not found");
     err.status = 404;
     throw err;
   }
-  if (!plan.isActive) {
+  if (!plan.isActive)
+  {
     const err = new Error("Inactive plans cannot be assigned");
     err.status = 409;
     throw err;
@@ -473,14 +538,17 @@ const loadPlanOrThrow = async (planId) => {
   return plan;
 };
 
-const loadSchoolOrThrow = async (schoolId) => {
-  if (!mongoose.Types.ObjectId.isValid(schoolId)) {
+const loadSchoolOrThrow = async (schoolId) =>
+{
+  if (!mongoose.Types.ObjectId.isValid(schoolId))
+  {
     const err = new Error("schoolId is invalid");
     err.status = 400;
     throw err;
   }
   const school = await School.findById(schoolId);
-  if (!school) {
+  if (!school)
+  {
     const err = new Error("School not found");
     err.status = 404;
     throw err;
@@ -488,7 +556,8 @@ const loadSchoolOrThrow = async (schoolId) => {
   return school;
 };
 
-const createInvoiceForSubscription = async (sub, metadata = {}) => {
+const createInvoiceForSubscription = async (sub, metadata = {}) =>
+{
   if (!sub.price) return null;
   const invoiceNumber = generateInvoiceNumber();
   const durationPeriods = sub.durationPeriods || 1;
@@ -503,11 +572,14 @@ const createInvoiceForSubscription = async (sub, metadata = {}) => {
 
   // Resolve plan and school snapshot data
   let planName = null, planCode = null, schoolName = null, schoolCode = null;
-  try {
-    if (sub.planId && typeof sub.planId === "object" && sub.planId.name) {
+  try
+  {
+    if (sub.planId && typeof sub.planId === "object" && sub.planId.name)
+    {
       planName = sub.planId.name;
       planCode = sub.planId.code;
-    } else if (sub.planId) {
+    } else if (sub.planId)
+    {
       const Plan = require("../models/Plan");
       const plan = await Plan.findById(sub.planId).select("name code").lean();
       if (plan) { planName = plan.name; planCode = plan.code; }
@@ -539,18 +611,23 @@ const createInvoiceForSubscription = async (sub, metadata = {}) => {
     schoolCode,
     paymentOrderId: metadata.paymentOrderId || null,
   });
-  try {
+  try
+  {
     await invoice.save();
-  } catch (err) {
+  } catch (err)
+  {
     if (err.code !== 11000) throw err;
   }
   return invoice;
 };
 
-const createSubscription = async (req, res) => {
-  try {
+const createSubscription = async (req, res) =>
+{
+  try
+  {
     const { schoolId, planId, effectiveDate } = req.body || {};
-    if (!schoolId || !planId) {
+    if (!schoolId || !planId)
+    {
       return res.status(400).json({ success: false, message: "schoolId and planId are required" });
     }
     const school = await loadSchoolOrThrow(schoolId);
@@ -582,18 +659,22 @@ const createSubscription = async (req, res) => {
 
     const loaded = await loadSubscription(sub._id);
     res.status(201).json({ success: true, message: "Subscription created", data: toSubscriptionJson(loaded) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const updateSubscription = async (req, res) => {
-  try {
+const updateSubscription = async (req, res) =>
+{
+  try
+  {
     const { action } = req.body || {};
     const sub = await Subscription.findById(req.params.id);
     if (!sub) return res.status(404).json({ success: false, message: "Subscription not found" });
 
-    switch (action) {
+    switch (action)
+    {
       case "changePlan": {
         const plan = await loadPlanOrThrow(req.body.planId);
         const dates = buildSubscriptionDates(plan, req.body.effectiveDate);
@@ -620,11 +701,13 @@ const updateSubscription = async (req, res) => {
       }
 
       case "extendTrial": {
-        if (sub.status !== "trialing") {
+        if (sub.status !== "trialing")
+        {
           return res.status(400).json({ success: false, message: "Only trialing subscriptions can be extended" });
         }
         const days = parseInt(req.body.days, 10);
-        if (!Number.isInteger(days) || days <= 0) {
+        if (!Number.isInteger(days) || days <= 0)
+        {
           return res.status(400).json({ success: false, message: "days must be a positive integer" });
         }
         const base = sub.trialEndDate && sub.trialEndDate > new Date() ? sub.trialEndDate : new Date();
@@ -639,7 +722,8 @@ const updateSubscription = async (req, res) => {
       }
 
       case "suspend": {
-        if (!CURRENT_SUBSCRIPTION_STATUSES.includes(sub.status)) {
+        if (!CURRENT_SUBSCRIPTION_STATUSES.includes(sub.status))
+        {
           return res.status(400).json({ success: false, message: "Subscription is not current" });
         }
         sub.status = "suspended";
@@ -652,11 +736,13 @@ const updateSubscription = async (req, res) => {
       }
 
       case "reactivate": {
-        if (["trialing", "active", "past_due"].includes(sub.status)) {
+        if (["trialing", "active", "past_due"].includes(sub.status))
+        {
           return res.status(400).json({ success: false, message: "Subscription is already current" });
         }
         const plan = await Plan.findById(sub.planId);
-        if (!plan || !plan.isActive) {
+        if (!plan || !plan.isActive)
+        {
           return res.status(400).json({ success: false, message: "Linked plan is not active" });
         }
         const cycleMonths = sub.billingCycle === "yearly" ? 12 : 1;
@@ -675,7 +761,8 @@ const updateSubscription = async (req, res) => {
       }
 
       case "cancel": {
-        if (["cancelled", "expired"].includes(sub.status)) {
+        if (["cancelled", "expired"].includes(sub.status))
+        {
           return res.status(400).json({ success: false, message: "Subscription already ended" });
         }
         sub.status = "cancelled";
@@ -694,7 +781,8 @@ const updateSubscription = async (req, res) => {
           message: "action must be one of: changePlan, extendTrial, suspend, reactivate, cancel",
         });
     }
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
@@ -703,8 +791,10 @@ const updateSubscription = async (req, res) => {
 // Billing / invoice handlers
 // --------------------------------------------------------------------------
 
-const listInvoices = async (req, res) => {
-  try {
+const listInvoices = async (req, res) =>
+{
+  try
+  {
     const { page, limit, skip } = paginate(req);
     const filter = {};
     if (req.query.schoolId) filter.schoolId = asObjectId(req.query.schoolId, "schoolId");
@@ -726,25 +816,31 @@ const listInvoices = async (req, res) => {
       pages: Math.ceil(total / limit) || 0,
       data: invoices.map(toInvoiceJson),
     });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const getInvoice = async (req, res) => {
-  try {
+const getInvoice = async (req, res) =>
+{
+  try
+  {
     const invoice = await BillingInvoice.findById(req.params.id)
       .populate("schoolId", "_id name code")
       .lean();
     if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
     res.json({ success: true, data: toInvoiceJson(invoice) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const generateInvoice = async (req, res) => {
-  try {
+const generateInvoice = async (req, res) =>
+{
+  try
+  {
     const { subscriptionId, periodStart, periodEnd } = req.body || {};
     if (!subscriptionId) return res.status(400).json({ success: false, message: "subscriptionId is required" });
     const sub = await Subscription.findById(subscriptionId);
@@ -753,12 +849,14 @@ const generateInvoice = async (req, res) => {
     const invoice = await createInvoiceForSubscriptionWithPeriod(sub, periodStart, periodEnd);
     await writeAudit({ req, user: req.user, action: "invoice.generated", targetType: "invoice", targetId: invoice._id, message: `Generated invoice ${invoice.invoiceNumber}` });
     return res.status(201).json({ success: true, message: "Invoice generated", data: toInvoiceJson(invoice.toJSON ? invoice : invoice) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const createInvoiceForSubscriptionWithPeriod = async (sub, periodStart, periodEnd) => {
+const createInvoiceForSubscriptionWithPeriod = async (sub, periodStart, periodEnd) =>
+{
   const invoiceNumber = generateInvoiceNumber();
   const durationPeriods = sub.durationPeriods || 1;
   const baseAmount = sub.price * durationPeriods;
@@ -771,11 +869,14 @@ const createInvoiceForSubscriptionWithPeriod = async (sub, periodStart, periodEn
   const totalAmount = baseAmount + gstAmount;
 
   let planName = null, planCode = null, schoolName = null, schoolCode = null;
-  try {
-    if (sub.planId && typeof sub.planId === "object" && sub.planId.name) {
+  try
+  {
+    if (sub.planId && typeof sub.planId === "object" && sub.planId.name)
+    {
       planName = sub.planId.name;
       planCode = sub.planId.code;
-    } else if (sub.planId) {
+    } else if (sub.planId)
+    {
       const Plan = require("../models/Plan");
       const plan = await Plan.findById(sub.planId).select("name code").lean();
       if (plan) { planName = plan.name; planCode = plan.code; }
@@ -806,19 +907,24 @@ const createInvoiceForSubscriptionWithPeriod = async (sub, periodStart, periodEn
     schoolName,
     schoolCode,
   });
-  try {
+  try
+  {
     await invoice.save();
-  } catch (err) {
+  } catch (err)
+  {
     if (err.code !== 11000) throw err;
   }
   return invoice;
 };
 
-const updateInvoice = async (req, res) => {
-  try {
+const updateInvoice = async (req, res) =>
+{
+  try
+  {
     const { status } = req.body || {};
     const allowed = ["draft", "issued", "paid", "void", "overdue"];
-    if (!allowed.includes(status)) {
+    if (!allowed.includes(status))
+    {
       return res.status(400).json({ success: false, message: `status must be one of: ${allowed.join(", ")}` });
     }
     const invoice = await BillingInvoice.findById(req.params.id);
@@ -828,7 +934,8 @@ const updateInvoice = async (req, res) => {
     await invoice.save();
     await writeAudit({ req, user: req.user, action: "invoice.updated", targetType: "invoice", targetId: invoice._id, message: `Invoice ${invoice.invoiceNumber} → ${status}` });
     res.json({ success: true, message: "Invoice updated", data: toInvoiceJson(invoice.toJSON()) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
@@ -837,23 +944,28 @@ const updateInvoice = async (req, res) => {
 // Platform analytics (Platform Owner dashboard KPIs)
 // --------------------------------------------------------------------------
 
-const monthKey = (date) => {
+const monthKey = (date) =>
+{
   const d = new Date(date);
   return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
 };
 
-const buildMonthSeries = (count) => {
+const buildMonthSeries = (count) =>
+{
   const series = [];
   const now = new Date();
-  for (let i = count - 1; i >= 0; i--) {
+  for (let i = count - 1; i >= 0; i--)
+  {
     const cursor = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1));
     series.push({ month: monthKey(cursor), label: cursor.toLocaleString("en-US", { month: "short", year: "2-digit", timeZone: "UTC" }), count: 0 });
   }
   return series;
 };
 
-const getPlatformAnalytics = async (req, res) => {
-  try {
+const getPlatformAnalytics = async (req, res) =>
+{
+  try
+  {
     // Tenant footprint
     const [schools, activeSchools, users] = await Promise.all([
       School.countDocuments({}),
@@ -875,9 +987,11 @@ const getPlatformAnalytics = async (req, res) => {
     const toMonthly = (sub) => (sub.billingCycle === "yearly" ? (sub.price || 0) / 12 : sub.price || 0);
     let mrr = 0;
     let payingCount = 0;
-    for (const sub of current) {
+    for (const sub of current)
+    {
       const monthly = toMonthly(sub);
-      if (monthly > 0) {
+      if (monthly > 0)
+      {
         mrr += monthly;
         payingCount++;
       }
@@ -885,7 +999,8 @@ const getPlatformAnalytics = async (req, res) => {
     mrr = Math.round(mrr * 100) / 100;
 
     const planDistribution = {};
-    for (const sub of current) {
+    for (const sub of current)
+    {
       const code = sub.planId?.code || "unknown";
       planDistribution[code] = (planDistribution[code] || 0) + 1;
     }
@@ -896,7 +1011,8 @@ const getPlatformAnalytics = async (req, res) => {
     const now = new Date();
     const soonLimit = addDays(now, 14);
 
-    const withReference = (sub) => {
+    const withReference = (sub) =>
+    {
       const reference = sub.status === "trialing" ? sub.trialEndDate || sub.nextBillingDate : sub.nextBillingDate;
       return { sub, reference: reference ? new Date(reference) : null };
     };
@@ -943,7 +1059,8 @@ const getPlatformAnalytics = async (req, res) => {
       pageSize: expLimit,
       items: expiringItems.slice(expSkip, expSkip + expLimit).map(({ sub, reference }) => ({ ...toSubscriptionJson(sub), reference })),
     };
-    for (const it of expiringItems) {
+    for (const it of expiringItems)
+    {
       const days = Math.ceil((it.reference - now) / 86400000);
       if (days <= 30) expiringSubscriptions.in30++;
       if (days <= 15) expiringSubscriptions.in15++;
@@ -974,7 +1091,8 @@ const getPlatformAnalytics = async (req, res) => {
     const alerts = [];
     const expiring7 = expiringItems.filter(({ reference }) => reference <= addDays(now, 7));
     if (expiring7.length) alerts.push({ severity: "warning", type: "subscription_expiring", message: `${expiring7.length} subscription(s) expire within 7 days` });
-    if ((revenueByStatus.overdue?.n || 0) > 0) {
+    if ((revenueByStatus.overdue?.n || 0) > 0)
+    {
       alerts.push({ severity: "warning", type: "invoices_overdue", message: `${revenueByStatus.overdue.n} invoice(s) overdue totalling ${(revenueByStatus.overdue.total || 0).toFixed(2)}` });
     }
     const noSubActive = await School.countDocuments({ status: "active", "_id": { $nin: current.map((c) => c.schoolId?._id || c.schoolId).filter(Boolean) } });
@@ -1054,7 +1172,8 @@ const getPlatformAnalytics = async (req, res) => {
         },
       },
     });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
@@ -1063,8 +1182,10 @@ const getPlatformAnalytics = async (req, res) => {
 // Audit log handler (append-oriented, read-only via API)
 // --------------------------------------------------------------------------
 
-const listAuditLogs = async (req, res) => {
-  try {
+const listAuditLogs = async (req, res) =>
+{
+  try
+  {
     const { page, limit, skip } = paginate(req, 25);
     const filter = {};
     if (req.query.action) filter.action = req.query.action;
@@ -1079,8 +1200,70 @@ const listAuditLogs = async (req, res) => {
       .limit(limit)
       .lean();
     res.json({ success: true, count: docs.length, total, page, pages: Math.ceil(total / limit) || 0, data: docs });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
+  }
+};
+
+// Records the fact that a platform owner entered, escalated or left a tenant.
+//
+// Only these three actions are accepted, and the actor is taken from the
+// verified token rather than the body, so the trail cannot be forged by the
+// client into implicating someone else. The tenant comes from the body instead
+// of the X-School-Id header because the header is already absent on
+// "impersonation.ended" — by definition the header is cleared before that call
+// can be made. Ordinary tenant writes are NOT audited by this handler; it
+// covers the impersonation session itself.
+const IMPERSONATION_AUDIT_ACTIONS = new Set([
+  "impersonation.started",
+  "impersonation.write_enabled",
+  "impersonation.ended",
+]);
+
+const recordImpersonationEvent = async (req, res) =>
+{
+  try
+  {
+    const action = String(req.body?.action || "");
+    if (!IMPERSONATION_AUDIT_ACTIONS.has(action))
+    {
+      return res.status(400).json({ success: false, message: "Unsupported impersonation action." });
+    }
+
+    const schoolId = req.body?.schoolId ? String(req.body.schoolId) : null;
+    if (schoolId && !mongoose.isValidObjectId(schoolId))
+    {
+      return res.status(400).json({ success: false, message: "Invalid schoolId." });
+    }
+
+    // "ended" has no tenant by design; the other two must name one.
+    if (action !== "impersonation.ended" && !schoolId)
+    {
+      return res.status(400).json({ success: false, message: "schoolId is required for this action." });
+    }
+
+    const IMPERSONATION_AUDIT_VERB = {
+      "impersonation.started": "entered tenant",
+      "impersonation.write_enabled": "enabled write access in tenant",
+      "impersonation.ended": "left tenant",
+    };
+
+    await writeAudit({
+      req,
+      user: req.user,
+      action,
+      targetType: schoolId ? "school" : null,
+      targetId: schoolId,
+      message: schoolId
+        ? `Platform owner ${IMPERSONATION_AUDIT_VERB[action]} ${schoolId}`
+        : `Platform owner ${IMPERSONATION_AUDIT_VERB[action]}`,
+    });
+
+    return res.json({ success: true });
+  } catch (err)
+  {
+    return rawError(res, err);
   }
 };
 
@@ -1106,15 +1289,18 @@ const toPlatformUserJson = (raw) => ({
   createdAt: raw.createdAt,
 });
 
-const listPlatformUsers = async (req, res) => {
-  try {
+const listPlatformUsers = async (req, res) =>
+{
+  try
+  {
     const { page, limit, skip } = paginate(req, 25);
     const { q, role, schoolId, includeDeleted } = req.query;
     const filter = {};
     if (includeDeleted !== "true") filter.deletedAt = null;
     if (role) filter.role = role;
     if (schoolId) filter.schoolId = asObjectId(schoolId, "schoolId");
-    if (q) {
+    if (q)
+    {
       const rx = { $regex: q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
       filter.$or = [{ name: rx }, { email: rx }];
     }
@@ -1122,24 +1308,29 @@ const listPlatformUsers = async (req, res) => {
     const total = await User.countDocuments(filter);
     const docs = await User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
     res.json({ success: true, count: docs.length, total, page, pages: Math.ceil(total / limit) || 0, data: docs.map(toPlatformUserJson) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const getUser360 = async (req, res) => {
-  try {
+const getUser360 = async (req, res) =>
+{
+  try
+  {
     const id = asObjectId(req.params.id, "id");
     const user = await User.findById(id).lean();
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
     let school = null;
-    if (user.schoolId) {
+    if (user.schoolId)
+    {
       school = await School.findById(user.schoolId).select("name code shortName city status plan").lean();
     }
 
     let subscription = null;
-    if (user.schoolId) {
+    if (user.schoolId)
+    {
       const sub = await Subscription.findOne({ schoolId: user.schoolId, status: { $in: CURRENT_SUBSCRIPTION_STATUSES } })
         .populate("planId", "_id name code price currency billingCycle trialDays")
         .sort({ createdAt: -1 })
@@ -1153,7 +1344,8 @@ const getUser360 = async (req, res) => {
       .lean();
 
     res.json({ success: true, data: { user: toPlatformUserJson(user), school, subscription, recentAudits } });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
@@ -1192,21 +1384,26 @@ const toSchoolJson = (raw) => ({
   updatedAt: raw.updatedAt,
 });
 
-const listPlatformSchools = async (req, res) => {
-  try {
+const listPlatformSchools = async (req, res) =>
+{
+  try
+  {
     const { page, limit, skip } = paginate(req, 25);
     const { q, status, plan, onboarding, deleted } = req.query;
     const filter = {};
     // By default exclude deleted schools; pass deleted=true to show only deleted
-    if (deleted === "true") {
+    if (deleted === "true")
+    {
       filter.isDeleted = true;
-    } else {
+    } else
+    {
       filter.isDeleted = { $ne: true };
     }
     if (status) filter.status = status;
     if (plan) filter.plan = plan;
     if (onboarding) filter["onboarding.status"] = onboarding;
-    if (q) {
+    if (q)
+    {
       const rx = { $regex: q.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
       filter.$or = [{ name: rx }, { code: rx }, { shortName: rx }, { city: rx }];
     }
@@ -1214,13 +1411,16 @@ const listPlatformSchools = async (req, res) => {
     const total = await School.countDocuments(filter);
     const docs = await School.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
     res.json({ success: true, count: docs.length, total, page, pages: Math.ceil(total / limit) || 0, data: docs.map(toSchoolJson) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const getSchool360 = async (req, res) => {
-  try {
+const getSchool360 = async (req, res) =>
+{
+  try
+  {
     const id = asObjectId(req.params.id, "id");
     const school = await School.findById(id).lean();
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
@@ -1247,25 +1447,70 @@ const getSchool360 = async (req, res) => {
         currentSession,
       },
     });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const SCHOOL_PROFILE_FIELDS = ["name", "shortName", "email", "phone", "address", "city", "state", "pincode", "website", "logo", "board", "recognitionNumber", "recognitionAuthority", "recognitionVerified"];
+const SCHOOL_PROFILE_FIELDS = ["name", "shortName", "email", "phone", "address", "city", "state", "pincode", "website", "logo", "board", "recognitionNumber", "recognitionAuthority", "recognitionVerified", "code"];
 
-const updateSchoolProfile = async (req, res) => {
-  try {
+// Onboarding advertises a slug ("e.g. brightwood-academy"), so the edit path
+// enforces the same shape rather than accepting anything. The only codes the
+// seed scripts create — "DS2" (lowercased to ds2) and "demo-school-1" — both
+// satisfy it, so no existing school is locked out of editing.
+const SCHOOL_CODE_RE = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+const SCHOOL_CODE_MAX = 60;
+
+const updateSchoolProfile = async (req, res) =>
+{
+  // Declared outside the try so the catch block can name the offending field
+  // when the unique index rejects the write.
+  let attemptedCode = null;
+  try
+  {
     const patch = {};
-    for (const key of SCHOOL_PROFILE_FIELDS) {
+    for (const key of SCHOOL_PROFILE_FIELDS)
+    {
       if (req.body[key] !== undefined) patch[key] = req.body[key];
     }
-    if (!Object.keys(patch).length) {
+    if (!Object.keys(patch).length)
+    {
       return res.status(400).json({ success: false, message: "No fields to update" });
     }
 
+    // code is required and unique. Validated up front because otherwise an
+    // empty value surfaces as an opaque 500 from the schema validator, and a
+    // collision as a generic 409 that names no field.
+    if (patch.code !== undefined)
+    {
+      attemptedCode = String(patch.code).trim().toLowerCase();
+      if (!attemptedCode)
+      {
+        return res.status(400).json({ success: false, message: "School code cannot be empty" });
+      }
+      if (attemptedCode.length > SCHOOL_CODE_MAX)
+      {
+        return res.status(400).json({ success: false, message: `School code cannot be longer than ${SCHOOL_CODE_MAX} characters` });
+      }
+      if (!SCHOOL_CODE_RE.test(attemptedCode))
+      {
+        return res.status(400).json({ success: false, message: "School code may only contain lowercase letters, numbers and single hyphens (e.g. brightwood-academy)" });
+      }
+      patch.code = attemptedCode;
+    }
+
+    // Read before writing so the audit trail can record which code replaced
+    // which. The code is printed on issued invoices, so losing the old value
+    // makes historical documents untraceable.
+    const previous = await School.findById(req.params.id).select("code").lean();
+    if (!previous) return res.status(404).json({ success: false, message: "School not found" });
+
     const school = await School.findByIdAndUpdate(req.params.id, patch, { new: true, runValidators: true });
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
+
+    const changed = Object.keys(patch).join(", ");
+    const codeMoved = attemptedCode && previous.code !== attemptedCode;
 
     await writeAudit({
       req,
@@ -1273,21 +1518,31 @@ const updateSchoolProfile = async (req, res) => {
       action: "school.updated",
       targetType: "school",
       targetId: school._id,
-      message: `School profile updated: ${Object.keys(patch).join(", ")}`,
+      message: codeMoved
+        ? `School profile updated: ${changed} (code: ${previous.code} → ${attemptedCode})`
+        : `School profile updated: ${changed}`,
     });
 
     res.json({ success: true, message: "School updated", data: toSchoolJson(school) });
-  } catch (err) {
+  } catch (err)
+  {
+    if (attemptedCode && err.code === 11000)
+    {
+      return res.status(409).json({ success: false, message: `School code "${attemptedCode}" is already in use by another school` });
+    }
     rawError(res, err);
   }
 };
 
 const SCHOOL_LIFECYCLE = { active: "school.activated", suspended: "school.suspended" };
 
-const updateSchoolStatus = async (req, res) => {
-  try {
+const updateSchoolStatus = async (req, res) =>
+{
+  try
+  {
     const { status, reason } = req.body || {};
-    if (!["active", "suspended"].includes(status)) {
+    if (!["active", "suspended"].includes(status))
+    {
       return res.status(400).json({ success: false, message: "status must be one of: active, suspended" });
     }
     const school = await School.findById(req.params.id);
@@ -1308,13 +1563,16 @@ const updateSchoolStatus = async (req, res) => {
       reason: reasonText || null,
     });
     res.json({ success: true, message: `School ${status === "active" ? "activated" : "suspended"}`, data: toSchoolJson(school) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const softDeleteSchool = async (req, res) => {
-  try {
+const softDeleteSchool = async (req, res) =>
+{
+  try
+  {
     const { reason } = req.body || {};
     const school = await School.findById(req.params.id);
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
@@ -1323,7 +1581,8 @@ const softDeleteSchool = async (req, res) => {
     school.isDeleted = true;
     school.deletedAt = new Date();
     school.deletedBy = req.user?.email || "platform";
-    if (!["trial", "basic", "standard", "premium"].includes(school.plan)) {
+    if (!["trial", "basic", "standard", "premium"].includes(school.plan))
+    {
       school.plan = "trial";
     }
     const reasonText = (reason || "").toString().trim();
@@ -1338,13 +1597,16 @@ const softDeleteSchool = async (req, res) => {
       reason: reasonText || null,
     });
     res.json({ success: true, message: "School moved to trash", data: toSchoolJson(school) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const restoreSchool = async (req, res) => {
-  try {
+const restoreSchool = async (req, res) =>
+{
+  try
+  {
     const school = await School.findById(req.params.id);
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
     if (!school.isDeleted) return res.status(400).json({ success: false, message: "School is not deleted" });
@@ -1361,13 +1623,16 @@ const restoreSchool = async (req, res) => {
       message: `School ${school.name} restored from trash`,
     });
     res.json({ success: true, message: "School restored", data: toSchoolJson(school) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const hardDeleteSchool = async (req, res) => {
-  try {
+const hardDeleteSchool = async (req, res) =>
+{
+  try
+  {
     const school = await School.findById(req.params.id);
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
 
@@ -1380,26 +1645,31 @@ const hardDeleteSchool = async (req, res) => {
 
     await School.findByIdAndDelete(req.params.id);
     res.json({ success: true, message: "School permanently deleted" });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
 const ONBOARDING_FLOW = ["created", "configured", "subscribed", "live"];
-const nextOnboardingStep = (from, to) => {
+const nextOnboardingStep = (from, to) =>
+{
   const i = ONBOARDING_FLOW.indexOf(from);
   const j = ONBOARDING_FLOW.indexOf(to);
   return j >= 0 && (i === -1 || j > i);
 };
 
-const updateSchoolOnboarding = async (req, res) => {
-  try {
+const updateSchoolOnboarding = async (req, res) =>
+{
+  try
+  {
     const { status, notes } = req.body || {};
     const school = await School.findById(req.params.id);
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
 
     const current = school.onboarding?.status || "created";
-    if (!nextOnboardingStep(current, status)) {
+    if (!nextOnboardingStep(current, status))
+    {
       return res.status(400).json({ success: false, message: `Cannot move onboarding from ${current} to ${status}. Flow: ${ONBOARDING_FLOW.join(" → ")}` });
     }
 
@@ -1420,7 +1690,8 @@ const updateSchoolOnboarding = async (req, res) => {
       message: `Onboarding advanced ${current} → ${status}`,
     });
     res.json({ success: true, message: "Onboarding updated", data: toSchoolJson(school) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
@@ -1429,8 +1700,10 @@ const updateSchoolOnboarding = async (req, res) => {
 // Welcome email to school admin after launch
 // --------------------------------------------------------------------------
 
-const sendSchoolWelcomeEmail = async (req, res) => {
-  try {
+const sendSchoolWelcomeEmail = async (req, res) =>
+{
+  try
+  {
     const id = asObjectId(req.params.id, "id");
     const school = await School.findById(id).lean();
     if (!school) return res.status(404).json({ success: false, message: "School not found" });
@@ -1518,7 +1791,8 @@ const sendSchoolWelcomeEmail = async (req, res) => {
     });
 
     res.json({ success: true, message: "Welcome email sent" });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
@@ -1562,8 +1836,10 @@ const REPORT_CATALOG = [
 
 const buildDaysAgo = (days) => new Date(new Date().getTime() - days * 24 * 60 * 60 * 1000);
 
-const applyDateWindow = (req, filter, dateField = "createdAt") => {
-  if (req.query.from || req.query.to) {
+const applyDateWindow = (req, filter, dateField = "createdAt") =>
+{
+  if (req.query.from || req.query.to)
+  {
     filter[dateField] = {};
     if (req.query.from) filter[dateField].$gte = new Date(req.query.from);
     if (req.query.to) filter[dateField].$lte = new Date(req.query.to);
@@ -1572,7 +1848,8 @@ const applyDateWindow = (req, filter, dateField = "createdAt") => {
 };
 
 const reportGenerators = {
-  "tenant-directory": async (req) => {
+  "tenant-directory": async (req) =>
+  {
     const filter = applyDateWindow(req, {});
     if (req.query.status) filter.status = req.query.status;
     const schools = await School.find(filter).sort({ createdAt: -1 }).lean();
@@ -1593,7 +1870,8 @@ const reportGenerators = {
     }));
   },
 
-  "user-roster": async (req) => {
+  "user-roster": async (req) =>
+  {
     const filter = applyDateWindow(req, { role: { $ne: "super_admin" } });
     if (req.query.role) filter.role = req.query.role;
     if (req.query.includeDeleted === "true") delete filter.deletedAt;
@@ -1614,7 +1892,8 @@ const reportGenerators = {
     }));
   },
 
-  "subscription-ledger": async (req) => {
+  "subscription-ledger": async (req) =>
+  {
     const filter = applyDateWindow(req);
     if (req.query.status) filter.status = req.query.status;
     const subs = await Subscription.find(filter)
@@ -1639,7 +1918,8 @@ const reportGenerators = {
     }));
   },
 
-  "invoice-ledger": async (req) => {
+  "invoice-ledger": async (req) =>
+  {
     const filter = applyDateWindow(req);
     if (req.query.status) filter.status = req.query.status;
     const invoices = await BillingInvoice.find(filter)
@@ -1661,7 +1941,8 @@ const reportGenerators = {
     }));
   },
 
-  "revenue-summary": async () => {
+  "revenue-summary": async () =>
+  {
     const [current, revenueRows] = await Promise.all([
       Subscription.find({ status: { $in: CURRENT_SUBSCRIPTION_STATUSES } }).lean(),
       BillingInvoice.aggregate([
@@ -1672,9 +1953,11 @@ const reportGenerators = {
     const revenueByStatus = Object.fromEntries(revenueRows.map((r) => [r._id, r]));
     let mrr = 0;
     let payingCount = 0;
-    for (const sub of current) {
+    for (const sub of current)
+    {
       const monthly = sub.billingCycle === "yearly" ? (sub.price || 0) / 12 : sub.price || 0;
-      if (monthly > 0) {
+      if (monthly > 0)
+      {
         mrr += monthly;
         payingCount++;
       }
@@ -1698,20 +1981,26 @@ const reportGenerators = {
   },
 };
 
-const listReports = async (req, res) => {
-  try {
+const listReports = async (req, res) =>
+{
+  try
+  {
     res.json({ success: true, data: REPORT_CATALOG });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const generateReport = async (req, res) => {
-  try {
+const generateReport = async (req, res) =>
+{
+  try
+  {
     const { type } = req.params;
     const definition = REPORT_CATALOG.find((r) => r.id === type);
     const generator = reportGenerators[type];
-    if (!definition || !generator) {
+    if (!definition || !generator)
+    {
       return res.status(404).json({ success: false, message: "Unknown report type" });
     }
     const rows = await generator(req);
@@ -1732,7 +2021,8 @@ const generateReport = async (req, res) => {
         rows: wrapped,
       },
     });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
@@ -1751,23 +2041,28 @@ const SETTING_DEFS = {
   "notifications.renewalReminderDays": { label: "Renewal reminder (days before)", section: "notifications", type: "number", min: 0, max: 120, help: "How far in advance renewal reminders are sent to schools.", default: 7 },
 };
 
-const coerceSettingValue = (def, value) => {
+const coerceSettingValue = (def, value) =>
+{
   if (def.type === "boolean") return Boolean(value);
-  if (def.type === "number") {
+  if (def.type === "number")
+  {
     const n = Number(value);
     if (!Number.isFinite(n)) throw Object.assign(new Error(`Invalid number for setting`), { status: 400 });
     if (def.min !== undefined && n < def.min) throw Object.assign(new Error(`Value must be >= ${def.min}`), { status: 400 });
     if (def.max !== undefined && n > def.max) throw Object.assign(new Error(`Value must be <= ${def.max}`), { status: 400 });
     return n;
   }
-  if (def.options && !def.options.includes(value)) {
+  if (def.options && !def.options.includes(value))
+  {
     throw Object.assign(new Error(`Invalid value, expected one of: ${def.options.join(", ")}`), { status: 400 });
   }
   return String(value);
 };
 
-const getPlatformSettings = async (req, res) => {
-  try {
+const getPlatformSettings = async (req, res) =>
+{
+  try
+  {
     const stored = await PlatformSetting.find().lean();
     const map = Object.fromEntries(stored.map((s) => [s.key, s]));
     const data = Object.entries(SETTING_DEFS).map(([key, def]) => ({
@@ -1784,30 +2079,37 @@ const getPlatformSettings = async (req, res) => {
       updatedAt: map[key]?.updatedAt || null,
     }));
     res.json({ success: true, data });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const updatePlatformSettings = async (req, res) => {
-  try {
+const updatePlatformSettings = async (req, res) =>
+{
+  try
+  {
     const body = req.body || {};
     const allowed = Object.keys(SETTING_DEFS);
     const entries = Object.entries(body);
-    if (entries.length === 0) {
+    if (entries.length === 0)
+    {
       return res.status(400).json({ success: false, message: "No settings provided" });
     }
     const coerced = [];
-    for (const [key, raw] of entries) {
+    for (const [key, raw] of entries)
+    {
       const def = SETTING_DEFS[key];
-      if (!def) {
+      if (!def)
+      {
         const err = new Error(`Key is not editable: ${key}`);
         err.status = 400;
         throw err;
       }
       coerced.push([key, coerceSettingValue(def, raw)]);
     }
-    for (const [key, value] of coerced) {
+    for (const [key, value] of coerced)
+    {
       await PlatformSetting.findOneAndUpdate(
         { key },
         { key, value, updatedBy: req.user?.email || null },
@@ -1838,7 +2140,8 @@ const updatePlatformSettings = async (req, res) => {
       updatedAt: map[key]?.updatedAt || null,
     }));
     res.json({ success: true, data });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
@@ -1848,47 +2151,60 @@ const updatePlatformSettings = async (req, res) => {
 // ---------------------------------------------------------------------------
 const VALID_CATEGORIES = ["board", "recognition_authority", "city", "state"];
 
-const listReferenceData = async (req, res) => {
-  try {
+const listReferenceData = async (req, res) =>
+{
+  try
+  {
     const { category } = req.params;
-    if (!VALID_CATEGORIES.includes(category)) {
+    if (!VALID_CATEGORIES.includes(category))
+    {
       return res.status(400).json({ success: false, message: "Invalid category" });
     }
     const ReferenceData = require("../models/ReferenceData");
     const items = await ReferenceData.find({ category }).sort({ value: 1 }).lean();
     res.json({ success: true, data: items.map((i) => i.value) });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
 
-const addReferenceData = async (req, res) => {
-  try {
+const addReferenceData = async (req, res) =>
+{
+  try
+  {
     const { category } = req.params;
-    if (!VALID_CATEGORIES.includes(category)) {
+    if (!VALID_CATEGORIES.includes(category))
+    {
       return res.status(400).json({ success: false, message: "Invalid category" });
     }
     const value = String(req.body.value || "").trim();
-    if (!value) {
+    if (!value)
+    {
       return res.status(400).json({ success: false, message: "Value is required" });
     }
     const ReferenceData = require("../models/ReferenceData");
     let doc;
-    try {
+    try
+    {
       doc = await ReferenceData.findOneAndUpdate(
         { category, value },
         { $setOnInsert: { category, value } },
         { upsert: true, new: true, runValidators: true },
       );
-    } catch (err) {
-      if (err.code === 11000) {
+    } catch (err)
+    {
+      if (err.code === 11000)
+      {
         doc = await ReferenceData.findOne({ category, value }).lean();
-      } else {
+      } else
+      {
         throw err;
       }
     }
     res.status(201).json({ success: true, data: doc.value });
-  } catch (err) {
+  } catch (err)
+  {
     rawError(res, err);
   }
 };
@@ -1913,6 +2229,7 @@ module.exports = {
   getPlatformSettings,
   updatePlatformSettings,
   listAuditLogs,
+  recordImpersonationEvent,
   listPlatformUsers,
   getUser360,
   listPlatformSchools,

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Users, Search, UserRound, CalendarDays } from "lucide-react";
+import { Search, UserRound, CalendarDays, Users } from "lucide-react";
 import {
   PageIntro,
   Card,
@@ -9,6 +9,7 @@ import {
   StatCard,
   toast,
 } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
 import { useTeacherContext } from "./useTeacherContext";
 import StudentDetailModal from "./StudentDetailModal";
@@ -54,7 +55,7 @@ export default function MyClass() {
     return (
       <Card>
         <div className="py-16 text-center">
-          <Users size={40} className="mx-auto text-slate-text/30 mb-3" />
+          <PageArtwork name="students" size={64} className="mx-auto mb-4" />
           <p className="text-[15px] font-semibold text-ink">
             No class assigned to your account yet
           </p>
@@ -72,7 +73,7 @@ export default function MyClass() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="My Teaching"
-        title="My Class"
+        title="My Class" art="students"
         description={
           hasClassTeacher
             ? `You are the Class Teacher for ${cls}${section ? `-${section}` : ""}.`

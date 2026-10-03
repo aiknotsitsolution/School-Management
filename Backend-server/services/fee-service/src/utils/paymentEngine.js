@@ -159,6 +159,9 @@ const reconcileFeePayment = async (order, extras = {}) => {
 
   const payment = await createPaymentWithReceipt({
     schoolId: order.schoolId,
+    // Gateway path: the campus is the order's, which the create path copied from
+    // the invoice, so a confirmed payment is credited to the right campus.
+    branchId: order.branchId || invoice.branchId,
     invoiceId: invoice._id,
     studentId: order.studentId,
     amount: order.amount,

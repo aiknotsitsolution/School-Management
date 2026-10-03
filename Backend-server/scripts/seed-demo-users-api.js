@@ -121,11 +121,11 @@ async function main() {
     await createStaffAndUser(school1._id, "CT1", "Demo Class Teacher I", "teacher", "Class Teacher - Nursery A", "teacher", "classteacher1.demoschool1@edu.in", null);
     await createStaffAndUser(school1._id, "CT2", "Demo Class Teacher II", "teacher", "Class Teacher - LKG A", "teacher", "classteacher2.demoschool1@edu.in", null);
     await createStaffAndUser(school1._id, "T3", "Demo Subject Teacher", "teacher", "TGT English", "teacher", "teacher3.demoschool1@edu.in", null);
-    await createStaffAndUser(school1._id, "ACC", "Demo Accountant", "admin-staff", "Accountant", "staff", "accountant1.demoschool1@edu.in", "accountant");
-    await createStaffAndUser(school1._id, "LIB", "Demo Librarian", "support", "Librarian", "staff", "librarian1.demoschool1@edu.in", "librarian");
-    await createStaffAndUser(school1._id, "REC", "Demo Receptionist", "admin-staff", "Receptionist", "staff", "receptionist1.demoschool1@edu.in", "receptionist");
-    await createStaffAndUser(school1._id, "TRN", "Demo Transport", "support", "Transport In-Charge", "staff", "transport1.demoschool1@edu.in", "transport");
-    await createStaffAndUser(school1._id, "COU", "Demo Counsellor", "admin-staff", "Admission Counsellor", "staff", "counsellor1.demoschool1@edu.in", "admission_counsellor");
+    await createStaffAndUser(school1._id, "ACC", "Demo Accountant", "staff", "Accountant", "staff", "accountant1.demoschool1@edu.in", "accountant");
+    await createStaffAndUser(school1._id, "LIB", "Demo Librarian", "staff", "Librarian", "staff", "librarian1.demoschool1@edu.in", "librarian");
+    await createStaffAndUser(school1._id, "REC", "Demo Receptionist", "staff", "Receptionist", "staff", "receptionist1.demoschool1@edu.in", "receptionist");
+    await createStaffAndUser(school1._id, "TRN", "Demo Transport", "staff", "Transport In-Charge", "staff", "transport1.demoschool1@edu.in", "transport");
+    await createStaffAndUser(school1._id, "COU", "Demo Counsellor", "staff", "Admission Counsellor", "staff", "counsellor1.demoschool1@edu.in", "admission_counsellor");
 
     // Students — create student records then user accounts
     const students = [
@@ -172,11 +172,11 @@ async function main() {
     await createStaffAndUser(school2._id, "CT1", "School2 Class Teacher I", "teacher", "Class Teacher - Nursery A", "teacher", "classteacher1.demoschool2@edu.in", null);
     await createStaffAndUser(school2._id, "CT2", "School2 Class Teacher II", "teacher", "Class Teacher - LKG A", "teacher", "classteacher2.demoschool2@edu.in", null);
     await createStaffAndUser(school2._id, "T3", "School2 Subject Teacher", "teacher", "TGT English", "teacher", "teacher3.demoschool2@edu.in", null);
-    await createStaffAndUser(school2._id, "ACC", "School2 Accountant", "admin-staff", "Accountant", "staff", "accountant1.demoschool2@edu.in", "accountant");
-    await createStaffAndUser(school2._id, "LIB", "School2 Librarian", "support", "Librarian", "staff", "librarian1.demoschool2@edu.in", "librarian");
-    await createStaffAndUser(school2._id, "REC", "School2 Receptionist", "admin-staff", "Receptionist", "staff", "receptionist1.demoschool2@edu.in", "receptionist");
-    await createStaffAndUser(school2._id, "TRN", "School2 Transport", "support", "Transport In-Charge", "staff", "transport1.demoschool2@edu.in", "transport");
-    await createStaffAndUser(school2._id, "COU", "School2 Counsellor", "admin-staff", "Admission Counsellor", "staff", "counsellor1.demoschool2@edu.in", "admission_counsellor");
+    await createStaffAndUser(school2._id, "ACC", "School2 Accountant", "staff", "Accountant", "staff", "accountant1.demoschool2@edu.in", "accountant");
+    await createStaffAndUser(school2._id, "LIB", "School2 Librarian", "staff", "Librarian", "staff", "librarian1.demoschool2@edu.in", "librarian");
+    await createStaffAndUser(school2._id, "REC", "School2 Receptionist", "staff", "Receptionist", "staff", "receptionist1.demoschool2@edu.in", "receptionist");
+    await createStaffAndUser(school2._id, "TRN", "School2 Transport", "staff", "Transport In-Charge", "staff", "transport1.demoschool2@edu.in", "transport");
+    await createStaffAndUser(school2._id, "COU", "School2 Counsellor", "staff", "Admission Counsellor", "staff", "counsellor1.demoschool2@edu.in", "admission_counsellor");
 
     const students2 = [
       { email: "student1.demoschool2@edu.in", name: "School2 Student I", admNo: "DS2NUR001", cls: "Nursery", sec: "A" },

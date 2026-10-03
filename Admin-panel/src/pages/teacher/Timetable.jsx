@@ -1,5 +1,6 @@
-import { CalendarDays } from "lucide-react";
+﻿import { CalendarDays } from "lucide-react";
 import { PageIntro, Card } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import TimetableManager from "../../components/timetable/TimetableManager";
 import MySubstitutions from "../../components/timetable/MySubstitutions";
 import { useTeacherContext } from "./useTeacherContext";
@@ -13,7 +14,7 @@ export default function Timetable() {
     return (
       <Card>
         <div className="py-16 text-center">
-          <CalendarDays size={40} className="mx-auto text-slate-text/30 mb-3" />
+          <PageArtwork name="calendar" size={64} className="mx-auto mb-4" />
           <p className="text-[15px] font-semibold text-ink">
             No class assigned yet
           </p>
@@ -29,7 +30,7 @@ export default function Timetable() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="My Teaching"
-        title="Timetable"
+        title="Timetable" art="calendar"
         description={
           canWrite
             ? `Manage the weekly timetable for ${assignment}. Add, edit, or remove lesson slots for your class.`

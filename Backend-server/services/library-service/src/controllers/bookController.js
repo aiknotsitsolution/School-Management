@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Book = require("../models/Book");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 
@@ -31,7 +32,7 @@ const addBook = async (req, res) => {
 const getBooks = async (req, res) => {
   try {
     const { category, search } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Book, req, { schoolId: req.tenantId })
     if (category) filter.category = category;
     if (search) filter.title = { $regex: escapeRegex(search), $options: "i" };
     const { page, limit, skip } = paginate(req.query);
@@ -47,8 +48,8 @@ const getBooks = async (req, res) => {
 
 const updateBook = async (req, res) => {
   try {
-    const book = await Book.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const book = await Book.findOneAndUpdate(scopeQuery(Book, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       pick(req.body, BOOK_FIELDS),
       { new: true },
     );
@@ -64,7 +65,7 @@ const updateBook = async (req, res) => {
 
 const deleteBook = async (req, res) => {
   try {
-    const book = await Book.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const book = await Book.findOneAndDelete(scopeQuery(Book, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!book) return res.status(404).json({ success: false, message: "Book not found" });
     res.json({ success: true, message: "Book removed" });
   } catch (err) {

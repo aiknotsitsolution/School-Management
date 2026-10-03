@@ -15,6 +15,9 @@ router.get("/analytics", ctrl.getPlatformAnalytics);
 
 // Audit trail (read-only surface for the append-oriented store)
 router.get("/audit-logs", ctrl.listAuditLogs);
+// Write-side of the audit trail: records that a platform owner entered, escalated
+// or left a tenant. Appends only; the actor is derived from the token here.
+router.post("/audit/impersonation", ctrl.recordImpersonationEvent);
 
 // Platform users (list / 360)
 router.get("/users", ctrl.listPlatformUsers);

@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const Notice = require("../models/Notice");
 const { getUserModel } = require("../models/userLite");
 const { resolveAudienceUserIds, insertFanout, visibleClassTagsFor } = require("../services/audience");
@@ -79,7 +80,7 @@ const getNotices = async (req, res) => {
       req.user.role === "teacher"
         ? ["teacher", "class_teacher", "all"]
         : [req.user.role, "all"];
-    const filter = { schoolId: req.tenantId, audience: { $in: effectiveAudiences } };
+    const filter = scopeQuery(Notice, req, { schoolId: req.tenantId, audience: { $in: effectiveAudiences } })
     // Class-tag scoping: only students/parents are restricted; staff and
     // teachers see tagged notices regardless (they may teach those classes).
     const ownTags = await visibleClassTagsFor({ tenantId: req.tenantId, user: req.user });
@@ -115,10 +116,10 @@ const updateNotice = async (req, res) => {
     if (Object.keys(updates).length === 0) {
       return res.status(400).json({ success: false, message: "Nothing to update" });
     }
-    const before = await Notice.findOne({ _id: req.params.id, schoolId: req.tenantId }).lean();
+    const before = await Notice.findOne(scopeQuery(Notice, req, { _id: req.params.id, schoolId: req.tenantId })).lean();
     if (!before) return res.status(404).json({ success: false, message: "Notice not found" });
-    const notice = await Notice.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const notice = await Notice.findOneAndUpdate(scopeQuery(Notice, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       { $set: updates },
       { new: true, runValidators: true },
     );
@@ -143,7 +144,7 @@ const updateNotice = async (req, res) => {
 
 const deleteNotice = async (req, res) => {
   try {
-    const notice = await Notice.findOneAndDelete({ _id: req.params.id, schoolId: req.tenantId });
+    const notice = await Notice.findOneAndDelete(scopeQuery(Notice, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!notice) return res.status(404).json({ success: false, message: "Notice not found" });
     res.json({ success: true, message: "Notice deleted" });
   } catch (err) {

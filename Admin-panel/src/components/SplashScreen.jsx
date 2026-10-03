@@ -48,7 +48,7 @@ export default function SplashScreen() {
       <div
         className="absolute w-80 h-80 rounded-full"
         style={{
-          background: "radial-gradient(circle, rgba(79,70,229,0.1) 0%, transparent 70%)",
+          background: "radial-gradient(circle, rgba(12,71,207,0.1) 0%, transparent 70%)",
           animation: "center-glow 2s ease-out 0.3s both",
         }}
       />

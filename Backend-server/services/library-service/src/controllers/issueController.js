@@ -1,3 +1,7 @@
+const {
+  scopeQuery,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const Book = require("../models/Book");
 const IssueRecord = require("../models/IssueRecord");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
@@ -5,14 +9,21 @@ const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination"
 const issueBook = async (req, res) => {
   try {
     const { bookId, borrowerId, borrowerType, dueDate } = req.body;
-    const book = await Book.findOne({ _id: bookId, schoolId: req.tenantId });
+    const book = await Book.findOne(scopeQuery(Book, req, { _id: bookId, schoolId: req.tenantId }));
     if (!book) return res.status(404).json({ success: false, message: "Book not found" });
     if (book.availableCopies < 1) return res.status(400).json({ success: false, message: "No copies available" });
 
     book.availableCopies -= 1;
     await book.save();
 
-    const record = await IssueRecord.create({ bookId, borrowerId, borrowerType, dueDate, schoolId: req.tenantId });
+      const record = await IssueRecord.create({
+        bookId,
+        borrowerId,
+        borrowerType,
+        dueDate,
+        schoolId: req.tenantId,
+        branchId: branchIdForWrite(req),
+      });
     res.status(201).json({ success: true, data: record });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
@@ -21,7 +32,7 @@ const issueBook = async (req, res) => {
 
 const returnBook = async (req, res) => {
   try {
-    const record = await IssueRecord.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const record = await IssueRecord.findOne(scopeQuery(IssueRecord, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!record) return res.status(404).json({ success: false, message: "Issue record not found" });
     if (record.status === "Returned") return res.status(400).json({ success: false, message: "Already returned" });
 
@@ -33,7 +44,7 @@ const returnBook = async (req, res) => {
     }
     await record.save();
 
-    const book = await Book.findOne({ _id: record.bookId, schoolId: req.tenantId });
+    const book = await Book.findOne(scopeQuery(Book, req, { _id: record.bookId, schoolId: req.tenantId }));
     if (book) {
       book.availableCopies += 1;
       await book.save();
@@ -48,7 +59,7 @@ const returnBook = async (req, res) => {
 const getIssues = async (req, res) => {
   try {
     const { borrowerId, status } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(IssueRecord, req, { schoolId: req.tenantId })
     if (borrowerId) filter.borrowerId = borrowerId;
     if (status) filter.status = status;
     const { page, limit, skip } = paginate(req.query);

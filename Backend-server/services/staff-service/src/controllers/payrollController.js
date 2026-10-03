@@ -1,3 +1,7 @@
+const {
+  scopeQuery,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const mongoose = require("mongoose");
 const Payroll = require("../models/Payroll");
 const Staff = require("../models/Staff");
@@ -30,7 +34,7 @@ const generatePayroll = async (req, res) => {
     if (!mongoose.isValidObjectId(staffId)) {
       return res.status(400).json({ success: false, message: "staffId must reference a real staff member" });
     }
-    const staff = await Staff.findOne({ _id: staffId, schoolId: req.tenantId }).select("_id").lean();
+    const staff = await Staff.findOne(scopeQuery(Staff, req, { _id: staffId, schoolId: req.tenantId })).select("_id").lean();
     if (!staff) {
       return res.status(404).json({ success: false, message: "Staff member not found" });
     }
@@ -44,11 +48,11 @@ const generatePayroll = async (req, res) => {
     if (adjustForAttendance) {
       const range = dateRange(month, year);
       const records = range
-        ? await StaffAttendance.find({
+        ? await StaffAttendance.find(scopeQuery(StaffAttendance, req, {
             schoolId: req.tenantId,
             staffId: String(staffId),
             date: { $gte: range.gte, $lte: range.lte },
-          }).select("status").lean()
+          })).select("status").lean()
         : [];
       totals = applyAttendance({ basic, month, year, records, baseDeductions: deductions, deductionReason });
     }
@@ -66,7 +70,8 @@ const generatePayroll = async (req, res) => {
       attendancePct: totals.attendancePct,
       netPay,
       schoolId: req.tenantId,
-    });
+
+      branchId: branchIdForWrite(req),    });
     res.status(201).json({ success: true, data: payroll });
   } catch (err) {
     if (err.code === 11000) {
@@ -78,7 +83,7 @@ const generatePayroll = async (req, res) => {
 
 const getPayroll = async (req, res) => {
   try {
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Payroll, req, { schoolId: req.tenantId })
     const { page, limit, skip } = paginate(req.query);
 
     if (["teacher", "staff"].includes(req.user.role)) {
@@ -104,14 +109,14 @@ const getPayroll = async (req, res) => {
 
 const markPaid = async (req, res) => {
   try {
-    const payroll = await Payroll.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const payroll = await Payroll.findOneAndUpdate(scopeQuery(Payroll, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       { status: "Paid", paidOn: new Date() },
       { new: true },
     );
     if (!payroll) return res.status(404).json({ success: false, message: "Payroll record not found" });
 
-    const staff = await Staff.findOne({ _id: payroll.staffId, schoolId: req.tenantId })
+    const staff = await Staff.findOne(scopeQuery(Staff, req, { _id: payroll.staffId, schoolId: req.tenantId }))
       .select("userId employeeId name")
       .lean();
     if (staff?.userId) {
@@ -138,7 +143,7 @@ const generateAllPayroll = async (req, res) => {
       return res.status(400).json({ success: false, message: "month and year are required" });
     }
 
-    const activeStaff = await Staff.find({ schoolId: req.tenantId, status: "Active" })
+    const activeStaff = await Staff.find(scopeQuery(Staff, req, { schoolId: req.tenantId, status: "Active" }))
       .select("employeeId name salary")
       .lean();
 
@@ -146,11 +151,11 @@ const generateAllPayroll = async (req, res) => {
       return res.status(200).json({ success: true, data: { created: 0, skipped: 0, message: "No active staff found" } });
     }
 
-    const existing = await Payroll.find({
+    const existing = await Payroll.find(scopeQuery(Payroll, req, {
       schoolId: req.tenantId,
       month,
       year: Number(year),
-    })
+    }))
       .select("staffId")
       .lean();
 
@@ -161,10 +166,10 @@ const generateAllPayroll = async (req, res) => {
     if (adjustForAttendance) {
       const range = dateRange(month, year);
       if (range) {
-        const rows = await StaffAttendance.find({
+        const rows = await StaffAttendance.find(scopeQuery(StaffAttendance, req, {
           schoolId: req.tenantId,
           date: { $gte: range.gte, $lte: range.lte },
-        }).select("staffId status").lean();
+        })).select("staffId status").lean();
         for (const r of rows) {
           const key = String(r.staffId);
           if (!attendanceByStaff.has(key)) attendanceByStaff.set(key, []);
@@ -181,9 +186,10 @@ const generateAllPayroll = async (req, res) => {
           ? attendanceAdjustment({ basic: s.salary || 0, month, year, records })
           : { attendanceDeduction: 0, attendancePct: null, penaltyDays: 0 };
         const deductions = adj.attendanceDeduction;
-        return {
-          schoolId: req.tenantId,
-          staffId: s._id,
+          return {
+            schoolId: req.tenantId,
+            branchId: branchIdForWrite(req),
+            staffId: s._id,
           month,
           year: Number(year),
           basic: s.salary || 0,
@@ -217,8 +223,8 @@ const updatePayroll = async (req, res) => {
     const netPay = calcNetPay(basic, allowances, deductions);
     // Manual edit overrides any generated attendance adjustment — reset the
     // transparency fields so they never contradict the edited totals.
-    const payroll = await Payroll.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId, status: "Pending" },
+    const payroll = await Payroll.findOneAndUpdate(scopeQuery(Payroll, req, 
+      { _id: req.params.id, schoolId: req.tenantId, status: "Pending" }),
       { basic, allowances, deductions, deductionReason, attendanceDeduction: 0, attendancePct: null, netPay },
       { new: true },
     );

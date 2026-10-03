@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const mongoose = require("mongoose");
 const Leave = require("../models/Leave");
 const Staff = require("../models/Staff");
@@ -49,6 +50,7 @@ const applyLeave = async (req, res) => {
       staffId,
       studentId,
       schoolId: req.tenantId,
+      branchId: branchIdForWrite(req),
     });
     res.status(201).json({ success: true, data: leave });
   } catch (err) {
@@ -61,7 +63,7 @@ const applyLeave = async (req, res) => {
 
 const getLeaves = async (req, res) => {
   try {
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Leave, req, { schoolId: req.tenantId })
     if (["teacher", "staff"].includes(req.user.role)) {
       filter.staffId = req.user.refId;
     } else if (req.user.role === "student") {
@@ -85,8 +87,8 @@ const updateLeaveStatus = async (req, res) => {
     if (!["Approved", "Rejected"].includes(status)) {
       return res.status(400).json({ success: false, message: "status must be Approved or Rejected" });
     }
-    const leave = await Leave.findOneAndUpdate(
-      { _id: req.params.id, schoolId: req.tenantId },
+    const leave = await Leave.findOneAndUpdate(scopeQuery(Leave, req, 
+      { _id: req.params.id, schoolId: req.tenantId }),
       { status, remarks, approvedBy: req.user.name },
       { new: true },
     );
@@ -141,12 +143,12 @@ const getLeaveBalance = async (req, res) => {
     const currentYear = new Date().getFullYear();
     const yearStart = new Date(currentYear, 0, 1);
     const yearEnd = new Date(currentYear, 11, 31, 23, 59, 59);
-    const filter = {
+    const filter = scopeQuery(Leave, req, {
       schoolId: req.tenantId,
       status: "Approved",
       fromDate: { $lte: yearEnd },
       toDate: { $gte: yearStart },
-    };
+    })
     if (staffId) filter.staffId = staffId;
     if (studentId) filter.studentId = studentId;
 

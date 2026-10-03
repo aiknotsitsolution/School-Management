@@ -122,6 +122,12 @@ const routes = [
     target: process.env.AUTH_SERVICE_URL || "http://localhost:5001",
   },
   {
+    // Branch records live in auth-service (it owns the school + plan needed to
+    // enforce Plan.limits.branches).
+    path: "/api/branches",
+    target: process.env.AUTH_SERVICE_URL || "http://localhost:5001",
+  },
+  {
     path: "/api/students",
     target: process.env.STUDENT_SERVICE_URL || "http://localhost:5002",
   },
@@ -194,10 +200,6 @@ const routes = [
     target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
   },
   {
-    path: "/api/behavior",
-    target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
-  },
-  {
     path: "/api/achievements",
     target: process.env.ACADEMIC_SERVICE_URL || "http://localhost:5004",
   },
@@ -250,6 +252,12 @@ const routes = [
     target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
   },
   {
+    // The inbox UI (/messages) drives /api/conversations, not /api/messages —
+    // both are mounted by communication-service and both must be proxied.
+    path: "/api/conversations",
+    target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
+  },
+  {
     path: "/api/broadcast",
     target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
   },
@@ -267,6 +275,13 @@ const routes = [
   },
   {
     path: "/api/inventory",
+    target: process.env.FACILITY_SERVICE_URL || "http://localhost:5008",
+  },
+  {
+    // Feature-neutral place search (facility-service owns the geocoder). Served
+    // separately from /api/transport so the branch form does not have to hold a
+    // transport permission.
+    path: "/api/places",
     target: process.env.FACILITY_SERVICE_URL || "http://localhost:5008",
   },
   {

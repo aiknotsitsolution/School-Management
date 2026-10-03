@@ -1,122 +1,126 @@
 import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
-import { useEffect } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Ban } from "lucide-react";
 import Layout from "./layout/Layout";
-import SidebarMuiPreview from "./layout/SidebarMuiPreview";
 import { loadActiveGradingScale } from "./lib/grading";
 import { logout } from "./store/authSlice";
-import Login from "./pages/Login";
-import ResetPassword from "./pages/ResetPassword";
-import ForgotPassword from "./pages/ForgotPassword";
-import Dashboard from "./pages/Dashboard";
-import Attendance from "./pages/Attendance";
-import Timetable from "./pages/Timetable";
-import Homework from "./pages/Homework";
-import Examination from "./pages/Examination";
-import AcademicSessions from "./pages/AcademicSessions";
-import GradingScales from "./pages/GradingScales";
-import StudyMaterials from "./pages/StudyMaterials";
-import SyllabusManage from "./pages/SyllabusManage";
-import ReportCard from "./pages/ReportCard";
-import MarksEntry from "./pages/MarksEntry";
-import Promotions from "./pages/Promotions";
-import Transfers from "./pages/Transfers";
-import Rollover from "./pages/Rollover";
-import Students from "./pages/Students";
-import AdmissionEnquiry from "./pages/AdmissionEnquiry";
+import RouteFallback from "./components/RouteFallback";
 
-import NoticeBoard from "./pages/NoticeBoard";
-import Events from "./pages/Events";
-import FeesCollection from "./pages/FeesCollection";
-import Accounting from "./pages/Accounting";
-import OnlinePayment from "./pages/OnlinePayment";
-import PaymentGateway from "./pages/PaymentGateway";
-import Inventory from "./pages/Inventory";
-import BusTracking from "./pages/BusTracking";
-import Reports from "./pages/Reports";
-import Library from "./pages/Library";
-import Leave from "./pages/Leave";
-import Hostel from "./pages/Hostel";
-import Payroll from "./pages/Payroll";
-import AddStudent from "./pages/AddStudent";
-import TeacherDashboard from "./pages/TeacherDashboard";
-import TeacherMyClass from "./pages/teacher/MyClass";
-import TeacherAttendance from "./pages/teacher/Attendance";
-import TeacherTimetable from "./pages/teacher/Timetable";
-import TeacherHomework from "./pages/teacher/Homework";
-import TeacherExams from "./pages/teacher/Exams";
-import TeacherPerformance from "./pages/teacher/Performance";
-import TeacherNotices from "./pages/teacher/Notices";
-import TeacherProfile from "./pages/teacher/Profile";
-import ParentDashboard from "./pages/ParentDashboard";
-import Diary from "./pages/Diary";
-import Messages from "./pages/Messages";
-import Broadcast from "./pages/Broadcast";
-import StudentDashboard from "./pages/student/StudentDashboard";
-import StudentProfile from "./pages/student/Profile";
-import StudentAttendance from "./pages/student/Attendance";
-import StudentTimetable from "./pages/student/Timetable";
-import StudentHomework from "./pages/student/Homework";
-import StudentExams from "./pages/student/Exams";
-import StudentResults from "./pages/student/Results";
-import StudentFees from "./pages/student/Fees";
-import StudentNotices from "./pages/student/Notices";
-import StudentLibrary from "./pages/student/Library";
-import StudentTransport from "./pages/student/Transport";
-import StudentDocuments from "./pages/student/Documents";
-import StudentHostel from "./pages/student/Hostel";
-import StudentEvents from "./pages/student/Events";
-import StudentAchievements from "./pages/student/Achievements";
-import StudentBehavior from "./pages/student/Behavior";
-import StudentLeave from "./pages/student/Leave";
-import StudentNotifications from "./pages/student/Notifications";
-import StudentStudyMaterials from "./pages/student/StudyMaterials";
-import StudentSyllabus from "./pages/student/Syllabus";
-import StaffDashboard from "./pages/StaffDashboard";
-import MyAttendance from "./pages/MyAttendance";
-import Notifications from "./pages/Notifications";
-import MyProfile from "./pages/staff/MyProfile";
-import AccountantDashboard from "./pages/staff/AccountantDashboard";
-import Fees from "./pages/staff/Fees";
-import LibrarianDashboard from "./pages/staff/LibrarianDashboard";
-import Books from "./pages/staff/Books";
-import Circulation from "./pages/staff/Circulation";
-import TransportDashboard from "./pages/staff/TransportDashboard";
-import BusRoutes from "./pages/staff/BusRoutes";
-import Allocations from "./pages/staff/Allocations";
-import ReceptionDashboard from "./pages/staff/ReceptionDashboard";
-import Enquiries from "./pages/staff/Enquiries";
-import StudentLookup from "./pages/staff/StudentLookup";
-import ReceptionNotices from "./pages/staff/ReceptionNotices";
-import PlatformDashboard from "./pages/platform/PlatformDashboard";
-import SchoolOnboarding from "./pages/platform/SchoolOnboarding";
-import SchoolsManagement from "./pages/platform/SchoolsManagement";
-import SchoolDetail from "./pages/platform/SchoolDetail";
-import PlatformUsers from "./pages/platform/PlatformUsers";
-import AuditLogs from "./pages/platform/AuditLogs";
-import PlatformReports from "./pages/platform/PlatformReports";
-import PlatformSettings from "./pages/platform/PlatformSettings";
-import Users from "./pages/Users";
-import ManageSchool from "./pages/ManageSchool";
-import Subscription from "./pages/Subscription";
-import Account from "./pages/Account";
-import SchoolSettings from "./pages/SchoolSettings";
-import Teachers from "./pages/Teachers";
-import Plans from "./pages/Plans";
-import Subscriptions from "./pages/Subscriptions";
-import CounsellorWorkspace from "./pages/CounsellorWorkspace";
-import StudentCompleteProfile from "./pages/StudentCompleteProfile";
-import StaffCompleteProfile from "./pages/StaffCompleteProfile";
-import BehaviorLog from "./pages/BehaviorLog";
-import Achievements from "./pages/Achievements";
+// Every page is code-split: 105 statically imported pages meant a single
+// 2.4 MB entry chunk that every visitor (including the login screen) had to
+// parse. Roles now load only what they navigate to.
+const Login = lazy(() => import("./pages/Login"));
+const ResetPassword = lazy(() => import("./pages/ResetPassword"));
+const ForgotPassword = lazy(() => import("./pages/ForgotPassword"));
+const Landing = lazy(() => import("./pages/Landing"));
+const IconPicker = lazy(() => import("./pages/IconPicker"));
+const Dashboard = lazy(() => import("./pages/Dashboard"));
+const Attendance = lazy(() => import("./pages/Attendance"));
+const Timetable = lazy(() => import("./pages/Timetable"));
+const Homework = lazy(() => import("./pages/Homework"));
+const Examination = lazy(() => import("./pages/Examination"));
+const AcademicSessions = lazy(() => import("./pages/AcademicSessions"));
+const GradingScales = lazy(() => import("./pages/GradingScales"));
+const Branches = lazy(() => import("./pages/Branches"));
+const StudyMaterials = lazy(() => import("./pages/StudyMaterials"));
+const SyllabusManage = lazy(() => import("./pages/SyllabusManage"));
+const ReportCard = lazy(() => import("./pages/ReportCard"));
+const MarksEntry = lazy(() => import("./pages/MarksEntry"));
+const Promotions = lazy(() => import("./pages/Promotions"));
+const Transfers = lazy(() => import("./pages/Transfers"));
+const Rollover = lazy(() => import("./pages/Rollover"));
+const Students = lazy(() => import("./pages/Students"));
+const AdmissionEnquiry = lazy(() => import("./pages/AdmissionEnquiry"));
+const NoticeBoard = lazy(() => import("./pages/NoticeBoard"));
+const Events = lazy(() => import("./pages/Events"));
+const FeesCollection = lazy(() => import("./pages/FeesCollection"));
+const Accounting = lazy(() => import("./pages/Accounting"));
+const OnlinePayment = lazy(() => import("./pages/OnlinePayment"));
+const PaymentGateway = lazy(() => import("./pages/PaymentGateway"));
+const Inventory = lazy(() => import("./pages/Inventory"));
+const BusTracking = lazy(() => import("./pages/BusTracking"));
+const Reports = lazy(() => import("./pages/Reports"));
+const Library = lazy(() => import("./pages/Library"));
+const Leave = lazy(() => import("./pages/Leave"));
+const Hostel = lazy(() => import("./pages/Hostel"));
+const Payroll = lazy(() => import("./pages/Payroll"));
+const AddStudent = lazy(() => import("./pages/AddStudent"));
+const TeacherDashboard = lazy(() => import("./pages/TeacherDashboard"));
+const TeacherMyClass = lazy(() => import("./pages/teacher/MyClass"));
+const TeacherAttendance = lazy(() => import("./pages/teacher/Attendance"));
+const TeacherTimetable = lazy(() => import("./pages/teacher/Timetable"));
+const TeacherHomework = lazy(() => import("./pages/teacher/Homework"));
+const TeacherExams = lazy(() => import("./pages/teacher/Exams"));
+const TeacherPerformance = lazy(() => import("./pages/teacher/Performance"));
+const TeacherNotices = lazy(() => import("./pages/teacher/Notices"));
+const TeacherProfile = lazy(() => import("./pages/teacher/Profile"));
+const ParentDashboard = lazy(() => import("./pages/ParentDashboard"));
+const Diary = lazy(() => import("./pages/Diary"));
+const Messages = lazy(() => import("./pages/Messages"));
+const Broadcast = lazy(() => import("./pages/Broadcast"));
+const StudentDashboard = lazy(() => import("./pages/student/StudentDashboard"));
+const StudentProfile = lazy(() => import("./pages/student/Profile"));
+const StudentAttendance = lazy(() => import("./pages/student/Attendance"));
+const StudentTimetable = lazy(() => import("./pages/student/Timetable"));
+const StudentHomework = lazy(() => import("./pages/student/Homework"));
+const StudentExams = lazy(() => import("./pages/student/Exams"));
+const StudentResults = lazy(() => import("./pages/student/Results"));
+const StudentFees = lazy(() => import("./pages/student/Fees"));
+const StudentNotices = lazy(() => import("./pages/student/Notices"));
+const StudentLibrary = lazy(() => import("./pages/student/Library"));
+const StudentTransport = lazy(() => import("./pages/student/Transport"));
+const StudentDocuments = lazy(() => import("./pages/student/Documents"));
+const StudentHostel = lazy(() => import("./pages/student/Hostel"));
+const StudentEvents = lazy(() => import("./pages/student/Events"));
+const StudentAchievements = lazy(() => import("./pages/student/Achievements"));
+const StudentLeave = lazy(() => import("./pages/student/Leave"));
+const StudentNotifications = lazy(() => import("./pages/student/Notifications"));
+const StudentStudyMaterials = lazy(() => import("./pages/student/StudyMaterials"));
+const StudentSyllabus = lazy(() => import("./pages/student/Syllabus"));
+const StaffDashboard = lazy(() => import("./pages/StaffDashboard"));
+const MyAttendance = lazy(() => import("./pages/MyAttendance"));
+const Notifications = lazy(() => import("./pages/Notifications"));
+const MyProfile = lazy(() => import("./pages/staff/MyProfile"));
+const AccountantDashboard = lazy(() => import("./pages/staff/AccountantDashboard"));
+const Fees = lazy(() => import("./pages/staff/Fees"));
+const LibrarianDashboard = lazy(() => import("./pages/staff/LibrarianDashboard"));
+const Books = lazy(() => import("./pages/staff/Books"));
+const Circulation = lazy(() => import("./pages/staff/Circulation"));
+const TransportDashboard = lazy(() => import("./pages/staff/TransportDashboard"));
+const BusRoutes = lazy(() => import("./pages/staff/BusRoutes"));
+const Allocations = lazy(() => import("./pages/staff/Allocations"));
+const ReceptionDashboard = lazy(() => import("./pages/staff/ReceptionDashboard"));
+const Enquiries = lazy(() => import("./pages/staff/Enquiries"));
+const StudentLookup = lazy(() => import("./pages/staff/StudentLookup"));
+const ReceptionNotices = lazy(() => import("./pages/staff/ReceptionNotices"));
+const PlatformDashboard = lazy(() => import("./pages/platform/PlatformDashboard"));
+const SchoolOnboarding = lazy(() => import("./pages/platform/SchoolOnboarding"));
+const SchoolsManagement = lazy(() => import("./pages/platform/SchoolsManagement"));
+const SchoolDetail = lazy(() => import("./pages/platform/SchoolDetail"));
+const PlatformUsers = lazy(() => import("./pages/platform/PlatformUsers"));
+const AuditLogs = lazy(() => import("./pages/platform/AuditLogs"));
+const PlatformReports = lazy(() => import("./pages/platform/PlatformReports"));
+const PlatformSettings = lazy(() => import("./pages/platform/PlatformSettings"));
+const Users = lazy(() => import("./pages/Users"));
+const ManageSchool = lazy(() => import("./pages/ManageSchool"));
+const Subscription = lazy(() => import("./pages/Subscription"));
+const Account = lazy(() => import("./pages/Account"));
+const SchoolSettings = lazy(() => import("./pages/SchoolSettings"));
+const Teachers = lazy(() => import("./pages/Teachers"));
+const Plans = lazy(() => import("./pages/Plans"));
+const Subscriptions = lazy(() => import("./pages/Subscriptions"));
+const CounsellorWorkspace = lazy(() => import("./pages/CounsellorWorkspace"));
+const StudentCompleteProfile = lazy(() => import("./pages/StudentCompleteProfile"));
+const StaffCompleteProfile = lazy(() => import("./pages/StaffCompleteProfile"));
+const Achievements = lazy(() => import("./pages/Achievements"));
 import {
   selectIsAuthenticated,
   selectRole,
   selectUser,
   selectSchool,
 } from "./store/selectors";
-import { hasPermission } from "./lib/permissions";
+import { hasPermission, legacyRole } from "./lib/permissions";
 import { resolvePersona } from "./lib/persona";
 import SplashScreen from "./components/SplashScreen";
 
@@ -139,7 +143,7 @@ function SchoolSuspendedScreen() {
         <button
           type="button"
           onClick={() => dispatch(logout())}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-ink text-white text-sm font-semibold hover:opacity-90 transition-opacity"
+          className="inline-flex items-center justify-center gap-2 px-4 py-2 rounded-xl bg-ink text-white text-sm font-semibold hover:opacity-90 transition-opacity dark:bg-slate-200 dark:text-ink"
         >
           Sign out
         </button>
@@ -151,7 +155,8 @@ function SchoolSuspendedScreen() {
 function ProtectedLayout() {
   const isAuth = useSelector(selectIsAuthenticated);
   const school = useSelector(selectSchool);
-  const role = useSelector(selectRole);
+  const rawRole = useSelector(selectRole);
+  const role = legacyRole(rawRole);
   // Load the school's active grading scale once per auth so grade previews
   // (marks entry, report fallbacks) use the configured bands, not defaults.
   useEffect(() => {
@@ -177,7 +182,7 @@ function ProtectedLayout() {
 
 function RequireRole({ roles, children, fallback = "/" }) {
   const role = useSelector(selectRole);
-  if (!roles.includes(role)) {
+  if (!roles.includes(legacyRole(role))) {
     return <Navigate to={fallback} replace />;
   }
   return children;
@@ -232,10 +237,23 @@ function RequireNotTeacher({ children, fallback = "/teacher-dashboard" }) {
   return children;
 }
 
+// The fleet map is an operator surface: it lists every route in the school,
+// including driver contacts and assigned rosters. Parents hold transport:read
+// for their own children only, via the /parent-dashboard bus panel.
+function RequireStaff({ children, fallback = "/parent-dashboard" }) {
+  const role = legacyRole(useSelector(selectRole));
+  if (role !== "school_admin" && role !== "super_admin" && role !== "staff") {
+    return <Navigate to={fallback} replace />;
+  }
+  return children;
+}
+
 function HomeRedirect() {
   const user = useSelector(selectUser);
   const school = useSelector(selectSchool);
-  const role = user?.role || "admin";
+  // Normalise the legacy "admin" token so it resolves to the school_admin
+  // branch below instead of falling through to a route it cannot pass.
+  const role = legacyRole(user?.role) || "school_admin";
   if (role === "super_admin") return <Navigate to="/platform" replace />;
   // Suspended school admins land on the subscription page
   if (role === "school_admin" && school?.status === "suspended") {
@@ -251,19 +269,32 @@ function HomeRedirect() {
     }
     return <Navigate to="/staff-dashboard" replace />;
   }
-  return <Dashboard />;
+  // school_admin lands on the guarded /dashboard route (inside ProtectedLayout)
+  // so the app shell — sidebar, topbar, suspended-school gate — is applied.
+  return <Navigate to="/dashboard" replace />;
+}
+
+// Public landing page gate: visitors on `/` see the marketing site; signed-in
+// users are routed to their role home exactly as HomeRedirect used to do.
+function LandingGate() {
+  const isAuth = useSelector(selectIsAuthenticated);
+  return isAuth ? <HomeRedirect /> : <Landing />;
 }
 
 export default function App() {
   return (
     <BrowserRouter>
       <SplashScreen />
+      <Suspense fallback={<RouteFallback />}>
       <Routes>
+        <Route path="/" element={<LandingGate />} />
         <Route path="/login" element={<Login />} />
         <Route path="/reset-password" element={<ResetPassword />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
         <Route element={<ProtectedLayout />}>
-          <Route path="/" element={<HomeRedirect />} />
+          {/* Dev tool for choosing sidebar icons. Remove this route and
+              pages/IconPicker.jsx once the final picks are applied. */}
+          <Route path="/dev/icon-picker" element={<IconPicker />} />
           <Route
             path="/platform"
             element={
@@ -379,6 +410,14 @@ export default function App() {
               <RequirePermission permission="staff:write">
                 <Teachers />
               </RequirePermission>
+            }
+          />
+          <Route
+            path="/dashboard"
+            element={
+              <RequireRole roles={["school_admin"]}>
+                <Dashboard />
+              </RequireRole>
             }
           />
           <Route
@@ -570,14 +609,6 @@ export default function App() {
             element={
               <RequireRole roles={["student"]}>
                 <StudentAchievements />
-              </RequireRole>
-            }
-          />
-          <Route
-            path="/student/behavior"
-            element={
-              <RequireRole roles={["student"]}>
-                <StudentBehavior />
               </RequireRole>
             }
           />
@@ -836,16 +867,26 @@ export default function App() {
               </RequirePermission>
             }
           />
-          <Route
-            path="/grading-scales"
-            element={
-              <RequirePermission permission="exams:read">
-                <RequireNotStudent>
-                  <GradingScales />
-                </RequireNotStudent>
-              </RequirePermission>
-            }
-          />
+            <Route
+              path="/grading-scales"
+              element={
+                <RequirePermission permission="exams:read">
+                  <RequireNotStudent>
+                    <GradingScales />
+                  </RequireNotStudent>
+                </RequirePermission>
+              }
+            />
+            <Route
+              path="/branches"
+              element={
+                <RequirePermission permission="branches:read">
+                  <RequireNotStudent>
+                    <Branches />
+                  </RequireNotStudent>
+                </RequirePermission>
+              }
+            />
           <Route
             path="/study-materials"
             element={
@@ -914,7 +955,9 @@ export default function App() {
           <Route
             path="/messages"
             element={
-              <RequireRole roles={["parent", "teacher", "school_admin", "super_admin"]}>
+              <RequireRole
+                roles={["student", "parent", "teacher", "staff", "school_admin", "super_admin"]}
+              >
                 <Messages />
               </RequireRole>
             }
@@ -985,9 +1028,9 @@ export default function App() {
             path="/bus-tracking"
             element={
               <RequirePermission permission="transport:read">
-                <RequireNotStudent>
+                <RequireStaff>
                   <BusTracking />
-                </RequireNotStudent>
+                </RequireStaff>
               </RequirePermission>
             }
           />
@@ -996,16 +1039,6 @@ export default function App() {
             element={
               <RequirePermission permission="reports:view">
                 <Reports />
-              </RequirePermission>
-            }
-          />
-          <Route
-            path="/behavior"
-            element={
-              <RequirePermission permission="conduct:read">
-                <RequireNotStudent>
-                  <BehaviorLog />
-                </RequireNotStudent>
               </RequirePermission>
             }
           />
@@ -1089,8 +1122,8 @@ export default function App() {
           />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>
-        <Route path="/sidebar-preview" element={<SidebarMuiPreview />} />
       </Routes>
+      </Suspense>
     </BrowserRouter>
   );
 }

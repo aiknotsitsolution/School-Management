@@ -19,6 +19,7 @@ import {
   Building2,
   Save,
   Camera,
+  ImageOff,
 } from "lucide-react";
 import { api } from "../lib/api";
 import {
@@ -205,6 +206,22 @@ function SchoolProfileForm({ school, user, onSave }) {
     e.target.value = "";
   };
 
+  const handleBannerRemove = async () => {
+    setBannerSaving(true);
+    try {
+      const { data } = await api.school.update({ bannerImage: "" });
+      dispatch(setSchoolAction(data));
+      localStorage.setItem("erp_school", JSON.stringify(data));
+      toast("Dashboard banner removed");
+    } catch (err) {
+      toast(err.message || "Could not remove banner", "error");
+    } finally {
+      setBannerSaving(false);
+    }
+  };
+
+  const bannerImage = school?.settings?.bannerImage || "";
+
   return (
     <div className="space-y-5">
       <div className="flex items-center gap-5">
@@ -238,17 +255,37 @@ function SchoolProfileForm({ school, user, onSave }) {
       </div>
 
       <div>
-        <label className="text-[12px] font-semibold text-ink mb-1.5 block">Dashboard Banner</label>
+        <div className="mb-1.5 flex items-center justify-between gap-3">
+          <label className="text-[12px] font-semibold text-ink">Dashboard Banner</label>
+          {bannerImage && (
+            <button
+              type="button"
+              onClick={handleBannerRemove}
+              disabled={bannerSaving}
+              className="inline-flex items-center gap-1.5 rounded-control border border-line px-2.5 py-1.5 text-[11.5px] font-semibold text-brand-red transition hover:border-brand-red hover:bg-brand-red-light disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              <Trash2 size={13} />
+              {bannerSaving ? "Removing…" : "Remove"}
+            </button>
+          )}
+        </div>
         <div className="relative rounded-xl overflow-hidden bg-ink group cursor-pointer" style={{ height: 140 }}>
-          <img
-            src={school?.settings?.bannerImage || "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1600&h=400&q=80"}
-            alt="Dashboard banner"
-            className="absolute inset-0 w-full h-full object-cover opacity-25"
-          />
+          {bannerImage ? (
+            <img
+              src={bannerImage}
+              alt="Dashboard banner"
+              className="absolute inset-0 w-full h-full object-cover opacity-25"
+            />
+          ) : (
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-1.5 bg-gradient-to-br from-primary/30 via-ink to-ink text-white/60">
+              <ImageOff size={20} />
+              <span className="text-[12px] font-semibold">No banner image — plain gradient</span>
+            </div>
+          )}
           <div className="absolute inset-0 bg-ink/45 opacity-0 group-hover:opacity-100 transition-opacity flex flex-col items-center justify-center gap-1 text-white">
             <Camera size={20} />
             <span className="text-[12px] font-semibold">
-              {bannerSaving ? "Uploading…" : "Change Banner Image"}
+              {bannerSaving ? "Uploading…" : bannerImage ? "Change Banner Image" : "Upload Banner Image"}
             </span>
           </div>
           <label className="absolute inset-0 cursor-pointer">
@@ -262,7 +299,11 @@ function SchoolProfileForm({ school, user, onSave }) {
           </label>
         </div>
         <p className="text-[11px] text-slate-text/50 mt-1">
-          {bannerSaving ? "Uploading banner…" : "This image appears as the background on the Admin Dashboard."}
+          {bannerSaving
+            ? "Saving banner…"
+            : bannerImage
+              ? "Shown as the background on the Admin, Teacher, Staff and Parent dashboards."
+              : "No image set — dashboards show the default gradient. Upload one, or remove it any time."}
         </p>
       </div>
 
@@ -332,30 +373,6 @@ function SchoolProfileForm({ school, user, onSave }) {
               <option value="IGCSE">IGCSE</option>
               <option value="IB">IB (International Baccalaureate)</option>
               <option value="NIOS">NIOS</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-          <div>
-            <label className="text-[12px] font-semibold text-ink mb-1.5 block">Recognition / Affiliation No.</label>
-            <Input
-              value={form.recognitionNumber}
-              onChange={(e) => setForm((f) => ({ ...f, recognitionNumber: e.target.value }))}
-              placeholder="e.g. 2730456 / UGC-12345"
-            />
-          </div>
-          <div>
-            <label className="text-[12px] font-semibold text-ink mb-1.5 block">Issuing Authority</label>
-            <select
-              value={form.recognitionAuthority}
-              onChange={(e) => setForm((f) => ({ ...f, recognitionAuthority: e.target.value }))}
-              className="w-full h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
-            >
-              <option value="">Select authority</option>
-              <option value="CBSE">CBSE, New Delhi</option>
-              <option value="CISCE">CISCE (ICSE), New Delhi</option>
-              <option value="State Education Dept">State Education Department</option>
-              <option value="UGC">UGC (University Grants Commission)</option>
-              <option value="AICTE">AICTE</option>
               <option value="Other">Other</option>
             </select>
           </div>

@@ -3,6 +3,8 @@ const mongoose = require("mongoose");
 const achievementSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the achievement was recorded at (the student's own campus).
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     studentId: { type: String, required: true, index: true },
     class: { type: String },
     section: { type: String },

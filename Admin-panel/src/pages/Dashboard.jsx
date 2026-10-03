@@ -43,6 +43,7 @@ import {
 } from "recharts";
 import { Pill, statusTone, Avatar } from "../components/UI";
 import AttendanceTrendChart from "../components/AttendanceTrendChart";
+import RecognitionBand from "../components/dashboard/RecognitionBand";
 import {
   DashboardPagination,
   usePaged,
@@ -114,6 +115,7 @@ export default function Dashboard() {
     busRoutes: [],
     staff: [],
     events: [],
+    achievements: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -136,12 +138,14 @@ export default function Dashboard() {
         api.staff.list(),
         api.events.list(),
         api.staff.attendance.list("limit=5000"),
+        api.achievements.list("limit=200"),
       ]);
       const value = (index) =>
         results[index].status === "fulfilled" ? results[index].value : {};
       const failed = results.filter((result) => result.status === "rejected");
       setAttendanceFailed(results[2].status === "rejected");
       setStaffAttendanceFailed(results[10].status === "rejected");
+      const achievementsRaw = value(11).data;
       setData({
         studentStats: value(0).data || { total: 0, active: 0, byClass: [] },
         students: value(1).data || [],
@@ -154,6 +158,7 @@ export default function Dashboard() {
         busRoutes: value(7).data || [],
         staff: value(8).data || [],
         events: value(9).data || [],
+        achievements: Array.isArray(achievementsRaw) ? achievementsRaw : achievementsRaw?.data || [],
       });
       if (failed.length === results.length) {
         setError("Dashboard data could not be loaded. Please try again.");
@@ -265,6 +270,7 @@ export default function Dashboard() {
     eta: route.currentLocation ? "Live" : "—",
   }));
   const studentStats = data.studentStats;
+  const achievements = data.achievements || [];
   const admissionList = admissionEnquiries.map((item) => ({
     ...item,
     id: item._id,
@@ -427,12 +433,12 @@ export default function Dashboard() {
   }, [staffAttendance, data.staff]);
 
   const quickActions = [
-    { to: "/users", icon: UserPlus, label: "Add Student", tone: ACCENTS.primary.icon, perm: "students:write" },
-    { to: "/teachers", icon: GraduationCap, label: "Add Staff", tone: ACCENTS.violet.icon, perm: "staff:write" },
-    { to: "/fees-collection", icon: CreditCard, label: "Fee Collection", tone: ACCENTS.success.icon, perm: "fees:collect" },
-    { to: "/notice-board", icon: Megaphone, label: "Publish Notice", tone: ACCENTS.warn.icon, perm: "notices:publish" },
-    { to: "/events", icon: CalendarDays, label: "New Event", tone: ACCENTS.alert.icon, perm: "events:publish" },
-    { to: "/homework", icon: BookOpenCheck, label: "Homework", tone: ACCENTS.teal.icon, perm: "homework:read" },
+    { to: "/users", icon: UserPlus, label: "Add Student", accent: "primary", perm: "students:write" },
+    { to: "/teachers", icon: GraduationCap, label: "Add Staff", accent: "violet", perm: "staff:write" },
+    { to: "/fees-collection", icon: CreditCard, label: "Fee Collection", accent: "success", perm: "fees:collect" },
+    { to: "/notice-board", icon: Megaphone, label: "Publish Notice", accent: "warn", perm: "notices:publish" },
+    { to: "/events", icon: CalendarDays, label: "New Event", accent: "alert", perm: "events:publish" },
+    { to: "/homework", icon: BookOpenCheck, label: "Homework", accent: "teal", perm: "homework:read" },
   ].filter((item) => hasPermission(user, item.perm));
 
   const dateLabel = new Date().toLocaleDateString("en-IN", {
@@ -464,10 +470,7 @@ export default function Dashboard() {
           (loading ? " · Loading live data…" : "")
         }
         dateLabel={dateLabel}
-        image={
-          school?.settings?.bannerImage ||
-          "https://images.unsplash.com/photo-1503676260728-1c00da094a0b?auto=format&fit=crop&w=1600&h=400&q=80"
-        }
+        image={school?.settings?.bannerImage}
         quote="Great schools are built on great data."
         quoteTitle={school?.name || "School command centre"}
         right={
@@ -485,7 +488,6 @@ export default function Dashboard() {
         icon={Zap}
         action={<ViewLink to="/students">Manage school</ViewLink>}
         items={quickActions}
-        columns={6}
       />
 
       {error && (
@@ -581,6 +583,8 @@ export default function Dashboard() {
         />
       </MetricGrid>
 
+      <RecognitionBand achievements={achievements} students={students} />
+
       <AttendanceTrendChart
         records={attendance}
         loading={loading}
@@ -599,6 +603,8 @@ export default function Dashboard() {
           iconTone={ACCENTS.violet.icon}
           subtitle="Live distribution of every enrolled student"
           action={<ViewLink to="/students">All students</ViewLink>}
+          decor="people"
+          decorTone={ACCENTS.violet.text}
         >
           {classStrength.length === 0 ? (
             <EmptyPanel
@@ -672,6 +678,8 @@ export default function Dashboard() {
             month: "long",
           })}
           action={<ViewLink to="/staff/my-attendance">Details</ViewLink>}
+          decor="attend"
+          decorTone={ACCENTS.success.text}
         >
           <div className="flex flex-col items-center gap-4">
             <div className="relative flex h-32 w-32 shrink-0 items-center justify-center">
@@ -772,6 +780,8 @@ export default function Dashboard() {
           iconTone={ACCENTS.success.icon}
           subtitle="Realised collections against outstanding dues"
           action={<ViewLink to="/fees-collection">Fees</ViewLink>}
+          decor="coins"
+          decorTone={ACCENTS.success.text}
         >
           <div className="mb-4 grid grid-cols-2 gap-3 sm:grid-cols-3">
             <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-3">
@@ -841,6 +851,8 @@ export default function Dashboard() {
           icon={Bell}
           iconTone={ACCENTS.warn.icon}
           action={<ViewLink to="/notice-board">All</ViewLink>}
+          decor="broadcast"
+          decorTone={ACCENTS.warn.text}
         >
           {pagedNotices.length === 0 ? (
             <EmptyPanel
@@ -958,6 +970,8 @@ export default function Dashboard() {
         iconTone={ACCENTS.info.icon}
         subtitle="Live location and load per route"
         action={<ViewLink to="/bus-tracking">Live tracking</ViewLink>}
+        decor="motion"
+        decorTone={ACCENTS.info.text}
       >
         {pagedBuses.length === 0 ? (
           <EmptyPanel
@@ -1004,6 +1018,8 @@ export default function Dashboard() {
           icon={PartyPopper}
           iconTone={ACCENTS.violet.icon}
           action={<ViewLink to="/events">All events</ViewLink>}
+          decor="events"
+          decorTone={ACCENTS.violet.text}
         >
           {upcomingEvents.length === 0 ? (
             <EmptyPanel

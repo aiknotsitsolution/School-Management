@@ -1,3 +1,8 @@
+const {
+  scopeQuery,
+  withBranchScope,
+  assertBranchAssignable,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const mongoose = require("mongoose");
 const Student = require("../models/Student");
 const { notifyByRefIds } = require("../utils/notify");
@@ -117,10 +122,10 @@ const createStudent = async (req, res) => {
       });
     }
 
-    const existing = await Student.findOne({
+    const existing = await Student.findOne(scopeQuery(Student, req, {
       schoolId: req.tenantId,
       admissionNo: admissionId,
-    });
+    }));
     if (existing) {
       return res.status(409).json({
         success: false,
@@ -142,6 +147,11 @@ const createStudent = async (req, res) => {
     const data = {
       ...pick(studentData, STUDENT_EDITABLE),
       schoolId: req.tenantId,
+      // Campus of the admission. An admin may name it explicitly (a student
+      // admitted straight into a second campus); otherwise the student lands in
+      // the campus the admin is currently working in. A later transfer is done
+      // from the account screen, which moves this record with the account.
+      branchId: await assertBranchAssignable(req, studentData.branchId),
       admissionNo: admissionId,
       parentName: studentData.parentName || fatherName,
       parentContact: studentData.parentContact || phone,
@@ -189,7 +199,7 @@ const getStudents = async (req, res) => {
       page = 1,
       limit = 20,
     } = req.query;
-    const filter = { schoolId: req.tenantId };
+    const filter = scopeQuery(Student, req, { schoolId: req.tenantId })
     // Soft-deleted students are hidden from every listing unless explicitly
     // requested (admin "deleted" views / restore flows).
     if (includeDeleted !== "true" && includeDeleted !== "1") filter.deletedAt = null;
@@ -264,13 +274,13 @@ const getStudents = async (req, res) => {
 const getPendingRegistrations = async (req, res) => {
   try {
     const { page = 1, limit = 20 } = req.query;
-    const filter = {
+    const filter = scopeQuery(Student, req, {
       schoolId: req.tenantId,
       // { userId: null } matches both explicit null and absent field, exactly
       // the union of shells (created on admission-confirm) that await a user.
       userId: null,
       deletedAt: null,
-    };
+    })
     const students = await Student.find(filter)
       .sort({ createdAt: -1 })
       .skip((page - 1) * limit)
@@ -308,10 +318,10 @@ const getMyStudent = async (req, res) => {
         message: "No Admission ID linked to this account",
       });
     }
-    const student = await Student.findOne({
+    const student = await Student.findOne(scopeQuery(Student, req, {
       schoolId: req.tenantId,
       admissionNo: req.user.refId,
-    });
+    }));
     if (!student) {
       return res.status(404).json({
         success: false,
@@ -327,7 +337,7 @@ const getMyStudent = async (req, res) => {
 // Aggregate KPI surface for the Admission Counsellor workspace.
 const counsellorStats = async (req, res) => {
   try {
-    const base = { schoolId: req.tenantId, deletedAt: null };
+    const base = withBranchScope(req, { schoolId: req.tenantId, deletedAt: null });
     if (req.teacherScope) {
       base.class = req.teacherScope.class;
       if (req.teacherScope.section) base.section = req.teacherScope.section;
@@ -351,10 +361,10 @@ const counsellorStats = async (req, res) => {
 
 const getStudentById = async (req, res) => {
   try {
-    const student = await Student.findOne({
+    const student = await Student.findOne(scopeQuery(Student, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
-    });
+    }));
     if (!student)
       return res
         .status(404)
@@ -369,10 +379,10 @@ const getStudentById = async (req, res) => {
 
 const updateStudent = async (req, res) => {
   try {
-    const student = await Student.findOne({
+    const student = await Student.findOne(scopeQuery(Student, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
-    });
+    }));
     if (!student)
       return res
         .status(404)
@@ -442,10 +452,10 @@ const updateStudent = async (req, res) => {
 // complete. Secured by students:write at the route level.
 const completeProfile = async (req, res) => {
   try {
-    const student = await Student.findOne({
+    const student = await Student.findOne(scopeQuery(Student, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
-    });
+    }));
     if (!student)
       return res
         .status(404)
@@ -480,10 +490,10 @@ const completeProfile = async (req, res) => {
 // the original idCardNumber but refreshes the issuedAt timestamp.
 const issueIdCard = async (req, res) => {
   try {
-    const student = await Student.findOne({
+    const student = await Student.findOne(scopeQuery(Student, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
-    });
+    }));
     if (!student)
       return res
         .status(404)
@@ -524,10 +534,10 @@ const issueIdCard = async (req, res) => {
 
 const deleteStudent = async (req, res) => {
   try {
-    const student = await Student.findOne({
+    const student = await Student.findOne(scopeQuery(Student, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
-    });
+    }));
     if (!student)
       return res
         .status(404)
@@ -557,10 +567,10 @@ const deleteStudent = async (req, res) => {
 // of no return). Mirrors auth-service's user restore pattern.
 const restoreStudent = async (req, res) => {
   try {
-    const student = await Student.findOne({
+    const student = await Student.findOne(scopeQuery(Student, req, {
       _id: req.params.id,
       schoolId: req.tenantId,
-    });
+    }));
     if (!student)
       return res
         .status(404)
@@ -572,12 +582,12 @@ const restoreStudent = async (req, res) => {
     }
     // The admissionNo may have been re-issued to a new student (partial unique
     // index allows it) — refuse the restore rather than create a duplicate.
-    const clash = await Student.findOne({
+    const clash = await Student.findOne(scopeQuery(Student, req, {
       schoolId: req.tenantId,
       admissionNo: student.admissionNo,
       deletedAt: null,
       _id: { $ne: student._id },
-    });
+    }));
     if (clash) {
       return res.status(409).json({
         success: false,
@@ -600,7 +610,7 @@ const restoreStudent = async (req, res) => {
 
 const bulkStats = async (req, res) => {
   try {
-    const base = { schoolId: req.tenantId, deletedAt: null };
+    const base = withBranchScope(req, { schoolId: req.tenantId, deletedAt: null });
     if (req.teacherScope) {
       base.class = req.teacherScope.class;
       if (req.teacherScope.section) base.section = req.teacherScope.section;

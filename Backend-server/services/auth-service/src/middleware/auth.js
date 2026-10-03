@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
 const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
 const { resolveTenant } = require("@school-erp/shared/src/middleware/tenant");
+const { resolveBranchScope } = require("@school-erp/shared/src/middleware/branchScope");
 const JWT_SECRET = getJwtSecret();
 
 // Decodes the JWT and attaches the tenant + role payload to req.user.
@@ -69,4 +70,17 @@ const scopeStudentQuery = (req, res, next) => {
   next();
 };
 
-module.exports = { verifyToken, resolveTenant, requirePermission, authorizeRoles, scopeStudentQuery };
+// auth-service owns User documents, so it is the one service that cannot skip
+// branch resolution - every other service has it folded into requireTenant.
+// Applied per route rather than globally, because login/registration/platform
+// routes legitimately run before a branch is known.
+const resolveBranch = (req, res, next) => resolveBranchScope(req, res, next);
+
+module.exports = {
+  verifyToken,
+  resolveTenant,
+  requirePermission,
+  authorizeRoles,
+  scopeStudentQuery,
+  resolveBranch,
+};

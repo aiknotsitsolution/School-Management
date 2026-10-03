@@ -62,8 +62,12 @@ async function resolveStudentAdmissionNo(schoolId, value) {
 }
 
 // Published exam ids for a session (optionally class-scoped).
-async function publishedExamIdsForSession({ schoolId, session, class: cls }) {
+// branchId is threaded through the session/promotion helpers below so a summary
+// can never mix marks from another campus; resolveScale() stays school-wide
+// because grading scales are a school-level policy.
+async function publishedExamIdsForSession({ schoolId, branchId, session, class: cls }) {
   const filter = { schoolId, status: "published" };
+  if (branchId) filter.branchId = branchId;
   if (session) filter.session = session;
   if (cls) filter.class = cls;
   const exams = await Exam.find(filter).select("_id").lean();
@@ -71,12 +75,14 @@ async function publishedExamIdsForSession({ schoolId, session, class: cls }) {
 }
 
 // Best-marks-per-subject result summary across a session's published exams.
-async function computeStudentSummary({ schoolId, studentId, session, class: cls, section: sec }) {
-  const examIds = await publishedExamIdsForSession({ schoolId, session, class: cls, section: sec });
+async function computeStudentSummary({ schoolId, branchId, studentId, session, class: cls, section: sec }) {
+  const examIds = await publishedExamIdsForSession({ schoolId, branchId, session, class: cls, section: sec });
   if (!examIds.length) {
     return { totalObtained: 0, totalMax: 0, percentage: null, failedSubjects: 0, subjects: [] };
   }
-  const marks = await Marks.find({ schoolId, studentId, examId: { $in: examIds } }).lean();
+  const marksFilter = { schoolId, studentId, examId: { $in: examIds } };
+  if (branchId) marksFilter.branchId = branchId;
+  const marks = await Marks.find(marksFilter).lean();
   const scale = await resolveScale(schoolId);
   const bySubject = {};
   for (const mark of marks) {
@@ -107,7 +113,7 @@ async function computeStudentSummary({ schoolId, studentId, session, class: cls,
 
 // Enrolled students for a class/section, excluding students already recorded
 // for the from-session of the given flow kind (prevents duplicate promotion).
-async function rosterFor({ schoolId, class: cls, section: sec, fromSession, kind = "promotion" }) {
+async function rosterFor({ schoolId, branchId, class: cls, section: sec, fromSession, kind = "promotion" }) {
   const Student = await tryStudentModel();
   if (!Student) {
     const err = new Error("Student database is not configured for academic-service");
@@ -115,13 +121,16 @@ async function rosterFor({ schoolId, class: cls, section: sec, fromSession, kind
     throw err;
   }
   const filter = { schoolId, status: { $in: ["Active", "Inactive"] } };
+  if (branchId) filter.branchId = branchId;
   if (cls) filter.class = cls;
   if (sec) filter.section = sec;
   const students = await Student.find(filter)
     .select("admissionNo name class section rollNo")
     .lean();
   if (fromSession) {
-    const done = await StudentAcademicRecord.find({ schoolId, session: fromSession, kind })
+    const doneFilter = { schoolId, session: fromSession, kind };
+    if (branchId) doneFilter.branchId = branchId;
+    const done = await StudentAcademicRecord.find(doneFilter)
       .select("studentId")
       .lean();
     const doneSet = new Set(done.map((d) => d.studentId));
@@ -130,11 +139,35 @@ async function rosterFor({ schoolId, class: cls, section: sec, fromSession, kind
   return students;
 }
 
-// Distinct enrolled classes for a school (rollover preparation).
-async function enrolledClasses({ schoolId }) {
+// Union of student admission numbers across a teacher's whole assignment
+// union. StudentAcademicRecord rows are addressed by studentId only (they
+// carry no class/section), so scoping a teacher to their academic history means
+// resolving the request through the roster rather than filtering a class field.
+// Returns [] when there is nothing to scope to, which fails closed for the
+// caller ($in: [] matches no record).
+async function rosterAdmissionNosFor({ schoolId, branchId, scopes }) {
+  const pairs = (scopes || [])
+    .filter((s) => s && s.class != null && String(s.class).trim() !== "")
+    .map((s) => ({ class: String(s.class), section: s.section == null ? null : String(s.section) }));
+  if (!pairs.length) return [];
   const Student = await tryStudentModel();
   if (!Student) return [];
-  const raw = await Student.distinct("class", { schoolId, status: { $in: ["Active", "Inactive"] } });
+  const filter = { schoolId, status: { $in: ["Active", "Inactive"] } };
+  if (branchId) filter.branchId = branchId;
+  filter.$or = pairs.map((p) =>
+    p.section == null || p.section === "" ? { class: p.class } : { class: p.class, section: p.section },
+  );
+  const rows = await Student.find(filter).select("admissionNo").lean();
+  return rows.map((r) => String(r.admissionNo)).filter(Boolean);
+}
+
+// Distinct enrolled classes for a school (rollover preparation).
+async function enrolledClasses({ schoolId, branchId }) {
+  const Student = await tryStudentModel();
+  if (!Student) return [];
+  const filter = { schoolId, status: { $in: ["Active", "Inactive"] } };
+  if (branchId) filter.branchId = branchId;
+  const raw = await Student.distinct("class", filter);
   return raw.filter((c) => c).sort((a, b) => String(a).localeCompare(String(b), undefined, { numeric: true }));
 }
 
@@ -146,5 +179,6 @@ module.exports = {
   publishedExamIdsForSession,
   computeStudentSummary,
   rosterFor,
+  rosterAdmissionNosFor,
   enrolledClasses,
 };

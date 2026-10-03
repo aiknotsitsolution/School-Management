@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
+  ArrowRight,
   Award,
   BarChart3,
   BookOpen,
@@ -8,6 +9,7 @@ import {
   CalendarCheck,
   CalendarCheck2,
   CalendarDays,
+  CalendarRange,
   CheckCircle2,
   ChevronLeft,
   ChevronRight,
@@ -22,6 +24,17 @@ import {
   Zap,
 } from "lucide-react";
 import { Card, StatCard } from "../../components/UI";
+import { QuickActions as QuickActionRail, ACCENTS } from "../../components/dashboard/DashKit";
+import PageArtwork, { artworkForLucide } from "../../components/PageArtwork";
+import {
+  TrendArea,
+  BarRowChart,
+  Donut,
+  Sparkline,
+  ProgressRing,
+  StatusStrip,
+} from "../../components/studentcharts/StudentCharts";
+import { ATT_ORDER, ATT_STATUS, toneFor } from "../../components/studentcharts/theme";
 import { computeGrade } from "../../lib/grading";
 import { api } from "../../lib/api";
 import useStudentContext, {
@@ -31,15 +44,19 @@ import useStudentContext, {
   dateOf,
 } from "./useStudentContext";
 import studentHeroImage from "../../assets/dashboard-images/Student-dashboard-image.png";
+import MomentumStrip from "../../components/student/MomentumStrip";
+import MomentumTicker from "../../components/student/MomentumTicker";
+import OnTrackCard from "../../components/student/OnTrackCard";
+import ValueStrip from "../../components/student/ValueStrip";
 
 const WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 const QUICK_ACTIONS = [
-  { to: "/student/attendance", label: "My Attendance", icon: CalendarCheck, tone: "bg-rose-50 text-rose-500" },
-  { to: "/student/timetable", label: "My Timetable", icon: Clock, tone: "bg-blue-50 text-blue-600" },
-  { to: "/student/homework", label: "Homework & Assignments", icon: BookOpen, tone: "bg-violet-50 text-violet-600" },
-  { to: "/student/exams", label: "Examinations", icon: ClipboardList, tone: "bg-emerald-50 text-emerald-600" },
-  { to: "/student/results", label: "Results / Report Card", icon: Trophy, tone: "bg-amber-50 text-amber-600" },
+  { to: "/student/attendance", label: "My Attendance", icon: CalendarCheck, accent: "alert" },
+  { to: "/student/timetable", label: "My Timetable", icon: CalendarRange, accent: "info" },
+  { to: "/student/homework", label: "Homework & Assignments", icon: BookOpen, accent: "violet" },
+  { to: "/student/exams", label: "Examinations", icon: ClipboardList, accent: "success" },
+  { to: "/student/results", label: "Results / Report Card", icon: Trophy, accent: "warn" },
 ];
 
 const ATT_DOT = {
@@ -179,11 +196,16 @@ function PanelIcon({ tone = "bg-blue-50 text-blue-600", children }) {
 }
 
 function EmptyPanel({ icon: Icon, title, text, action, iconTone = "bg-blue-50 text-blue-500" }) {
+  const art = artworkForLucide(Icon);
   return (
     <div className="py-10 px-4 text-center">
-      <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl ${iconTone}`} aria-hidden="true">
-        <Icon size={24} />
-      </div>
+      {art ? (
+        <PageArtwork name={art} size={56} className="mx-auto" />
+      ) : (
+        <div className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl ${iconTone}`} aria-hidden="true">
+          <Icon size={24} />
+        </div>
+      )}
       <p className="mt-4 text-[14.5px] font-bold text-ink">{title}</p>
       <p className="mx-auto mt-1.5 max-w-[34ch] text-[12.5px] leading-relaxed text-slate-text/70">{text}</p>
       {action && <div className="mt-3.5 flex justify-center">{action}</div>}
@@ -193,35 +215,6 @@ function EmptyPanel({ icon: Icon, title, text, action, iconTone = "bg-blue-50 te
 
 function Skeleton({ className = "" }) {
   return <div className={`animate-pulse rounded-xl bg-slate-200/70 ${className}`} aria-hidden="true" />;
-}
-
-function AttendanceRing({ pct }) {
-  const value = Math.min(100, Math.max(0, Number(pct) || 0));
-  const r = 52;
-  const circumference = 2 * Math.PI * r;
-  const offset = circumference - (value / 100) * circumference;
-  return (
-    <div className="relative h-32 w-32 shrink-0" role="img" aria-label={`Overall attendance ${value}%`}>
-      <svg viewBox="0 0 120 120" className="h-32 w-32 -rotate-90" aria-hidden="true">
-        <circle cx="60" cy="60" r={r} fill="none" stroke="currentColor" className="text-slate-100" strokeWidth="13" />
-        <circle
-          cx="60"
-          cy="60"
-          r={r}
-          fill="none"
-          stroke="currentColor"
-          className="text-success"
-          strokeWidth="13"
-          strokeLinecap="round"
-          strokeDasharray={circumference}
-          strokeDashoffset={offset}
-        />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="font-display text-[27px] font-bold leading-none text-ink">{value}%</span>
-      </div>
-    </div>
-  );
 }
 
 function AttStat({ label, value, status }) {
@@ -423,9 +416,8 @@ export default function StudentDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [now, setNow] = useState(() => new Date());
-  const [scrollPct, setScrollPct] = useState(0);
-  const [canScroll, setCanScroll] = useState({ left: false, right: true });
+const [now, setNow] = useState(() => new Date());
+const [canScroll, setCanScroll] = useState({ left: false, right: true });
 
   useEffect(() => {
     const id = setInterval(() => setNow(new Date()), 30000);
@@ -433,19 +425,40 @@ export default function StudentDashboard() {
   }, []);
 
   useEffect(() => {
+    let alive = true;
     setLoading(true);
     setError("");
-    Promise.allSettled([
-      api.students.me(),
-      api.attendance.list(),
-      api.timetable.list(`class=${encodeURIComponent(cls || "")}&section=${encodeURIComponent(section || "")}`),
-      api.homework.list(`class=${encodeURIComponent(cls || "")}&section=${encodeURIComponent(section || "")}`),
-      api.exams.list(`class=${encodeURIComponent(cls || "")}`),
-      api.marks.reportCard(),
-      api.fees.invoices.list(),
-      api.notices.list(),
-      api.homework.submissions.myList(),
-    ]).then((results) => {
+
+    const run = async () => {
+      // /students/me is the authoritative profile and needs no class/section, so
+      // it resolves first: the JWT `user` claim may not carry them, which would
+      // otherwise send the class-scoped calls below with empty values and get
+      // back nothing. Still exactly one profile request, no second fetch.
+      let profile = null;
+      let profileFailed = false;
+      try {
+        profile = (await api.students.me()).data || null;
+      } catch {
+        profileFailed = true;
+      }
+      if (!alive) return;
+
+      const scopedCls = profile?.class || cls || "";
+      const scopedSection = profile?.section || section || "";
+
+      const results = await Promise.allSettled([
+        profileFailed ? Promise.reject(new Error("profile")) : Promise.resolve(profile),
+        api.attendance.list(),
+        api.timetable.list(`class=${encodeURIComponent(scopedCls)}&section=${encodeURIComponent(scopedSection)}`),
+        api.homework.list(`class=${encodeURIComponent(scopedCls)}&section=${encodeURIComponent(scopedSection)}`),
+        api.exams.list(`class=${encodeURIComponent(scopedCls)}`),
+        api.marks.reportCard(),
+        api.fees.invoices.list(),
+        api.notices.list(),
+        api.homework.submissions.myList(),
+      ]);
+      if (!alive) return;
+
       const value = (i) => (results[i].status === "fulfilled" ? results[i].value.data : null);
       if (results[0].status === "rejected") {
         setError("We couldn't load your data. Please sign out and sign in again.");
@@ -462,10 +475,18 @@ export default function StudentDashboard() {
         submissions: value(8) || [],
       });
       setLoading(false);
-    });
+    };
+
+    run();
+    return () => { alive = false; };
   }, [cls, section]);
 
   const { profile, attendance, timetable, homework, exams, marks, invoices, notices, submissions } = data;
+
+  // Class/section for display. /students/me is authoritative; the JWT claim is
+  // only a fallback so the first paint is never blank.
+  const activeCls = profile?.class || cls || "";
+  const activeSection = profile?.section || section || "";
 
   const name = profile?.name || user?.name || "Student";
   const firstName = name.split(" ")[0];
@@ -507,17 +528,41 @@ export default function StudentDashboard() {
     return m;
   }, [attendance]);
 
-  const attendanceBars = useMemo(() => {
-    const colors = {
-      Present: "bg-emerald-500",
-      Absent: "bg-rose-500",
-      Leave: "bg-blue-600",
-      "Half Day": "bg-amber-500",
-    };
-    return attendance
-      .slice(-7)
-      .map((a) => ({ color: colors[a.status] || "bg-slate-300", height: a.status === "Half Day" ? 8 : a.status === "Absent" ? 6 : 16 }));
+  /** Month-by-month attendance % — the trend behind the headline ring. */
+  const attendanceTrend = useMemo(() => {
+    const buckets = new Map();
+    attendance.forEach((a) => {
+      const d = new Date(a.date);
+      if (Number.isNaN(d.getTime())) return;
+      const key = `${d.getFullYear()}-${d.getMonth()}`;
+      if (!buckets.has(key)) {
+        buckets.set(key, {
+          label: d.toLocaleDateString("en-IN", { month: "short" }),
+          fullLabel: d.toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+          order: d.getFullYear() * 12 + d.getMonth(),
+          hit: 0,
+          total: 0,
+        });
+      }
+      const b = buckets.get(key);
+      b.total += 1;
+      if (a.status === "Present" || a.status === "Half Day") b.hit += 1;
+    });
+    return [...buckets.values()]
+      .sort((a, b) => a.order - b.order)
+      .map((b) => ({ ...b, value: b.total ? Math.round((b.hit / b.total) * 100) : 0 }));
   }, [attendance]);
+
+  /** Status split for the donut — same colours as the ring and status pills. */
+  const attendanceSplit = useMemo(
+    () =>
+      ATT_ORDER.filter((k) => byStatus[k] > 0).map((k) => ({
+        name: ATT_STATUS[k].label,
+        value: byStatus[k],
+        color: ATT_STATUS[k].key,
+      })),
+    [byStatus],
+  );
 
   const todayISO = dateOf(new Date());
 
@@ -538,8 +583,6 @@ export default function StudentDashboard() {
     if (!el) return;
     const max = el.scrollWidth - el.clientWidth;
     const overflow = max > 4;
-    const pct = overflow ? (el.scrollLeft / max) * 100 : 100;
-    setScrollPct(pct);
     setCanScroll({
       left: overflow && el.scrollLeft > 4,
       right: overflow && el.scrollLeft < max - 4,
@@ -579,47 +622,119 @@ export default function StudentDashboard() {
       if (!group[key]) group[key] = [];
       group[key].push(m);
     });
-    return Object.entries(group).map(([examName, subjects]) => {
-      const obtained = subjects.reduce((s, m) => s + m.marksObtained, 0);
-      const max = subjects.reduce((s, m) => s + m.maxMarks, 0);
-      return {
-        examName,
-        subjects,
-        obtained,
-        max,
-        pct: max ? Math.round((obtained / max) * 100) : 0,
-      };
-    });
+    return Object.entries(group)
+      .map(([examName, subjects]) => {
+        const obtained = subjects.reduce((s, m) => s + (Number(m.marksObtained) || 0), 0);
+        const max = subjects.reduce((s, m) => s + (Number(m.maxMarks) || 0), 0);
+        const dates = subjects.map((m) => m.date).filter(Boolean).sort();
+        return {
+          examName,
+          subjects,
+          obtained,
+          max,
+          pct: max ? Math.round((obtained / max) * 100) : 0,
+          lastDate: dates.length ? dates[dates.length - 1] : "",
+        };
+      })
+      .sort((a, b) => (a.lastDate || "").localeCompare(b.lastDate || ""));
   }, [marks]);
 
-  const recentAttendance = attendance.slice(-5).reverse();
+  // Newest 7 attendance records, in chronological display order (oldest → newest
+  // left to right). The endpoint returns `.sort({ date: -1 })`, so the previous
+  // `attendance.slice(-7).reverse()` took the seven OLDEST rows. Sorted on a copy
+  // so `attendance` itself is never mutated — the percentage, status-count and
+  // month-trend memos above keep reading the original array unchanged.
+  const recentAttendance = useMemo(
+    () =>
+      [...attendance]
+        .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())
+        .slice(0, 7)
+        .reverse(),
+    [attendance],
+  );
+
+  const latestExam = resultsByExam.length ? resultsByExam[resultsByExam.length - 1] : null;
+
+  /** Recent days rendered as the status strip instead of plain text pills. */
+  const recentStatus = recentAttendance.map((a, i) => ({
+    id: `${a.date}-${i}`,
+    color: (ATT_STATUS[a.status] || {}).key || "slateLight",
+    label: `${fmtShort(a.date)} · ${a.status}`,
+  }));
+
+  /** Subject-wise marks for the latest exam, ordered by percentage. */
+  const subjectPerformance = useMemo(() => {
+    if (!latestExam) return [];
+    return latestExam.subjects
+      .map((m) => {
+        const pct = m.maxMarks ? Math.round((m.marksObtained / m.maxMarks) * 100) : 0;
+        return {
+          id: m._id,
+          label: m.subject,
+          value: pct,
+          obtained: m.marksObtained,
+          maxMarks: m.maxMarks,
+          grade: m.grade || computeGrade(m.marksObtained, m.maxMarks),
+        };
+      })
+      .sort((a, b) => b.value - a.value);
+  }, [latestExam]);
+
+  /** Exam-over-exam overall %, so progress across terms is visible at a glance. */
+  const examSeries = useMemo(
+    () => resultsByExam.map((e) => ({ label: e.examName, value: e.pct })),
+    [resultsByExam],
+  );
 
   const nextInvoice =
     [...invoices]
       .filter((i) => Number(i.amount || 0) - Number(i.paidAmount || 0) > 0.5)
       .sort((a, b) => String(a.dueDate || "").localeCompare(String(b.dueDate || "")))[0] || null;
 
-  const latestExam = resultsByExam.length ? resultsByExam[resultsByExam.length - 1] : null;
-
   const topNotices = [...notices]
     .sort((a, b) => String(b.createdAt || "").localeCompare(String(a.createdAt || "")))
     .slice(0, 3);
+
+    // Every assignment that is due today or later and has not been submitted — i.e.
+  // all pending future homework, with no 7-day bound. Named for what it counts so
+  // the card label below describes the data honestly.
+  const pendingSubmitCount = hwClass.filter((h) => h.dueSoon && !h.submission).length;
+  const submittedCount = hwClass.filter((h) => h.submission).length;
+  const submissionPct = hwClass.length ? Math.round((submittedCount / hwClass.length) * 100) : null;
+  const examPct = latestExam ? latestExam.pct : marks.percentage || null;
+  const nextExam = upcomingExams[0];
+
+  const heroValues = [
+    isWeekend
+      ? { icon: Clock, label: "Today", value: "Week off", sub: "No classes", color: "#0C47CF" }
+      : { icon: Clock, label: "Today", value: `${todayPeriods.length} periods`, sub: "Scheduled", color: "#0C47CF" },
+    pendingSubmitCount
+      // Was "Due soon" / "This week" — but `dueSoon` means dueDate >= today, so
+      // the count is unbounded into the future, not a 7-day window. Relabelled to
+      // "To submit" / "Pending" to match MomentumTicker's wording. Icon, colour
+      // and layout untouched.
+      ? { icon: ClipboardList, label: "To submit", value: `${pendingSubmitCount} assignments`, sub: "Pending", color: "#E9424E" }
+      : { icon: ClipboardList, label: "To submit", value: "All clear", sub: "Nothing pending", color: "#E9424E" },
+    nextExam
+      ? { icon: CalendarDays, label: "Next exam", value: fmtDate(nextExam.date), sub: `${upcomingExams.length} scheduled`, color: "#16A34A" }
+      : { icon: CalendarDays, label: "Next exam", value: "None scheduled", sub: "Check exams", color: "#16A34A" },
+  ];
 
   return (
     <div className="space-y-5 sm:space-y-6">
       {/* ── Greeting banner ─────────────────────────────────────────── */}
       <section
         aria-label="Greeting"
-        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#1B3FCB] via-[#2563EB] to-[#4F46E5]"
+        className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0A39A3] via-[#0C47CF] to-[#2B4180] ring-1 ring-inset ring-white/15"
       >
         <img
           src={studentHeroImage}
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 h-full w-[52%] object-cover object-[68%_50%] [mask-image:linear-gradient(to_right,transparent,black_30%)] sm:w-[58%] lg:w-[64%]"
+          className="pointer-events-none absolute inset-y-0 right-0 h-full w-[52%] object-cover object-[68%_50%] saturate-[1.15] opacity-95 [mask-image:linear-gradient(to_right,transparent,black_55%)] sm:w-[58%] lg:w-[64%]"
         />
         <span
-          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-[#122C86]/65 via-[#122C86]/25 to-transparent"
+          className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent"
           aria-hidden="true"
         />
         <span className="pointer-events-none absolute -left-16 -top-24 h-64 w-64 rounded-full bg-white/10" aria-hidden="true" />
@@ -627,22 +742,42 @@ export default function StudentDashboard() {
 
         <div className="relative z-10 flex min-h-[206px] items-center gap-6 p-6 sm:min-h-[228px] sm:p-8">
           <div className="min-w-0 max-w-full lg:max-w-[44%]">
-            <p className="flex items-center gap-2 text-[13.5px] font-medium text-white/85">
-              <Sun size={17} className="text-amber-300" aria-hidden="true" />
+            <p className="flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-white/80">
+              <Sun size={15} className="text-amber-300" aria-hidden="true" />
               {greeting()},
             </p>
-            <h1 className="mt-1 font-display text-3xl font-bold leading-tight text-white sm:text-[38px]">
+            <h1 className="mt-2 font-display text-[30px] font-bold leading-[1.06] tracking-tight text-white sm:text-[42px]">
               {firstName}
             </h1>
             <p className="mt-2 text-[13.5px] leading-relaxed text-white/85">
-              {cls ? `Class ${cls}${section ? `-${section}` : ""}` : ""}
-              {cls && admissionNo ? " • " : ""}
+              {activeCls ? `Class ${activeCls}${activeSection ? `-${activeSection}` : ""}` : ""}
+              {activeCls && admissionNo ? " • " : ""}
               {admissionNo ? `Admission ${admissionNo}` : ""}
             </p>
             <span className="mt-3.5 inline-flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 text-[12.5px] font-medium text-white">
               <CalendarDays size={14} aria-hidden="true" />
               {dateLabel}
             </span>
+
+            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+              <Link
+                to="/student/timetable"
+                className="group inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-[12.5px] font-semibold text-ink shadow-[0_12px_28px_-18px_rgba(11,25,44,0.95)] transition-colors hover:bg-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+              >
+                View timetable
+                <ArrowRight
+                  size={14}
+                  className="transition-transform group-hover:translate-x-0.5"
+                  aria-hidden="true"
+                />
+              </Link>
+              <Link
+                to="/student/results"
+                className="inline-flex items-center gap-2 rounded-full border border-white/45 bg-white/10 px-4 py-2 text-[12.5px] font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+              >
+                See progress
+              </Link>
+            </div>
           </div>
 
           <blockquote className="hidden w-[170px] shrink-0 flex-col gap-2 rounded-2xl bg-white/95 px-4 py-3 shadow-[0_18px_40px_-24px_rgba(11,25,44,0.7)] lg:flex xl:w-[200px]">
@@ -660,31 +795,31 @@ export default function StudentDashboard() {
         </div>
       )}
 
+      <MomentumTicker
+        attendance={attendance}
+        homework={homework}
+        submissions={submissions}
+        exams={exams}
+        marks={marks}
+        pendingDue={pendingDue}
+      />
+
+      <ValueStrip items={heroValues} />
+
+      <MomentumStrip
+        attendance={attendance}
+        homework={homework}
+        submissions={submissions}
+        marks={marks}
+      />
+
       {/* ── Quick actions ───────────────────────────────────────────── */}
-      <section aria-labelledby="quick-actions-title" className="space-y-3">
-        <div className="flex items-center justify-between gap-3">
-          <h2 id="quick-actions-title" className="flex items-center gap-2 font-display text-[16px] font-bold text-ink">
-            <Zap size={18} className="text-info" aria-hidden="true" />
-            Quick Actions
-          </h2>
-          <ViewLink to="/student/timetable">View All</ViewLink>
-        </div>
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
-          {QUICK_ACTIONS.map((a) => (
-            <Link
-              key={a.to}
-              to={a.to}
-              className="group flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-3.5 py-3 shadow-[0_2px_10px_-6px_rgba(15,23,42,0.25)] transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_14px_28px_-18px_rgba(37,99,235,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40"
-            >
-              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105 ${a.tone}`} aria-hidden="true">
-                <a.icon size={17} />
-              </span>
-              <span className="min-w-0 flex-1 text-[12.5px] font-bold leading-tight text-ink">{a.label}</span>
-              <ChevronRight size={15} className="shrink-0 text-slate-text/40 transition-colors group-hover:text-info" aria-hidden="true" />
-            </Link>
-          ))}
-        </div>
-      </section>
+      <QuickActionRail
+        title="Quick Actions"
+        icon={Zap}
+        action={<ViewLink to="/student/timetable">View All</ViewLink>}
+        items={QUICK_ACTIONS}
+      />
 
       {loading ? (
         <LoadingDashboard />
@@ -698,7 +833,7 @@ export default function StudentDashboard() {
               label="Attendance"
               value={`${attPct}%`}
               sub={`${byStatus.Present} present of ${attendance.length} recorded`}
-              bars={attendanceBars}
+              chart={<Sparkline data={attendanceTrend} color="success" height={30} />}
             />
             <StatCard
               icon={BookOpenCheck}
@@ -744,6 +879,7 @@ export default function StudentDashboard() {
             action={<ViewLink to="/student/timetable">Full timetable</ViewLink>}
             headerClassName="px-5 sm:px-6 pt-5 pb-0"
             bodyClassName="px-5 sm:px-6 pb-5 pt-4"
+            decor="periods"
           >
             {isWeekend ? (
               <EmptyPanel
@@ -765,7 +901,7 @@ export default function StudentDashboard() {
                   className="scrollbar-thin flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40 rounded-xl"
                 >
                   {todayPeriods.map((p, i) => (
-                    <ClassCard key={`${p.subject}-${p.startTime}-${i}`} period={p} cls={cls} section={section} nowMin={nowMin} />
+                    <ClassCard key={`${p.subject}-${p.startTime}-${i}`} period={p} cls={activeCls} section={activeSection} nowMin={nowMin} />
                   ))}
                 </div>
 
@@ -797,13 +933,6 @@ export default function StudentDashboard() {
                     </button>
                   </>
                 )}
-
-                <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-slate-100" aria-hidden="true">
-                  <div
-                    className="h-full rounded-full bg-info transition-all duration-300"
-                    style={{ width: `${Math.max(14, scrollPct)}%` }}
-                  />
-                </div>
               </div>
             ) : (
               <EmptyPanel
@@ -813,7 +942,28 @@ export default function StudentDashboard() {
                 action={<ViewLink to="/student/timetable">Full timetable</ViewLink>}
               />
             )}
+
+            {/* Soft base flourish bleeding off the bottom edge, in place of the
+                scroll progress bar — a full-width rule under the card read as a
+                stray divider rather than decoration. Kept in normal flow (not
+                absolute) so it never sits on top of the class cards; the negative
+                margins cancel the body padding to reach both edges. */}
+            <div
+              aria-hidden="true"
+              className="-mx-5 sm:-mx-6 -mb-5 mt-4 h-10 overflow-hidden text-teal-600 opacity-[0.14]"
+            >
+              <PageArtwork name="timeline" className="h-full w-full" />
+            </div>
           </Card>
+
+          <OnTrackCard
+            attendancePct={attPct}
+            attendanceCount={attendance.length}
+            submissionPct={submissionPct}
+            submittedCount={submittedCount}
+            totalCount={hwClass.length}
+            examPct={examPct}
+          />
 
           {/* ── Attendance overview ─────────────────────────────────── */}
           <Card
@@ -828,6 +978,8 @@ export default function StudentDashboard() {
             action={<ViewLink to="/student/attendance">View all</ViewLink>}
             headerClassName="px-5 sm:px-6 pt-5 pb-0"
             bodyClassName="px-5 sm:px-6 pb-5 pt-4"
+            decor="attend"
+            decorTone={ACCENTS.info.text}
           >
             {attendance.length === 0 ? (
               <EmptyPanel
@@ -838,33 +990,55 @@ export default function StudentDashboard() {
               />
             ) : (
               <div>
-                <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+                <div className="flex flex-col gap-6 lg:flex-row lg:items-center">
                   <div className="flex shrink-0 flex-col items-center gap-1.5">
-                    <AttendanceRing pct={attPct} />
-                    <p className="text-[11.5px] font-medium text-slate-text/70">Overall attendance</p>
+                    <ProgressRing
+                      value={attPct}
+                      size={140}
+                      stroke={12}
+                      color="success"
+                      label="Attendance"
+                      ariaLabel={`Overall attendance ${attPct} percent`}
+                    />
                   </div>
-                  <div className="grid flex-1 grid-cols-2 gap-3 lg:grid-cols-4">
-                    <AttStat label="Present" value={byStatus.Present} status="Present" />
-                    <AttStat label="Absent" value={byStatus.Absent} status="Absent" />
-                    <AttStat label="Leave" value={byStatus.Leave} status="Leave" />
-                    <AttStat label="Half Day" value={byStatus["Half Day"]} status="Half Day" />
+
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-text/60">
+                      Month by month
+                    </p>
+                    <div className="mt-2">
+                <TrendArea
+                  data={attendanceTrend}
+                  height={190}
+                  color="info"
+                  tooltipLabel="Attendance"
+                  footerFor={(p) => `${p.hit} of ${p.total} days`}
+                />
+                    </div>
                   </div>
+
+                  <div className="shrink-0 lg:w-[250px]">
+                    <Donut
+                      data={attendanceSplit}
+                      height={168}
+                      centerValue={attendance.length}
+                      centerLabel="Records"
+                    />
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-2 gap-2.5 border-t border-slate-100 pt-3.5 lg:grid-cols-4">
+                  {ATT_ORDER.map((k) => (
+                    <AttStat key={k} label={ATT_STATUS[k].label} value={byStatus[k]} status={k} />
+                  ))}
                 </div>
 
                 <div className="mt-4 border-t border-slate-100 pt-3.5">
                   <p className="text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-text/60">
                     Recent activity
                   </p>
-                  <div className="mt-2.5 flex flex-wrap gap-2">
-                    {recentAttendance.map((a, i) => (
-                      <span
-                        key={`${a.date}-${i}`}
-                        className="inline-flex items-center gap-2 whitespace-nowrap rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11.5px] font-medium text-slate-text"
-                      >
-                        <span className={`h-1.5 w-1.5 rounded-full ${ATT_DOT[a.status] || "bg-slate-300"}`} aria-hidden="true" />
-                        {fmtShort(a.date)} • {a.status}
-                      </span>
-                    ))}
+                  <div className="mt-2.5">
+                    <StatusStrip items={recentStatus} />
                   </div>
                 </div>
               </div>
@@ -886,6 +1060,8 @@ export default function StudentDashboard() {
               action={<ViewLink to="/student/homework">All assignments</ViewLink>}
               headerClassName="px-5 sm:px-6 pt-5 pb-0"
               bodyClassName="px-5 sm:px-6 pb-5 pt-4"
+              decor="tasks"
+              decorTone={ACCENTS.violet.text}
             >
               {hwClass.length === 0 ? (
                 <EmptyPanel
@@ -950,6 +1126,8 @@ export default function StudentDashboard() {
               action={<ViewLink to="/student/results">Report card</ViewLink>}
               headerClassName="px-5 sm:px-6 pt-5 pb-0"
               bodyClassName="px-5 sm:px-6 pb-5 pt-2"
+              decor="trend"
+              decorTone={ACCENTS.warn.text}
             >
               {!latestExam ? (
                 <EmptyPanel
@@ -960,40 +1138,67 @@ export default function StudentDashboard() {
                 />
               ) : (
                 <div>
-                  <div className="mb-2 flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
+                  <div className="mb-3 flex items-center justify-between gap-2 border-b border-slate-100 pb-2.5">
                     <p className="truncate text-[12.5px] font-semibold text-slate-text">{latestExam.examName}</p>
                     <Badge tone={latestExam.pct >= 40 ? "success" : "alert"}>{latestExam.pct}% overall</Badge>
                   </div>
-                  {latestExam.subjects.slice(0, 6).map((m, i) => {
-                    const grade = m.grade || computeGrade(m.marksObtained, m.maxMarks);
-                    return (
-                      <div
-                        key={m._id || i}
-                        className="flex items-center justify-between gap-2 border-b border-slate-100 py-2 last:border-0 last:py-0"
-                      >
-                        <div className="min-w-0">
-                          <p className="truncate text-[13px] font-medium text-ink">{m.subject}</p>
-                          {m.date && <p className="mt-0.5 text-[11px] text-slate-text/60">{fmtDate(m.date)}</p>}
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2.5">
-                          <span className="text-[12.5px] font-semibold tabular-nums text-ink">
-                            {m.marksObtained}/{m.maxMarks}
-                          </span>
-                          <Badge
-                            tone={
-                              ["A+", "A", "B+"].includes(grade)
-                                ? "success"
-                                : grade === "F"
-                                  ? "alert"
-                                  : "info"
-                            }
-                          >
-                            {grade}
-                          </Badge>
-                        </div>
-                      </div>
-                    );
-                  })}
+
+                  {subjectPerformance.length >= 2 && (
+                    <div className="mb-3.5">
+                      <BarRowChart
+                        data={subjectPerformance}
+                        height={Math.max(120, subjectPerformance.length * 34)}
+                        color="info"
+                        colorFor={(d) => toneFor(d.value)}
+                        tooltipLabel="Score"
+                      />
+                    </div>
+                  )}
+
+                  <ul className="divide-y divide-slate-100">
+                    {latestExam.subjects.slice(0, 6).map((m, i) => {
+                      const grade = m.grade || computeGrade(m.marksObtained, m.maxMarks);
+                      return (
+                        <li key={m._id || i} className="flex items-center justify-between gap-2 py-2">
+                          <div className="min-w-0">
+                            <p className="truncate text-[13px] font-medium text-ink">{m.subject}</p>
+                            {m.date && <p className="mt-0.5 text-[11px] text-slate-text/60">{fmtDate(m.date)}</p>}
+                          </div>
+                          <div className="flex shrink-0 items-center gap-2.5">
+                            <span className="text-[12.5px] font-semibold tabular-nums text-ink">
+                              {m.marksObtained}/{m.maxMarks}
+                            </span>
+                            <Badge
+                              tone={
+                                ["A+", "A", "B+"].includes(grade)
+                                  ? "success"
+                                  : grade === "F"
+                                    ? "alert"
+                                    : "info"
+                              }
+                            >
+                              {grade}
+                            </Badge>
+                          </div>
+                        </li>
+                      );
+                    })}
+                  </ul>
+
+                  {examSeries.length > 1 && (
+                    <div className="mt-4 border-t border-slate-100 pt-3.5">
+                      <p className="mb-2 text-[10.5px] font-bold uppercase tracking-[0.12em] text-slate-text/60">
+                        Across exams
+                      </p>
+                      <TrendArea
+                        data={examSeries}
+                        height={140}
+                        color="violet"
+                        suffix="%"
+                        tooltipLabel="Overall"
+                      />
+                    </div>
+                  )}
                 </div>
               )}
             </Card>
@@ -1010,12 +1215,27 @@ export default function StudentDashboard() {
               action={<ViewLink to="/student/fees">Details</ViewLink>}
               headerClassName="px-5 sm:px-6 pt-5 pb-0"
               bodyClassName="px-5 sm:px-6 pb-5 pt-3"
+              decor="coins"
+              decorTone={ACCENTS.success.text}
             >
               {pendingDue > 0 ? (
                 <div className="space-y-3">
-                  <div className="rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3.5">
-                    <p className="font-display text-[26px] font-bold leading-none text-ink">{fmtMoney(pendingDue)}</p>
-                    <p className="mt-1.5 text-[11.5px] text-slate-text/70">Amount Due</p>
+                  <div className="flex items-center gap-4 rounded-xl border border-amber-100 bg-amber-50/70 px-4 py-3.5">
+                    <ProgressRing
+                      value={feesTotal ? (paidAmount / feesTotal) * 100 : 0}
+                      size={104}
+                      stroke={10}
+                      color="warning"
+                      label="Paid"
+                      ariaLabel={`${Math.round(feesTotal ? (paidAmount / feesTotal) * 100 : 0)} percent of fees paid`}
+                    />
+                    <div className="min-w-0">
+                      <p className="font-display text-[26px] font-bold leading-none text-ink">{fmtMoney(pendingDue)}</p>
+                      <p className="mt-1.5 text-[11.5px] text-slate-text/70">Amount Due</p>
+                      <p className="mt-1 text-[12px] text-slate-text/70">
+                        of {fmtMoney(feesTotal)} invoiced
+                      </p>
+                    </div>
                   </div>
                   {nextInvoice && (
                     <div className="flex items-center justify-between gap-2 rounded-xl border border-slate-200 px-3.5 py-2.5">
@@ -1038,13 +1258,23 @@ export default function StudentDashboard() {
                   </p>
                 </div>
               ) : (
-                <div className="rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-4">
-                  <p className="font-display text-[26px] font-bold leading-none text-ink">{fmtMoney(0)}</p>
-                  <p className="mt-1.5 text-[11.5px] text-slate-text/70">Amount Due</p>
-                  <p className="mt-2.5 flex items-center gap-1.5 text-[12.5px] font-bold text-emerald-600">
-                    <CheckCircle2 size={14} aria-hidden="true" />
-                    {invoices.length ? "No pending invoices" : "No invoices raised yet"}
-                  </p>
+                <div className="flex items-center gap-4 rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-4">
+                  <ProgressRing
+                    value={100}
+                    size={104}
+                    stroke={10}
+                    color="success"
+                    label="Settled"
+                    ariaLabel="All fees settled"
+                  />
+                  <div className="min-w-0">
+                    <p className="font-display text-[26px] font-bold leading-none text-ink">{fmtMoney(0)}</p>
+                    <p className="mt-1.5 text-[11.5px] text-slate-text/70">Amount Due</p>
+                    <p className="mt-2 flex items-center gap-1.5 text-[12.5px] font-bold text-emerald-600">
+                      <CheckCircle2 size={14} aria-hidden="true" />
+                      {invoices.length ? "No pending invoices" : "No invoices raised yet"}
+                    </p>
+                  </div>
                 </div>
               )}
             </Card>
@@ -1061,6 +1291,8 @@ export default function StudentDashboard() {
               action={<ViewLink to="/student/notices">All notices</ViewLink>}
               headerClassName="px-5 sm:px-6 pt-5 pb-0"
               bodyClassName="px-5 sm:px-6 pb-5 pt-3"
+              decor="broadcast"
+              decorTone={ACCENTS.alert.text}
             >
               {topNotices.length === 0 ? (
                 <EmptyPanel

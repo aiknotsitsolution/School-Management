@@ -6,8 +6,9 @@
 // panels, considered empty states and skeleton loading.
 // Purely presentational — no data fetching lives in this file.
 
-import { Children, useEffect, useRef, useState } from "react";
+import { Children, useEffect, useId, useRef, useState } from "react";
 import { Link } from "react-router-dom";
+import PageArtwork, { artworkForLucide } from "../PageArtwork";
 import {
   CalendarDays,
   ChevronLeft,
@@ -26,6 +27,9 @@ export const ACCENTS = {
     text: "text-indigo-600",
     chip: "bg-indigo-100 text-indigo-700",
     dot: "bg-indigo-500",
+    tile: "bg-indigo-50 text-indigo-600",
+    edge: "hover:border-indigo-300",
+    glow: "hover:shadow-[0_22px_44px_-24px_rgba(79,70,229,0.55)]",
   },
   success: {
     soft: "bg-emerald-50/80 border-emerald-100 hover:border-emerald-200",
@@ -34,6 +38,9 @@ export const ACCENTS = {
     text: "text-emerald-600",
     chip: "bg-emerald-100 text-emerald-700",
     dot: "bg-emerald-500",
+    tile: "bg-emerald-50 text-emerald-600",
+    edge: "hover:border-emerald-300",
+    glow: "hover:shadow-[0_22px_44px_-24px_rgba(16,185,129,0.5)]",
   },
   info: {
     soft: "bg-sky-50/80 border-sky-100 hover:border-sky-200",
@@ -42,6 +49,9 @@ export const ACCENTS = {
     text: "text-sky-600",
     chip: "bg-sky-100 text-sky-700",
     dot: "bg-sky-500",
+    tile: "bg-sky-50 text-sky-600",
+    edge: "hover:border-sky-300",
+    glow: "hover:shadow-[0_22px_44px_-24px_rgba(14,165,233,0.5)]",
   },
   warn: {
     soft: "bg-amber-50/80 border-amber-100 hover:border-amber-200",
@@ -50,6 +60,9 @@ export const ACCENTS = {
     text: "text-amber-600",
     chip: "bg-amber-100 text-amber-700",
     dot: "bg-amber-500",
+    tile: "bg-amber-50 text-amber-600",
+    edge: "hover:border-amber-300",
+    glow: "hover:shadow-[0_22px_44px_-24px_rgba(245,158,11,0.5)]",
   },
   alert: {
     soft: "bg-rose-50/80 border-rose-100 hover:border-rose-200",
@@ -58,6 +71,9 @@ export const ACCENTS = {
     text: "text-rose-500",
     chip: "bg-rose-100 text-rose-600",
     dot: "bg-rose-500",
+    tile: "bg-rose-50 text-rose-600",
+    edge: "hover:border-rose-300",
+    glow: "hover:shadow-[0_22px_44px_-24px_rgba(225,29,72,0.5)]",
   },
   neutral: {
     soft: "bg-slate-50/80 border-slate-200 hover:border-slate-300",
@@ -66,6 +82,9 @@ export const ACCENTS = {
     text: "text-slate-600",
     chip: "bg-slate-100 text-slate-600",
     dot: "bg-slate-400",
+    tile: "bg-slate-100 text-slate-600",
+    edge: "hover:border-slate-400",
+    glow: "hover:shadow-[0_22px_44px_-24px_rgba(15,23,42,0.4)]",
   },
   violet: {
     soft: "bg-violet-50/80 border-violet-100 hover:border-violet-200",
@@ -74,6 +93,9 @@ export const ACCENTS = {
     text: "text-violet-600",
     chip: "bg-violet-100 text-violet-700",
     dot: "bg-violet-500",
+    tile: "bg-violet-50 text-violet-600",
+    edge: "hover:border-violet-300",
+    glow: "hover:shadow-[0_22px_44px_-24px_rgba(139,92,246,0.5)]",
   },
   teal: {
     soft: "bg-teal-50/80 border-teal-100 hover:border-teal-200",
@@ -82,6 +104,9 @@ export const ACCENTS = {
     text: "text-teal-600",
     chip: "bg-teal-100 text-teal-700",
     dot: "bg-teal-500",
+    tile: "bg-teal-50 text-teal-600",
+    edge: "hover:border-teal-300",
+    glow: "hover:shadow-[0_22px_44px_-24px_rgba(13,148,136,0.5)]",
   },
 };
 
@@ -127,6 +152,38 @@ export const HERO_ACCENT = {
   sky: "#BAE6FD",
   ink: "#C7D2FE",
 };
+
+/* ── Data helpers ───────────────────────────────────────────────────────── */
+
+// Month-by-month bucketing for sparklines and trend areas.
+//
+// Deliberately NOT `bucketByMonth` from studentcharts/theme: that one keys on the
+// month NAME alone, so "Jan" from last year silently merges into this year's
+// "Jan", it returns buckets in insertion order rather than chronological order,
+// and it hardcodes a `date` field. The staff records that feed these dashboards
+// are dated by `createdAt` / `paidOn` / `issuedOn` instead, so reusing it would
+// have produced empty or scrambled charts.
+//
+// `value` is optional: omit it to count rows per month, or pass a mapper to sum
+// an amount. Returns ascending by year+month, which the x-axis relies on.
+export function monthlyTrend(rows = [], { dateKey = "date", value, label } = {}) {
+  const buckets = new Map();
+  (rows || []).forEach((r) => {
+    const d = new Date(r[dateKey]);
+    if (Number.isNaN(d.getTime())) return;
+    const key = `${d.getFullYear()}-${d.getMonth()}`;
+    if (!buckets.has(key)) {
+      buckets.set(key, {
+        label: label ? label(r) : d.toLocaleDateString("en-IN", { month: "short" }),
+        fullLabel: d.toLocaleDateString("en-IN", { month: "long", year: "numeric" }),
+        order: d.getFullYear() * 12 + d.getMonth(),
+        value: 0,
+      });
+    }
+    buckets.get(key).value += value ? Number(value(r)) || 0 : 1;
+  });
+  return [...buckets.values()].sort((a, b) => a.order - b.order);
+}
 
 /* ── Small primitives ──────────────────────────────────────────────────── */
 
@@ -208,14 +265,19 @@ export function EmptyPanel({
   action,
   tone = ACCENTS.neutral.icon,
 }) {
+  const art = artworkForLucide(Icon);
   return (
     <div className="px-4 py-10 text-center">
-      <div
-        className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl ${tone}`}
-        aria-hidden="true"
-      >
-        <Icon size={24} />
-      </div>
+      {art ? (
+        <PageArtwork name={art} size={56} className="mx-auto" />
+      ) : (
+        <div
+          className={`mx-auto flex h-14 w-14 items-center justify-center rounded-2xl ${tone}`}
+          aria-hidden="true"
+        >
+          <Icon size={24} />
+        </div>
+      )}
       <p className="mt-4 text-[14.5px] font-bold text-ink">{title}</p>
       {text && (
         <p className="mx-auto mt-1.5 max-w-[36ch] text-[12.5px] leading-relaxed text-slate-text/70">
@@ -232,8 +294,8 @@ export function EmptyPanel({
 export function GlassStat({ value, label, tone = "text-white" }) {
   return (
     <div className="rounded-2xl bg-white/12 px-4 py-3 text-center ring-1 ring-inset ring-white/20 backdrop-blur-md">
-      <p className={`font-display text-[19px] font-bold leading-none ${tone}`}>{value}</p>
-      <p className="mt-1.5 text-[10.5px] font-medium uppercase tracking-[0.09em] text-white/65">
+      <p className={`font-display text-[22px] font-bold leading-none tracking-tight tabular-nums ${tone}`}>{value}</p>
+      <p className="mt-1.5 text-[10.5px] font-bold uppercase tracking-[0.12em] text-white/60">
         {label}
       </p>
     </div>
@@ -262,18 +324,18 @@ export function HeroBanner({
   return (
     <section
       aria-label="Greeting"
-      className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ${grad} ${className}`}
+      className={`relative overflow-hidden rounded-3xl bg-gradient-to-br ring-1 ring-inset ring-white/15 ${grad} ${className}`}
     >
       {image && (
         <img
           src={image}
           alt=""
           aria-hidden="true"
-          className="pointer-events-none absolute inset-y-0 right-0 h-full w-[52%] object-cover object-[68%_50%] opacity-90 [mask-image:linear-gradient(to_right,transparent,black_30%)] sm:w-[58%] lg:w-[62%]"
+          className="pointer-events-none absolute inset-y-0 right-0 h-full w-[52%] object-cover object-[68%_50%] saturate-[1.15] opacity-95 [mask-image:linear-gradient(to_right,transparent,black_55%)] sm:w-[58%] lg:w-[62%]"
         />
       )}
       <span
-        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/45 via-black/15 to-transparent"
+        className="pointer-events-none absolute inset-0 bg-gradient-to-r from-black/60 via-black/20 to-transparent"
         aria-hidden="true"
       />
       <span
@@ -292,20 +354,20 @@ export function HeroBanner({
       <div className="relative z-10 flex min-h-[200px] flex-col gap-6 p-6 sm:min-h-[216px] sm:flex-row sm:items-center sm:p-8">
         <div className="min-w-0 max-w-full lg:max-w-[46%]">
           {(eyebrow || name) && (
-            <p className="flex items-center gap-2 text-[13.5px] font-medium text-white/85">
-              {showGreetingIcon && <Sun size={17} className="text-amber-300" aria-hidden="true" />}
+            <p className="flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-white/80">
+              {showGreetingIcon && <Sun size={15} className="text-amber-300" aria-hidden="true" />}
               {eyebrow}
             </p>
           )}
           {(title || name) && (
-            <h1 className="mt-1 font-display text-[28px] font-bold leading-tight text-white sm:text-[36px]">
+            <h1 className="mt-2 font-display text-[30px] font-bold leading-[1.06] tracking-tight text-white sm:text-[42px] lg:text-[46px]">
               {title || name}
             </h1>
           )}
           {subtitle && (
             <p className="mt-2 text-[13.5px] leading-relaxed text-white/85">{subtitle}</p>
           )}
-          {meta && <p className="mt-1 text-[12.5px] text-white/65">{meta}</p>}
+          {meta && <p className="mt-1.5 text-[12.5px] font-medium tracking-wide text-white/70">{meta}</p>}
           {dateLabel && (
             <span className="mt-3.5 inline-flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 text-[12.5px] font-medium text-white ring-1 ring-inset ring-white/20">
               <CalendarDays size={14} aria-hidden="true" />
@@ -333,53 +395,58 @@ export function HeroBanner({
 
 /* ── Quick actions ─────────────────────────────────────────────────────── */
 
-export function QuickActions({ title, icon: TitleIcon, action, items = [], columns = 5 }) {
-  if (!items.length) return null;
+function actionAccent(item) {
+  if (item.accent) return ACCENTS[item.accent] || ACCENTS.primary;
+  if (typeof item.tone === "string" && ACCENTS[item.tone]) return ACCENTS[item.tone];
+  return ACCENTS.primary;
+}
+
+export function QuickActions({ title, icon: TitleIcon, action, items = [] }) {
+  const headingId = useId();
+  const rail = items.filter((item) => item && item.to && item.icon);
+  if (!rail.length) return null;
+
   return (
-    <section aria-labelledby="dash-quick-actions" className="space-y-3">
+    <section aria-labelledby={headingId} className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <h2
-          id="dash-quick-actions"
-          className="flex items-center gap-2 font-display text-[16px] font-bold text-ink"
+          id={headingId}
+          className="flex items-center gap-2 font-display text-[16px] font-bold tracking-tight text-ink"
         >
           {TitleIcon && <TitleIcon size={18} className="text-info" aria-hidden="true" />}
           {title}
         </h2>
         {action}
       </div>
+
+      {/* One row that fills the available width. `grow` shares leftover space
+          equally, `shrink-0` + `basis-auto` keeps each pill at least as wide as
+          its label, so a narrow screen scrolls instead of squashing text. */}
       <div
-        className={`grid grid-cols-1 gap-3 sm:grid-cols-2 ${
-          columns === 6
-            ? "lg:grid-cols-6"
-            : columns === 4 || columns > 6
-              ? "lg:grid-cols-4"
-              : columns === 3
-                ? "lg:grid-cols-3"
-                : "lg:grid-cols-5"
-        }`}
+        role="list"
+        className="-mx-1 flex snap-x gap-2 overflow-x-auto px-1 pb-1.5 [scrollbar-width:thin] [scrollbar-color:theme(colors.slate.300)_transparent]"
       >
-        {items.map((item) => (
-          <Link
-            key={item.to || item.label}
-            to={item.to}
-            className="group flex items-center gap-2.5 rounded-2xl border border-slate-200 bg-white px-3.5 py-3 shadow-[0_2px_10px_-6px_rgba(15,23,42,0.25)] transition-all duration-200 hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-[0_14px_28px_-18px_rgba(37,99,235,0.55)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40"
-          >
-            <span
-              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl transition-transform group-hover:scale-105 ${item.tone || ACCENTS.primary.icon}`}
-              aria-hidden="true"
+        {rail.map((item) => {
+          const t = actionAccent(item);
+          return (
+            <Link
+              key={item.to}
+              to={item.to}
+              role="listitem"
+              className={`group flex grow shrink-0 basis-auto snap-start items-center justify-center gap-2.5 rounded-2xl border border-slate-200 bg-white py-2.5 px-3 transition-colors duration-200 hover:bg-slate-50 ${t.edge} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40`}
             >
-              <item.icon size={17} />
-            </span>
-            <span className="min-w-0 flex-1 text-[12.5px] font-bold leading-tight text-ink">
-              {item.label}
-            </span>
-            <ChevronRight
-              size={15}
-              className="shrink-0 text-slate-text/40 transition-colors group-hover:text-info"
-              aria-hidden="true"
-            />
-          </Link>
-        ))}
+              <span
+                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-xl transition-transform duration-200 group-hover:scale-105 ${t.tile}`}
+                aria-hidden="true"
+              >
+                <item.icon size={16} strokeWidth={2.1} />
+              </span>
+              <span className="whitespace-nowrap text-[12.5px] font-semibold leading-none text-ink">
+                {item.label}
+              </span>
+            </Link>
+          );
+        })}
       </div>
     </section>
   );
@@ -396,56 +463,72 @@ export function MetricCard({
   tone,
   progress,
   bars,
+  chart,
   to,
   onClick,
   delay = 0,
 }) {
   const t = accentOf(accent, tone);
   const Wrapper = to ? Link : onClick ? "button" : "div";
+  const interactive = Boolean(to || onClick);
   const wrapperProps = to
-    ? { to, className: "text-left w-full" }
+    ? { to }
     : onClick
-      ? { type: "button", onClick, className: "w-full text-left" }
-      : { className: "" };
+      ? { type: "button", onClick }
+      : {};
 
   return (
     <Wrapper
       {...wrapperProps}
       style={delay ? { animationDelay: `${delay}ms` } : undefined}
-      className={`group relative block w-full overflow-hidden rounded-2xl border p-4 text-left transition-all duration-200 hover:-translate-y-0.5 hover:shadow-[0_14px_30px_-18px_rgba(15,23,42,0.4)] ${t.soft} ${
-        to || onClick ? "cursor-pointer" : ""
-      } ${wrapperProps.className || ""}`}
+      className={`group relative block w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:-translate-y-1 ${t.edge} ${t.glow} ${
+        interactive
+          ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40"
+          : ""
+      }`}
     >
-      <div className="flex items-start gap-3">
-        {Icon && (
+      {/* Decorative texture, right side, behind the content. */}
+      <span
+        className={`pointer-events-none absolute inset-y-0 right-0 w-[70%] opacity-[0.16] transition-all duration-500 group-hover:opacity-[0.26] ${t.text}`}
+        aria-hidden="true"
+      >
+        <PageArtwork name="waves" className="h-full w-full" />
+      </span>
+
+      <div className="relative flex items-start gap-3">
+        {Icon ? (
           <span
-            className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl ${t.icon}`}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl transition-transform duration-300 group-hover:scale-105 ${t.tile}`}
             aria-hidden="true"
           >
-            <Icon size={19} />
+            <Icon size={19} strokeWidth={2.1} />
           </span>
+        ) : (
+          <span className={`mt-1.5 h-2 w-2 shrink-0 rounded-full ${t.dot}`} aria-hidden="true" />
         )}
-        <div className="min-w-0 flex-1">
-          <p className="text-[10.5px] font-bold uppercase tracking-[0.09em] text-slate-text/70">
+
+        <div className="min-w-0 flex-1 pt-0.5">
+          <p className="truncate text-[10.5px] font-bold uppercase tracking-[0.14em] text-slate-text/70">
             {label}
           </p>
-          <p className="mt-1.5 truncate font-display text-[26px] font-bold leading-none text-ink">
-            {value}
-          </p>
+          {interactive && (
+            <ChevronRight
+              size={15}
+              className={`mt-1 shrink-0 text-slate-text/30 transition-all duration-200 group-hover:translate-x-0.5 ${t.text}`}
+              aria-hidden="true"
+            />
+          )}
         </div>
-        {to && (
-          <ChevronRight
-            size={15}
-            className="mt-0.5 shrink-0 text-slate-text/30 transition-colors group-hover:text-info"
-            aria-hidden="true"
-          />
-        )}
       </div>
 
-      {sub && <p className="mt-2.5 text-[11.5px] leading-snug text-slate-text/75">{sub}</p>}
+      <p className="relative mt-3.5 font-display text-[32px] font-bold leading-none tracking-tight tabular-nums text-ink">
+        {value}
+      </p>
+
+      {sub && <p className="relative mt-2.5 text-[11.5px] leading-snug text-slate-text/75">{sub}</p>}
 
       {typeof progress === "number" && (
-        <div className="mt-3 h-1.5 w-full overflow-hidden rounded-full bg-black/5">
+        <div className="relative mt-4 h-1.5 w-full overflow-hidden rounded-full bg-black/5">
           <div
             className={`h-full rounded-full transition-all duration-500 ${t.bar}`}
             style={{ width: `${Math.max(2, Math.min(100, progress))}%` }}
@@ -454,7 +537,7 @@ export function MetricCard({
       )}
 
       {bars && bars.length > 0 && (
-        <div className="mt-3 flex h-6 items-end gap-1" aria-hidden="true">
+        <div className="relative mt-4 flex h-6 items-end gap-1" aria-hidden="true">
           {bars.map((b, i) => (
             <span
               key={`${b.color || t.bar}-${i}`}
@@ -465,10 +548,7 @@ export function MetricCard({
         </div>
       )}
 
-      <span
-        className="pointer-events-none absolute -bottom-8 -right-7 h-20 w-20 rounded-full bg-white/45"
-        aria-hidden="true"
-      />
+      {chart && <div className="relative mt-4">{chart}</div>}
     </Wrapper>
   );
 }
@@ -498,26 +578,38 @@ export function Panel({
   bodyClassName = "px-5 sm:px-6 pb-5 pt-4",
   footer,
   flush = false,
+  decor,
+  decorTone = ACCENTS.teal.text,
 }) {
   return (
     <section
-      className={`overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}
+      className={`relative overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm ${className}`}
     >
+      {/* Optional texture from PageArtwork's vector decorations, tinted by
+          decorTone. Sits behind the header and body, clipped by the section. */}
+      {decor && (
+        <span
+          className={`pointer-events-none absolute inset-y-0 right-0 w-[42%] opacity-[0.13] ${decorTone}`}
+          aria-hidden="true"
+        >
+          <PageArtwork name={decor} className="h-full w-full" />
+        </span>
+      )}
       {(title || action) && (
-        <div className="flex items-center justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-5">
+        <div className="relative flex items-center justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-5">
           <div className="flex min-w-0 items-center gap-2.5">
             {Icon && <PanelIcon tone={iconTone || ACCENTS.primary.icon}>{<Icon size={15} />}</PanelIcon>}
             <div className="min-w-0">
-              <h3 className="truncate font-display text-[15.5px] font-bold text-ink">{title}</h3>
+              <h3 className="truncate font-display text-[15.5px] font-bold tracking-tight text-ink">{title}</h3>
               {subtitle && <p className="mt-0.5 text-[12px] text-slate-text/60">{subtitle}</p>}
             </div>
           </div>
           {action && <div className="shrink-0">{action}</div>}
         </div>
       )}
-      <div className={flush ? "" : bodyClassName}>{children}</div>
+      <div className={`relative ${flush ? "" : bodyClassName}`}>{children}</div>
       {footer && (
-        <div className="border-t border-slate-100 bg-slate-50/60 px-5 py-3 sm:px-6">{footer}</div>
+        <div className="relative border-t border-slate-100 bg-slate-50/60 px-5 py-3 sm:px-6">{footer}</div>
       )}
     </section>
   );
@@ -527,7 +619,7 @@ export function SectionHeading({ title, icon: Icon, action, sub }) {
   return (
     <div className="flex items-center justify-between gap-3">
       <div className="min-w-0">
-        <h2 className="flex items-center gap-2 font-display text-[16px] font-bold text-ink">
+        <h2 className="flex items-center gap-2 font-display text-[16px] font-bold tracking-tight text-ink">
           {Icon && <Icon size={18} className="text-info" aria-hidden="true" />}
           {title}
         </h2>

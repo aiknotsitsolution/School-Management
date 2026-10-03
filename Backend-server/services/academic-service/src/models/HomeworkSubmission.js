@@ -2,6 +2,9 @@ const mongoose = require("mongoose");
 
 const homeworkSubmissionSchema = new mongoose.Schema(
   {
+    // Campus this record belongs to. null = school-wide, or a row
+    // that predates branch scoping.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     homeworkId: { type: mongoose.Schema.Types.ObjectId, ref: "Homework", required: true, index: true },
     studentId: { type: String, required: true, index: true },
@@ -22,6 +25,7 @@ const homeworkSubmissionSchema = new mongoose.Schema(
 );
 
 // A student can submit a given homework only once.
+homeworkSubmissionSchema.index({ schoolId: 1, branchId: 1, createdAt: -1 });
 homeworkSubmissionSchema.index({ schoolId: 1, homeworkId: 1, studentId: 1 }, { unique: true });
 homeworkSubmissionSchema.index({ schoolId: 1, homeworkId: 1, status: 1 });
 homeworkSubmissionSchema.index({ studentId: 1, createdAt: -1 });

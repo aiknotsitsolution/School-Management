@@ -51,7 +51,7 @@ export default function ResetPassword() {
 
   return (
     <div className="min-h-screen grid lg:grid-cols-2 bg-paper">
-      <div className="relative hidden lg:flex flex-col justify-between p-12 bg-ink text-white overflow-hidden">
+      <div className="relative hidden lg:flex flex-col justify-between p-12 bg-ink text-white overflow-hidden dark:bg-slate-200 dark:text-ink">
         <img
           src="https://images.unsplash.com/photo-1580582932707-520aed937b7b?w=1200&h=1400&fit=crop"
           alt=""
@@ -66,19 +66,19 @@ export default function ResetPassword() {
           />
           <div>
             <p className="font-display font-bold text-lg leading-tight">Zipschool OS</p>
-            <p className="text-white/50 text-[12.5px]">School operations, connected</p>
+            <p className="text-white/50 dark:text-ink/50 text-[12.5px]">School operations, connected</p>
           </div>
         </div>
         <div className="relative z-10 max-w-md">
           <h2 className="font-display text-4xl font-bold leading-tight">
             Set a fresh password, <span className="text-primary">securely.</span>
           </h2>
-          <p className="text-white/60 mt-4 text-[14.5px] leading-relaxed">
+          <p className="text-white/60 dark:text-ink/60 mt-4 text-[14.5px] leading-relaxed">
             Set a fresh password for your Zipschool OS account. The link is one-time and
             expires shortly after it is generated.
           </p>
         </div>
-        <p className="relative z-10 text-white/35 text-[12px]">School Administration</p>
+        <p className="relative z-10 text-white/35 dark:text-ink/35 text-[12px]">School Administration</p>
       </div>
 
       <div className="relative flex items-center justify-center p-6 sm:p-12 overflow-hidden">

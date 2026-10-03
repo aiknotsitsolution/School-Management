@@ -210,7 +210,7 @@ export default function Circulation() {
                 key={s}
                 onClick={() => setStatusTab(s)}
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-semibold transition-colors ${
-                  statusTab === s ? "bg-ink text-white" : "bg-paper text-slate-text"
+                  statusTab === s ? "bg-ink text-white dark:bg-slate-200 dark:text-ink" : "bg-paper text-slate-text"
                 }`}
               >
                 {s}

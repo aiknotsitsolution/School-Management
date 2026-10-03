@@ -26,6 +26,7 @@ import {
   Printer,
   UserCheck,
   AlertCircle,
+  Building2,
 } from "lucide-react";
 import { selectSchool } from "../store/selectors";
 import { sessionLabel } from "../lib/session";
@@ -41,11 +42,13 @@ import {
   toast,
 } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
+import BranchSelect from "../components/BranchSelect";
 import { SegmentedTabs, Pagination } from "../components/Pagination";
 import { api } from "../lib/api";
 import { PermissionGate } from "../lib/permissions";
 import { isPositiveNumber, isValidEmail, isValidPhone } from "../lib/validation.js";
 import { useMasterOptions } from "../hooks/useMasterOptions";
+import { useBranches } from "../hooks/useBranches";
 import TeacherIdCard, { printTeacherIdCard } from "../components/idcard/TeacherIdCard";
 
 const CLASS_OPTIONS_FALLBACK = [
@@ -56,14 +59,12 @@ const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
 const ROLE_TABS = [
   { key: "all", label: "All Staff", icon: Users },
   { key: "teacher", label: "Teachers", icon: GraduationCap },
-  { key: "admin-staff", label: "Admin Staff", icon: UserCog },
-  { key: "support", label: "Support Staff", icon: Briefcase },
+  { key: "staff", label: "Staff", icon: Briefcase },
 ];
 
 const ROLE_LABELS = {
   teacher: "Teacher",
-  "admin-staff": "Admin Staff",
-  support: "Support Staff",
+  staff: "Staff",
 };
 
 const STATUS_OPTIONS = ["All", "Active", "Inactive", "Resigned"];
@@ -89,7 +90,7 @@ function emptyStaffForm() {
   return {
     employeeId: "", name: "", designation: "", department: "", role: "teacher",
     subjects: "", qualification: "", joiningDate: "", contact: "", email: "",
-    address: "", salary: "", status: "Active",
+    address: "", salary: "", status: "Active", branchId: "",
   };
 }
 
@@ -117,6 +118,10 @@ function toApiStaff(form) {
     address: form.address.trim() || undefined,
     salary: form.salary === "" ? undefined : Number(form.salary),
     status: form.status,
+    // Empty means "the campus the admin is working in". Only meaningful on
+    // create: an existing record's campus is moved from the account screen, so
+    // the linked account and this record can never disagree.
+    branchId: form.branchId || undefined,
   };
 }
 
@@ -136,6 +141,7 @@ export default function Teachers() {
   const { options: CLASS_OPTIONS } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
   const { options: SECTION_OPTIONS, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
   const { options: SUBJECT_SUGGESTIONS } = useMasterOptions("subjects", SUBJECT_SUGGESTIONS_FALLBACK);
+  const { branches, loading: branchesLoading, nameOf: campusName } = useBranches();
 
   const [list, setList] = useState([]);
   const [assignments, setAssignments] = useState([]);
@@ -224,8 +230,8 @@ export default function Teachers() {
     const activeClassTeachers = new Set(
       assignments.filter((a) => a.type === "class_teacher" && a.status === "active").map((a) => String(a.staffId))
     );
-    const adminSupport = list.filter((s) => s.role === "admin-staff" || s.role === "support").length;
-    return { total: list.length, teachers, activeClassTeachers: activeClassTeachers.size, adminSupport };
+    const nonTeaching = list.filter((s) => s.role === "staff").length;
+    return { total: list.length, teachers, activeClassTeachers: activeClassTeachers.size, nonTeaching };
   }, [list, assignments]);
 
   // Reports & Analytics-style segmented role tabs (like Users & Access), with
@@ -263,6 +269,9 @@ export default function Teachers() {
       joiningDate: staff.joiningDate ? String(staff.joiningDate).slice(0, 10) : "",
       contact: staff.contact || "", email: staff.email || "", address: staff.address || "",
       salary: staff.salary != null ? String(staff.salary) : "", status: staff.status || "Active",
+      // Campus is not editable on an existing record — it moves with the
+      // account from Users & Access, so the record and the account stay in step.
+      branchId: staff.branchId || "",
     });
     setFormSection("personal");
     setApiError("");
@@ -368,7 +377,7 @@ export default function Teachers() {
       });
       applyStaffUpdate(data);
       setCompleteTarget(null);
-      toast(data?.idCardNumber ? `Profile complete · ID card ${data.idCardNumber} issued` : "Profile complete");
+      toast(data?.idCardNumber ? `Profile complete · ID card for ${data.employeeId || "—"} issued` : "Profile complete");
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -381,7 +390,7 @@ export default function Teachers() {
     try {
       const { data } = await api.staff.issueIdCard(staff.id);
       applyStaffUpdate(data);
-      toast(`ID card ${data.idCardNumber} issued`);
+      toast(`ID card for ${data.employeeId || "—"} issued`);
     } catch (error) {
       toast(error.message, "error");
     } finally {
@@ -434,8 +443,8 @@ export default function Teachers() {
     <div className="space-y-6 pb-24">
       <PageIntro
         eyebrow="Human Resources"
-        title="Teachers & Staff"
-        description={loading ? "Loading staff records..." : `${stats.total} staff members across all departments.`}
+        title="Add Staff"
+        description={loading ? "Loading staff records..." : `${stats.total} staff members across all departments. Add a teacher, class teacher, or non-teaching staff member.`}
         right={
           <PermissionGate permission="staff:write">
             <Button variant="primary" onClick={openAdd}>
@@ -453,7 +462,7 @@ export default function Teachers() {
         <StatCard icon={Users} label="Total Staff" value={String(stats.total)} sub="All departments" accent="info" />
         <StatCard icon={GraduationCap} label="Teachers" value={String(stats.teachers)} sub="Teaching role" accent="primary" />
         <StatCard icon={ClipboardList} label="Class Teachers" value={String(stats.activeClassTeachers)} sub="Homeroom assignments" accent="success" />
-        <StatCard icon={UserCog} label="Admin / Support" value={String(stats.adminSupport)} sub="Non-teaching staff" accent="info" />
+        <StatCard icon={UserCog} label="Staff" value={String(stats.nonTeaching)} sub="Non-teaching staff" accent="info" />
       </div>
 
       {/* Tabs */}
@@ -530,6 +539,12 @@ export default function Teachers() {
                       {s.employeeId && (
                         <span className="inline-flex items-center gap-1">
                           <Briefcase size={11} /> {s.employeeId}
+                        </span>
+                      )}
+                      {branches.length > 1 && (
+                        <span className="inline-flex items-center gap-1">
+                          <Building2 size={11} />{" "}
+                          {s.branchId ? campusName(s.branchId) || "—" : "All campuses"}
                         </span>
                       )}
                       {s.contact && (
@@ -833,7 +848,7 @@ export default function Teachers() {
                 {viewStaff.idCardNumber ? (
                   <div className="flex items-center justify-between gap-3 flex-wrap">
                     <p className="text-[12.5px] text-ink">
-                      ID Card <span className="font-mono font-semibold text-info">{viewStaff.idCardNumber}</span>
+                      Employee ID <span className="font-mono font-semibold text-info">{viewStaff.employeeId || "—"}</span>
                       <span className="text-slate-text/50"> · issued {fmtDate(viewStaff.idCardIssuedAt)}</span>
                     </p>
                   </div>
@@ -950,6 +965,32 @@ export default function Teachers() {
                       <label className="text-[12px] font-semibold text-ink mb-1.5 block">Contact</label>
                       <Input value={form.contact} onChange={(e) => updateForm("contact", e.target.value)} placeholder="Phone number" />
                     </div>
+                    {editId ? (
+                      <div>
+                        <label className="text-[12px] font-semibold text-ink mb-1.5 block">Campus</label>
+                        <p className="text-[13px] text-ink py-2">
+                          {campusName(form.branchId) || "All campuses"}
+                        </p>
+                        <p className="text-[11px] text-slate-text/50 mt-1.5">
+                          A campus change moves the linked account too, so it is done from
+                          Users &amp; Access.
+                        </p>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="text-[12px] font-semibold text-ink mb-1.5 block">Campus</label>
+                        <BranchSelect
+                          branches={branches}
+                          loading={branchesLoading}
+                          value={form.branchId}
+                          onChange={(val) => updateForm("branchId", val)}
+                          placeholder="The campus you are working in"
+                        />
+                        <p className="text-[11px] text-slate-text/50 mt-1.5">
+                          The account created from this record is scoped to the same campus.
+                        </p>
+                      </div>
+                    )}
                     <div>
                       <label className="text-[12px] font-semibold text-ink mb-1.5 block">Email</label>
                       <Input type="email" value={form.email} onChange={(e) => updateForm("email", e.target.value)} placeholder="enter-personal@gmail.com" />
@@ -988,7 +1029,7 @@ export default function Teachers() {
                     <div>
                       <label className="text-[12px] font-semibold text-ink mb-1.5 block">Role</label>
                       <Select value={form.role} onChange={(e) => handleRoleChange(e.target.value)} className="w-full">
-                        {["teacher", "admin-staff", "support"].map((r) => (
+                        {["teacher", "staff"].map((r) => (
                           <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                         ))}
                       </Select>
@@ -1084,7 +1125,7 @@ export default function Teachers() {
                 <AlertCircle size={16} className="shrink-0 mt-0.5" />
                 <p>
                   Use this to finish the shared person record on the teacher's
-                  behalf. {completeTarget.idCardNumber ? "Re-issuing keeps the same card number after review." : "The ID card issues automatically on completion."}
+                  behalf. {completeTarget.idCardNumber ? "Re-issuing keeps the same Employee ID on the card after review." : "The ID card issues automatically on completion."}
                 </p>
               </div>
               <div className="grid grid-cols-2 gap-4">

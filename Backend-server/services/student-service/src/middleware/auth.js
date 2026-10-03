@@ -2,10 +2,11 @@ const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
 const { getPermissionsFor } = require("@school-erp/shared/src/utils/permissions");
 const { getJwtSecret } = require("@school-erp/shared/src/utils/jwtSecret");
-const { scopeClassTeacher } = require("@school-erp/shared/src/middleware/teacherScopeAuth");
+const { scopeClassTeacher, scopeClassTeacherAggregate } = require("@school-erp/shared/src/middleware/teacherScopeAuth");
 const { resolveTenant } = require("@school-erp/shared/src/middleware/tenant");
 const { requireSchoolActive } = require("@school-erp/shared/src/middleware/requireSchoolActive");
 const { requireSubscriptionActive } = require("@school-erp/shared/src/middleware/requireSubscriptionActive");
+const { resolveBranchScope } = require("@school-erp/shared/src/middleware/branchScope");
 const JWT_SECRET = getJwtSecret();
 
 // Decodes the JWT and attaches the tenant + role payload to req.user.
@@ -53,7 +54,13 @@ const requireTenant = async (req, res, next) => {
   }
   return requireSchoolActive(req, res, (err) => {
     if (err) return next(err);
-    return requireSubscriptionActive(req, res, next);
+    // Branch scope is part of school context, so it resolves here rather than
+    // per route: every router already runs requireTenant, which keeps
+    // X-Branch-Id honoured on all endpoints without touching route files.
+    return requireSubscriptionActive(req, res, (subErr) => {
+      if (subErr) return next(subErr);
+      return resolveBranchScope(req, res, next);
+    });
   });
 };
 
@@ -98,4 +105,4 @@ const restrictToOwnStudent = (getStudentIdFromReq) => (req, res, next) => {
 // current session and attached to req.teacherScope (see
 // @school-erp/shared/src/middleware/teacherScopeAuth).
 
-module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery, restrictToOwnStudent, scopeClassTeacher };
+module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery, restrictToOwnStudent, scopeClassTeacher, scopeClassTeacherAggregate };

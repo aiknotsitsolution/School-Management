@@ -18,6 +18,17 @@ const teacherAssignmentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    // Campus the assignment belongs to. Both partial unique indexes below key
+    // on class/section NAMES, which are per campus, so branchId joins them —
+    // otherwise branch B could never appoint its own class teacher for the same
+    // class/section names. Requires dropping the old indexes first; see
+    // scripts/backfill-branches.js.
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      default: null,
+      index: true,
+    },
     // Denormalized snapshot for display and audit history (kept after a staff
     // record is soft-deactivated or renamed).
     staffName: { type: String, trim: true, default: "" },
@@ -36,9 +47,9 @@ const teacherAssignmentSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-// At most ONE active Class Teacher per (school, session, class, section).
+// At most ONE active Class Teacher per (school, branch, session, class, section).
 teacherAssignmentSchema.index(
-  { schoolId: 1, session: 1, class: 1, section: 1, type: 1 },
+  { schoolId: 1, branchId: 1, session: 1, class: 1, section: 1, type: 1 },
   {
     unique: true,
     partialFilterExpression: { status: "active", type: "class_teacher" },
@@ -47,9 +58,9 @@ teacherAssignmentSchema.index(
 );
 
 // A teacher cannot hold the SAME active teaching assignment twice
-// (school, staff, session, subject, class, section).
+// (school, branch, staff, session, subject, class, section).
 teacherAssignmentSchema.index(
-  { schoolId: 1, staffId: 1, session: 1, subject: 1, class: 1, section: 1 },
+  { schoolId: 1, branchId: 1, staffId: 1, session: 1, subject: 1, class: 1, section: 1 },
   {
     unique: true,
     partialFilterExpression: { status: "active", type: "teaching" },

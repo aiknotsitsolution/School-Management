@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Library as LibraryIcon, CalendarClock } from "lucide-react";
 import { PageIntro, Card, Pill } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
 import { fmtDate, dateOf } from "./useStudentContext";
 
@@ -29,7 +30,7 @@ export default function Library() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="Library"
-        title="My Library"
+        title="My Library" art="library"
         description="Books issued to you and their return status."
       />
 
@@ -48,7 +49,7 @@ export default function Library() {
           <p className="text-[13px] text-slate-text py-10 text-center">Loading…</p>
         ) : active.length === 0 ? (
           <div className="py-10 text-center">
-            <LibraryIcon size={40} className="mx-auto text-slate-text/30 mb-3" />
+            <PageArtwork name="library" size={64} className="mx-auto mb-4" />
             <p className="text-[15px] font-semibold text-ink">No books issued</p>
             <p className="text-[13px] text-slate-text/70 mt-1">Books you borrow from the library will show here.</p>
           </div>

@@ -1,3 +1,4 @@
+const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
 const GradingScale = require("../models/GradingScale");
 const { GRADING_PRESETS, validateScaleBands } = require("../utils/gradingPresets");
 
@@ -29,7 +30,7 @@ async function seedPresets(schoolId) {
 const listScales = async (req, res) => {
   try {
     await seedPresets(req.tenantId);
-    const data = await GradingScale.find({ schoolId: req.tenantId })
+    const data = await GradingScale.find(scopeQuery(GradingScale, req, { schoolId: req.tenantId }))
       .sort({ isDefault: -1, system: 1, name: 1 })
       .lean();
     res.json({ success: true, data });
@@ -42,11 +43,11 @@ const listScales = async (req, res) => {
 // configured yet — resolves the same way resolveScale does server-side).
 const getActiveScale = async (req, res) => {
   try {
-    const row = await GradingScale.findOne({
+    const row = await GradingScale.findOne(scopeQuery(GradingScale, req, {
       schoolId: req.tenantId,
       isDefault: true,
       active: true,
-    }).lean();
+    })).lean();
     if (row) return res.json({ success: true, data: row });
     const fallback = GRADING_PRESETS.find((p) => p.key === "default");
     return res.json({
@@ -99,7 +100,7 @@ const createScale = async (req, res) => {
 
 const updateScale = async (req, res) => {
   try {
-    const scale = await GradingScale.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const scale = await GradingScale.findOne(scopeQuery(GradingScale, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!scale) {
       return res.status(404).json({ success: false, message: "Grading scale not found" });
     }
@@ -149,7 +150,7 @@ const updateScale = async (req, res) => {
 // concurrent switches safe (loser gets 409, nothing half-applies).
 const activateScale = async (req, res) => {
   try {
-    const scale = await GradingScale.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const scale = await GradingScale.findOne(scopeQuery(GradingScale, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!scale) {
       return res.status(404).json({ success: false, message: "Grading scale not found" });
     }
@@ -158,8 +159,8 @@ const activateScale = async (req, res) => {
     }
     if (scale.isDefault) return res.json({ success: true, data: scale });
     try {
-      await GradingScale.updateMany(
-        { schoolId: req.tenantId, _id: { $ne: scale._id }, isDefault: true },
+      await GradingScale.updateMany(scopeQuery(GradingScale, req, 
+        { schoolId: req.tenantId, _id: { $ne: scale._id }, isDefault: true }),
         { $set: { isDefault: false } }
       );
       await GradingScale.updateOne({ _id: scale._id }, { $set: { isDefault: true } });
@@ -180,7 +181,7 @@ const activateScale = async (req, res) => {
 
 const deleteScale = async (req, res) => {
   try {
-    const scale = await GradingScale.findOne({ _id: req.params.id, schoolId: req.tenantId });
+    const scale = await GradingScale.findOne(scopeQuery(GradingScale, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!scale) {
       return res.status(404).json({ success: false, message: "Grading scale not found" });
     }

@@ -27,11 +27,12 @@ async function notifyByRefIds({ schoolId, refIds, title, message, kind = "system
 
 // Resolves the active student admissionNos for a class (and optional section)
 // via the student-service internal endpoint, then notifies them.
-async function notifyClassStudents({ schoolId, class: cls, section, title, message, kind = "system", link = null }) {
+async function notifyClassStudents({ schoolId, branchId, class: cls, section, title, message, kind = "system", link = null }) {
   if (!INTERNAL_KEY || !schoolId || !cls) return null;
   let refIds = [];
   try {
     const params = new URLSearchParams({ schoolId: String(schoolId), class: String(cls) });
+    if (branchId) params.set("branchId", String(branchId));
     if (section) params.set("section", String(section));
     const res = await fetch(`${STUDENT_URL}/api/students/internal/by-class?${params}`, {
       headers: { "X-Internal-Key": INTERNAL_KEY },

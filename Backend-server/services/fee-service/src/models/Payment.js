@@ -3,6 +3,9 @@ const mongoose = require("mongoose");
 const paymentSchema = new mongoose.Schema(
   {
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
+    // Campus the payment was collected at; copied from the invoice so a branch
+    // admin only ever sees their own campus collections.
+    branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     invoiceId: { type: mongoose.Schema.Types.ObjectId, ref: "FeeInvoice", required: true },
     studentId: { type: String, required: true },
     amount: { type: Number, required: true },

@@ -1,6 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { CalendarCheck, CalendarDays } from "lucide-react";
+import { CalendarDays } from "lucide-react";
 import { PageIntro, Card, Pill, Select } from "../../components/UI";
+import PageArtwork from "../../components/PageArtwork";
+import {
+  TrendArea,
+  BarRowChart,
+  Donut,
+  ProgressRing,
+} from "../../components/studentcharts/StudentCharts";
+import { ATT_ORDER, ATT_STATUS } from "../../components/studentcharts/theme";
 import { api } from "../../lib/api";
 import { fmtDate, dateOf } from "./useStudentContext";
 
@@ -40,15 +48,100 @@ export default function Attendance() {
     return [...set].sort().reverse();
   }, [records]);
 
+  /** Weekly attendance % across the whole session — the long-view trend. */
+  const weeklyTrend = useMemo(() => {
+    const weeks = new Map();
+    records.forEach((r) => {
+      const day = dateOf(r.date);
+      if (!day) return;
+      const d = new Date(day);
+      if (Number.isNaN(d.getTime())) return;
+      const monday = new Date(d);
+      const shift = (d.getDay() + 6) % 7;
+      monday.setDate(d.getDate() - shift);
+      const key = monday.toISOString().slice(0, 10);
+      if (!weeks.has(key)) weeks.set(key, { label: monday.toLocaleDateString("en-IN", { day: "numeric", month: "short" }), hit: 0, total: 0 });
+      const w = weeks.get(key);
+      w.total += 1;
+      if (r.status === "Present" || r.status === "Half Day") w.hit += 1;
+    });
+    return [...weeks.values()]
+      .sort((a, b) => a.label.localeCompare(b.label))
+      .map((w) => ({ label: w.label, value: w.total ? Math.round((w.hit / w.total) * 100) : 0 }));
+  }, [records]);
+
+  /** Day-of-week breakdown, Monday first. */
+  const weekdaySplit = useMemo(() => {
+    const order = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+    const buckets = order.map((label) => ({ label, hit: 0, total: 0 }));
+    records.forEach((r) => {
+      const day = dateOf(r.date);
+      if (!day) return;
+      const d = new Date(day);
+      if (Number.isNaN(d.getTime())) return;
+      const idx = (d.getDay() + 6) % 7;
+      buckets[idx].total += 1;
+      if (r.status === "Present" || r.status === "Half Day") buckets[idx].hit += 1;
+    });
+    return buckets
+      .filter((b) => b.total > 0)
+      .map((b) => ({ label: b.label, value: Math.round((b.hit / b.total) * 100), total: b.total }));
+  }, [records]);
+
+  const statusSplit = useMemo(
+    () =>
+      ATT_ORDER.filter((k) => summary[k] > 0).map((k) => ({
+        name: ATT_STATUS[k].label,
+        value: summary[k],
+        color: ATT_STATUS[k].key,
+      })),
+    [summary],
+  );
+
   return (
     <div className="space-y-6">
-      <PageIntro eyebrow="Academics" title="My Attendance" description="Your attendance record for this session." />
+      <PageIntro eyebrow="Academics" title="My Attendance" art="attendance" description="Your attendance record for this session." />
 
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
-        <Card className="col-span-2 lg:col-span-1">
-            <p className="font-display text-3xl font-bold text-ink">{summary.pct}%</p>
-            <p className="text-[11px] text-slate-text/60 mt-1">Overall attendance</p>
-          </Card>
+      <div className="grid gap-4 lg:grid-cols-3">
+        <Card className="lg:col-span-1">
+          <div className="flex flex-col items-center gap-3 py-2">
+            <ProgressRing
+              value={summary.pct}
+              size={150}
+              stroke={13}
+              color="success"
+              label="Attendance"
+              sublabel={`${summary.total} records`}
+              ariaLabel={`Overall attendance ${summary.pct} percent`}
+            />
+            <Donut data={statusSplit} height={132} centerValue={summary.total} centerLabel="Records" />
+          </div>
+        </Card>
+
+        <Card className="lg:col-span-2" title="Weekly Trend" subtitle="Percentage of days attended, by week">
+            <TrendArea
+              data={weeklyTrend}
+              height={188}
+              color="success"
+              tooltipLabel="Attendance"
+              footerFor={(p) => `${p.hit} of ${p.total} days`}
+            />
+        </Card>
+      </div>
+
+      {weekdaySplit.length > 0 && (
+        <Card title="Attendance by Day" subtitle="Which days you attend most reliably">
+          <BarRowChart
+            data={weekdaySplit}
+            height={Math.max(150, weekdaySplit.length * 36)}
+            color="info"
+            colorFor={(d) => (d.value >= 85 ? "success" : d.value >= 60 ? "info" : "alert")}
+            tooltipLabel="Attendance"
+          />
+        </Card>
+      )}
+
+      <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <Card><p className="font-display text-xl font-bold text-success">{summary.Present}</p><p className="text-[11px] text-slate-text/60 mt-1">Present</p></Card>
         <Card><p className="font-display text-xl font-bold text-alert">{summary.Absent}</p><p className="text-[11px] text-slate-text/60 mt-1">Absent</p></Card>
         <Card><p className="font-display text-xl font-bold text-info">{summary.Leave}</p><p className="text-[11px] text-slate-text/60 mt-1">Leave</p></Card>
@@ -72,7 +165,7 @@ export default function Attendance() {
           <p className="text-[13px] text-slate-text py-10 text-center">Loading…</p>
         ) : records.length === 0 ? (
           <div className="py-10 text-center">
-            <CalendarCheck size={40} className="mx-auto text-slate-text/30 mb-3" />
+            <PageArtwork name="attendance" size={64} className="mx-auto mb-4" />
             <p className="text-[15px] font-semibold text-ink">No attendance records available</p>
             <p className="text-[13px] text-slate-text/70 mt-1">Records will appear here once the school marks them.</p>
           </div>

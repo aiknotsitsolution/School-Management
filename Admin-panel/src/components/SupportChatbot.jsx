@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, Headset, Send, X } from "lucide-react";
+import { Bot, Send, X } from "lucide-react";
 
 const FAQS = [
   {
@@ -116,20 +116,20 @@ export default function SupportChatbot() {
       {open && (
         <div className="w-[calc(100vw-2rem)] max-w-[360px] h-[480px] max-h-[72vh] bg-white rounded-2xl shadow-2xl border border-ink/10 overflow-hidden flex flex-col">
           {/* Header */}
-          <div className="bg-ink text-white px-4 py-3 flex items-center gap-3 shrink-0">
+          <div className="bg-ink text-white px-4 py-3 flex items-center gap-3 shrink-0 dark:bg-slate-200 dark:text-ink">
             <div className="w-10 h-10 rounded-full bg-primary/90 flex items-center justify-center">
-              <Bot size={20} className="text-ink" />
+              <Bot size={20} className="text-white" aria-hidden="true" />
             </div>
             <div className="flex-1 min-w-0">
               <p className="text-[14px] font-semibold leading-tight">Support Assistant</p>
-              <p className="text-[11.5px] text-white/60 flex items-center gap-1.5">
+              <p className="text-[11.5px] text-white/60 flex items-center gap-1.5 dark:text-ink/60">
                 <span className="w-1.5 h-1.5 rounded-full bg-success inline-block" />
                 Online · School Helpdesk
               </p>
             </div>
             <button
               onClick={() => setOpen(false)}
-              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white"
+              className="p-1.5 rounded-lg hover:bg-white/10 transition-colors text-white/70 hover:text-white dark:text-ink/70 dark:hover:text-ink dark:hover:bg-ink/10"
               aria-label="Close support chat"
             >
               <X size={18} />
@@ -152,7 +152,7 @@ export default function SupportChatbot() {
               ) : (
                 <div
                   key={i}
-                  className="max-w-[88%] ml-auto w-fit bg-ink text-white rounded-2xl rounded-tr-sm px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line"
+                  className="max-w-[88%] ml-auto w-fit bg-ink text-white rounded-2xl rounded-tr-sm px-3 py-2 text-[13px] leading-relaxed whitespace-pre-line dark:bg-primary"
                 >
                   {msg.text}
                 </div>
@@ -216,7 +216,7 @@ export default function SupportChatbot() {
       >
         <span className="absolute inset-0 rounded-full bg-ink/40 animate-ping" style={{ animationDuration: "2.5s" }} />
         <span className="relative">
-          {open ? <X size={24} /> : <Headset size={24} />}
+          {open ? <X size={24} /> : <Bot size={26} aria-hidden="true" />}
         </span>
       </button>
     </div>

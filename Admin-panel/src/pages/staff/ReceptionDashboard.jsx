@@ -12,11 +12,12 @@ import {
   PhoneCall,
   MapPin,
   UserPlus,
+  TrendingUp,
 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "../../components/UI";
 import { api } from "../../lib/api";
-import useStaffContext, { fmtDate } from "./useStaffContext";
+import useStaffContext, { fmtDate, dateOf } from "./useStaffContext";
 import {
   HeroBanner,
   GlassStat,
@@ -29,9 +30,12 @@ import {
   ListRow,
   EmptyPanel,
   DashboardSkeleton,
+  AlertStrip,
   ACCENTS,
   greeting,
+  monthlyTrend,
 } from "../../components/dashboard/DashKit";
+import { Sparkline, Donut, StatusStrip } from "../../components/studentcharts/StudentCharts";
 
 const STATUS_TONE = {
   New: "info",
@@ -39,6 +43,17 @@ const STATUS_TONE = {
   Rejected: "alert",
   "Campus Visit Scheduled": "violet",
   "Follow Up": "warning",
+};
+
+// Pipeline status → chart palette key. Only the statuses the desk actually
+// triages are listed; anything else falls back to slate so a new backend status
+// still renders instead of being dropped from the donut.
+const STATUS_COLOR = {
+  New: "info",
+  "Follow Up": "warning",
+  "Campus Visit Scheduled": "violet",
+  Admitted: "success",
+  Rejected: "alert",
 };
 
 const DESK_LINKS = [
@@ -89,9 +104,73 @@ export default function ReceptionDashboard() {
   const conversionRate =
     stats.total > 0 ? Math.round((stats.admitted / stats.total) * 100) : 0;
   const emergencyNotices = notices.filter((n) => n.priority === "emergency");
+  // Stable primitive: `emergencyNotices` is rebuilt every render, so depending on
+  // it (or on `.length` of it) in a memo re-evaluates on every render anyway.
+  const emergencyCount = useMemo(
+    () => notices.filter((n) => n.priority === "emergency").length,
+    [notices],
+  );
   const sourceItems = Object.entries(stats.sources)
     .filter(([source]) => source && source !== "undefined")
     .sort((a, b) => b[1] - a[1]);
+
+  /** Enquiries logged per month — the sparkline behind "Total enquiries". */
+  const enquiryTrend = useMemo(
+    () => monthlyTrend(enquiries, { dateKey: "createdAt" }),
+    [enquiries],
+  );
+
+  /** Walk-ins logged today, so the desk can see a live figure. */
+  const todayEnquiries = useMemo(() => {
+    const today = dateOf(new Date());
+    return enquiries.filter((q) => dateOf(q.createdAt) === today).length;
+  }, [enquiries]);
+
+  /** Pipeline split for the donut — empty statuses are dropped, not zeroed. */
+  const pipelineSplit = useMemo(
+    () =>
+      Object.entries(stats.byStatus)
+        .filter(([, count]) => count > 0)
+        .map(([status, count]) => ({
+          name: status,
+          value: count,
+          color: STATUS_COLOR[status] || "slate",
+        })),
+    [stats.byStatus],
+  );
+
+  /** Newest leads as status pips, matching the reference StatusStrip pattern. */
+  const recentLeads = useMemo(
+    () =>
+      [...enquiries]
+        .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0))
+        .slice(0, 7)
+        .map((q, i) => ({
+          id: `${q._id}-${i}`,
+          color: STATUS_COLOR[q.status] || "slateLight",
+          label: `${fmtDate(q.createdAt)} · ${q.status}`,
+        })),
+    [enquiries],
+  );
+
+  /** Actionable states only — an always-green strip teaches people to ignore it. */
+  const alerts = useMemo(
+    () => [
+      stats.new > 0
+        ? { label: `${stats.new} new lead${stats.new === 1 ? "" : "s"} to call back`, tone: "info" }
+        : null,
+emergencyCount > 0
+        ? { label: `${emergencyCount} emergency notice${emergencyCount === 1 ? "" : "s"} live`, tone: "alert" }
+        : null,
+      stats.total > 0 && conversionRate < 50
+        ? { label: `Conversion at ${conversionRate}% — below target`, tone: "warning" }
+        : null,
+      todayEnquiries > 0
+        ? { label: `${todayEnquiries} walk-in${todayEnquiries === 1 ? "" : "s"} logged today`, tone: "success" }
+        : null,
+    ].filter(Boolean),
+    [stats.new, stats.total, emergencyCount, conversionRate, todayEnquiries],
+  );
 
   return (
     <div className="space-y-5 sm:space-y-6">
@@ -121,9 +200,8 @@ export default function ReceptionDashboard() {
       <QuickActions
         title="Front Desk Shortcuts"
         icon={Sparkles}
-        columns={5}
-        action={
-          <button
+          action={
+            <button
             type="button"
             onClick={() => navigate("/reception/enquiries")}
             className="inline-flex items-center gap-2 rounded-xl bg-info px-3.5 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-blue-700"
@@ -133,6 +211,8 @@ export default function ReceptionDashboard() {
         }
         items={DESK_LINKS}
       />
+
+      <AlertStrip items={alerts} />
 
       {loading ? (
         <DashboardSkeleton metricCols={4} />
@@ -145,6 +225,7 @@ export default function ReceptionDashboard() {
               value={stats.total}
               sub="all admission leads"
               accent="info"
+              chart={<Sparkline data={enquiryTrend} color="info" height={28} />}
             />
             <MetricCard
               icon={PhoneCall}
@@ -190,6 +271,8 @@ export default function ReceptionDashboard() {
                   type="button"
                   onClick={() => navigate("/reception/enquiries")}
                   className="inline-flex items-center gap-1 whitespace-nowrap text-[12.5px] font-semibold text-info transition-colors hover:text-blue-700"
+                  decor="phone"
+                  decorTone={ACCENTS.info.text}
                 >
                   View all <ArrowRight size={14} />
                 </button>
@@ -229,12 +312,43 @@ export default function ReceptionDashboard() {
               )}
             </Panel>
 
-            <div className="space-y-5">
+<div className="space-y-5">
+              <Panel
+                title="Admission pipeline"
+                icon={TrendingUp}
+                iconTone={ACCENTS.teal.icon}
+                subtitle={
+                  stats.total > 0
+                    ? `${stats.admitted} of ${stats.total} converted`
+                    : "No leads yet"
+                }
+                decor="funnel"
+                decorTone={ACCENTS.teal.text}
+              >
+                {pipelineSplit.length === 0 ? (
+                  <EmptyPanel
+                    icon={TrendingUp}
+                    iconTone={ACCENTS.neutral.icon}
+                    title="Nothing in the pipeline"
+                    text="Enquiry statuses will be charted here as soon as the first lead arrives."
+                  />
+                ) : (
+                  <Donut
+                    data={pipelineSplit}
+                    height={190}
+                    centerValue={stats.total}
+                    centerLabel="Leads"
+                  />
+                )}
+              </Panel>
+
               <Panel
                 title="Enquiry sources"
                 icon={MapPin}
                 iconTone={ACCENTS.violet.icon}
                 subtitle="Where families hear about us"
+                decor="pin"
+                decorTone={ACCENTS.violet.text}
               >
                 {sourceItems.length === 0 ? (
                   <EmptyPanel
@@ -265,6 +379,8 @@ export default function ReceptionDashboard() {
                     type="button"
                     onClick={() => navigate("/reception/notices")}
                     className="inline-flex items-center gap-1 whitespace-nowrap text-[12.5px] font-semibold text-info transition-colors hover:text-blue-700"
+                    decor="broadcast"
+                    decorTone={ACCENTS.warn.text}
                   >
                     Open <ArrowRight size={14} />
                   </button>
@@ -302,6 +418,18 @@ export default function ReceptionDashboard() {
               </Panel>
             </div>
           </div>
+
+          {recentLeads.length > 0 && (
+            <Panel
+              title="Lead activity"
+              icon={ClipboardList}
+              iconTone={ACCENTS.neutral.icon}
+              subtitle="Newest enquiries by status"
+              className="mt-5"
+            >
+              <StatusStrip items={recentLeads} emptyText="No enquiries logged yet" />
+            </Panel>
+          )}
         </>
       )}
     </div>

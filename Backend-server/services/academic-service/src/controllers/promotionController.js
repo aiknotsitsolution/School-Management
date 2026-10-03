@@ -1,8 +1,15 @@
+const {
+  scopeQuery,
+  withBranchScope,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const mongoose = require("mongoose");
+const { resolveTeacherScope } = require("@school-erp/shared/src/utils/teacherScope");
 const StudentAcademicRecord = require("../models/StudentAcademicRecord");
 const {
   computeStudentSummary,
   rosterFor,
+  rosterAdmissionNosFor,
   tryStudentModel,
   ACADEMIC_RECORD_STATUSES,
 } = require("../services/academicYearService");
@@ -12,11 +19,12 @@ const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination"
 
 // Class/section targets must resolve to active masters when the school has
 // configured its catalogs (lenient for legacy free-string schools).
-async function assertMoveRefs(schoolId, decisions) {
+async function assertMoveRefs(schoolId, decisions, branchId) {
   for (const move of decisions || []) {
     if (move.toClass == null || String(move.toClass).trim() === "") continue;
     const missing = await findMissingMasterRefs({
       schoolId,
+      branchId,
       class: move.toClass,
       section: move.toSection,
     });
@@ -37,11 +45,18 @@ const preview = async (req, res) => {
     if (!fromSession) return res.status(400).json({ success: false, message: "fromSession is required" });
     if (!toSession) return res.status(400).json({ success: false, message: "toSession is required" });
 
-    const roster = await rosterFor({ schoolId: req.tenantId, class: cls, section, fromSession });
+const roster = await rosterFor({ schoolId: req.tenantId, branchId: req.branchId, class: cls, section, fromSession });
+    // Class-level preview for a teacher: cover only the sections they are
+    // assigned to, never every section of the class.
+    const rosterInScope =
+      req.teacherScope && !section && req.teacherScope.sections
+        ? roster.filter((s) => req.teacherScope.sections.includes(String(s.section)))
+        : roster;
     const rows = await Promise.all(
-      roster.map(async (student) => {
+      rosterInScope.map(async (student) => {
         const summary = await computeStudentSummary({
           schoolId: req.tenantId,
+            branchId: req.branchId,
           studentId: student.admissionNo,
           session: fromSession,
           class: cls || student.class,
@@ -121,7 +136,7 @@ const commit = async (req, res) => {
         });
       }
     }
-    await assertMoveRefs(req.tenantId, decisions);
+    await assertMoveRefs(req.tenantId, decisions, req.branchId);
 
     const Student = await tryStudentModel();
     if (!Student) {
@@ -132,16 +147,16 @@ const commit = async (req, res) => {
     const records = [];
     const rowById = {};
     for (const move of decisions) {
-      const student = await Student.findOne({ schoolId: req.tenantId, admissionNo: move.studentId });
+      const student = await Student.findOne(scopeQuery(Student, req, { schoolId: req.tenantId, admissionNo: move.studentId }));
       if (!student) {
         return res.status(404).json({ success: false, message: `Student ${move.studentId} not found in this school` });
       }
-      const duplicate = await StudentAcademicRecord.findOne({
+      const duplicate = await StudentAcademicRecord.findOne(scopeQuery(StudentAcademicRecord, req, {
         schoolId: req.tenantId,
         studentId: move.studentId,
         session: fromSession,
         kind: "promotion",
-      });
+      }));
       if (duplicate) {
         return res.status(409).json({
           success: false,
@@ -152,13 +167,15 @@ const commit = async (req, res) => {
       const toSection = moving ? (move.toSection || student.section || "") : null;
       const summary = await computeStudentSummary({
         schoolId: req.tenantId,
+            branchId: req.branchId,
         studentId: student.admissionNo,
         session: fromSession,
         class: student.class,
         section: student.section,
       });
-      records.push({
-        schoolId: req.tenantId,
+        records.push({
+          schoolId: req.tenantId,
+          branchId: branchIdForWrite(req),
         studentId: student.admissionNo,
         studentName: student.name,
         session: fromSession,
@@ -208,12 +225,15 @@ const commit = async (req, res) => {
       if (move.status === "Transferred") set.status = "Transferred";
       if (move.status === "Graduated") set.status = "Alumni";
       if (Object.keys(set).length > 0) {
-        studentOps.push({
-          updateOne: {
-            filter: { schoolId: req.tenantId, admissionNo: record.studentId },
-            update: { $set: set },
-          },
-        });
+          studentOps.push({
+            updateOne: {
+              filter: withBranchScope(req, {
+                schoolId: req.tenantId,
+                admissionNo: record.studentId,
+              }),
+              update: { $set: set },
+            },
+          });
       }
     }
 
@@ -245,8 +265,27 @@ const commit = async (req, res) => {
 const history = async (req, res) => {
   try {
     const { studentId, session, status } = req.query;
-    const filter = { schoolId: req.tenantId, kind: "promotion" };
-    if (studentId) filter.studentId = studentId;
+    const filter = scopeQuery(StudentAcademicRecord, req, { schoolId: req.tenantId, kind: "promotion" })
+    // A promotion record carries no class/section, so a teacher's authority is
+    // resolved through the roster of their assignment union rather than a class
+    // filter. Non-teachers get a null scope and stay unfiltered.
+    const teacherScope = await resolveTeacherScope({ tenantId: req.tenantId, user: req.user });
+    if (teacherScope && teacherScope.allScopes.length) {
+      const mine = await rosterAdmissionNosFor({
+        schoolId: req.tenantId,
+        branchId: req.branchId,
+        scopes: teacherScope.allScopes,
+      });
+      // The roster must constrain the request, not replace it: a teacher asking
+      // for one specific student still gets only the intersection of that
+      // student and their own roster. Setting $in alone would silently widen
+      // the query to the whole roster and drop the requested filter.
+      filter.studentId = studentId
+        ? { $in: mine.filter((no) => String(no) === String(studentId)) }
+        : { $in: mine };
+    } else if (studentId) {
+      filter.studentId = studentId;
+    }
     if (session) filter.session = session;
     if (status) filter.status = status;
     const { page, limit, skip } = paginate(req.query);
