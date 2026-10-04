@@ -379,6 +379,12 @@ export const api = {
   },
   homework: {
     list: (params = "") => request(`/homework${params ? `?${params}` : ""}`),
+    // Own assigned work (teacher / staff self-service). The server scopes this
+    // to the caller by assignment, so it deliberately carries no permission —
+    // non-teaching staff don't hold homework:read.
+    mine: (params = "") => request(`/homework/mine${params ? `?${params}` : ""}`),
+    // Self-service: assignee may move their own work's status, nothing else.
+    updateMyStatus: (id, status) => request(`/homework/${id}/status`, json("PATCH", { status })),
     create: (item) => request("/homework", json("POST", item)),
     update: (id, item) => request(`/homework/${id}`, json("PUT", item)),
     remove: (id) => request(`/homework/${id}`, { method: "DELETE" }),
@@ -538,6 +544,20 @@ export const api = {
       toggleActive: (id, active) =>
         request(`/fees/structure/${id}`, json("PATCH", { active })),
       remove: (id) => request(`/fees/structure/${id}`, { method: "DELETE" }),
+    },
+    // Admission-time fee package: yearly plan per student + the one-place
+    // summary (package vs invoiced vs collected vs balance) everyone renders.
+    plans: {
+      list: (params = "") => request(`/fees/plans${params ? `?${params}` : ""}`),
+      get: (id) => request(`/fees/plans/${id}`),
+      create: (item) => request("/fees/plans", json("POST", item)),
+      update: (id, item) => request(`/fees/plans/${id}`, json("PUT", item)),
+      // Idempotent "build from the class fee structure" (onboarding + admin).
+      ensure: (item) => request("/fees/plans/ensure", json("POST", item)),
+      summary: (studentId, session = "") =>
+        request(
+          `/fees/plans/summary/${encodeURIComponent(studentId)}${session ? `?session=${encodeURIComponent(session)}` : ""}`,
+        ),
     },
     invoices: {
       list: (params = "") => request(`/fees${params ? `?${params}` : ""}`),

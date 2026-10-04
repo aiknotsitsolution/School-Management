@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
+import { useNavigate } from "react-router-dom";
 import {
   Plus,
   Search,
@@ -29,7 +30,6 @@ import {
   Building2,
 } from "lucide-react";
 import { selectSchool } from "../store/selectors";
-import { sessionLabel } from "../lib/session";
 import {
   PageIntro,
   Card,
@@ -41,7 +41,6 @@ import {
   StatCard,
   toast,
 } from "../components/UI";
-import SearchableSelect from "../components/SearchableSelect";
 import BranchSelect from "../components/BranchSelect";
 import { SegmentedTabs, Pagination } from "../components/Pagination";
 import { api } from "../lib/api";
@@ -50,11 +49,6 @@ import { isPositiveNumber, isValidEmail, isValidPhone } from "../lib/validation.
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import { useBranches } from "../hooks/useBranches";
 import TeacherIdCard, { printTeacherIdCard } from "../components/idcard/TeacherIdCard";
-
-const CLASS_OPTIONS_FALLBACK = [
-  "Nursery", "LKG", "UKG", "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11-Sci", "11-Com", "12-Sci", "12-Com",
-];
-const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
 
 const ROLE_TABS = [
   { key: "all", label: "All Staff", icon: Users },
@@ -137,9 +131,7 @@ function subLabel(sub) {
 
 export default function Teachers() {
   const school = useSelector(selectSchool);
-  const session = sessionLabel(school) || String(new Date().getFullYear());
-  const { options: CLASS_OPTIONS } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
-  const { options: SECTION_OPTIONS, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
+  const navigate = useNavigate();
   const { options: SUBJECT_SUGGESTIONS } = useMasterOptions("subjects", SUBJECT_SUGGESTIONS_FALLBACK);
   const { branches, loading: branchesLoading, nameOf: campusName } = useBranches();
 
@@ -158,8 +150,6 @@ export default function Teachers() {
   const [formSection, setFormSection] = useState("personal");
 
   const [viewStaff, setViewStaff] = useState(null);
-  const [assignStaff, setAssignStaff] = useState(null);
-  const [assignForm, setAssignForm] = useState({});
   const [expandedCard, setExpandedCard] = useState(null);
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
@@ -169,11 +159,6 @@ export default function Teachers() {
   const [completeForm, setCompleteForm] = useState({ dob: "", gender: "", contact: "", address: "" });
   const [completing, setCompleting] = useState(false);
   const [issuingId, setIssuingId] = useState(null);
-
-  const filteredSections = useMemo(() => {
-    if (!assignForm.class) return SECTION_OPTIONS;
-    return [...new Set(rawSections.filter((s) => s.className === assignForm.class).map((s) => s.name))];
-  }, [assignForm.class, SECTION_OPTIONS, rawSections]);
 
   const reload = async () => {
     try {
@@ -398,35 +383,11 @@ export default function Teachers() {
     }
   };
 
+  // The assign form no longer lives here: work allocation has a single home on
+  // the Assign Work page. Deep-linking with the staff id preserves exactly what
+  // this button did before (a form pre-filled for this person) — just relocated.
   const openAssign = (staff) => {
-    setAssignStaff(staff);
-    setAssignForm({ session, type: "teaching", subject: "", class: "", section: "A" });
-  };
-
-  const handleCreateAssignment = async () => {
-    if (!assignStaff) return;
-    const { type, subject, class: cls, section: sec } = assignForm;
-    if (!assignForm.session || !cls) {
-      setApiError("Session, class and section are required");
-      return;
-    }
-    if (type === "teaching" && !subject.trim()) {
-      setApiError("Subject is required for a teaching assignment");
-      return;
-    }
-    try {
-      await api.assignments.create({
-        staffId: assignStaff.id, session: assignForm.session.trim(), type,
-        ...(type === "teaching" ? { subject: subject.trim() } : {}),
-        class: cls, section: sec,
-      });
-      toast("Assignment added");
-      setApiError("");
-      setAssignForm({ session, type: "teaching", subject: "", class: "", section: "A" });
-      await reload();
-    } catch (error) {
-      setApiError(error.message);
-    }
+    navigate(`/homework?tab=teacher&staff=${staff.id}`);
   };
 
   const endAssignment = async (assignment) => {
@@ -454,7 +415,7 @@ export default function Teachers() {
         }
       />
 
-      {apiError && !showStaffModal && !assignStaff && (
+      {apiError && !showStaffModal && (
         <p className="text-alert text-[13px]" role="alert">{apiError}</p>
       )}
 
@@ -1166,98 +1127,6 @@ export default function Teachers() {
         </div>
       )}
 
-      {/* ========== ASSIGNMENT MODAL ========== */}
-      {assignStaff && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-ink/50 backdrop-blur-sm" onClick={() => setAssignStaff(null)} />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 sticky top-0 bg-white">
-              <h3 className="font-display font-semibold text-ink text-[17px]">Assignments · {assignStaff.name}</h3>
-              <button onClick={() => setAssignStaff(null)} className="p-2 rounded-lg hover:bg-paper text-slate-text">
-                <X size={20} />
-              </button>
-            </div>
-            <div className="px-6 py-5">
-              {apiError && (
-                <p className="text-alert text-[13px] rounded-lg bg-alert/5 px-3 py-2 mb-4" role="alert">{apiError}</p>
-              )}
-
-              {assignmentsFor(assignStaff.id).length === 0 ? (
-                <p className="text-[13px] text-slate-text/60 mb-4">No assignments yet. Create one below.</p>
-              ) : (
-                <div className="space-y-2 mb-5">
-                  {assignmentsFor(assignStaff.id).map((a) => (
-                    <div key={a._id} className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 px-4 py-3">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <Pill tone={a.type === "class_teacher" ? "primary" : "info"}>
-                            {a.type === "class_teacher" ? "Class Teacher" : "Teaching"}
-                          </Pill>
-                          <span className="font-medium text-ink text-[13px]">
-                            {a.type === "class_teacher"
-                              ? `${subLabel(a.class)}-${a.section}`
-                              : `${a.subject} · ${subLabel(a.class)}-${a.section}`}
-                          </span>
-                        </div>
-                        <p className="text-[11.5px] text-slate-text/55 mt-1">
-                          Session {a.session} · {a.status === "active" ? "Active" : `Ended ${fmtDate(a.endedAt)}`}
-                        </p>
-                      </div>
-                      {a.status === "active" && (
-                        <Button variant="outline" className="px-3 py-1.5 text-[12px]" onClick={() => endAssignment(a)}>
-                          End
-                        </Button>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              <div className="border-t border-slate-200 pt-5">
-                <p className="font-display font-semibold text-ink text-[15px] mb-4">Add Assignment</p>
-                <div className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Session</label>
-                      <Input value={assignForm.session} onChange={(e) => setAssignForm((f) => ({ ...f, session: e.target.value }))} placeholder="e.g. 2026-27" />
-                    </div>
-                    <div>
-                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Type</label>
-                      <Select value={assignForm.type} onChange={(e) => setAssignForm((f) => ({ ...f, type: e.target.value }))} className="w-full">
-                        <option value="teaching">Teaching</option>
-                        <option value="class_teacher">Class Teacher</option>
-                      </Select>
-                    </div>
-                    {assignForm.type === "teaching" && (
-                      <div className="col-span-2">
-                        <label className="text-[12px] font-semibold text-ink mb-1.5 block">Subject *</label>
-                        <Input list="subject-suggestions-assign" value={assignForm.subject} onChange={(e) => setAssignForm((f) => ({ ...f, subject: e.target.value }))} placeholder="e.g. Mathematics" />
-                        <datalist id="subject-suggestions-assign">
-                          {SUBJECT_SUGGESTIONS.map((s) => <option key={s} value={s} />)}
-                        </datalist>
-                      </div>
-                    )}
-                    <div>
-                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Class *</label>
-                      <SearchableSelect options={CLASS_OPTIONS} value={assignForm.class} onChange={(val) => setAssignForm((f) => ({ ...f, class: val, section: "" }))} renderLabel={(c) => subLabel(c)} placeholder="Select class" className="w-full" />
-                    </div>
-                    <div>
-                      <label className="text-[12px] font-semibold text-ink mb-1.5 block">Section *</label>
-                      <SearchableSelect options={filteredSections} value={assignForm.section} onChange={(val) => setAssignForm((f) => ({ ...f, section: val }))} renderLabel={(s) => `Section ${s}`} placeholder="Select section" className="w-full" />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2">
-                    <Button variant="outline" onClick={() => setAssignStaff(null)}>Close</Button>
-                    <Button variant="primary" onClick={handleCreateAssignment}>
-                      <Plus size={15} /> Add Assignment
-                    </Button>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

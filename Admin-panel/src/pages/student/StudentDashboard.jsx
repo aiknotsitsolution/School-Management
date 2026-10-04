@@ -345,7 +345,7 @@ function ClassCard({ period, cls, section, nowMin }) {
         <span className="rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-600">
           {amPm(period)}
         </span>
-        <span className="text-[12px] font-semibold tabular-nums text-slate-text/80">{timeRange(period)}</span>
+        <span className="text-[12px] font-semibold tabular-nums text-slate-text/90">{timeRange(period)}</span>
       </div>
       <div className="relative mt-3 flex items-center gap-2.5">
         <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${subjectTone(period.subject)}`} aria-hidden="true">
@@ -446,8 +446,13 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
       const scopedCls = profile?.class || cls || "";
       const scopedSection = profile?.section || section || "";
 
+      // Every entry below is an api.* call that resolves to { success, data },
+      // which `value()` unwraps. The profile promise has to be wrapped into that
+      // same shape: `profile` is ALREADY the unwrapped student document, so
+      // unwrapping it a second time produced `undefined` and silently dropped
+      // class/section from the hero — only the JWT's name/refId survived.
       const results = await Promise.allSettled([
-        profileFailed ? Promise.reject(new Error("profile")) : Promise.resolve(profile),
+        profileFailed ? Promise.reject(new Error("profile")) : Promise.resolve({ data: profile }),
         api.attendance.list(),
         api.timetable.list(`class=${encodeURIComponent(scopedCls)}&section=${encodeURIComponent(scopedSection)}`),
         api.homework.list(`class=${encodeURIComponent(scopedCls)}&section=${encodeURIComponent(scopedSection)}`),
@@ -497,6 +502,18 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
     month: "long",
     year: "numeric",
   });
+
+  // Meta line under the greeting: class/section, admission number and — when
+  // the staff DB has an assignment — the class teacher. Empty pieces are
+  // dropped rather than rendered as "Class Teacher: ", so the line reads clean
+  // when the profile or the class-teacher lookup comes back partial.
+  const heroMeta = [
+    activeCls ? `Class ${activeCls}${activeSection ? `-${activeSection}` : ""}` : "",
+    admissionNo ? `Admission ${admissionNo}` : "",
+    profile?.classTeacher ? `Class Teacher: ${profile.classTeacher}` : "",
+  ]
+    .filter(Boolean)
+    .join(" • ");
 
   const hwClass = useMemo(() => {
     const today = dateOf(new Date());
@@ -574,7 +591,20 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const todayRow = timetable.find((t) => t.day === WEEK[todayIdx]);
   const todayPeriods = (todayRow?.periods || []).filter((p) => p.subject !== "Break");
-  const isWeekend = todayIdx === 0 || todayIdx === 6;
+  // The timetable is the source of truth for which days the school runs — this
+  // one is Mon–Sat, so a hardcoded Sat/Sun check used to report "weekend" on a
+  // Saturday that has 5 periods and hide them. `isWeekendDay` now only picks
+  // the wording; whether a day has classes comes from the data below.
+  const hasTimetable = timetable.length > 0;
+  const isDayOff = hasTimetable && todayPeriods.length === 0;
+  const isWeekendDay = todayIdx === 0 || todayIdx === 6;
+  const nextClassDay = hasTimetable
+    ? [...Array(7).keys()]
+        .map((i) => WEEK[(todayIdx + 1 + i) % 7])
+        .find((day) =>
+          (timetable.find((t) => t.day === day)?.periods || []).some((p) => p.subject !== "Break"),
+        )
+    : null;
 
   const classesRef = useRef(null);
 
@@ -705,8 +735,14 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
   const nextExam = upcomingExams[0];
 
   const heroValues = [
-    isWeekend
-      ? { icon: Clock, label: "Today", value: "Week off", sub: "No classes", color: "#0C47CF" }
+    isDayOff
+      ? {
+          icon: Clock,
+          label: "Today",
+          value: isWeekendDay ? "Week off" : "Day off",
+          sub: "No classes",
+          color: "#0C47CF",
+        }
       : { icon: Clock, label: "Today", value: `${todayPeriods.length} periods`, sub: "Scheduled", color: "#0C47CF" },
     pendingSubmitCount
       // Was "Due soon" / "This week" — but `dueSoon` means dueDate >= today, so
@@ -749,11 +785,9 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
             <h1 className="mt-2 font-display text-[30px] font-bold leading-[1.06] tracking-tight text-white sm:text-[42px]">
               {firstName}
             </h1>
-            <p className="mt-2 text-[13.5px] leading-relaxed text-white/85">
-              {activeCls ? `Class ${activeCls}${activeSection ? `-${activeSection}` : ""}` : ""}
-              {activeCls && admissionNo ? " • " : ""}
-              {admissionNo ? `Admission ${admissionNo}` : ""}
-            </p>
+            {heroMeta ? (
+              <p className="mt-2 text-[13.5px] leading-relaxed text-white/85">{heroMeta}</p>
+            ) : null}
             <span className="mt-3.5 inline-flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 text-[12.5px] font-medium text-white">
               <CalendarDays size={14} aria-hidden="true" />
               {dateLabel}
@@ -874,12 +908,29 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
             bodyClassName="px-5 sm:px-6 pb-5 pt-4"
             decor="periods"
           >
-            {isWeekend ? (
+            {/* Same soft-circle decor as OnTrackCard ("Needs attention"): theme
+                tokens at 8% opacity, so both hues flip with the mode instead of
+                a fixed pastel that only reads on a light surface. */}
+            <span
+              className="pointer-events-none absolute -right-10 -top-14 h-40 w-40 rounded-full bg-primary/8"
+              aria-hidden="true"
+            />
+            <span
+              className="pointer-events-none absolute -left-12 -bottom-10 h-32 w-32 rounded-full bg-[#E9424E]/8"
+              aria-hidden="true"
+            />
+            {isDayOff ? (
               <EmptyPanel
                 icon={CalendarCheck}
                 iconTone="bg-emerald-50 text-emerald-500"
-                title="Weekend — no classes today"
-                text="Enjoy your day off. Your next classes are waiting on Monday."
+                title={isWeekendDay ? "Weekend — no classes today" : "No classes scheduled today"}
+                text={
+                  nextClassDay
+                    ? `${isWeekendDay ? "Enjoy your day off. " : ""}Your next classes are on ${nextClassDay}.`
+                    : isWeekendDay
+                      ? "Enjoy your day off."
+                      : "No classes are scheduled today."
+                }
                 action={<ViewLink to="/student/timetable">Full timetable</ViewLink>}
               />
             ) : todayPeriods.length ? (
@@ -891,7 +942,7 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
                   ref={classesRef}
                   onScroll={syncClassScroll}
                   onKeyDown={handleClassesKeyDown}
-                  className="scrollbar-thin flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40 rounded-xl"
+                  className="scrollbar-hidden flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40 rounded-xl"
                 >
                   {todayPeriods.map((p, i) => (
                     <ClassCard key={`${p.subject}-${p.startTime}-${i}`} period={p} cls={activeCls} section={activeSection} nowMin={nowMin} />
@@ -936,17 +987,6 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
               />
             )}
 
-            {/* Soft base flourish bleeding off the bottom edge, in place of the
-                scroll progress bar — a full-width rule under the card read as a
-                stray divider rather than decoration. Kept in normal flow (not
-                absolute) so it never sits on top of the class cards; the negative
-                margins cancel the body padding to reach both edges. */}
-            <div
-              aria-hidden="true"
-              className="-mx-5 sm:-mx-6 -mb-5 mt-4 h-10 overflow-hidden text-teal-600 opacity-[0.14]"
-            >
-              <PageArtwork name="timeline" className="h-full w-full" />
-            </div>
           </Card>
 
           <OnTrackCard

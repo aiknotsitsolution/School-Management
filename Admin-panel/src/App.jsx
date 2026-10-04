@@ -80,6 +80,7 @@ const StudentStudyMaterials = lazy(() => import("./pages/student/StudyMaterials"
 const StudentSyllabus = lazy(() => import("./pages/student/Syllabus"));
 const StaffDashboard = lazy(() => import("./pages/StaffDashboard"));
 const MyAttendance = lazy(() => import("./pages/MyAttendance"));
+const MyWork = lazy(() => import("./pages/MyWork"));
 const Notifications = lazy(() => import("./pages/Notifications"));
 const MyProfile = lazy(() => import("./pages/staff/MyProfile"));
 const AccountantDashboard = lazy(() => import("./pages/staff/AccountantDashboard"));
@@ -661,6 +662,18 @@ export default function App() {
             element={
               <RequireRole roles={["staff", "teacher"]}>
                 <MyAttendance />
+              </RequireRole>
+            }
+          />
+          {/* Ownership-scoped: the server pins every row to the caller, so this
+              needs no homework:read (which non-teaching staff don't hold).
+              Student homework lives at /student/homework, teacher-created
+              homework at /teacher/homework. */}
+          <Route
+            path="/my-work"
+            element={
+              <RequireRole roles={["staff", "teacher"]}>
+                <MyWork />
               </RequireRole>
             }
           />

@@ -100,8 +100,10 @@ function csvCell(value) {
 }
 
 function downloadCsv(filename, headers, rows) {
-  const lines = [headers, ...rows.map((row) => row.map(csvCell))]
-    .map((line) => line.join(","))
+  // Headers go through csvCell too — a title like "Package (Year, ₹)" would
+  // otherwise split on its comma and shift every column left by one.
+  const lines = [headers, ...rows]
+    .map((line) => line.map(csvCell).join(","))
     .join("\r\n");
   const blob = new Blob(["\uFEFF" + lines], {
     type: "text/csv;charset=utf-8;",
@@ -215,6 +217,8 @@ const REPORT_CONFIGS = [
         filename: "fee-collection-ledger.csv",
         headers: [
           "Receipt No",
+          "Receipt Mode",
+          "Source",
           "Student ID",
           "Payment Mode",
           "Amount (₹)",
@@ -224,6 +228,8 @@ const REPORT_CONFIGS = [
         ],
         rows: data.map((p) => [
           p.receiptNo,
+          p.receiptMode || "auto",
+          p.source || "counter",
           p.studentId,
           p.mode || "",
           Number(p.amount || 0).toFixed(2),
@@ -287,6 +293,92 @@ const REPORT_CONFIGS = [
           "Status",
         ],
         rows,
+      };
+    },
+  },
+  {
+    id: "fee-statement",
+    title: "Student Fee Statement",
+    description:
+      "Per-student yearly package vs invoiced, collected and balance — the one-place money view.",
+    icon: Wallet,
+    accent: "success",
+    fields: [
+      {
+        key: "session",
+        label: "Session (optional)",
+        type: "text",
+        placeholder: "e.g. 2026-27",
+      },
+    ],
+    generate: async (cfg) => {
+      const [{ data: plans = [] }, { data: invoices = [] }, { data: payments = [] }] =
+        await Promise.all([
+          api.fees.plans.list(cfg.session ? `session=${encodeURIComponent(cfg.session)}` : ""),
+          api.fees.invoices.list(cfg.session ? `session=${encodeURIComponent(cfg.session)}` : ""),
+          api.fees.payments.list(),
+        ]);
+      const rows = new Map();
+      const rowFor = (id) => {
+        if (!rows.has(id)) {
+          rows.set(id, {
+            studentId: id,
+            class: "",
+            session: cfg.session || "",
+            planned: 0,
+            invoiced: 0,
+            paid: 0,
+            receipts: 0,
+          });
+        }
+        return rows.get(id);
+      };
+      plans.forEach((plan) => {
+        const row = rowFor(plan.studentId);
+        row.planned = Number(plan.totalAnnual || 0);
+        row.class = plan.class || row.class;
+        row.session = row.session || plan.session || "";
+      });
+      invoices.forEach((inv) => {
+        const row = rowFor(inv.studentId);
+        row.invoiced += Number(inv.amount || 0);
+        row.paid += Number(inv.paidAmount || 0);
+        row.class = row.class || inv.class || "";
+        row.session = row.session || inv.session || "";
+      });
+      const invoiceStudent = new Map(invoices.map((inv) => [String(inv._id), inv.studentId]));
+      payments.forEach((p) => {
+        const studentId = p.studentId || invoiceStudent.get(String(p.invoiceId));
+        if (!studentId) return;
+        const row = rowFor(studentId);
+        row.receipts += 1;
+      });
+      const statementRows = [...rows.values()]
+        .filter((row) => row.planned > 0 || row.invoiced > 0)
+        .sort((a, b) => a.studentId.localeCompare(b.studentId))
+        .map((row) => [
+          row.studentId,
+          row.class,
+          row.session,
+          row.planned.toFixed(2),
+          row.invoiced.toFixed(2),
+          row.paid.toFixed(2),
+          Math.max(0, row.invoiced - row.paid).toFixed(2),
+          row.receipts,
+        ]);
+      return {
+        filename: "student-fee-statement.csv",
+        headers: [
+          "Student ID",
+          "Class",
+          "Session",
+          "Package (Year, ₹)",
+          "Invoiced (₹)",
+          "Collected (₹)",
+          "Balance (₹)",
+          "Receipts",
+        ],
+        rows: statementRows,
       };
     },
   },

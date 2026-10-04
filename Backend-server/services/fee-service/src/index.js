@@ -12,6 +12,7 @@ const { liveness, readiness } = require("@school-erp/shared/src/health");
 
 const feeStructureRoutes = require("./routes/feeStructureRoutes");
 const concessionRoutes = require("./routes/concessionRoutes");
+const studentFeePlanRoutes = require("./routes/studentFeePlanRoutes");
 const invoiceRoutes = require("./routes/invoiceRoutes");
 const paymentRoutes = require("./routes/paymentRoutes");
 const paymentOrderRoutes = require("./routes/paymentOrderRoutes");
@@ -80,6 +81,8 @@ app.use("/api/fees/structure", feeStructureRoutes);
 // Before the /api/fees catch-all so /api/fees/concessions never falls into
 // invoiceRoutes' parameterised paths.
 app.use("/api/fees/concessions", concessionRoutes);
+// Before the /api/fees catch-all (invoiceRoutes owns parameterised /:id paths).
+app.use("/api/fees/plans", studentFeePlanRoutes);
 app.use("/api/fees", invoiceRoutes);
 app.use("/api/payments/internal", internalPaymentRoutes);
 app.use("/api/payments", paymentRoutes);

@@ -169,6 +169,9 @@ const reconcileFeePayment = async (order, extras = {}) => {
     // gateway-confirmed online orders record Online Gateway.
     mode: extras.mode || MODE_ROUTING[order.gatewayMode] || "Online Gateway",
     transactionId,
+    // Portal-origin money: the receipt number is always minted (never the
+    // office's receipt book) and reports split it from counter collections.
+    source: "online",
     collectedBy: `${order.confirmedBy || "gateway"}:${order.gatewayMode || "platform"}`,
     ...(extras.receivedRef ? { receivedRef: String(extras.receivedRef).slice(0, 120) } : {}),
     ...(extras.chequeNo ? { chequeNo: String(extras.chequeNo).slice(0, 40), clearanceStatus: "Pending" } : {}),

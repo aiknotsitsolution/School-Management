@@ -74,6 +74,7 @@ export const routeLoaders = {
   "/staff-dashboard": () => import("../pages/StaffDashboard"),
   "/staff/complete/:id": () => import("../pages/StaffCompleteProfile"),
   "/staff/my-attendance": () => import("../pages/MyAttendance"),
+  "/my-work": () => import("../pages/MyWork"),
   "/staff/profile": () => import("../pages/staff/MyProfile"),
   "/student-dashboard": () => import("../pages/student/StudentDashboard"),
   "/student/achievements": () => import("../pages/student/Achievements"),

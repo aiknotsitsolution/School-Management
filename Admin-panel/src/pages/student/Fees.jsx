@@ -14,6 +14,7 @@ export default function Fees() {
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [orders, setOrders] = useState([]);
+  const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,10 +23,13 @@ export default function Fees() {
       api.fees.invoices.list(),
       api.fees.payments.list(),
       api.fees.orders.list(),
-    ]).then(([i, p, o]) => {
+      // One-place statement: yearly package vs billed vs collected vs balance.
+      api.fees.plans.summary("me"),
+    ]).then(([i, p, o, s]) => {
       setInvoices(i.status === "fulfilled" ? (i.value.data || []) : []);
       setPayments(p.status === "fulfilled" ? (p.value.data || []) : []);
       setOrders(o.status === "fulfilled" ? (o.value.data || []) : []);
+      setSummary(s.status === "fulfilled" ? s.value.data || null : null);
       setLoading(false);
     });
   }, []);
@@ -54,7 +58,7 @@ export default function Fees() {
         const paid = Number(inv.paidAmount || 0);
         return {
           id: inv._id,
-          label: inv.title || "Invoice",
+          label: inv.feeType || inv.title || "Invoice",
           value: amount ? Math.round((paid / amount) * 100) : 0,
           obtained: paid,
           maxMarks: amount,
@@ -84,6 +88,116 @@ export default function Fees() {
         art="fees"
         description="Your fee invoices and payment history."
       />
+
+      {/* Yearly package: what was fixed at admission vs what is billed,
+          collected and still due — the single place for the money story. */}
+      <Card
+        title={`Yearly Fee Package${summary?.plan ? ` · ${summary.plan.session}` : ""}`}
+        subtitle="Annual fees fixed at admission, head-wise"
+      >
+        {!summary ? (
+          <p className="py-6 text-center text-[13px] text-slate-text/70">
+            {loading ? "Loading…" : "No fee package on record yet — the school office sets it up at admission."}
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
+              <div className="rounded-xl border border-slate-200 bg-paper/60 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/60">
+                  Package (Year)
+                </p>
+                <p className="mt-1 font-display text-xl font-bold text-ink">
+                  {summary.totals.planned === null ? "—" : fmtMoney(summary.totals.planned)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-slate-200 bg-paper/60 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/60">
+                  Invoiced
+                </p>
+                <p className="mt-1 font-display text-xl font-bold text-ink">
+                  {fmtMoney(summary.totals.invoiced)}
+                </p>
+              </div>
+              <div className="rounded-xl border border-success/30 bg-success/5 p-3">
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/60">
+                  Collected
+                </p>
+                <p className="mt-1 font-display text-xl font-bold text-success">
+                  {fmtMoney(summary.totals.collected)}
+                </p>
+              </div>
+              <div
+                className={`rounded-xl border p-3 ${
+                  summary.totals.outstanding > 0
+                    ? "border-alert/30 bg-alert/5"
+                    : "border-success/30 bg-success/5"
+                }`}
+              >
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/60">
+                  Balance Due
+                </p>
+                <p
+                  className={`mt-1 font-display text-xl font-bold ${
+                    summary.totals.outstanding > 0 ? "text-alert" : "text-success"
+                  }`}
+                >
+                  {fmtMoney(summary.totals.outstanding)}
+                </p>
+              </div>
+            </div>
+
+            {summary.headwise.length > 0 ? (
+              <div className="overflow-x-auto -mx-5">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="text-left text-[11px] uppercase tracking-wide text-slate-text/50">
+                      <th className="px-5 py-2 font-semibold">Fee Head</th>
+                      <th className="px-3 py-2 text-right font-semibold">Annual Fee</th>
+                      <th className="px-3 py-2 text-right font-semibold">Invoiced</th>
+                      <th className="px-3 py-2 text-right font-semibold">Paid</th>
+                      <th className="px-5 py-2 text-right font-semibold">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.headwise.map((row) => (
+                      <tr key={row.feeType} className="border-t border-slate-200">
+                        <td className="px-5 py-2.5 font-medium text-ink">{row.feeType}</td>
+                        <td className="px-3 py-2.5 text-right text-slate-text/80">
+                          {row.planned ? fmtMoney(row.planned) : "—"}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-slate-text/80">
+                          {fmtMoney(row.invoiced)}
+                        </td>
+                        <td className="px-3 py-2.5 text-right text-success">
+                          {fmtMoney(row.paid)}
+                        </td>
+                        <td
+                          className={`px-5 py-2.5 text-right font-semibold ${
+                            row.balance > 0 ? "text-alert" : "text-success"
+                          }`}
+                        >
+                          {fmtMoney(row.balance)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              <p className="text-[13px] text-slate-text/70">
+                No fee heads in your package yet.
+              </p>
+            )}
+
+            {summary.concessions.length > 0 && (
+              <p className="text-[12.5px] text-slate-text/80">
+                Concessions applied:{" "}
+                {summary.concessions.map((c) => `${c.name} (${c.type} ${c.value}${c.type === "percent" ? "%" : ""})`).join(", ")}
+              </p>
+            )}
+          </div>
+        )}
+      </Card>
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card>
@@ -153,7 +267,7 @@ export default function Fees() {
             <table className="w-full text-[13px]">
               <thead>
                 <tr className="text-left text-[11px] text-slate-text/50 uppercase tracking-wide">
-                  <th className="px-5 py-2 font-semibold">Title</th>
+                  <th className="px-5 py-2 font-semibold">Fee Head</th>
                   <th className="px-3 py-2 font-semibold">Due Date</th>
                   <th className="px-3 py-2 font-semibold">Amount</th>
                   <th className="px-3 py-2 font-semibold">Paid</th>
@@ -166,7 +280,9 @@ export default function Fees() {
                   const status = inv.status || (remaining <= 0 ? "Paid" : "Pending");
                   return (
                     <tr key={inv._id} className="border-t border-slate-200">
-                      <td className="px-5 py-2.5 font-medium text-ink">{inv.title}</td>
+                      <td className="px-5 py-2.5 font-medium text-ink">
+                        {inv.feeType || inv.title || "Fee invoice"}
+                      </td>
                       <td className="px-3 py-2.5 text-slate-text/80">{fmtDate(inv.dueDate || inv.createdAt)}</td>
                       <td className="px-3 py-2.5 font-semibold text-ink">{fmtMoney(inv.amount || 0)}</td>
                       <td className="px-3 py-2.5 text-success">{fmtMoney(inv.paidAmount || 0)}</td>
@@ -199,10 +315,30 @@ export default function Fees() {
               <tbody>
                 {sortedPayments.map((p) => (
                   <tr key={p._id || p.receiptNo} className="border-t border-slate-200">
-                    <td className="px-5 py-2.5">{fmtDate(p.paymentDate || p.createdAt)}</td>
+                    <td className="px-5 py-2.5">{fmtDate(p.paidOn || p.paymentDate || p.createdAt)}</td>
                     <td className="px-3 py-2.5 font-semibold text-success">{fmtMoney(p.amount || 0)}</td>
-                    <td className="px-3 py-2.5 text-slate-text/80">{p.receiptNo || p.transactionId || p.invoiceId || "—"}</td>
-                    <td className="px-5 py-2.5 text-slate-text/80">{p.mode || "Cash"}</td>
+                    <td className="px-3 py-2.5 text-slate-text/80">
+                      {p.receiptNo || p.transactionId || p.invoiceId || "—"}
+                      {p.receiptNo && (
+                        <span
+                          className={`ml-2 rounded px-1 py-px text-[10px] font-semibold uppercase ${
+                            p.receiptMode === "manual"
+                              ? "bg-primary/10 text-primary"
+                              : "bg-slate-100 text-slate-text/70"
+                          }`}
+                        >
+                          {p.receiptMode === "manual" ? "manual" : "auto"}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-2.5 text-slate-text/80">
+                      {p.mode || "Cash"}
+                      {p.source === "online" && (
+                        <span className="ml-2 rounded bg-success/10 px-1.5 py-0.5 text-[10.5px] font-semibold uppercase text-success">
+                          online
+                        </span>
+                      )}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -235,7 +371,9 @@ export default function Fees() {
       <Card>
         <p className="text-[12.5px] text-slate-text/80 flex items-center gap-2">
           <Wallet size={14} className="text-slate-text/50" />
-          Payments are confirmed by the school's payment gateway once configured. Until then, pay at the school office and keep your receipt.
+          Pay online from your parent&apos;s dashboard (Fees &amp; Payments), or pay at the
+          school office and collect the receipt. Portal payments get an auto-generated receipt
+          number; counter cash receipts use the office receipt book.
         </p>
       </Card>
     </div>

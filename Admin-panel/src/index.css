@@ -197,6 +197,21 @@
   --color-cyan-700: #CFFAFE;
   --color-cyan-800: #ECFEFF;
 
+  /* Blue was the one hue family missing from this inversion — `bg-blue-50`
+     icon tiles and the ClassCard corner blob stayed #EFF6FF (near-white) on a
+     #111827 card, so light text landed on a white patch (measured 2.38:1).
+     Same crossover rule as the ramps above: 50–300 are dark tinted surfaces,
+     400+ become light text, 500–600 aligned to --color-primary. */
+  --color-blue-50: #0D1A30;
+  --color-blue-100: #122544;
+  --color-blue-200: #193059;
+  --color-blue-300: #24407A;
+  --color-blue-400: #5B8DEF;
+  --color-blue-500: #7BA6F5;
+  --color-blue-600: #A9C6F9;
+  --color-blue-700: #C9DDFC;
+  --color-blue-800: #E4EEFE;
+
   --color-primary: #7BA6F5;
   --color-primary-light: #16244A;
   --color-primary-dark: #A9C6F9;
@@ -240,6 +255,34 @@
     animation: none !important;
     opacity: 0.75 !important;
   }
+}
+
+/* `bg-blue-700` inverted with the blue ramp above, but it exists only as the
+   9 `hover:bg-blue-700` states on `bg-info text-white` buttons — seating #fff
+   on #C9DDFC is 1.1:1. `text-blue-700` (13 uses, on bg-blue-100 badges) does
+   need the light value, so pin the background utility alone. */
+[data-theme="dark"] .bg-blue-700,
+[data-theme="dark"] .hover\:bg-blue-700:hover {
+  background-color: #1d4ed8;
+}
+
+/* `bg-ink` + `text-white` inverts badly on its own: --color-ink flips to
+   #F1F5F9 in dark while the `.text-white` pin above holds the label at #fff,
+   so the pill renders white-on-white (measured 1.1:1 on OnTrackCard's
+   "See report card"). Elements that bring their own `dark:bg-*` fill are
+   already dark and keep their white label, so only the rest invert the label. */
+[data-theme="dark"] .bg-ink.text-white:not([class*="dark:bg-"]) {
+  color: #0b1220;
+}
+
+/* …but OnTrackCard's "See report card" runs the two fills the other way round
+   in dark: primary (#7BA6F5) at rest, ink — now #F1F5F9 — on hover. Light mode
+   keeps bg-ink / hover:bg-primary from the class list. */
+[data-theme="dark"] .report-cta {
+  background-color: var(--color-primary);
+}
+[data-theme="dark"] .report-cta:hover {
+  background-color: var(--color-ink);
 }
 
 /* Soft elevation for cards in dark mode — a black shadow is invisible. */
@@ -286,6 +329,28 @@
   color: #fff;
 }
 [data-theme="dark"] .group-hover\:text-white:is(:where(.group):hover *) {
+  color: #fff;
+}
+
+/* The dark palette remaps every accent to a LIGHT fill so it reads on a dark
+   canvas (#7BA6F5 primary/info, #F08087 alert, #4ADE80 success, #FBBF24
+   warning) — but the `.text-white` pin above still seats the label at #fff, so
+   white-on-light-fill measures 1.7–2.6:1: 2.44 for the primary buttons
+   ("New Enquiry", "New user"), tab pills, pill counts and NA/ST avatars, 2.58
+   for the bell badge, 1.73 for the attendance "Present" chip. Seat the label
+   dark on those fills instead (7.6–11:1 measured). Elements that bring their
+   own `dark:bg-*` fill are already dark and keep their white label; the two
+   round nav buttons flip to the dark #1d4ed8 fill on hover, so they return to
+   #fff there. */
+[data-theme="dark"] .bg-primary.text-white:not([class*="dark:bg-"]),
+[data-theme="dark"] .bg-info.text-white:not([class*="dark:bg-"]),
+[data-theme="dark"] .bg-alert.text-white:not([class*="dark:bg-"]),
+[data-theme="dark"] .bg-success.text-white:not([class*="dark:bg-"]),
+[data-theme="dark"] .bg-warning.text-white:not([class*="dark:bg-"]) {
+  color: #0b1220;
+}
+
+[data-theme="dark"] .bg-info.text-white.hover\:bg-blue-700:hover {
   color: #fff;
 }
 

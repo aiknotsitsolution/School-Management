@@ -112,7 +112,7 @@ export default function OnTrackCard({
           <p className="text-[12px] text-slate-text/80">Based on your attendance, submissions and marks.</p>
           <Link
             to="/student/results"
-            className="group inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
+            className="group report-cta inline-flex items-center gap-1.5 rounded-full bg-ink px-4 py-2 text-[12.5px] font-semibold text-white transition-colors hover:bg-primary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 focus-visible:ring-offset-2"
           >
             See report card
             <ArrowRight size={14} className="transition-transform group-hover:translate-x-0.5" aria-hidden="true" />

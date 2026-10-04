@@ -17,7 +17,7 @@ const { generateFeeReceiptPdf } = require("../utils/receiptPdf");
 
 const recordPayment = async (req, res) => {
   try {
-    const { invoiceId, amount, mode, transactionId, receivedRef, chequeNo, chequeDate, bankName } = req.body;
+    const { invoiceId, amount, mode, transactionId, receivedRef, chequeNo, chequeDate, bankName, receiptNo } = req.body;
     const amt = Number(amount);
     const invoice = await FeeInvoice.findOne(scopeQuery(FeeInvoice, req, { _id: invoiceId, schoolId: req.tenantId }));
     if (!invoice) return res.status(404).json({ success: false, message: "Invoice not found" });
@@ -26,6 +26,24 @@ const recordPayment = async (req, res) => {
       return res.status(400).json({ success: false, message: "Payment amount exceeds outstanding balance" });
     if (mode === "Cheque" && !(chequeNo && String(chequeNo).trim()))
       return res.status(400).json({ success: false, message: "Cheque number is required for cheque payments" });
+
+    // Offline instruments come with the office's own receipt book, so cash and
+    // cheque carry a MANUAL receipt number (blank -> auto-mint for the other
+    // modes; portal/gateway payments are always auto — see paymentEngine).
+    const receipt = receiptNo ? String(receiptNo).trim() : "";
+    const needsManualReceipt = mode === "Cash" || mode === "Cheque";
+    if (needsManualReceipt && !receipt) {
+      return res.status(400).json({
+        success: false,
+        message: `Receipt number is required for ${mode} payments (use your receipt book)`,
+      });
+    }
+    if (receipt && !/^[A-Za-z0-9][A-Za-z0-9/_#.-]{2,39}$/.test(receipt)) {
+      return res.status(400).json({
+        success: false,
+        message: "Receipt number must be 3-40 characters: letters, digits, - _ / . # only",
+      });
+    }
 
     // 1) Record the receipt first (tenant-unique receiptNo; a duplicate
     //    transaction reference is rejected by the unique index).
@@ -39,6 +57,9 @@ const recordPayment = async (req, res) => {
         transactionId: transactionId || uuidv4(),
         collectedBy: req.user.name,
         schoolId: req.tenantId,
+        // Staff collection at the counter (portal orders set "online").
+        source: "counter",
+        ...(receipt ? { receiptNo: receipt } : {}),
         // Copied from the invoice, not from the acting branch: the money belongs
         // to the campus that raised the bill even if another campus's admin
         // collected it (head-office fee collection).
@@ -55,6 +76,12 @@ const recordPayment = async (req, res) => {
           : {}),
       });
     } catch (err) {
+      if (err && err.receiptDuplicate) {
+        return res.status(409).json({
+          success: false,
+          message: `Receipt number ${receipt} is already used — enter the next number from your receipt book`,
+        });
+      }
       if (err && err.code === 11000 && String(err.message || "").includes("transactionId")) {
         return res.status(409).json({ success: false, message: "This transaction reference has already been recorded" });
       }

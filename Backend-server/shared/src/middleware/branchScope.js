@@ -237,7 +237,18 @@ function scopeQuery(model, req, filter = {}, opts = {}) {
   if (!model) {
     throw new TypeError("scopeQuery(model, req, filter) requires a model as the first argument.");
   }
-  if (filter && typeof filter === "object" && (typeof filter.then === "function" || filter.status || filter.headers)) {
+  // `status` is a NORMAL filter field (`status: { $ne: "Rejected" }`,
+  // `status: "Active"`, `status: "published"`), so a truthy `filter.status` on
+  // its own is not a request — treating it as one made every controller that
+  // scoped by status throw a 400 (concession create, staff attendance, payroll,
+  // student/parent marks). Only shapes that can only be an Express req/res are
+  // flagged: a thenable, a response whose .status() is a function, or an
+  // incoming message (headers together with url/method).
+  const looksLikeReqOrRes =
+    typeof filter?.then === "function" ||
+    typeof filter?.status === "function" ||
+    (filter?.headers && typeof filter.headers === "object" && (filter.url || filter.method));
+  if (filter && typeof filter === "object" && looksLikeReqOrRes) {
     throw new TypeError(
       "scopeQuery(model, req, filter) looks like it received the request as the filter. " +
         "Correct usage: scopeQuery(Model, req, filter).",

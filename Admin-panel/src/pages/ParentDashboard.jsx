@@ -44,6 +44,8 @@ function fmtDate(value) {
   return value ? new Date(value).toLocaleDateString("en-IN", { day: "numeric", month: "short" }) : "—";
 }
 
+const inr = (value) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
+
 // Matches the fleet view's poll cadence in BusTracking.jsx.
 const BUS_REFRESH_MS = 30000;
 
@@ -58,6 +60,8 @@ export default function ParentDashboard() {
   const [data, setData] = useState({ children: [], notices: [], notifications: [], busRoutes: [] });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  // Per-child one-place fee statement (package vs collected vs balance).
+  const [fees, setFees] = useState({});
 
   // The bus panel is a live view, so it refreshes on its own timer; the rest of
   // the dashboard is a one-shot load. Only the scoped /transport/me endpoint is
@@ -101,6 +105,25 @@ export default function ParentDashboard() {
     const timer = setInterval(() => loadBus(true), BUS_REFRESH_MS);
     return () => clearInterval(timer);
   }, [loadBus]);
+
+  // Fee statements depend on the linked children, so they load right after
+  // them. The endpoint is role-scoped: a parent token can only ever read the
+  // summary of a linked child, so this cannot be widened.
+  useEffect(() => {
+    const linked = (data.children || []).filter((child) => child.admissionNo);
+    if (linked.length === 0) return;
+    Promise.allSettled(linked.map((child) => api.fees.plans.summary(child.admissionNo))).then(
+      (results) => {
+        const next = {};
+        results.forEach((result, index) => {
+          if (result.status === "fulfilled") {
+            next[linked[index].admissionNo] = result.value.data;
+          }
+        });
+        setFees(next);
+      },
+    );
+  }, [data.children]);
 
   const { children, notices, notifications, busRoutes } = data;
   const busRoute = busRoutes[0] || null;
@@ -245,6 +268,108 @@ export default function ParentDashboard() {
               accent="alert"
             />
           </MetricGrid>
+
+          {/* ── Fees: package vs collected vs balance, per child ──── */}
+          {children.length > 0 && (
+            <Panel
+              title="Fees at a Glance"
+              icon={Wallet}
+              iconTone={ACCENTS.success.icon}
+              subtitle="Yearly package, what has been collected and what is still due"
+              decorTone={ACCENTS.success.text}
+            >
+              <div className="grid gap-3 sm:grid-cols-2">
+                {children.map((child) => {
+                  const statement = fees[child.admissionNo];
+                  const planned = statement?.totals?.planned;
+                  const outstanding = statement?.totals?.outstanding ?? null;
+                  return (
+                    <div
+                      key={child._id}
+                      className="rounded-2xl border border-slate-200 bg-white p-4"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                          <p className="truncate font-display text-[15px] font-bold text-ink">
+                            {child.name}
+                          </p>
+                          <p className="mt-0.5 text-[12px] text-slate-text/70">
+                            Class {child.class}
+                            {child.section ? `-${child.section}` : ""} · {child.admissionNo}
+                          </p>
+                        </div>
+                        <Link
+                          to="/online-payment"
+                          className="shrink-0 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
+                        >
+                          Pay Online
+                        </Link>
+                      </div>
+
+                      {!statement ? (
+                        <p className="mt-3 text-[12.5px] text-slate-text/70">
+                          Fee summary unavailable right now.
+                        </p>
+                      ) : (
+                        <>
+                          <div className="mt-3 grid grid-cols-3 gap-2">
+                            <div className="rounded-xl bg-slate-50 p-2.5">
+                              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-slate-text/60">
+                                Package
+                              </p>
+                              <p className="mt-0.5 text-[15px] font-bold text-ink">
+                                {planned === null || planned === undefined
+                                  ? "—"
+                                  : inr(planned)}
+                              </p>
+                            </div>
+                            <div className="rounded-xl bg-emerald-50 p-2.5">
+                              <p className="text-[10.5px] font-semibold uppercase tracking-wide text-emerald-700/70">
+                                Collected
+                              </p>
+                              <p className="mt-0.5 text-[15px] font-bold text-emerald-700">
+                                {inr(statement.totals.collected)}
+                              </p>
+                            </div>
+                            <div
+                              className={`rounded-xl p-2.5 ${
+                                outstanding > 0 ? "bg-rose-50" : "bg-slate-50"
+                              }`}
+                            >
+                              <p
+                                className={`text-[10.5px] font-semibold uppercase tracking-wide ${
+                                  outstanding > 0 ? "text-rose-600/80" : "text-slate-text/60"
+                                }`}
+                              >
+                                Balance
+                              </p>
+                              <p
+                                className={`mt-0.5 text-[15px] font-bold ${
+                                  outstanding > 0 ? "text-rose-600" : "text-ink"
+                                }`}
+                              >
+                                {inr(statement.totals.outstanding)}
+                              </p>
+                            </div>
+                          </div>
+                          <p className="mt-2.5 text-[12px] text-slate-text/70">
+                            {statement.headwise.length > 0
+                              ? statement.headwise
+                                  .map(
+                                    (row) =>
+                                      `${row.feeType}: ${inr(row.paid)} of ${inr(row.invoiced || row.planned)}`,
+                                  )
+                                  .join("  ·  ")
+                              : "No fee heads on record yet."}
+                          </p>
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </Panel>
+          )}
 
           {/* ── Children ───────────────────────────────────────────── */}
           <Panel

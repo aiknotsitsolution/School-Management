@@ -1,4 +1,4 @@
-const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
+const { scopeQuery, branchIdForWrite } = require("@school-erp/shared/src/middleware/branchScope");
 const StudentDocument = require("../models/StudentDocument");
 const Student = require("../models/Student");
 const imagekit = require("@school-erp/shared/src/config/imagekit");

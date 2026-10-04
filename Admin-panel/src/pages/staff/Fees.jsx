@@ -13,13 +13,14 @@ import {
 import { api } from "../../lib/api";
 import useStaffContext, { fmtMoney, fmtDate } from "./useStaffContext";
 
-const TABS = ["Invoices", "Fee Structure"];
+const TABS = ["Invoices", "Students", "Fee Structure"];
 
 export default function Fees() {
   const [tab, setTab] = useState("Invoices");
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [structures, setStructures] = useState([]);
+  const [plans, setPlans] = useState([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
@@ -32,11 +33,14 @@ export default function Fees() {
       api.fees.invoices.list(),
       api.fees.payments.list(),
       api.fees.structures.list(),
+      // Yearly packages — one row per student for the Students tab.
+      api.fees.plans.list(),
     ])
-      .then(([i, p, s]) => {
+      .then(([i, p, s, pl]) => {
         setInvoices(i.status === "fulfilled" ? i.value.data || [] : []);
         setPayments(p.status === "fulfilled" ? p.value.data || [] : []);
         setStructures(s.status === "fulfilled" ? s.value.data || [] : []);
+        setPlans(pl.status === "fulfilled" ? pl.value.data || [] : []);
       })
       .finally(() => setLoading(false));
   };
@@ -57,9 +61,51 @@ export default function Fees() {
       .sort((a, b) => (a.status === "Paid" ? 1 : -1) - (b.status === "Paid" ? 1 : -1));
   }, [invoices, statusFilter, search]);
 
+  // One row per student: yearly package vs billed vs collected vs balance.
+  const studentRows = useMemo(() => {
+    const rows = new Map();
+    const rowFor = (id) => {
+      if (!rows.has(id)) {
+        rows.set(id, { studentId: id, planned: 0, hasPlan: false, invoiced: 0, paid: 0, className: "" });
+      }
+      return rows.get(id);
+    };
+    (plans || []).forEach((plan) => {
+      const row = rowFor(plan.studentId);
+      row.planned = Number(plan.totalAnnual || 0);
+      row.hasPlan = true;
+      row.className = plan.class || row.className;
+    });
+    (invoices || []).forEach((invoice) => {
+      const row = rowFor(invoice.studentId);
+      row.invoiced += Number(invoice.amount || 0);
+      row.paid += Number(invoice.paidAmount || 0);
+      row.className = row.className || invoice.class || "";
+    });
+    const q = search.toLowerCase();
+    return [...rows.values()]
+      .map((row) => ({ ...row, balance: Math.max(0, row.invoiced - row.paid) }))
+      .filter((row) => row.hasPlan || row.invoiced > 0)
+      .filter((row) => !q || row.studentId.toLowerCase().includes(q))
+      .sort((a, b) => b.balance - a.balance);
+  }, [plans, invoices, search]);
+
   const handleCollect = async () => {
+    const receiptNo = String(collect.receiptNo || "").trim();
+    const needsReceipt = collect.mode === "Cash" || collect.mode === "Cheque";
+    if (needsReceipt && !receiptNo) {
+      toast(`Enter the receipt number from your receipt book (${collect.mode})`, "error");
+      return;
+    }
+    if (receiptNo && !/^[A-Za-z0-9][A-Za-z0-9/_#.-]{2,39}$/.test(receiptNo)) {
+      toast("Receipt number: 3-40 chars, letters/digits and - _ / . # only", "error");
+      return;
+    }
     try {
-      await api.fees.payments.create(collect);
+      await api.fees.payments.create({
+        ...collect,
+        receiptNo: receiptNo || undefined,
+      });
       toast("Payment recorded", "success");
       setCollect(null);
       refresh();
@@ -181,7 +227,7 @@ export default function Fees() {
                           </td>
                           <td className="px-3 py-2.5 text-right">
                             {i.status !== "Paid" ? (
-                              <button onClick={() => setCollect({ invoiceId: i._id, studentId: i.studentId, amount: due, mode: "Cash", transactionId: "" })} className="text-[12px] font-semibold text-info hover:underline">
+                              <button onClick={() => setCollect({ invoiceId: i._id, studentId: i.studentId, amount: due, mode: "Cash", transactionId: "", receiptNo: "" })} className="text-[12px] font-semibold text-info hover:underline">
                                 Collect
                               </button>
                             ) : (
@@ -197,6 +243,54 @@ export default function Fees() {
             )}
           </Card>
         </>
+      )}
+
+      {tab === "Students" && (
+        <Card
+          title="Student-wise Fee Summary"
+          subtitle="Yearly package, billed, collected and balance per student"
+          action={
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-text/40" />
+              <Input placeholder="Search admission no…" value={search} onChange={(e) => setSearch(e.target.value)} className="pl-8 w-52" />
+            </div>
+          }
+        >
+          {loading ? (
+            <p className="text-[13px] text-slate-text py-10 text-center">Loading…</p>
+          ) : studentRows.length === 0 ? (
+            <p className="text-[13px] text-slate-text py-10 text-center">No fee packages or invoices yet.</p>
+          ) : (
+            <div className="overflow-x-auto -mx-5">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="text-left text-[11px] text-slate-text/50 uppercase tracking-wide">
+                    <th className="px-5 py-2 font-semibold">Student</th>
+                    <th className="px-3 py-2 font-semibold">Class</th>
+                    <th className="px-3 py-2 text-right font-semibold">Package (Year)</th>
+                    <th className="px-3 py-2 text-right font-semibold">Invoiced</th>
+                    <th className="px-3 py-2 text-right font-semibold">Collected</th>
+                    <th className="px-5 py-2 text-right font-semibold">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {studentRows.map((row) => (
+                    <tr key={row.studentId} className="border-t border-slate-200 hover:bg-paper/60">
+                      <td className="px-5 py-2.5 font-semibold text-ink">{row.studentId}</td>
+                      <td className="px-3 py-2.5">{row.className ? `Class ${row.className}` : "—"}</td>
+                      <td className="px-3 py-2.5 text-right">{row.hasPlan ? fmtMoney(row.planned) : "—"}</td>
+                      <td className="px-3 py-2.5 text-right">{fmtMoney(row.invoiced)}</td>
+                      <td className="px-3 py-2.5 text-right text-success font-semibold">{fmtMoney(row.paid)}</td>
+                      <td className={`px-5 py-2.5 text-right font-semibold ${row.balance > 0 ? "text-alert" : "text-success"}`}>
+                        {fmtMoney(row.balance)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
       )}
 
       {tab === "Fee Structure" && (
@@ -276,11 +370,31 @@ export default function Fees() {
                 <option key={m} value={m}>{m}</option>
               ))}
             </Select>
+            <label className="block text-[12px] font-semibold text-slate-text/70">
+              Receipt No. {(collect.mode === "Cash" || collect.mode === "Cheque") ? <span className="text-alert">*</span> : <span className="font-normal">(optional)</span>}
+            </label>
+            <Input
+              value={collect.receiptNo || ""}
+              onChange={(e) => setCollect({ ...collect, receiptNo: e.target.value })}
+              placeholder={
+                collect.mode === "Cash" || collect.mode === "Cheque"
+                  ? "Next number from your receipt book"
+                  : "Leave blank to auto-generate"
+              }
+            />
             <label className="block text-[12px] font-semibold text-slate-text/70">Transaction ID (optional)</label>
             <Input value={collect.transactionId} onChange={(e) => setCollect({ ...collect, transactionId: e.target.value })} placeholder="UPI/ref no." />
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="outline" onClick={() => setCollect(null)}>Cancel</Button>
-              <Button onClick={handleCollect}>Record Payment</Button>
+              <Button
+                onClick={handleCollect}
+                disabled={
+                  (collect.mode === "Cash" || collect.mode === "Cheque") &&
+                  !String(collect.receiptNo || "").trim()
+                }
+              >
+                Record Payment
+              </Button>
             </div>
           </div>
         </div>

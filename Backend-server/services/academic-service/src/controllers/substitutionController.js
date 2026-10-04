@@ -1,4 +1,4 @@
-const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
+const { scopeQuery, branchIdForWrite } = require("@school-erp/shared/src/middleware/branchScope");
 const Substitution = require("../models/Substitution");
 const Timetable = require("../models/Timetable");
 const { findCrossClassConflicts } = require("../utils/periodConflicts");

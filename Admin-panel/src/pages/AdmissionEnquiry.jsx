@@ -130,11 +130,36 @@ function enquiryNo(id) {
   return hex ? `ENQ-${hex.slice(-6)}` : "—";
 }
 
+// Masters store the canonical class value ("1") and the UI renders the label
+// ("Class 1"). Legacy rows and the old hardcoded default carried the *label*
+// instead, which the refs gate then rejects with `Unknown academic value: class
+// "Class 1"` once the school has a master catalog. Map whatever we hold back
+// onto the catalog being rendered so the payload is always a real master value.
+function classValue(value, options = []) {
+  const v = String(value || "").trim();
+  if (!v || !options.length) return v;
+  if (options.includes(v)) return v;
+  const stripped = v.replace(/^class\s+/i, "");
+  return options.includes(stripped) ? stripped : v;
+}
+
+// Mirror of the label helpers used across the app ("1" -> "Class 1"), leaving
+// values that already carry a label (or Nursery/LKG/UKG) untouched.
+function displayClass(value) {
+  const v = String(value || "").trim();
+  if (!v) return "—";
+  if (/^(nursery|lkg|ukg|class\s)/i.test(v)) return v;
+  return `Class ${v}`;
+}
+
 function emptyForm() {
   return {
     childName: "",
     parentName: "",
-    classApplied: "Class 1",
+    // Picked from the master catalog — see classValue(). An empty default
+    // forces an explicit choice instead of writing a label the refs gate
+    // cannot resolve.
+    classApplied: "",
     contact: "",
     studentEmail: "",
     date: new Date().toISOString().slice(0, 10),
@@ -273,7 +298,7 @@ export default function AdmissionEnquiry() {
     setForm({
       childName: item.childName,
       parentName: item.parentName,
-      classApplied: item.classApplied,
+      classApplied: classValue(item.classApplied, CLASS_OPTIONS),
       contact: item.contact,
       studentEmail: item.email || "",
       date: item.date,
@@ -310,7 +335,7 @@ export default function AdmissionEnquiry() {
     const payload = {
       childName: form.childName.trim(),
       parentName: form.parentName.trim(),
-      classApplied: form.classApplied,
+      classApplied: classValue(form.classApplied, CLASS_OPTIONS),
       contact: form.contact.trim(),
       email: form.studentEmail.trim() || undefined,
       source: backendSource[form.source] || "Other",
@@ -579,7 +604,7 @@ export default function AdmissionEnquiry() {
                       </div>
                     </td>
                     <td className="px-4 py-2.5">
-                      <span className="font-medium text-ink">{e.classApplied}</span>
+                      <span className="font-medium text-ink">{displayClass(e.classApplied)}</span>
                     </td>
                     <td className="px-4 py-2.5">
                       <span className="inline-flex items-center gap-1 text-slate-text text-[12px] whitespace-nowrap">
@@ -808,7 +833,7 @@ export default function AdmissionEnquiry() {
                   <div className="flex items-center justify-between px-4 py-3">
                     <span className="text-[12.5px] text-slate-text/70">Class Applied</span>
                     <span className="text-[13px] font-medium text-ink">
-                      {selected.classApplied}
+                      {displayClass(selected.classApplied)}
                       {selected.section ? ` · Sec ${selected.section}` : ""}
                     </span>
                   </div>

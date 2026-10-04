@@ -915,7 +915,7 @@ export function Rail({ children, ariaLabel, step = 280, className = "" }) {
         ref={ref}
         onScroll={sync}
         onKeyDown={onKeyDown}
-        className="scrollbar-thin flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40 rounded-xl"
+        className="scrollbar-hidden flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40 rounded-xl"
       >
         {children}
       </div>

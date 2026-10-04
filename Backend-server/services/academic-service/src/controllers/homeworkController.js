@@ -1,4 +1,4 @@
-const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
+const { scopeQuery, branchIdForWrite } = require("@school-erp/shared/src/middleware/branchScope");
 const Homework = require("../models/Homework");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 const {
@@ -27,10 +27,22 @@ async function assertRefs(tenantId, body, branchId) {
 // (schoolId / assignedBy / timestamps stay server-owned).
 const HOMEWORK_FIELDS = [
   "assignType", "class", "section", "subject", "title", "description",
-  "assignedTo", "assignedToRole", "assignedToUserId", "priority", "status", "dueDate", "maxMarks", "attachments",
+  "assignedTo", "assignedToRole", "assignedToUserId", "category",
+  "priority", "status", "dueDate", "maxMarks", "attachments",
 ];
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
+/**
+ * `assignedToUserId` is optional — legacy rows and hand-built payloads carry
+ * no user link — but an empty string cannot cast to ObjectId, so Mongoose
+ * rejects the whole write with a confusing "Cast to ObjectId failed for value".
+ * Normalise it to "unset" instead.
+ */
+const dropEmptyUserId = (value) => {
+  if (value && !String(value.assignedToUserId || "").trim()) delete value.assignedToUserId;
+  return value;
+};
 
 const createHomework = async (req, res) => {
   try {
@@ -43,7 +55,7 @@ const createHomework = async (req, res) => {
       await assertRefs(req.tenantId, req.body, req.branchId);
     }
     const homework = await Homework.create({
-      ...pick(req.body, HOMEWORK_FIELDS),
+      ...dropEmptyUserId(pick(req.body, HOMEWORK_FIELDS)),
       assignType,
       schoolId: req.tenantId,
       branchId: branchIdForWrite(req),
@@ -67,7 +79,10 @@ const createHomework = async (req, res) => {
         title: "New Work Assigned",
         message: `${homework.title} assigned by ${req.user.name}. Due: ${homework.dueDate ? new Date(homework.dueDate).toLocaleDateString("en-IN") : "No deadline"}.`,
         kind: "homework",
-        link: "/homework",
+        // The recipient is the assignee (a teacher or staff member), for whom
+        // /homework is the admin page — the work they were just handed lives
+        // on their own "My Work" route.
+        link: "/my-work",
       });
     }
     res.status(201).json({ success: true, data: homework });
@@ -116,6 +131,18 @@ const getHomework = async (req, res) => {
     if (section) filter.section = section;
     if (subject) filter.subject = subject;
     if (assignType) filter.assignType = assignType;
+    // Staff work is person-to-person, and homework:read also gates STUDENT
+    // homework — which teachers legitimately hold. So the permission alone
+    // must never expose the whole school's staff task list: only school/super
+    // admins read everyone's, every other caller reads rows addressed to them.
+    // Expressed as an extra $and clause so the parent branch's $or above
+    // (which would otherwise be clobbered) keeps applying untouched.
+    if (!["school_admin", "super_admin"].includes(req.user.role)) {
+      filter.$and = [
+        ...(filter.$and || []),
+        { $or: [{ assignType: { $ne: "staff" } }, { assignedToUserId: req.user.id }] },
+      ];
+    }
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
       Homework.find(filter).sort({ dueDate: 1 }).skip(skip).limit(limit),
@@ -127,6 +154,70 @@ const getHomework = async (req, res) => {
   }
 };
 
+// A teacher's or staff member's own assigned work — the read path behind the
+// "My Work" surface. Deliberately NOT gated on homework:read: non-teaching
+// staff don't hold that permission, and the filter pins every row to the
+// caller, so there is nothing school-wide left to leak. It also skips the
+// class-scoping middleware — staff tasks carry the sentinel class "staff",
+// which no TeacherAssignment scope would ever match.
+const getMyHomework = async (req, res) => {
+  try {
+    const filter = scopeQuery(Homework, req, {
+      schoolId: req.tenantId,
+      assignType: "staff",
+      assignedToUserId: req.user.id,
+    });
+    const { page, limit, skip } = paginate(req.query);
+    const [data, total] = await Promise.all([
+      Homework.find(filter).sort({ dueDate: 1 }).skip(skip).limit(limit),
+      Homework.countDocuments(filter),
+    ]);
+    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
+  } catch (err) {
+    res.status(500).json({ success: false, message: err.message });
+  }
+};
+
+// Status only — title, deadline, priority and reassignment stay with whoever
+// assigned the work, so this self-service endpoint can never rewrite the brief.
+// All four of the schema's stored states are allowed: "Overdue" is usually
+// DERIVED for display (a Pending row past its deadline), but it is also a value
+// an admin can set directly — excluding it here would 400 on a saved row the
+// next time the assignee tried to move it off Overdue.
+const MY_WORK_STATUSES = ["Pending", "In Progress", "Completed", "Overdue"];
+
+const updateMyWorkStatus = async (req, res) => {
+  try {
+    const status = String(req.body?.status || "").trim();
+    if (!MY_WORK_STATUSES.includes(status)) {
+      return res.status(400).json({
+        success: false,
+        message: `status must be one of: ${MY_WORK_STATUSES.join(", ")}`,
+      });
+    }
+    const existing = await Homework.findOne(scopeQuery(Homework, req, {
+      _id: req.params.id,
+      schoolId: req.tenantId,
+    }));
+    if (!existing || existing.assignType !== "staff") {
+      return res.status(404).json({ success: false, message: "Work item not found" });
+    }
+    if (String(existing.assignedToUserId || "") !== String(req.user.id)) {
+      return res
+        .status(403)
+        .json({ success: false, message: "You can only update work assigned to you" });
+    }
+    const hw = await Homework.findOneAndUpdate(
+      scopeQuery(Homework, req, { _id: existing._id, schoolId: req.tenantId }),
+      { status },
+      { new: true },
+    );
+    res.json({ success: true, data: hw });
+  } catch (err) {
+    res.status(err.status || 400).json({ success: false, message: err.message });
+  }
+};
+
 const updateHomework = async (req, res) => {
   try {
     const existing = await Homework.findOne(scopeQuery(Homework, req, { _id: req.params.id, schoolId: req.tenantId }));
@@ -135,7 +226,7 @@ const updateHomework = async (req, res) => {
       return res.status(403).json({ success: false, message: "You can only manage homework in your assigned classes and sections" });
     }
 
-    const updates = pick(req.body, HOMEWORK_FIELDS);
+    const updates = dropEmptyUserId(pick(req.body, HOMEWORK_FIELDS));
     // Validate only the fields being changed so legacy stored values (left
     // untouched by this edit) are never re-checked against the masters.
     if (existing.assignType === "student") {
@@ -162,7 +253,9 @@ const updateHomework = async (req, res) => {
         title: "Work Updated",
         message: `${hw.title} was updated by ${req.user.name}.`,
         kind: "homework",
-        link: "/homework",
+        // See createHomework: this notification targets the ASSIGNEE, whose
+        // work lives on /my-work — /homework is the school admin's page.
+        link: "/my-work",
       });
     }
     res.json({ success: true, data: hw });
@@ -186,4 +279,11 @@ const deleteHomework = async (req, res) => {
   }
 };
 
-module.exports = { createHomework, getHomework, updateHomework, deleteHomework };
+module.exports = {
+  createHomework,
+  getHomework,
+  getMyHomework,
+  updateHomework,
+  updateMyWorkStatus,
+  deleteHomework,
+};

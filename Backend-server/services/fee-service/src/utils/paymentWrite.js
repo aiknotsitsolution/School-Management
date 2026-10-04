@@ -57,11 +57,39 @@ const newReceiptNo = () =>
 // receiptNo} unique index makes collisions detectable; we remint a few times
 // before giving up. A 11000 on transactionId is a genuine duplicate payment
 // reference and is rethrown for the caller to map to 409.
+//
+// data.receiptNo set  -> the office supplied its own receipt-book number
+// (counter cash/cheque). A duplicate is a hard error flagged with
+// `err.receiptDuplicate` so the controller can answer 409 — never reminted,
+// because the printed receipt-book number is authoritative.
+// data.receiptNo empty -> mint RCPT-… as before (receiptMode "auto").
 const createPaymentWithReceipt = async (data, { attempts = 5 } = {}) => {
+  const manual = data.receiptNo ? String(data.receiptNo).trim() : "";
+  if (manual) {
+    try {
+      return await Payment.create({
+        ...data,
+        receiptNo: manual,
+        receiptMode: "manual",
+      });
+    } catch (err) {
+      if (isDupKey(err, "receiptNo")) {
+        const dup = new Error(`Receipt number ${manual} is already used`);
+        dup.receiptDuplicate = true;
+        throw dup;
+      }
+      throw err;
+    }
+  }
+
   let lastErr = null;
   for (let i = 0; i < attempts; i += 1) {
     try {
-      return await Payment.create({ ...data, receiptNo: newReceiptNo() });
+      return await Payment.create({
+        ...data,
+        receiptNo: newReceiptNo(),
+        receiptMode: "auto",
+      });
     } catch (err) {
       if (isDupKey(err, "receiptNo")) {
         lastErr = err;

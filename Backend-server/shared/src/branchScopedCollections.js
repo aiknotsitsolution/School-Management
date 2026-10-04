@@ -59,6 +59,7 @@ const BRANCH_SCOPED_COLLECTIONS = {
   erp_fee: {
     feestructures: "feestructures",
     feeinvoices: "feeinvoices",
+    studentfeeplans: "studentfeeplans",
     concessions: "concessions",
     feereminders: "feereminders",
     payments: "payments",

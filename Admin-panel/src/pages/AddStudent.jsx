@@ -80,6 +80,18 @@ function formatClassLabel(c) {
   return `Class ${c}`;
 }
 
+// Shell rows inherited from an enquiry can carry the display label ("Class 1")
+// instead of the master value ("1"). The refs gate on PUT only accepts master
+// values, so map the stored label back onto the rendered catalog before it is
+// pre-filled — otherwise onboarding 400s with `Unknown academic value`.
+function classValue(value, options = []) {
+  const v = String(value || "").trim();
+  if (!v || !options.length) return v;
+  if (options.includes(v)) return v;
+  const stripped = v.replace(/^class\s+/i, "");
+  return options.includes(stripped) ? stripped : v;
+}
+
 function formatDate(iso) {
   if (!iso) return "";
   const d = new Date(`${iso}T00:00:00`);
@@ -194,7 +206,7 @@ export default function AddStudent() {
       name: student.name || "",
       admissionNo: student.admissionNo || "",
       rollNo: student.rollNo || "",
-      class: student.class || "8",
+      class: classValue(student.class, CLASS_OPTIONS) || "8",
       section: student.section || "A",
       gender: student.gender || "Male",
       dob: normalizeDate(student.dob),
@@ -219,6 +231,27 @@ export default function AddStudent() {
       () => formRef.current?.scrollIntoView({ behavior: "smooth", block: "start" }),
       80,
     );
+  };
+
+  // Admission-time fee package: once the student exists (onboarding or direct
+  // add), ask the fee service to build the session package from the class fee
+  // structure. Fail-soft by design — a user without fees:structure, or a class
+  // with no structure yet, simply skips this and the office fills it in from
+  // the fees console. Returns true only when a NEW package was created.
+  const ensureFeePlan = async (payload) => {
+    try {
+      // `request()` hands back the whole response body ({ success, created, data }),
+      // so the flag sits at the top level — reading `data.created` would give the
+      // plan document and always report "not created".
+      const res = await api.fees.plans.ensure({
+        studentId: payload.admissionNo,
+        class: payload.class,
+      });
+      return Boolean(res && res.created);
+    } catch (err) {
+      console.warn("[onboarding] fee package not created:", err.message);
+      return false;
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -309,11 +342,21 @@ export default function AddStudent() {
         });
         saved = data || null;
         setReloadToken((t) => t + 1);
-        toast("Onboarding completed — student profile saved");
+        const planCreated = await ensureFeePlan(payload);
+        toast(
+          planCreated
+            ? "Onboarding completed — fee package created from the class structure"
+            : "Onboarding completed — student profile saved",
+        );
       } else {
         const { data } = await api.students.create(payload);
         saved = data || null;
-        toast("Student added successfully");
+        const planCreated = await ensureFeePlan(payload);
+        toast(
+          planCreated
+            ? "Student added — fee package created from the class structure"
+            : "Student added successfully",
+        );
       }
       resetForm();
       // Straight to the status/ID-card card: submitting the onboarding form is

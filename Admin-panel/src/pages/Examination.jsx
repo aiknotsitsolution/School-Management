@@ -107,7 +107,9 @@ function normalizeExam(exam) {
       exam.time ||
       [exam.startTime, exam.endTime].filter(Boolean).join(" – ") ||
       "—",
-    room: exam.room || "Room to be announced",
+    // Store the raw value: the display placeholder must never be fed back into
+    // the Edit form, otherwise saving an untouched room persists it as data.
+    room: exam.room || "",
   };
 }
 
@@ -226,10 +228,14 @@ export default function Examination() {
       classId: item.classId || "",
       class: item.class,
       sectionId: item.sectionId || "",
-      section: item.section || "A",
+      // Keep the stored value as-is: defaulting an empty section to "A" would
+      // silently attach the exam to a section the user never picked.
+      section: item.section || "",
       subjectId: item.subjectId || "",
       subject: item.subject,
-      date: item.date,
+      // <input type="date"> only accepts YYYY-MM-DD, but the API returns an
+      // ISO datetime — feeding that straight in leaves the field blank.
+      date: item.date ? new Date(item.date).toISOString().slice(0, 10) : "",
       timeSlotId: item.timeSlotId || "",
       startTime: item.startTime || "",
       endTime: item.endTime || "",
@@ -252,8 +258,8 @@ export default function Examination() {
   };
 
   const handleSave = async () => {
-    if (!form.date || !form.subject) {
-      toast("Fill all required exam fields", "error");
+    if (!form.exam || !form.class || !form.subject || !form.date) {
+      toast("Exam type, class, subject and date are required", "error");
       return;
     }
     const [startTime, endTime] = form.startTime || form.endTime
@@ -298,12 +304,14 @@ export default function Examination() {
     }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (id, label) => {
+    if (!window.confirm(`Delete ${label}? This cannot be undone.`)) return;
     try {
       await api.exams.remove(id);
       setExams((prev) => prev.filter((exam) => exam.id !== id));
+      toast("Exam deleted");
     } catch (requestError) {
-      window.alert(requestError.message);
+      toast(requestError.message, "error");
     }
   };
 
@@ -537,7 +545,7 @@ export default function Examination() {
                                   size={13}
                                   className="text-slate-text/50"
                                 />
-                                {e.room}
+                                {e.room || "Room to be announced"}
                               </span>
                             </td>
                             <td className="px-4 py-3">
@@ -568,7 +576,12 @@ export default function Examination() {
                                         <Pencil size={12} /> Edit
                                       </button>
                                       <button
-                                        onClick={() => handleDelete(e.id)}
+                                        onClick={() =>
+                                          handleDelete(
+                                            e.id,
+                                            `${e.exam} — ${e.subject}`,
+                                          )
+                                        }
                                         className="text-[12.5px] font-medium text-alert hover:underline"
                                       >
                                         Delete
@@ -969,7 +982,12 @@ export default function Examination() {
               <Button
                 variant="primary"
                 onClick={handleSave}
-                disabled={!form.date || !form.subject}
+                disabled={
+                  !form.exam ||
+                  !form.class ||
+                  !form.subject ||
+                  !form.date
+                }
               >
                 <Save size={15} /> {editId ? "Update" : "Schedule"} Exam
               </Button>

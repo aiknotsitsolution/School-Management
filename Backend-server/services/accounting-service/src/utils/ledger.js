@@ -100,7 +100,15 @@ function sumByAccount(entries) {
 
 function filterByPeriod(entries, from, to) {
   const start = from ? new Date(from).getTime() : null;
-  const end = to ? new Date(to).getTime() : null;
+  // A date-only `to`/`asOf` (YYYY-MM-DD) means "up to and including that
+  // day" — treat it as end-of-day, otherwise every entry posted later on the
+  // last day of the period is silently dropped (reports showed "No activity").
+  let end = null;
+  if (to) {
+    const endMs = new Date(to).getTime();
+    const dateOnly = /^\d{4}-\d{2}-\d{2}$/.test(String(to).trim());
+    end = dateOnly ? endMs + 24 * 60 * 60 * 1000 - 1 : endMs;
+  }
   if (start === null && end === null) return entries;
   return entries.filter((entry) => {
     const t = new Date(entry.date).getTime();

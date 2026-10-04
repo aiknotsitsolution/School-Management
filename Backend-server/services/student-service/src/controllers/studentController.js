@@ -9,6 +9,7 @@ const { notifyByRefIds } = require("../utils/notify");
 const { deactivateStudentUser } = require("../utils/authCascade");
 const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
 const { resolveTeacherScope } = require("@school-erp/shared/src/utils/teacherScope");
+const { classTeacherName } = require("../utils/classTeacher");
 const { assertAllowedUpload } = require("@school-erp/shared/src/utils/uploads");
 
 // Teacher access to a single student record is assignment-driven: the student's
@@ -328,7 +329,13 @@ const getMyStudent = async (req, res) => {
         message: "No student profile found. Contact your Admission Counsellor.",
       });
     }
-    res.json({ success: true, data: student });
+    // The profile document is what the student portal renders its hero from,
+    // and "who is my class teacher" is an assignment (staff DB), not a Student
+    // field — so it is resolved separately and attached. Non-fatal by design:
+    // a staff-DB miss yields "" and the portal simply omits the label.
+    const data = student.toObject();
+    data.classTeacher = await classTeacherName(student.schoolId, student.class, student.section);
+    res.json({ success: true, data });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

@@ -66,6 +66,9 @@ const createOrder = async (req, res) => {
     res.status(201).json({
       success: true,
       data: {
+        // `_id` is what every order action (initiate / confirm / cancel) is
+        // called with; `id` is kept as a convenience alias.
+        _id: order._id,
         id: order._id,
         invoiceId: order.invoiceId,
         studentId: order.studentId,

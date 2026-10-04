@@ -151,7 +151,7 @@ export default function RecognitionBand({ achievements = [], students = [], clas
           role="list"
           tabIndex={0}
           aria-label="Recognition list"
-          className="scrollbar-thin mt-5 flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-xl"
+          className="scrollbar-hidden mt-5 flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 rounded-xl"
         >
           {items.map((a) => {
             const t = toneFor(a.category);

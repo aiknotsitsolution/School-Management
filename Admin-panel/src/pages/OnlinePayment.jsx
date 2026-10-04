@@ -161,7 +161,9 @@ export default function OnlinePayment() {
         const payload = { invoiceId: invoice._id };
         if (payMode !== "auto") payload.mode = payMode;
         const { data } = await api.fees.orders.create(payload);
-        created.push(data);
+        // The list endpoint returns `_id`; older create payloads returned `id`
+        // only — normalize so the row's Initiate/Cancel actions get a real id.
+        created.push({ ...data, _id: data._id || data.id });
       }
       setOrders((prev) => [...created, ...prev]);
       setOrderNote(created);

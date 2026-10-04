@@ -273,8 +273,21 @@ export default function TeacherDashboard() {
   const leaveCount = marked.filter((s) => s === "Leave" || s === "Half Day").length;
   const unmarkedCount = students.length - marked.length;
 
-  const todayPeriods = (timetable.find((t) => t.day === WEEK[new Date().getDay()])?.periods || []).filter((p) => p.subject !== "Break");
-  const isWeekend = new Date().getDay() === 0 || new Date().getDay() === 6;
+  const todayIdx = new Date().getDay();
+  const todayPeriods = (timetable.find((t) => t.day === WEEK[todayIdx])?.periods || []).filter((p) => p.subject !== "Break");
+  // Same rule as the student dashboard: the timetable says which days the school
+  // runs (this one is Mon–Sat), so a hardcoded Sat/Sun check is only allowed to
+  // choose the wording — never to hide a day that has periods.
+  const hasTimetable = timetable.length > 0;
+  const isDayOff = hasTimetable && todayPeriods.length === 0;
+  const isWeekendDay = todayIdx === 0 || todayIdx === 6;
+  const nextClassDay = hasTimetable
+    ? [...Array(7).keys()]
+        .map((i) => WEEK[(todayIdx + 1 + i) % 7])
+        .find((day) =>
+          (timetable.find((t) => t.day === day)?.periods || []).some((p) => p.subject !== "Break"),
+        )
+    : null;
   const upcomingExams = exams.filter((e) => new Date(e.date) >= new Date()).sort((a, b) => new Date(a.date) - new Date(b.date));
   const openHomework = homework.filter((h) => new Date(h.dueDate) >= new Date());
   const overdueHomework = homework.filter((h) => new Date(h.dueDate) < new Date());
@@ -522,22 +535,28 @@ export default function TeacherDashboard() {
             decor="periods"
             decorTone={ACCENTS.teal.text}
             subtitle={
-              isWeekend
-                ? "Weekend — enjoy the break"
+              isDayOff
+                ? isWeekendDay
+                  ? "Weekend — enjoy the break"
+                  : "Day off — no periods"
                 : `${todayPeriods.length} period${todayPeriods.length === 1 ? "" : "s"} scheduled`
             }
             action={<ViewLink to="/teacher/timetable">Full timetable</ViewLink>}
           >
-            {isWeekend ? (
+            {isDayOff ? (
               <EmptyPanel
                 icon={CalendarDays}
                 iconTone={ACCENTS.success.icon}
-                title="Weekend — no classes"
-                text="No periods are scheduled for today. Use the time to plan next week."
+                title={isWeekendDay ? "Weekend — no classes" : "Day off — no classes"}
+                text={
+                  nextClassDay
+                    ? `No periods are scheduled for today. Your next classes are on ${nextClassDay}.`
+                    : "No periods are scheduled for today."
+                }
                 action={<ViewLink to="/teacher/timetable">Full timetable</ViewLink>}
               />
             ) : todayPeriods.length ? (
-              <div className="scrollbar-thin flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1">
+              <div className="scrollbar-hidden flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1">
                 {todayPeriods.map((p, i) => (
                   <PeriodCard
                     key={`${p.subject}-${p.startTime}-${i}`}

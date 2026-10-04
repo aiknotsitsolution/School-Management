@@ -12,6 +12,12 @@ const paymentSchema = new mongoose.Schema(
     mode: { type: String, enum: ["Cash", "Card", "UPI", "Net Banking", "Bank Transfer", "Cheque", "Online Gateway"], required: true },
     transactionId: { type: String },
     receiptNo: { type: String, required: true },
+    // "manual" = office typed their own receipt-book number at the counter;
+    // "auto" = the service minted RCPT-… (all portal/gateway payments are auto).
+    receiptMode: { type: String, enum: ["manual", "auto"], default: "auto" },
+    // Where the money came in: "counter" (staff collection) vs "online"
+    // (student/parent portal order) — lets reports split cash vs gateway.
+    source: { type: String, enum: ["counter", "online"], default: "counter" },
     paidOn: { type: Date, default: Date.now },
     collectedBy: { type: String },
     // Office-verified manual payments (CLIENT-REQ-037/039): payer's reference

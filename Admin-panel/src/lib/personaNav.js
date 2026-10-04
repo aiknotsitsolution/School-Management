@@ -8,6 +8,7 @@
 // Vectors only, so they stay crisp at the 84px rail size.
 import AccountBalanceWallet from "@mui/icons-material/AccountBalanceWallet";
 import Assignment from "@mui/icons-material/Assignment";
+import AssignmentTurnedIn from "@mui/icons-material/AssignmentTurnedIn";
 import AutoStories from "@mui/icons-material/AutoStories";
 import Campaign from "@mui/icons-material/Campaign";
 import DirectionsBus from "@mui/icons-material/DirectionsBus";
@@ -26,6 +27,14 @@ const attendance = {
   to: "/staff/my-attendance",
   icon: FactCheck,
   label: "My Attendance",
+};
+// Any persona can be handed a task, so their workspace needs the same
+// "My Work" surface the generic Staff Tools group offers — otherwise the
+// notification that task raises points at a route they have no way to reach.
+const myWork = {
+  to: "/my-work",
+  icon: AssignmentTurnedIn,
+  label: "My Work",
 };
 const leave = {
   to: "/leave",
@@ -62,6 +71,7 @@ export const PERSONA_NAV = {
     ]),
     group("Staff Tools", [
       { to: "/attendance", icon: EventAvailable, label: "Attendance" },
+      myWork,
       attendance,
       leave,
       notices,
@@ -73,7 +83,7 @@ export const PERSONA_NAV = {
       { to: "/accountant", icon: SpaceDashboard, label: "Dashboard", end: true },
       { to: "/accountant/fees", icon: AccountBalanceWallet, label: "Manage Fees" },
     ]),
-    group("Staff Tools", [attendance, leave, notices, notifications]),
+    group("Staff Tools", [myWork, attendance, leave, notices, notifications]),
   ],
   librarian: [
     group("Librarian Workspace", [
@@ -81,7 +91,7 @@ export const PERSONA_NAV = {
       { to: "/librarian/books", icon: AutoStories, label: "Books" },
       { to: "/librarian/circulation", icon: Download, label: "Circulation" },
     ]),
-    group("Staff Tools", [attendance, leave, notices, notifications]),
+    group("Staff Tools", [myWork, attendance, leave, notices, notifications]),
   ],
   transport: [
     group("Transport Workspace", [
@@ -90,7 +100,7 @@ export const PERSONA_NAV = {
       { to: "/transport/routes", icon: DirectionsBus, label: "Bus Routes" },
       { to: "/transport/allocations", icon: Speed, label: "Allocations" },
     ]),
-    group("Staff Tools", [attendance, leave, notices, notifications]),
+    group("Staff Tools", [myWork, attendance, leave, notices, notifications]),
   ],
   receptionist: [
     group("Reception Workspace", [
@@ -98,6 +108,6 @@ export const PERSONA_NAV = {
       { to: "/reception/enquiries", icon: Assignment, label: "Enquiries" },
       { to: "/reception/student-lookup", icon: PersonSearch, label: "Student Lookup" },
     ]),
-    group("Staff Tools", [attendance, leave, notices, notifications]),
+    group("Staff Tools", [myWork, attendance, leave, notices, notifications]),
   ],
 };

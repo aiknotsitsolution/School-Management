@@ -69,6 +69,7 @@ function emptyForm() {
     amount: 0,
     mode: "Cash",
     transactionId: "",
+    receiptNo: "",
     chequeNo: "",
     chequeDate: "",
     bankName: "",
@@ -98,6 +99,541 @@ function emptyConcessionForm() {
     siblingOf: "",
     notes: "",
   };
+}
+
+const inr = (value) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
+
+const currentSession = () => {
+  const year = new Date().getFullYear();
+  return `${year}-${String(year + 1).slice(2)}`;
+};
+
+// Small stat tile inside the student summary (keeps the Card markup readable).
+function SummaryStat({ label, value, sub, tone }) {
+  return (
+    <div
+      className={`rounded-xl border p-3 ${
+        tone === "alert"
+          ? "border-alert/30 bg-alert/5"
+          : tone === "success"
+            ? "border-success/30 bg-success/5"
+            : "border-slate-200 bg-paper/60"
+      }`}
+    >
+      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-text/60">
+        {label}
+      </p>
+      <p
+        className={`mt-1 text-[17px] font-display font-semibold ${
+          tone === "alert" ? "text-alert" : tone === "success" ? "text-success" : "text-ink"
+        }`}
+      >
+        {value}
+      </p>
+      {sub ? <p className="text-[11.5px] text-slate-text/70 mt-0.5">{sub}</p> : null}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Student Fee Summary — the ONE place for a student's money story:
+//   yearly package (agreed at admission) → invoiced → collected → balance,
+// head by head, with the receipt trail underneath. Managers (fees:structure)
+// can create the package from the class structure and edit it in place.
+// ---------------------------------------------------------------------------
+function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSaved }) {
+  const [studentId, setStudentId] = useState("");
+  const [sessionFilter, setSessionFilter] = useState("");
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [heads, setHeads] = useState([]);
+  const [planSession, setPlanSession] = useState("");
+
+  useEffect(() => {
+    if (!studentId) {
+      setSummary(null);
+      setError("");
+      setEditing(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError("");
+    api.fees.plans
+      .summary(studentId, sessionFilter || "")
+      .then(({ data }) => {
+        if (!cancelled) {
+          setSummary(data);
+          setEditing(false);
+        }
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message || "Could not load the fee summary");
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [studentId, sessionFilter]);
+
+  const refresh = async () => {
+    const { data } = await api.fees.plans.summary(studentId, sessionFilter || "");
+    setSummary(data);
+  };
+
+  const handleEnsure = async () => {
+    setBusy(true);
+    try {
+      // Response body is { success, created, data } — `created` is top level, the
+      // plan document lives under `data`.
+      const res = await api.fees.plans.ensure({
+        studentId,
+        session: planSession || sessionFilter || summary?.session || currentSession(),
+      });
+      toast(
+        res && res.created
+          ? "Fee package created from the class fee structure"
+          : "A fee package already exists for this session",
+      );
+      await refresh();
+      onSaved?.();
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const startEdit = () => {
+    const plan = summary?.plan;
+    setHeads(
+      (plan?.heads || []).map((head) => ({
+        feeType: head.feeType,
+        annualAmount: head.annualAmount,
+        frequency: head.frequency || "Annually",
+        active: head.active !== false,
+      })),
+    );
+    setPlanSession(plan?.session || sessionFilter || summary?.session || currentSession());
+    setEditing(true);
+  };
+
+  const setHead = (index, patch) =>
+    setHeads((prev) => prev.map((head, i) => (i === index ? { ...head, ...patch } : head)));
+
+  const saveEdit = async () => {
+    const cleaned = heads
+      .map((head) => ({
+        feeType: String(head.feeType || "").trim(),
+        annualAmount: Number(head.annualAmount),
+        frequency: head.frequency || "Annually",
+        active: head.active !== false,
+      }))
+      .filter((head) => head.feeType && Number.isFinite(head.annualAmount) && head.annualAmount >= 0);
+    if (cleaned.length === 0) {
+      toast("Add at least one fee head with an annual amount", "error");
+      return;
+    }
+    setBusy(true);
+    try {
+      if (summary?.plan) {
+        await api.fees.plans.update(summary.plan._id, { heads: cleaned });
+        toast("Fee package updated");
+      } else {
+        await api.fees.plans.create({
+          studentId,
+          session: planSession || currentSession(),
+          class: summary?.class || undefined,
+          heads: cleaned,
+        });
+        toast("Fee package created");
+      }
+      setEditing(false);
+      await refresh();
+      onSaved?.();
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const activeHeads = (summary?.plan?.heads || []).filter((head) => head.active !== false);
+  const inactiveCount = (summary?.plan?.heads || []).length - activeHeads.length;
+  const student = students.find((s) => (s.admissionNo || s.id) === studentId);
+
+  return (
+    <Card
+      title="Student Fee Summary"
+      action={
+        <div className="flex items-center gap-2">
+          <Select
+            value={sessionFilter}
+            onChange={(event) => setSessionFilter(event.target.value)}
+            className="w-36"
+          >
+            <option value="">Default session</option>
+            {sessions.map((s) => (
+              <option key={s} value={s}>
+                {s}
+              </option>
+            ))}
+          </Select>
+          <Select
+            value={studentId}
+            onChange={(event) => setStudentId(event.target.value)}
+            className="w-64"
+          >
+            <option value="">Select a student...</option>
+            {students.map((s) => (
+              <option key={s.id} value={s.admissionNo || s.id}>
+                {s.name} — {s.admissionNo || s.id}
+              </option>
+            ))}
+          </Select>
+        </div>
+      }
+    >
+      {!studentId && (
+        <p className="py-8 text-center text-[13px] text-slate-text/70">
+          Pick a student to see the full-year fee package, what has been billed, what is
+          collected and what is still due — in one place.
+        </p>
+      )}
+
+      {studentId && loading && (
+        <p className="py-8 text-center text-[13px] text-slate-text/60">Loading summary…</p>
+      )}
+
+      {studentId && !loading && error && <p className="py-4 text-sm text-alert">{error}</p>}
+
+      {studentId && !loading && !error && summary && (
+        <div className="space-y-5">
+          <div>
+            <p className="text-[13px] font-semibold text-ink">
+              {student?.name || summary.studentId}{" "}
+              <span className="font-normal text-slate-text/70">
+                · {summary.studentId}
+                {summary.class ? ` · Class ${summary.class}` : ""}
+                {summary.session ? ` · ${summary.session}` : ""}
+              </span>
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+            <SummaryStat
+              label="Package (Year)"
+              value={summary.totals.planned === null ? "—" : inr(summary.totals.planned)}
+              sub={
+                summary.plan
+                  ? `${activeHeads.length} heads${summary.plan.source === "onboarding" ? " · auto" : " · manual"}`
+                  : "no package yet"
+              }
+            />
+            <SummaryStat
+              label="Invoiced"
+              value={inr(summary.totals.invoiced)}
+              sub={`${summary.invoices.length} invoice${summary.invoices.length === 1 ? "" : "s"}`}
+            />
+            <SummaryStat
+              label="Collected"
+              value={inr(summary.totals.collected)}
+              sub={`${summary.payments.length} receipt${summary.payments.length === 1 ? "" : "s"}`}
+              tone="success"
+            />
+            <SummaryStat
+              label="Balance Due"
+              value={inr(summary.totals.outstanding)}
+              sub={summary.totals.outstanding > 0 ? "pending collection" : "all clear"}
+              tone={summary.totals.outstanding > 0 ? "alert" : undefined}
+            />
+            <SummaryStat
+              label="Concession"
+              value={inr(summary.totals.concession)}
+              sub={`${summary.concessions.length} active`}
+            />
+          </div>
+
+          {/* Yearly package */}
+          <div className="rounded-xl border border-slate-200 p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="text-[13px] font-semibold text-ink">
+                Yearly Fee Package
+                {summary.plan ? ` · ${summary.plan.session}` : ""}
+                {summary.plan?.notes ? (
+                  <span className="ml-2 font-normal text-slate-text/60">({summary.plan.notes})</span>
+                ) : null}
+              </h4>
+              {canEdit && !editing && (
+                <div className="flex items-center gap-2">
+                  {!summary.plan && (
+                    <Button
+                      variant="primary"
+                      className="px-3 py-1.5 text-[12px]"
+                      onClick={handleEnsure}
+                      disabled={busy}
+                    >
+                      {busy ? "Working…" : "Create from class structure"}
+                    </Button>
+                  )}
+                  {summary.plan && (
+                    <Button
+                      variant="outline"
+                      className="px-3 py-1.5 text-[12px]"
+                      onClick={startEdit}
+                    >
+                      <Pencil size={13} /> Edit package
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {!editing && summary.plan && activeHeads.length > 0 && (
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-[11.5px] uppercase tracking-wide text-slate-text/60">
+                    <th className="py-2 pr-3 font-semibold">Head</th>
+                    <th className="py-2 pr-3 font-semibold">Frequency</th>
+                    <th className="py-2 text-right font-semibold">Annual Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {activeHeads.map((head, index) => (
+                    <tr key={`${head.feeType}-${index}`} className="border-b border-slate-100">
+                      <td className="py-2 pr-3 font-medium text-ink">{head.feeType}</td>
+                      <td className="py-2 pr-3 text-slate-text">{head.frequency}</td>
+                      <td className="py-2 text-right text-slate-text">{inr(head.annualAmount)}</td>
+                    </tr>
+                  ))}
+                  <tr>
+                    <td className="py-2 pr-3 text-[12px] font-semibold uppercase tracking-wide text-slate-text/70">
+                      Total
+                    </td>
+                    <td />
+                    <td className="py-2 text-right text-[15px] font-semibold text-ink">
+                      {inr(summary.plan.totalAnnual)}
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            )}
+
+            {!editing && summary.plan && activeHeads.length === 0 && (
+              <p className="text-[13px] text-slate-text/70">
+                This package has no active heads yet — use <strong>Edit package</strong> to add
+                them.
+              </p>
+            )}
+
+            {!editing && !summary.plan && (
+              <p className="text-[13px] text-slate-text/70">
+                No yearly fee package recorded for this student yet.{" "}
+                {canEdit
+                  ? "Create it from the class fee structure, then adjust the annual amounts."
+                  : "Ask a fee manager to set it up."}
+                {inactiveCount > 0 ? "" : ""}
+              </p>
+            )}
+
+            {editing && (
+              <div className="space-y-3">
+                <div className="grid grid-cols-12 gap-2 text-[11.5px] font-semibold uppercase tracking-wide text-slate-text/60">
+                  <span className="col-span-4">Fee Head</span>
+                  <span className="col-span-3">Frequency</span>
+                  <span className="col-span-3">Annual Amount (₹)</span>
+                  <span className="col-span-1">Active</span>
+                  <span className="col-span-1" />
+                </div>
+                {heads.map((head, index) => (
+                  <div key={index} className="grid grid-cols-12 items-center gap-2">
+                    <Select
+                      value={head.feeType}
+                      onChange={(event) => setHead(index, { feeType: event.target.value })}
+                      className="col-span-4"
+                    >
+                      <option value="">Select head...</option>
+                      {(() => {
+                        const options = feeTypeOptions.includes(head.feeType)
+                          ? feeTypeOptions
+                          : [...feeTypeOptions, head.feeType].filter(Boolean);
+                        return options.map((ft) => (
+                          <option key={ft} value={ft}>
+                            {ft}
+                          </option>
+                        ));
+                      })()}
+                    </Select>
+                    <Select
+                      value={head.frequency}
+                      onChange={(event) => setHead(index, { frequency: event.target.value })}
+                      className="col-span-3"
+                    >
+                      {FREQUENCIES.map((freq) => (
+                        <option key={freq} value={freq}>
+                          {freq}
+                        </option>
+                      ))}
+                    </Select>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={head.annualAmount}
+                      onChange={(event) =>
+                        setHead(index, { annualAmount: Number(event.target.value) })
+                      }
+                      className="col-span-3"
+                    />
+                    <label className="col-span-1 flex items-center justify-center">
+                      <input
+                        type="checkbox"
+                        checked={head.active !== false}
+                        onChange={(event) => setHead(index, { active: event.target.checked })}
+                      />
+                    </label>
+                    <button
+                      onClick={() => setHeads((prev) => prev.filter((_, i) => i !== index))}
+                      className="col-span-1 rounded p-1.5 text-slate-text/60 hover:bg-paper hover:text-alert"
+                      title="Remove head"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+                <div className="flex items-center justify-between">
+                  <Button
+                    variant="outline"
+                    className="px-3 py-1.5 text-[12px]"
+                    onClick={() =>
+                      setHeads((prev) => [
+                        ...prev,
+                        { feeType: "", annualAmount: 0, frequency: "Monthly", active: true },
+                      ])
+                    }
+                  >
+                    <Plus size={13} /> Add head
+                  </Button>
+                  <div className="flex items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="px-3 py-1.5 text-[12px]"
+                      onClick={() => setEditing(false)}
+                      disabled={busy}
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      variant="primary"
+                      className="px-3 py-1.5 text-[12px]"
+                      onClick={saveEdit}
+                      disabled={busy}
+                    >
+                      <Save size={13} /> {busy ? "Saving…" : "Save package"}
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Head-wise: planned vs billed vs collected vs balance */}
+          {summary.headwise.length > 0 && (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-[11.5px] uppercase tracking-wide text-slate-text/60">
+                    <th className="py-2 pr-3 font-semibold">Fee Head</th>
+                    <th className="py-2 pr-3 text-right font-semibold">Planned (Year)</th>
+                    <th className="py-2 pr-3 text-right font-semibold">Invoiced</th>
+                    <th className="py-2 pr-3 text-right font-semibold">Collected</th>
+                    <th className="py-2 text-right font-semibold">Balance</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {summary.headwise.map((row) => (
+                    <tr key={row.feeType} className="border-b border-slate-100">
+                      <td className="py-2 pr-3 font-medium text-ink">{row.feeType}</td>
+                      <td className="py-2 pr-3 text-right text-slate-text">
+                        {row.planned ? inr(row.planned) : "—"}
+                      </td>
+                      <td className="py-2 pr-3 text-right text-slate-text">{inr(row.invoiced)}</td>
+                      <td className="py-2 pr-3 text-right text-success">{inr(row.paid)}</td>
+                      <td
+                        className={`py-2 text-right font-semibold ${
+                          row.balance > 0 ? "text-alert" : "text-success"
+                        }`}
+                      >
+                        {inr(row.balance)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+
+          {/* Receipt trail */}
+          {summary.payments.length > 0 && (
+            <div>
+              <h4 className="mb-2 text-[13px] font-semibold text-ink">Receipts</h4>
+              <div className="overflow-x-auto">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11.5px] uppercase tracking-wide text-slate-text/60">
+                      <th className="py-2 pr-3 font-semibold">Receipt No.</th>
+                      <th className="py-2 pr-3 font-semibold">Mode</th>
+                      <th className="py-2 pr-3 font-semibold">Source</th>
+                      <th className="py-2 pr-3 font-semibold">Date</th>
+                      <th className="py-2 text-right font-semibold">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {summary.payments.map((payment) => (
+                      <tr key={payment._id} className="border-b border-slate-100">
+                        <td className="py-2 pr-3 font-mono text-[12px] text-slate-text">
+                          {payment.receiptNo}
+                          <span
+                            className={`ml-2 rounded px-1 py-px text-[10px] font-semibold uppercase ${
+                              payment.receiptMode === "manual"
+                                ? "bg-primary/10 text-primary"
+                                : "bg-slate-100 text-slate-text/70"
+                            }`}
+                          >
+                            {payment.receiptMode === "manual" ? "manual" : "auto"}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-3 text-slate-text">{payment.mode}</td>
+                        <td className="py-2 pr-3">
+                          <span
+                            className={`rounded px-1.5 py-0.5 text-[10.5px] font-semibold uppercase ${
+                              payment.source === "online"
+                                ? "bg-success/10 text-success"
+                                : "bg-slate-100 text-slate-text/70"
+                            }`}
+                          >
+                            {payment.source === "online" ? "online" : "counter"}
+                          </span>
+                        </td>
+                        <td className="py-2 pr-3 text-slate-text">{formatDate(payment.paidOn)}</td>
+                        <td className="py-2 text-right font-semibold text-ink">
+                          {inr(payment.amount)}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
+  );
 }
 
 export default function FeesCollection() {
@@ -321,11 +857,16 @@ export default function FeesCollection() {
   const enrichedPayments = useMemo(() => {
     return payments.map((payment) => {
       const id = payment._id || payment.id;
-      const student = studentMap.get(String(payment.studentId));
+      const student =
+        studentByAdmission.get(String(payment.studentId)) ||
+        studentMap.get(String(payment.studentId));
       const invoice = invoiceMap.get(String(payment.invoiceId));
       return {
         id,
         receiptNo: payment.receiptNo || "—",
+        // Provenance: office receipt book vs minted, counter vs portal.
+        receiptMode: payment.receiptMode || "auto",
+        source: payment.source || "counter",
         studentId: payment.studentId,
         invoiceId: payment.invoiceId,
         studentName:
@@ -345,7 +886,7 @@ export default function FeesCollection() {
         paidAmount: Number(invoice?.paidAmount || 0),
       };
     });
-  }, [payments, studentMap, invoiceMap]);
+  }, [payments, studentMap, studentByAdmission, invoiceMap]);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -432,6 +973,13 @@ export default function FeesCollection() {
         : 0,
       mode: "Cash",
       transactionId: "",
+      // Rebuilt wholesale, so every field must be re-seeded — dropping
+      // receiptNo here made the receipt input uncontrolled and crashed the
+      // Cash/Cheque required-check on the next save.
+      receiptNo: "",
+      chequeNo: "",
+      chequeDate: "",
+      bankName: "",
     });
   };
 
@@ -466,6 +1014,18 @@ export default function FeesCollection() {
       toast("Enter the cheque number", "error");
       return;
     }
+    // Offline instruments carry the office's receipt-book number (server
+    // enforces this too for Cash/Cheque); blank = service mints RCPT-….
+    const receiptNo = form.receiptNo.trim();
+    const needsReceipt = form.mode === "Cash" || form.mode === "Cheque";
+    if (needsReceipt && !receiptNo) {
+      toast(`Enter the receipt number from your receipt book (${form.mode})`, "error");
+      return;
+    }
+    if (receiptNo && !/^[A-Za-z0-9][A-Za-z0-9/_#.-]{2,39}$/.test(receiptNo)) {
+      toast("Receipt number: 3-40 chars, letters/digits and - _ / . # only", "error");
+      return;
+    }
     setBusy(true);
     try {
       const { data } = await api.fees.payments.create({
@@ -473,6 +1033,7 @@ export default function FeesCollection() {
         amount,
         mode: form.mode,
         transactionId: form.transactionId.trim() || undefined,
+        receiptNo: receiptNo || undefined,
         chequeNo: form.mode === "Cheque" ? form.chequeNo.trim() : undefined,
         chequeDate: form.mode === "Cheque" && form.chequeDate ? form.chequeDate : undefined,
         bankName: form.mode === "Cheque" && form.bankName.trim() ? form.bankName.trim() : undefined,
@@ -680,7 +1241,7 @@ export default function FeesCollection() {
   };
 
   const payableStudents = students.filter(
-    (student) => outstandingForStudent(student.id) > 0,
+    (student) => outstandingForStudent(student.admissionNo || student.id) > 0,
   );
 
   return (
@@ -746,6 +1307,15 @@ export default function FeesCollection() {
           accent="info"
         />
       </div>
+
+      {/* One place: per-student package vs billed vs collected vs balance. */}
+      <StudentFeeSummary
+        students={students}
+        sessions={distinctSessions}
+        feeTypeOptions={feeTypeOptions}
+        canEdit={canStructure}
+        onSaved={reload}
+      />
 
       <Card
         title="Fee Structure"
@@ -1187,8 +1757,31 @@ export default function FeesCollection() {
                     key={payment.id}
                     className="border-b border-slate-100 hover:bg-paper/60"
                   >
-                    <td className="px-5 py-3 font-mono text-[12px] text-slate-text">
-                      {payment.receiptNo}
+                    <td className="px-5 py-3">
+                      <div className="font-mono text-[12px] text-slate-text">
+                        {payment.receiptNo}
+                      </div>
+                      {/* Provenance: office receipt book vs minted, counter vs portal. */}
+                      <div className="mt-0.5 flex items-center gap-1">
+                        <span
+                          className={`inline-block rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${
+                            payment.receiptMode === "manual"
+                              ? "bg-primary/10 text-primary"
+                              : "bg-slate-100 text-slate-text/70"
+                          }`}
+                        >
+                          {payment.receiptMode === "manual" ? "manual" : "auto"}
+                        </span>
+                        <span
+                          className={`inline-block rounded px-1 py-px text-[10px] font-semibold uppercase tracking-wide ${
+                            payment.source === "online"
+                              ? "bg-success/10 text-success"
+                              : "bg-slate-100 text-slate-text/70"
+                          }`}
+                        >
+                          {payment.source === "online" ? "online" : "counter"}
+                        </span>
+                      </div>
                     </td>
                     <td className="px-5 py-3 font-semibold text-ink">
                       {payment.studentName}
@@ -1494,9 +2087,12 @@ export default function FeesCollection() {
                 >
                   <option value="">Select a student...</option>
                   {students.map((student) => (
-                    <option key={student.id} value={student.id}>
+                    <option
+                      key={student.id}
+                      value={student.admissionNo || student.id}
+                    >
                       {student.name} — Class {student.class}-{student.section}
-                      {outstandingForStudent(student.id) > 0
+                      {outstandingForStudent(student.admissionNo || student.id) > 0
                         ? ""
                         : " (no dues)"}
                     </option>
@@ -1573,6 +2169,33 @@ export default function FeesCollection() {
 
                   <div>
                     <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                      Receipt No.{" "}
+                      {(form.mode === "Cash" || form.mode === "Cheque") ? (
+                        <span className="text-alert">*</span>
+                      ) : (
+                        <span className="font-normal text-slate-text/70">(optional)</span>
+                      )}
+                    </label>
+                    <Input
+                      placeholder={
+                        form.mode === "Cash" || form.mode === "Cheque"
+                          ? "Next number from your receipt book"
+                          : "Leave blank to auto-generate RCPT-…"
+                      }
+                      value={form.receiptNo}
+                      onChange={(event) =>
+                        setForm({ ...form, receiptNo: event.target.value })
+                      }
+                    />
+                    <p className="text-[11.5px] text-slate-text/70 mt-1">
+                      {form.mode === "Cash" || form.mode === "Cheque"
+                        ? "Offline payment — enter the printed receipt-book number (duplicates are rejected)."
+                        : "Blank generates an automatic RCPT number; type one to use your receipt book instead."}
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                       Transaction ID
                     </label>
                     <Input
@@ -1642,7 +2265,13 @@ export default function FeesCollection() {
               <Button
                 variant="primary"
                 onClick={handleSave}
-                disabled={busy || !form.studentId || !form.invoiceId || form.amount <= 0}
+                disabled={
+                  busy ||
+                  !form.studentId ||
+                  !form.invoiceId ||
+                  form.amount <= 0 ||
+                  ((form.mode === "Cash" || form.mode === "Cheque") && !form.receiptNo.trim())
+                }
               >
                 <Save size={15} /> {busy ? "Saving..." : "Record Payment"}
               </Button>
@@ -2050,7 +2679,7 @@ export default function FeesCollection() {
                   onClick={handleConfirmInvoices}
                   disabled={
                     invoiceBusy ||
-                    !invoicePreview?.rows?.filter((r) => !r.duplicate).length
+                    !invoicePreview?.preview?.filter((r) => !r.isDuplicate).length
                   }
                 >
                   {invoiceBusy ? (
@@ -2060,7 +2689,9 @@ export default function FeesCollection() {
                   )}{" "}
                   {invoiceBusy
                     ? "Generating..."
-                    : `Confirm Generated ${invoicePreview?.rows?.filter((r) => !r.duplicate).length || 0} Invoices`}
+                    : `Confirm Generated ${
+                        invoicePreview?.preview?.filter((r) => !r.isDuplicate).length || 0
+                      } Invoices`}
                 </Button>
               )}
             </div>

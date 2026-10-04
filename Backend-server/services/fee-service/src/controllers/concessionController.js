@@ -1,4 +1,4 @@
-const { scopeQuery } = require("@school-erp/shared/src/middleware/branchScope");
+const { scopeQuery, branchIdForWrite } = require("@school-erp/shared/src/middleware/branchScope");
 const Concession = require("../models/Concession");
 
 // Concession workflow (CLIENT-REQ-045/046/047): created as Requested,

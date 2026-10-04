@@ -15,6 +15,10 @@ const homeworkSchema = new mongoose.Schema(
     assignedTo: { type: String },
     assignedToRole: { type: String },
     assignedToUserId: { type: mongoose.Schema.Types.ObjectId, ref: "User" },
+    // Staff work only (assignType "staff"): is this teaching-related work or
+    // external/non-teaching work? Student homework never sets it, so it stays
+    // absent on those documents rather than carrying a meaningless default.
+    category: { type: String, enum: ["teaching", "external"] },
     priority: { type: String, enum: ["Low", "Medium", "High"], default: "Medium" },
     status: { type: String, enum: ["Pending", "In Progress", "Completed", "Overdue"], default: "Pending" },
     assignedBy: { type: String },

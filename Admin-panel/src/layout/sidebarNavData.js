@@ -147,6 +147,18 @@ export const groups = [
         end: true,
         roles: ["staff"],
       },
+      {
+        // Moved out of "My Teaching" so EVERY school role opens its sidebar on
+        // a dashboard: this group is first in the array and every group above it
+        // is platform-scoped (hidden for school roles), so whatever survives
+        // here lands at position 1. Keeping it under My Teaching left teachers
+        // scrolling past Staff Tools to reach their own dashboard.
+        to: "/teacher-dashboard",
+        icon: SpaceDashboard,
+        label: "Dashboard",
+        end: true,
+        roles: ["teacher"],
+      },
       // /admission-counsellor and /student-dashboard were removed from this
       // tree. Both were unreachable: Layout.jsx:74-79 hands counsellors
       // PERSONA_NAV and students STUDENT_NAV before `groups` is ever consulted,
@@ -157,6 +169,15 @@ export const groups = [
   {
     label: "Staff Tools",
     items: [
+      {
+        to: "/my-work",
+        icon: AssignmentTurnedIn,
+        label: "My Work",
+        // No `perm`: the route is ownership-scoped on the server, and
+        // non-teaching staff hold no homework:read (it gates the school-wide
+        // Assign Work list, which is why that entry stays admin-only).
+        roles: ["staff", "teacher"],
+      },
       {
         to: "/staff/my-attendance",
         icon: FactCheck,
@@ -175,13 +196,6 @@ export const groups = [
     label: "My Teaching",
     teacherOnly: true,
     items: [
-      {
-        to: "/teacher-dashboard",
-        icon: SpaceDashboard,
-        label: "Dashboard",
-        end: true,
-        roles: ["teacher"],
-      },
       {
         to: "/teacher/my-class",
         icon: Groups,
