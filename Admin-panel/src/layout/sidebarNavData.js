@@ -380,10 +380,13 @@ export const groups = [
         perm: "homework:read",
       },
       {
-        to: "/study-materials",
-        icon: Description,
+        // The Library hub now carries the class shelf as its "Study Materials"
+        // tab (deep link: /library?tab=materials) — one nav entry, not two.
+        to: "/library?tab=materials",
+        icon: AutoStories,
         label: "Study Materials",
-        perm: "homework:read",
+        perm: "library:read",
+        roles: ["school_admin", "super_admin", "teacher"],
       },
       {
         to: "/promotions",
@@ -619,15 +622,17 @@ export const STUDENT_NAV = [
         roles: ["student"],
       },
       {
-        to: "/student/study-materials",
-        icon: Description,
-        label: "Study Materials",
-        roles: ["student"],
-      },
-      {
         to: "/student/syllabus",
         icon: Description,
         label: "Syllabus",
+        roles: ["student"],
+      },
+      {
+        // My Library holds the Study Materials shelf as a tab, so the separate
+        // "Study Materials" leaf is gone — one Library, two tabs.
+        to: "/student/library",
+        icon: AutoStories,
+        label: "My Library",
         roles: ["student"],
       },
     ],
@@ -668,12 +673,6 @@ export const STUDENT_NAV = [
         to: "/student/notices",
         icon: Campaign,
         label: "Notices",
-        roles: ["student"],
-      },
-      {
-        to: "/student/library",
-        icon: AutoStories,
-        label: "My Library",
         roles: ["student"],
       },
       {

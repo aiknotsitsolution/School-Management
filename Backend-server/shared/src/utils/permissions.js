@@ -24,11 +24,16 @@ const TEACHING_PERMISSIONS = [
 ];
 
 const STAFF_PERMISSIONS = {
+  // Every staff designation can READ the Library (catalogue + study materials):
+  // personaNav shows the entry to all five, and /library is guarded by
+  // library:read — without it the sidebar link is a dead redirect. Writes stay
+  // with librarian (library:manage) / admin+teacher (homework:write).
   admission_counsellor: [
     "dashboard:view", "staff:read", "students:read", "students:write",
     "admissions:read", "admissions:write", "enquiries:read", "enquiries:write",
     "notices:read", "notices:publish", "attendance:read", "attendance:mark",
     "leaves:apply", "payroll:view",
+    "library:read",
   ],
   accountant: [
     "dashboard:view", "staff:read", "students:read", "fees:read", "fees:collect",
@@ -36,6 +41,7 @@ const STAFF_PERMISSIONS = {
     "accounting:read", "accounting:journal",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
+    "library:read",
   ],
   librarian: [
     "dashboard:view", "staff:read", "students:read", "library:read",
@@ -48,12 +54,14 @@ const STAFF_PERMISSIONS = {
     "admissions:write", "enquiries:read", "enquiries:write",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
+    "library:read",
   ],
   transport: [
     "dashboard:view", "staff:read", "students:read", "transport:read",
     "transport:update",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
+    "library:read",
   ],
 };
 

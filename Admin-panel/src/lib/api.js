@@ -349,7 +349,14 @@ export const api = {
   studyMaterials: {
     list: (params = "") => request(`/study-materials${params ? `?${params}` : ""}`),
     create: (item) => request("/study-materials", json("POST", item)),
+    update: (id, item) => request(`/study-materials/${id}`, json("PATCH", item)),
     remove: (id) => request(`/study-materials/${id}`, { method: "DELETE" }),
+    // PDF/image upload for the Library reader (multipart, same as documents).
+    upload: (file) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      return request("/study-materials/upload", { method: "POST", body: formData });
+    },
   },
   syllabus: {
     list: (params = "") => request(`/syllabus${params ? `?${params}` : ""}`),

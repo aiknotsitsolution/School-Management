@@ -24,6 +24,19 @@ const CCE_GRADE_OPTIONS = [
   { value: "D", label: "D · Marginal" },
 ];
 
+// DOB/date values arrive as ISO timestamps ("2019-07-08T00:00:00.000Z") — the
+// card only needs the date, never the time component.
+function fmtDate(value) {
+  if (!value) return "—";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
 function mergeCceAreas(saved) {
   const rows = Array.isArray(saved) ? saved : [];
   return [
@@ -570,7 +583,7 @@ export default function ReportCard() {
               </p>
               <p>
                 <span className="text-slate-text/60">Date of Birth:</span>{" "}
-                <b className="text-ink">{student.dob}</b>
+                <b className="text-ink">{fmtDate(student.dob)}</b>
               </p>
             </div>
           </div>

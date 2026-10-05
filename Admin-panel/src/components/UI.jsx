@@ -1,8 +1,9 @@
 // Shared, small UI primitives used across module pages.
 
-import { Children, useEffect, useRef, useState } from "react";
+import { Children, useRef, useState } from "react";
 import { ChevronDown, Eye, EyeOff } from "lucide-react";
 import PageArtwork from "./PageArtwork";
+import PopoverPanel from "./PopoverPanel";
 import { MetricCard } from "./dashboard/DashKit";
 
 // The stat card lives in the dashboard kit so every metric surface shares one
@@ -225,10 +226,15 @@ export function Select({
   const [draft, setDraft] = useState(defaultValue ?? "");
   const rootRef = useRef(null);
   const hiddenRef = useRef(null);
+  const triggerRef = useRef(null);
 
   const isControlled = value !== undefined;
   const current = isControlled ? value ?? "" : draft;
-  const hasWidth = /\bw-/.test(className || "");
+  // Token-level check: only a real width utility (w-40, w-full, sm:w-40) opts
+  // out of the default w-full. /\bw-/ also matched "min-w-[260px]" (word
+  // boundary before the w), which dropped w-full and let long labels blow the
+  // trigger past its container.
+  const hasWidth = /(?:^|[\s:])w-/.test(className || "");
 
   const options = Children.toArray(children)
     .filter((child) => child && child.props && child.props.value !== undefined)
@@ -243,21 +249,8 @@ export function Select({
     options.find((option) => String(option.value) === String(current)) || null;
   const shown = selected ? selected.label : rest.placeholder || "Select";
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => {
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  // Outside-click / Escape dismissal lives in PopoverPanel: the listbox is
+  // portalled to <body>, so clicks on it no longer land inside rootRef.
 
   const commit = (option) => {
     if (option.disabled) return;
@@ -294,6 +287,7 @@ export function Select({
 
       <button
         type="button"
+        ref={triggerRef}
         disabled={disabled}
         onClick={(e) => {
           onClick?.(e);
@@ -329,12 +323,8 @@ export function Select({
         />
       </button>
 
-      {open && (
-        <div
-          role="listbox"
-          className="absolute left-0 top-full z-40 mt-1.5 w-full overflow-hidden rounded-xl border border-slate-300 bg-white shadow-lg shadow-black/5"
-        >
-          <div className="max-h-72 overflow-y-auto p-1">
+      <PopoverPanel open={open} anchorRef={triggerRef} onClose={() => setOpen(false)}>
+        <div role="listbox" className="flex-1 overflow-y-auto p-1">
             {options.map((option) => {
               const active = String(option.value) === String(current);
               return (
@@ -364,9 +354,8 @@ export function Select({
                 </button>
               );
             })}
-          </div>
         </div>
-      )}
+      </PopoverPanel>
     </div>
   );
 }

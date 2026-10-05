@@ -11,6 +11,7 @@ import Assignment from "@mui/icons-material/Assignment";
 import AssignmentTurnedIn from "@mui/icons-material/AssignmentTurnedIn";
 import AutoStories from "@mui/icons-material/AutoStories";
 import Campaign from "@mui/icons-material/Campaign";
+import Description from "@mui/icons-material/Description";
 import DirectionsBus from "@mui/icons-material/DirectionsBus";
 import Download from "@mui/icons-material/Download";
 import EventAvailable from "@mui/icons-material/EventAvailable";
@@ -51,6 +52,18 @@ const notices = {
   icon: Campaign,
   label: "Notices",
 };
+// Every staff designation can browse the Library: the physical catalogue plus
+// the class shelf of study materials / e-books (deep-linked to its tab).
+const library = {
+  to: "/library",
+  icon: AutoStories,
+  label: "Library",
+};
+const studyMaterials = {
+  to: "/library?tab=materials",
+  icon: Description,
+  label: "Study Materials",
+};
 
 function group(label, items) {
   return { label, items };
@@ -60,8 +73,9 @@ export const PERSONA_NAV = {
   // Admission counsellor: the enrolment desk. Every route below is one the
   // counsellor bundle already authorizes (students:read/write, admissions:read,
   // attendance:read, notices:read, leaves:apply) and links to a route with a
-  // real guard — see App.jsx. Deliberately excludes the academic, finance,
-  // library, transport and administration trees a counsellor cannot use.
+  // real guard — see App.jsx. The Library entry is read-only (library:read) so
+  // the desk can hand out study materials; the finance, transport and
+  // administration trees a counsellor cannot use stay excluded.
   counsellor: [
     group("Counsellor Workspace", [
       { to: "/admission-counsellor", icon: SpaceDashboard, label: "Dashboard", end: true },
@@ -71,6 +85,7 @@ export const PERSONA_NAV = {
     ]),
     group("Staff Tools", [
       { to: "/attendance", icon: EventAvailable, label: "Attendance" },
+      library,
       myWork,
       attendance,
       leave,
@@ -83,15 +98,16 @@ export const PERSONA_NAV = {
       { to: "/accountant", icon: SpaceDashboard, label: "Dashboard", end: true },
       { to: "/accountant/fees", icon: AccountBalanceWallet, label: "Manage Fees" },
     ]),
-    group("Staff Tools", [myWork, attendance, leave, notices, notifications]),
+    group("Staff Tools", [library, myWork, attendance, leave, notices, notifications]),
   ],
   librarian: [
     group("Librarian Workspace", [
       { to: "/librarian", icon: SpaceDashboard, label: "Dashboard", end: true },
       { to: "/librarian/books", icon: AutoStories, label: "Books" },
       { to: "/librarian/circulation", icon: Download, label: "Circulation" },
+      studyMaterials,
     ]),
-    group("Staff Tools", [myWork, attendance, leave, notices, notifications]),
+    group("Staff Tools", [library, myWork, attendance, leave, notices, notifications]),
   ],
   transport: [
     group("Transport Workspace", [
@@ -100,7 +116,7 @@ export const PERSONA_NAV = {
       { to: "/transport/routes", icon: DirectionsBus, label: "Bus Routes" },
       { to: "/transport/allocations", icon: Speed, label: "Allocations" },
     ]),
-    group("Staff Tools", [myWork, attendance, leave, notices, notifications]),
+    group("Staff Tools", [library, myWork, attendance, leave, notices, notifications]),
   ],
   receptionist: [
     group("Reception Workspace", [
@@ -108,6 +124,6 @@ export const PERSONA_NAV = {
       { to: "/reception/enquiries", icon: Assignment, label: "Enquiries" },
       { to: "/reception/student-lookup", icon: PersonSearch, label: "Student Lookup" },
     ]),
-    group("Staff Tools", [myWork, attendance, leave, notices, notifications]),
+    group("Staff Tools", [library, myWork, attendance, leave, notices, notifications]),
   ],
 };

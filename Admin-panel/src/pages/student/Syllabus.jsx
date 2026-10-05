@@ -31,7 +31,7 @@ export default function Syllabus() {
       setLoading(true);
       setError(null);
       const res = await api.syllabus.list();
-      setSyllabus(res.data?.data || []);
+      setSyllabus(res.data || []);
     } catch (err) {
       setError(err.message || "Failed to load syllabus");
     } finally {
@@ -139,7 +139,7 @@ export default function Syllabus() {
                           <div>
                             <p className="text-[14px] font-semibold text-ink">{s.subject}</p>
                             <div className="flex items-center gap-2 mt-0.5">
-                              <span className="text-[11.5px] text-ink/40">Class {s.class}{s.section ? ` ${s.section}` : ""}</span>
+                              <span className="text-[11.5px] text-ink/65">Class {s.class}{s.section ? ` ${s.section}` : ""}</span>
                               <Pill className={`text-[10px] border ${TERM_COLORS[s.term] || TERM_COLORS["Full Year"]}`}>
                                 {s.term}
                               </Pill>
@@ -150,18 +150,18 @@ export default function Syllabus() {
                       <div className="flex items-center gap-4 sm:gap-6">
                         <div className="text-center">
                           <p className="text-[18px] font-bold text-ink">{total}</p>
-                          <p className="text-[10.5px] text-ink/40">Topics</p>
+                          <p className="text-[10.5px] text-ink/65">Topics</p>
                         </div>
                         <div className="text-center">
                           <p className="text-[18px] font-bold text-emerald-600">{completed}</p>
-                          <p className="text-[10.5px] text-ink/40">Done</p>
+                          <p className="text-[10.5px] text-ink/65">Done</p>
                         </div>
                         <div className="text-center">
                           <p className="text-[18px] font-bold text-amber-600">{inProgress}</p>
-                          <p className="text-[10.5px] text-ink/40">In Progress</p>
+                          <p className="text-[10.5px] text-ink/65">In Progress</p>
                         </div>
                         <div className="w-24">
-                          <div className="flex justify-between text-[10px] text-ink/40 mb-1">
+                          <div className="flex justify-between text-[10px] text-ink/65 mb-1">
                             <span>{progress}%</span>
                           </div>
                           <div className="h-2 rounded-full bg-ink/5 overflow-hidden">
@@ -184,17 +184,17 @@ export default function Syllabus() {
                                 <StIcon size={14} className={st.color} />
                               </div>
                               <div className="min-w-0 flex-1">
-                                <p className={`text-[13px] font-medium ${topic.status === "completed" ? "text-ink/40 line-through" : "text-ink"}`}>
+                                <p className={`text-[13px] font-medium ${topic.status === "completed" ? "text-ink/65 line-through" : "text-ink"}`}>
                                   {topic.title}
                                 </p>
                                 {topic.description && (
-                                  <p className="text-[11.5px] text-ink/40 mt-0.5">{topic.description}</p>
+                                  <p className="text-[11.5px] text-ink/65 mt-0.5">{topic.description}</p>
                                 )}
                               </div>
                               <Pill className={`text-[10px] border shrink-0 ${
                                 topic.status === "completed" ? "bg-emerald-50 text-emerald-600 border-emerald-100" :
                                 topic.status === "in_progress" ? "bg-amber-50 text-amber-600 border-amber-100" :
-                                "bg-slate-50 text-ink/40 border-ink/10"
+                                "bg-slate-50 text-ink/65 border-ink/10"
                               }`}>
                                 {topic.status === "completed" ? "Done" : topic.status === "in_progress" ? "Ongoing" : "Pending"}
                               </Pill>

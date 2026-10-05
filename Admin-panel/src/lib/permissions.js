@@ -21,12 +21,16 @@ const TEACHING_PERMISSIONS = [
   "achievements:read", "achievements:write",
 ];
 
+// Kept in sync with the backend STAFF_PERMISSIONS bundle: all five staff
+// designations carry library:read so the persona Library entry isn't a dead
+// redirect (writes stay with librarian/admin+teacher).
 const STAFF_PERMISSIONS = {
   admission_counsellor: [
     "dashboard:view", "staff:read", "students:read", "students:write",
     "admissions:read", "admissions:write", "enquiries:read", "enquiries:write",
     "notices:read", "notices:publish", "attendance:read", "attendance:mark",
     "leaves:apply", "payroll:view",
+    "library:read",
   ],
   accountant: [
     "dashboard:view", "staff:read", "students:read", "fees:read", "fees:collect",
@@ -34,6 +38,7 @@ const STAFF_PERMISSIONS = {
     "accounting:read", "accounting:journal",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
+    "library:read",
   ],
   librarian: [
     "dashboard:view", "staff:read", "students:read", "library:read",
@@ -46,12 +51,14 @@ const STAFF_PERMISSIONS = {
     "admissions:write", "enquiries:read", "enquiries:write",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
+    "library:read",
   ],
   transport: [
     "dashboard:view", "staff:read", "students:read", "transport:read",
     "transport:update",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
+    "library:read",
   ],
 };
 

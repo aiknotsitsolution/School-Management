@@ -10,11 +10,15 @@ const studyMaterialSchema = new mongoose.Schema(
     subject: { type: String, required: true, trim: true },
     class: { type: String, required: true, trim: true },
     section: { type: String, default: null, trim: true },
-    type: { type: String, enum: ["notes", "worksheet", "video", "link", "other"], default: "notes" },
+    // `ebook` marks a readable PDF/book uploaded for in-app reading (Library).
+    type: { type: String, enum: ["notes", "worksheet", "video", "link", "ebook", "other"], default: "notes" },
     fileUrl: { type: String, default: null },
     linkUrl: { type: String, default: null },
     fileName: { type: String, default: null },
     fileSize: { type: Number, default: null },
+    // Page count of an uploaded PDF — read client-side at upload time so the
+    // reader can show "12 / 24" without fetching the whole document first.
+    pageCount: { type: Number, default: null },
     uploadedBy: { type: mongoose.Schema.Types.ObjectId, ref: "Staff" },
     uploadedByName: { type: String, default: "" },
   },

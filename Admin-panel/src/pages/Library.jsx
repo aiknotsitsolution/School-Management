@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   Plus,
   BookOpen,
@@ -27,6 +28,7 @@ import {
 } from "../components/UI";
 import MasterSelect from "../components/MasterSelect";
 import CustomMasterModal from "../components/CustomMasterModal";
+import StudyMaterialsPanel from "../components/library/StudyMaterialsPanel";
 import { invalidateMasterCache } from "../lib/masterCache";
 import { api } from "../lib/api";
 import { hasPermission } from "../lib/permissions";
@@ -118,14 +120,16 @@ export default function Library() {
   const [students, setStudents] = useState([]);
   const [notifying, setNotifying] = useState(false);
   useEffect(() => {
-    Promise.all([
-      api.books.list(),
-      api.issues.list(),
-      api.students.list("limit=1000"),
-    ])
-      .then(([bookResponse, issueResponse, studentResponse]) => {
-        setBooks((bookResponse.data || []).map(normalizeBook));
-        setIssues((issueResponse.data || []).map(normalizeIssue));
+    // Loaded independently: a persona without students:read must still see the
+    // catalogue (Promise.all would drop every result on a single 403).
+    api.books.list()
+      .then((bookResponse) => setBooks((bookResponse.data || []).map(normalizeBook)))
+      .catch(() => {});
+    api.issues.list()
+      .then((issueResponse) => setIssues((issueResponse.data || []).map(normalizeIssue)))
+      .catch(() => {});
+    api.students.list("limit=1000")
+      .then((studentResponse) => {
         setStudents(
           (studentResponse.data || []).map((s) => ({
             _id: s._id,
@@ -140,7 +144,18 @@ export default function Library() {
   }, []);
   const [query, setQuery] = useState("");
   const [catFilter, setCatFilter] = useState("All");
-  const [tab, setTab] = useState("books");
+  // Deep-linkable tabs: /library?tab=materials opens straight on the shelf
+  // (the sidebar's Study Materials entry and old /study-materials links use it).
+  // The URL is the single source of truth for the tab. A local copy of the
+  // param only synced at mount, so a client-side navigation from /library to
+  // /library?tab=materials (the sidebar's Study Materials link) left the tab
+  // on "books" — this component never remounts on a search-param change.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const wantedTab = searchParams.get("tab");
+  const tab = ["books", "issues", "materials"].includes(wantedTab) ? wantedTab : "books";
+  const switchTab = (key) => {
+    setSearchParams(key === "books" ? {} : { tab: key }, { replace: true });
+  };
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyBookForm());
   const [editId, setEditId] = useState(null);
@@ -392,8 +407,8 @@ export default function Library() {
     <div className="space-y-6">
       <PageIntro
         eyebrow="Academics"
-        title="Library Management"
-        description="Catalogue, issue and manage library books and borrowers."
+        title="Library"
+        description="Books, circulation and class study materials — one shelf for the whole school."
         right={
           hasPermission(user, "library:notify") ? (
             <Button
@@ -407,46 +422,49 @@ export default function Library() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard
-          icon={LibraryBig}
-          label="Total Titles"
-          value={String(stats.totalTitles)}
-          sub={`${stats.totalCopies} total copies`}
-          accent="primary"
-        />
-        <StatCard
-          icon={BookOpen}
-          label="Available"
-          value={String(stats.avail)}
-          sub="Ready to issue"
-          accent="success"
-        />
-        <StatCard
-          icon={BookPlus}
-          label="Issued"
-          value={String(stats.issued)}
-          sub="Currently with students"
-          accent="info"
-        />
-        <StatCard
-          icon={RotateCcw}
-          label="Overdue"
-          value={String(stats.overdue)}
-          sub="Needs return follow-up"
-          accent="alert"
-        />
-      </div>
+      {tab !== "materials" && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard
+            icon={LibraryBig}
+            label="Total Titles"
+            value={String(stats.totalTitles)}
+            sub={`${stats.totalCopies} total copies`}
+            accent="primary"
+          />
+          <StatCard
+            icon={BookOpen}
+            label="Available"
+            value={String(stats.avail)}
+            sub="Ready to issue"
+            accent="success"
+          />
+          <StatCard
+            icon={BookPlus}
+            label="Issued"
+            value={String(stats.issued)}
+            sub="Currently with students"
+            accent="info"
+          />
+          <StatCard
+            icon={RotateCcw}
+            label="Overdue"
+            value={String(stats.overdue)}
+            sub="Needs return follow-up"
+            accent="alert"
+          />
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1.5">
           {[
             { key: "books", label: "Books Catalogue" },
             { key: "issues", label: "Issued / Returns" },
+            { key: "materials", label: "Study Materials" },
           ].map((t) => (
             <button
               key={t.key}
-              onClick={() => setTab(t.key)}
+              onClick={() => switchTab(t.key)}
               className={`px-3.5 py-1.5 rounded-full text-[12.5px] font-semibold border transition-colors ${
                 tab === t.key
                   ? "bg-primary text-white border-primary"
@@ -461,13 +479,16 @@ export default function Library() {
           <Button variant="primary" onClick={openAddBook}>
             <Plus size={15} /> Add Book
           </Button>
-        ) : (
+        ) : tab === "issues" ? (
           <Button variant="primary" onClick={openIssueModal}>
             <BookPlus size={15} /> Issue Book
           </Button>
-        )}
+        ) : null}
       </div>
 
+      {tab === "materials" ? (
+        <StudyMaterialsPanel />
+      ) : (
       <Card
         title={tab === "books" ? "Books Catalogue" : "Issued / Returns"}
         action={
@@ -652,6 +673,7 @@ export default function Library() {
           </div>
         )}
       </Card>
+      )}
 
       {/* ADD/EDIT BOOK MODAL */}
       {showModal && (

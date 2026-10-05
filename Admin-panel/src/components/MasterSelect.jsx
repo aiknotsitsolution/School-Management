@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Search, Plus, ChevronDown, AlertTriangle, X } from "lucide-react";
 import { api } from "../lib/api";
 import { getMasterCache, setMasterCache } from "../lib/masterCache";
+import PopoverPanel from "./PopoverPanel";
 
 function normalizeLabel(label) {
   return label.toLowerCase().replace(/\s+/g, " ").trim();
@@ -73,22 +74,8 @@ export default function MasterSelect({
     setOpen(next);
   };
 
-  // Close on outside click / Escape.
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => {
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  // Outside-click / Escape dismissal lives in PopoverPanel: the panel is
+  // portalled to <body>, so clicks on it no longer land inside rootRef.
 
   const selected = useMemo(
     () => items.find((i) => String(i._id) === String(value)),
@@ -122,8 +109,7 @@ export default function MasterSelect({
         <ChevronDown size={15} className="text-slate-text/50 shrink-0" />
       </button>
 
-      {open && (
-        <div className="absolute z-30 mt-1 w-full bg-white rounded-xl border border-slate-300 shadow-lg overflow-hidden">
+      <PopoverPanel open={open} anchorRef={rootRef} onClose={() => setOpen(false)}>
           {/* Search box */}
           <div className="p-2 border-b border-slate-200 relative">
             <Search
@@ -150,7 +136,7 @@ export default function MasterSelect({
           </div>
 
           {/* Body */}
-          <div className="max-h-56 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto">
             {loading ? (
               <div className="px-4 py-3 text-[13px] text-slate-text/70">
                 Loading {label.toLowerCase()}...
@@ -209,8 +195,7 @@ export default function MasterSelect({
               <Plus size={14} /> Add Custom {label}
             </button>
           )}
-        </div>
-      )}
+      </PopoverPanel>
     </div>
   );
 }

@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import { Search, Plus, ChevronDown, X } from "lucide-react";
+import PopoverPanel from "./PopoverPanel";
 
 /**
  * Lightweight searchable dropdown for string arrays.
@@ -30,21 +31,8 @@ export default function SearchableSelect({
       )
     : options;
 
-  useEffect(() => {
-    if (!open) return;
-    const onDown = (e) => {
-      if (rootRef.current && !rootRef.current.contains(e.target)) setOpen(false);
-    };
-    const onKey = (e) => {
-      if (e.key === "Escape") setOpen(false);
-    };
-    document.addEventListener("mousedown", onDown);
-    document.addEventListener("keydown", onKey);
-    return () => {
-      document.removeEventListener("mousedown", onDown);
-      document.removeEventListener("keydown", onKey);
-    };
-  }, [open]);
+  // Outside-click / Escape dismissal lives in PopoverPanel: the panel is
+  // portalled to <body>, so clicks on it no longer land inside rootRef.
 
   const toggle = () => {
     if (disabled) return;
@@ -79,8 +67,7 @@ export default function SearchableSelect({
         <ChevronDown size={15} className="text-slate-text/50 shrink-0 ml-1" />
       </button>
 
-      {open && (
-        <div className="absolute z-30 mt-1 w-full bg-white rounded-xl border border-slate-300 shadow-lg overflow-hidden">
+      <PopoverPanel open={open} anchorRef={rootRef} onClose={() => setOpen(false)}>
           <div className="p-2 border-b border-slate-200 relative">
             <Search
               size={14}
@@ -104,7 +91,7 @@ export default function SearchableSelect({
               </button>
             )}
           </div>
-          <div className="max-h-56 overflow-y-auto">
+          <div className="flex-1 overflow-y-auto">
             {filtered.length === 0 ? (
               <div className="px-4 py-4 text-center text-[13px] text-slate-text/60">
                 {query ? `No results for "${query}"` : "No options"}
@@ -139,8 +126,7 @@ export default function SearchableSelect({
               {addLabel || "Add Custom"}
             </button>
           )}
-        </div>
-      )}
+      </PopoverPanel>
     </div>
   );
 }

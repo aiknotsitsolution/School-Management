@@ -18,6 +18,7 @@ const {
 const { computeGradeWith, computeResultWith, resolveScale } = require("../utils/grading");
 const { resolveStudentAdmissionNo, tryStudentModel } = require("../services/academicYearService");
 const { fetchSessionWindow } = require("../utils/sessionWindow");
+const { resolveActiveSession } = require("@school-erp/shared/src/utils/teacherScope");
 const { generateReportCardPdf } = require("../utils/reportCardPdf");
 const { notifyClassStudents } = require("../utils/notify");
 
@@ -40,6 +41,10 @@ const TYPE_OF = {
 };
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 function isObjectId(value) {
   return ObjectId.isValid(value) && String(new ObjectId(value)) === String(value);
@@ -147,6 +152,12 @@ const createExam = async (req, res) => {
     const slot = toTimeSlotPayload(req.body) || {};
     const refs = toRefPayload(req.body);
     const payload = pick(req.body, EXAM_FIELDS);
+    // The exam form never sends session; stamp the school's active session so
+    // session-scoped reads (report cards, rollups, session filters) match.
+    if (!payload.session) {
+      const activeSession = await resolveActiveSession(req.tenantId);
+      if (activeSession) payload.session = activeSession;
+    }
     const exam = await Exam.create({
       ...payload,
       ...slot,
@@ -212,6 +223,11 @@ const updateExam = async (req, res) => {
       ...(slot.startTime || slot.endTime || slot.timeSlotId ? slot : {}),
       ...refs,
     };
+    // Self-heal exams created before session stamping existed.
+    if (!fields.session && !existing.session) {
+      const activeSession = await resolveActiveSession(req.tenantId);
+      if (activeSession) fields.session = activeSession;
+    }
 
     const exam = await Exam.findOneAndUpdate(scopeQuery(Exam, req, 
       { _id: req.params.id, schoolId: req.tenantId }),
@@ -415,7 +431,19 @@ async function buildReportCard(schoolId, branchId, opts) {
 
     const filter = { schoolId, ...(branchId ? { branchId } : {}), studentId };
   if (teacherScope) filter.class = teacherScope.class;
-  if (examName) filter.examName = examName;
+  // The Report Card page filters by TERM ("Term 1") while marks snapshot the
+  // full exam name ("Term 1 — Unit Test"), so an exact examName match returned
+  // nothing. Accept the exact legacy name, any exam name starting with the
+  // term label, and exams whose term field equals the label.
+  if (examName) {
+    const byName = new RegExp(`^${escapeRegExp(examName)}`);
+    const termExamIds = (
+      await Exam.find({ schoolId, ...(branchId ? { branchId } : {}), term: examName }).select("_id")
+    ).map((row) => row._id);
+    filter.$or = termExamIds.length
+      ? [{ examName: byName }, { examId: { $in: termExamIds } }]
+      : [{ examName: byName }];
+  }
   if (sessionParam) filter.session = sessionParam;
   const marks = await Marks.find(filter).sort({ subject: 1 });
 
