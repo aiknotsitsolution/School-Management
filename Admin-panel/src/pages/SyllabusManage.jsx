@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { ClipboardList, ListPlus, Pencil, Plus, RefreshCw, Trash2, X, CheckCircle2 } from "lucide-react";
 import { PageIntro, Card, Button, Input, Select, Pill, toast } from "../components/UI";
 import { LoadingBlock, EmptyBlock, ErrorBlock } from "../components/StateViews";
-import { usePermission } from "../lib/permissions";
+import { usePermission } from "../lib/permissions"; 
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import { api } from "../lib/api";
 
