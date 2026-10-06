@@ -6,9 +6,9 @@ export default defineConfig({
   plugins: [react()],
   server: {
     proxy: {
-      "/api": "http://localhost:5000",
+      "/api": "https://school-management-production-e239.up.railway.app",
       "/socket.io": {
-        target: "http://localhost:5000",
+        target: "https://school-management-production-e239.up.railway.app",
         ws: true,
       },
     },

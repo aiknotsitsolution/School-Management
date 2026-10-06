@@ -5,7 +5,7 @@ import { refreshAccessToken, scheduleRefresh } from "./tokenRefresh";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
-  "/api";
+  "https://school-management-production-e239.up.railway.app/api";
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
 
