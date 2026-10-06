@@ -114,6 +114,12 @@ app.get("/health", (_req, res) => {
 // Route map: gateway path -> downstream microservice
 const routes = [
   {
+    // Socket.IO is hosted by the communication service, alongside its REST API.
+    path: "/socket.io",
+    target: process.env.COMMUNICATION_SERVICE_URL || "http://localhost:5006",
+    ws: true,
+  },
+  {
     path: "/api/auth",
     target: process.env.AUTH_SERVICE_URL || "http://localhost:5001",
   },
@@ -290,27 +296,33 @@ const routes = [
   },
 ];
 
-routes.forEach(({ path, target }) => {
-  app.use(
-    path,
-    createProxyMiddleware({
-      target,
-      changeOrigin: true,
-      timeout: PROXY_TIMEOUT_MS,
-      proxyTimeout: PROXY_TIMEOUT_MS,
-      pathRewrite: (_requestPath, req) => req.originalUrl,
-      on: {
-        error: (_error, _request, response) => {
+let socketIoProxy;
+routes.forEach(({ path, target, ws = false }) => {
+  const proxy = createProxyMiddleware({
+    target,
+    changeOrigin: true,
+    ws,
+    timeout: PROXY_TIMEOUT_MS,
+    proxyTimeout: PROXY_TIMEOUT_MS,
+    pathRewrite: (_requestPath, req) => req.originalUrl || req.url,
+    on: {
+      error: (error, _request, response) => {
+        if (response && typeof response.status === "function") {
           if (!response.headersSent) {
             response.status(503).json({
               success: false,
               message: "Requested service is temporarily unavailable",
             });
           }
-        },
+        } else {
+          console.error(`Proxy error for ${path}:`, error.message);
+          response?.destroy?.();
+        }
       },
-    }),
-  );
+    },
+  });
+  app.use(path, proxy);
+  if (ws) socketIoProxy = proxy;
 });
 
 // Readiness: the gateway holds no DB connection of its own, so it fans out to
@@ -347,6 +359,12 @@ app.use((req, res) => {
     .json({ success: false, message: "Route not found on API Gateway" });
 });
 
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`API Gateway running on port ${PORT}`);
+});
+
+server.on("upgrade", (req, socket, head) => {
+  if (req.url?.startsWith("/socket.io")) {
+    socketIoProxy.upgrade(req, socket, head);
+  }
 });
