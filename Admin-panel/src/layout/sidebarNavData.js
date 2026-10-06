@@ -649,6 +649,14 @@ export const STUDENT_NAV = [
         roles: ["student"],
       },
       {
+        // Same checkout the parent portal uses — the page self-scopes a
+        // student account to its own invoices and orders.
+        to: "/online-payment",
+        icon: Payment,
+        label: "Pay Fees Online",
+        roles: ["student"],
+      },
+      {
         to: "/student/leave",
         icon: Description,
         label: "Leave Request",

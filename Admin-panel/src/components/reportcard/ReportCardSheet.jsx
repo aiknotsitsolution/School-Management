@@ -90,6 +90,11 @@ export default function ReportCardSheet({
   const totalStudents = report?.totalStudents || 0;
 
   const s = student || {};
+  // This card was generated for ONE class's exam — show that class, so the
+  // header, the marks table and the rank all describe the same group even when
+  // the student's profile has since been moved to another class.
+  const cardClass = report?.class || s.class || "";
+  const cardSection = report?.section || s.section || "";
 
   return (
     <div className="p-6 sm:p-8 max-w-3xl mx-auto" id="report-card-print">
@@ -157,8 +162,8 @@ export default function ReportCardSheet({
           <p>
             <span className="text-slate-text/60">Class / Section:</span>{" "}
             <b className="text-ink">
-              {formatClass(s.class)}
-              {s.section ? `-${s.section}` : ""}
+              {formatClass(cardClass)}
+              {cardSection ? `-${cardSection}` : ""}
             </b>
           </p>
           <p>

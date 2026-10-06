@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { CreditCard, Wallet, FileClock } from "lucide-react";
 import { PageIntro, Card, Pill } from "../../components/UI";
 import {
@@ -369,12 +370,19 @@ export default function Fees() {
       </Card>
 
       <Card>
-        <p className="text-[12.5px] text-slate-text/80 flex items-center gap-2">
-          <Wallet size={14} className="text-slate-text/50" />
-          Pay online from your parent&apos;s dashboard (Fees &amp; Payments), or pay at the
-          school office and collect the receipt. Portal payments get an auto-generated receipt
-          number; counter cash receipts use the office receipt book.
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <p className="text-[12.5px] text-slate-text/80 flex items-center gap-2">
+            <Wallet size={14} className="text-slate-text/50" />
+            Pay online yourself, or at the school office and collect the receipt. Portal payments get an
+            auto-generated receipt number; counter cash receipts use the office receipt book.
+          </p>
+          <Link
+            to="/online-payment"
+            className="shrink-0 whitespace-nowrap rounded-xl border border-emerald-200 bg-emerald-50 px-3.5 py-2 text-[12px] font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
+          >
+            Pay Online
+          </Link>
+        </div>
       </Card>
     </div>
   );

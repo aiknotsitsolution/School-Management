@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSelector } from "react-redux";
 import { api } from "../lib/api";
 import {
   ShieldCheck,
@@ -54,6 +55,11 @@ const fmtDate = (iso) =>
 export default function OnlinePayment() {
   const { options: masterClasses } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
   const CLASS_OPTIONS = ["All", ...masterClasses.filter((c) => c !== "All")];
+  // The portal pays only for itself: students are deliberately not granted
+  // students:read (the directory call below would 403), and the fee service
+  // already pins every invoice/order to their refId server-side.
+  const user = useSelector((state) => state.auth.user);
+  const isSelf = user?.role === "student";
   const [students, setStudents] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -69,8 +75,14 @@ export default function OnlinePayment() {
   const [upiCheckout, setUpiCheckout] = useState(null);
 
   useEffect(() => {
+    // Fee collectors browse the whole school; a student reads only their own
+    // profile (/students/me is self-scoped by gateOwnProfile) and is fed into
+    // the same shape below, so the rest of the page runs unchanged.
+    const studentsRequest = isSelf
+      ? api.students.me().then((res) => ({ data: res?.data ? [res.data] : [] }))
+      : api.students.list("limit=1000");
     Promise.all([
-      api.students.list("limit=1000"),
+      studentsRequest,
       api.fees.invoices.list(),
       api.fees.orders.list(),
     ])
@@ -102,7 +114,7 @@ export default function OnlinePayment() {
       })
       .catch((requestError) => setError(requestError.message))
       .finally(() => setLoading(false));
-  }, []);
+  }, [isSelf]);
 
   const feeStructure = useMemo(
     () =>
@@ -228,9 +240,13 @@ export default function OnlinePayment() {
   return (
     <div className="space-y-6">
       <PageIntro
-        eyebrow="Finance"
-        title="Online Fees Payment"
-        description="Generate payment orders for unpaid invoices. Provider checkout is enabled only after gateway configuration."
+        eyebrow={isSelf ? "My Fees" : "Finance"}
+        title={isSelf ? "Pay Fees Online" : "Online Fees Payment"}
+        description={
+          isSelf
+            ? "Pay your outstanding fee invoices online. An order is confirmed only once the school office verifies the payment."
+            : "Generate payment orders for unpaid invoices. Provider checkout is enabled only after gateway configuration."
+        }
       />
 
       {error && (
@@ -248,8 +264,9 @@ export default function OnlinePayment() {
                 Payment {orderNote.length > 1 ? "orders" : "order"} created
               </p>
               <p className="text-[12.5px] text-slate-text/80 mt-1">
-                Share the payment details with the parent — the order is confirmed once the office verifies
-                the receipt (bank transfer / UPI reference). No fee is recorded as paid before that.
+                Share the payment details with {isSelf ? "the school office" : "the parent"} — the order is
+                confirmed once the office verifies the receipt (bank transfer / UPI reference). No fee is
+                recorded as paid before that.
               </p>
               <div className="mt-2 space-y-1">
                 {orderNote.map((o) => (
@@ -302,9 +319,15 @@ export default function OnlinePayment() {
 
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         <Card bodyClassName="p-5">
-          <p className="text-[12.5px] text-slate-text/80 font-medium">Pending Students</p>
-          <p className="font-display text-[28px] font-bold text-ink mt-1 leading-none">{pendingStudents}</p>
-          <p className="text-[11.5px] text-slate-text/60 mt-2">Students with outstanding fees</p>
+          <p className="text-[12.5px] text-slate-text/80 font-medium">
+            {isSelf ? "My Fee Invoices" : "Pending Students"}
+          </p>
+          <p className="font-display text-[28px] font-bold text-ink mt-1 leading-none">
+            {isSelf ? feeStructure.length : pendingStudents}
+          </p>
+          <p className="text-[11.5px] text-slate-text/60 mt-2">
+            {isSelf ? "Invoices raised for you" : "Students with outstanding fees"}
+          </p>
         </Card>
         <Card bodyClassName="p-5">
           <p className="text-[12.5px] text-slate-text/80 font-medium">This Student Dues</p>
@@ -320,6 +343,20 @@ export default function OnlinePayment() {
 
       <div className="grid lg:grid-cols-3 gap-5">
         <Card title="Fee Summary" className="lg:col-span-1 h-fit">
+          {/* One student only for the portal account — there is nobody to
+              switch to, so the header is static instead of a picker trigger. */}
+          {isSelf ? (
+            <div className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-200">
+              <img src={student?.avatar} alt={student?.name} className="w-12 h-12 rounded-xl object-cover" />
+              <div className="flex-1 min-w-0">
+                <p className="font-semibold text-ink text-[13.5px] truncate">{student?.name || "—"}</p>
+                <p className="text-[11.5px] text-slate-text/60">
+                  {student?.displayId || ""} · Class {student?.class}-{student?.section}
+                </p>
+              </div>
+              <Pill tone="primary">My account</Pill>
+            </div>
+          ) : (
           <button
             onClick={() => { setPickerOpen(true); setQuery(""); }}
             className="flex items-center gap-3 pb-4 mb-4 border-b border-slate-200 w-full text-left hover:bg-paper/60 rounded-lg transition-colors"
@@ -333,11 +370,14 @@ export default function OnlinePayment() {
             </div>
             <span className="text-[11.5px] font-semibold text-info shrink-0">Change</span>
           </button>
+          )}
 
           {feeStructure.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-[13.5px] font-semibold text-ink">No invoices</p>
-              <p className="text-[12.5px] text-slate-text/60 mt-1">Add a fee invoice for this student.</p>
+              <p className="text-[12.5px] text-slate-text/60 mt-1">
+                {isSelf ? "No fee invoice has been raised for you yet." : "Add a fee invoice for this student."}
+              </p>
             </div>
           ) : (
             <>
@@ -385,7 +425,9 @@ export default function OnlinePayment() {
           {studentOrders.length === 0 ? (
             <div className="py-12 text-center">
               <FileClock size={38} className="mx-auto text-slate-text/30 mb-3" />
-              <p className="text-[14px] font-semibold text-ink">No orders for this student</p>
+              <p className="text-[14px] font-semibold text-ink">
+                {isSelf ? "No payment orders yet" : "No orders for this student"}
+              </p>
               <p className="text-[12.5px] text-slate-text/70 mt-1">
                 Generate a payment order from the fee summary to begin.
               </p>

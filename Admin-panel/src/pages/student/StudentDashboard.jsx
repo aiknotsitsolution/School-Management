@@ -57,6 +57,9 @@ const QUICK_ACTIONS = [
   { to: "/student/homework", label: "Homework & Assignments", icon: BookOpen, accent: "violet" },
   { to: "/student/exams", label: "Examinations", icon: ClipboardList, accent: "success" },
   { to: "/student/results", label: "Results / Report Card", icon: Trophy, accent: "warn" },
+  // Same online checkout the parent portal links to; OnlinePayment reads only
+  // this account's own invoices for a student session.
+  { to: "/online-payment", label: "Pay Fees Online", icon: CreditCard, accent: "success" },
 ];
 
 const ATT_DOT = {
@@ -1286,9 +1289,19 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
                       </Link>
                     </div>
                   )}
-                  <p className="text-[11.5px] leading-relaxed text-slate-text/70">
-                    Payments are collected at the school office. Online payment is not available.
-                  </p>
+                  <div className="flex items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50/70 px-3.5 py-2.5">
+                    {/* /85 not /70: inside the emerald panel the copy sits on a
+                        darker surface in dark mode, where /70 measured 3.94:1. */}
+                    <p className="text-[11.5px] leading-snug text-slate-text/85">
+                      Pay online with UPI or card, or settle at the school office.
+                    </p>
+                    <Link
+                      to="/online-payment"
+                      className="shrink-0 whitespace-nowrap rounded-xl border border-emerald-200 bg-white px-3 py-2 text-[12px] font-bold text-emerald-700 transition-colors hover:bg-emerald-100"
+                    >
+                      Pay Online
+                    </Link>
+                  </div>
                 </div>
               ) : (
                 <div className="flex items-center gap-4 rounded-xl border border-emerald-100 bg-emerald-50/70 px-4 py-4">

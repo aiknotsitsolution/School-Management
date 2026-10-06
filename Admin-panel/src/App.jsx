@@ -1008,10 +1008,12 @@ export default function App() {
           <Route
             path="/online-payment"
             element={
+              // students hold fees:read and are self-scoped by the fee service
+              // (scopeStudentQuery / order ownership), so the portal pays its
+              // own invoices here — RequireNotStudent would only deny them the
+              // checkout their dashboard links to.
               <RequirePermission permission="fees:read">
-                <RequireNotStudent>
-                  <OnlinePayment />
-                </RequireNotStudent>
+                <OnlinePayment />
               </RequirePermission>
             }
           />

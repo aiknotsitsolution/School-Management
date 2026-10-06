@@ -43,6 +43,38 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// "2026-10-06" is a calendar day — parse it at local midnight, or a timezone
+// behind UTC would roll it back a day. Anything else is an ISO timestamp.
+function parseDate(value) {
+  const raw = String(value || "");
+  if (!raw) return null;
+  const d = /^\d{4}-\d{2}-\d{2}$/.test(raw)
+    ? new Date(`${raw}T00:00:00`)
+    : new Date(raw);
+  return Number.isNaN(d.getTime()) ? null : d;
+}
+
+// The API returns purchaseDate as an ISO timestamp ("2026-10-06T00:00:00.000Z");
+// show it as a date, never as raw JSON.
+function fmtDate(value) {
+  const d = parseDate(value);
+  if (!d) return value ? String(value) : "—";
+  return d.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "short",
+    year: "numeric",
+  });
+}
+
+// <input type="date"> only accepts "yyyy-mm-dd" — a value carrying a time is
+// rejected and the field opens blank.
+function toInputDate(value) {
+  const d = parseDate(value);
+  if (!d) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 function emptyForm() {
   const n = initialInventory.length + 1;
   return {
@@ -133,7 +165,7 @@ export default function Inventory() {
       stock: i.stock,
       reorderLevel: i.reorderLevel,
       unit: i.unit,
-      lastRestocked: i.lastRestocked,
+      lastRestocked: toInputDate(i.lastRestocked) || todayISO(),
       id: i.id,
     });
     setShowModal(true);
@@ -321,9 +353,6 @@ export default function Inventory() {
                     >
                       <td className="px-5 py-3">
                         <p className="font-semibold text-ink">{i.item}</p>
-                        <p className="text-[11.5px] text-slate-text/50 font-mono">
-                          {i.id}
-                        </p>
                       </td>
                       <td className="px-5 py-3 text-slate-text">
                         {i.category}
@@ -345,7 +374,7 @@ export default function Inventory() {
                         {i.reorderLevel} {i.unit}
                       </td>
                       <td className="px-5 py-3 text-slate-text whitespace-nowrap">
-                        {i.lastRestocked}
+                        {fmtDate(i.lastRestocked)}
                       </td>
                       <td className="px-5 py-3">
                         <Pill tone={lowStock ? "alert" : "success"}>

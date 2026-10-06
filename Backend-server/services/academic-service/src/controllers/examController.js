@@ -405,10 +405,16 @@ const getMarks = async (req, res) => {
 };
 
 // examId -> { status, session } map for a report card's mark rows.
-async function examStatusMap(schoolId, branchId, marks) {
+async function examStatusMap(req, marks) {
     const ids = [...new Set(marks.map((m) => String(m.examId)).filter(Boolean))];
     if (!ids.length) return new Map();
-    const filter = { _id: { $in: ids }, schoolId, ...(branchId ? { branchId } : {}) };
+    // scopeQuery, never a raw `branchId` spread: the report-card path has to
+    // honour the same BRANCH_SCOPE rollout gate (and the same "a row with no
+    // branchId is visible to everyone" rule) as every other read. Spreading
+    // req.branchId directly filtered on it regardless of the flag, so a student
+    // — whose token always carries their campus — matched nothing when the
+    // marks rows had branchId null, and the dashboard showed an empty result.
+    const filter = scopeQuery(Exam, req, { _id: { $in: ids }, schoolId: req.tenantId });
     const exams = await Exam.find(filter)
     .select("_id status session")
     .lean();
@@ -424,12 +430,17 @@ function includeDrafts(req) {
 
 // Shared report-card builder: the JSON endpoint and the PDF endpoint both
 // render this payload so the on-screen card and the printable PDF never drift.
-async function buildReportCard(schoolId, branchId, opts) {
+async function buildReportCard(req, opts) {
+  const schoolId = req.tenantId;
   const { studentId: rawStudentId, examName, session, includeDrafts: drafts, teacherScope } = opts;
   const sessionParam = session ? String(session).trim() : "";
   const studentId = await resolveStudentAdmissionNo(schoolId, rawStudentId);
 
-    const filter = { schoolId, ...(branchId ? { branchId } : {}), studentId };
+    // scopeQuery, never a raw `branchId` spread — see the note in examStatusMap.
+    // The old `{ schoolId, ...(branchId ? { branchId } : {}), studentId }` applied
+    // branch filtering regardless of BRANCH_SCOPE, so a branch-assigned student
+    // got zero subjects whenever the marks rows carried branchId: null.
+    const filter = scopeQuery(Marks, req, { schoolId, studentId });
   if (teacherScope) filter.class = teacherScope.class;
   // The Report Card page filters by TERM ("Term 1") while marks snapshot the
   // full exam name ("Term 1 — Unit Test"), so an exact examName match returned
@@ -438,7 +449,7 @@ async function buildReportCard(schoolId, branchId, opts) {
   if (examName) {
     const byName = new RegExp(`^${escapeRegExp(examName)}`);
     const termExamIds = (
-      await Exam.find({ schoolId, ...(branchId ? { branchId } : {}), term: examName }).select("_id")
+      await Exam.find(scopeQuery(Exam, req, { schoolId, term: examName })).select("_id")
     ).map((row) => row._id);
     filter.$or = termExamIds.length
       ? [{ examName: byName }, { examId: { $in: termExamIds } }]
@@ -448,7 +459,7 @@ async function buildReportCard(schoolId, branchId, opts) {
   const marks = await Marks.find(filter).sort({ subject: 1 });
 
   const seeAll = drafts;
-    const statusById = await examStatusMap(schoolId, branchId, marks);
+    const statusById = await examStatusMap(req, marks);
   const visible = marks.filter((m) => {
     if (seeAll) return true;
     const exam = statusById.get(String(m.examId));
@@ -492,11 +503,10 @@ async function buildReportCard(schoolId, branchId, opts) {
   let totalStudents = 0;
   if (visible.length) {
     const anchor = visible.find((m) => m.class) || null;
-      const cohortFilter = {
+      const cohortFilter = scopeQuery(Marks, req, {
         schoolId,
-        ...(branchId ? { branchId } : {}),
         examId: { $in: visible.map((m) => m.examId) },
-      };
+      });
     if (anchor) {
       cohortFilter.class = anchor.class;
       if (anchor.section) cohortFilter.section = anchor.section;
@@ -525,7 +535,7 @@ async function buildReportCard(schoolId, branchId, opts) {
   let attendance = null;
   {
     const window = sessEcho ? await fetchSessionWindow(schoolId, sessEcho) : null;
-      const dateFilter = { schoolId, ...(branchId ? { branchId } : {}), studentId };
+      const dateFilter = scopeQuery(Attendance, req, { schoolId, studentId });
     if (window && window.startDate && window.endDate) {
       const end = new Date(window.endDate);
       end.setHours(23, 59, 59, 999);
@@ -581,7 +591,7 @@ const getReportCard = async (req, res) => {
     if (!req.query.studentId) {
       return res.status(400).json({ success: false, message: "studentId is required" });
     }
-    const data = await buildReportCard(req.tenantId, req.branchId, {
+    const data = await buildReportCard(req, {
       studentId: req.query.studentId,
       examName: req.query.examName,
       session: req.query.session,
@@ -601,7 +611,7 @@ const getReportCardPdf = async (req, res) => {
     if (!req.query.studentId) {
       return res.status(400).json({ success: false, message: "studentId is required" });
     }
-    const data = await buildReportCard(req.tenantId, req.branchId, {
+    const data = await buildReportCard(req, {
       studentId: req.query.studentId,
       examName: req.query.examName,
       session: req.query.session,
@@ -652,7 +662,7 @@ const getClassSummary = async (req, res) => {
 
     // Same publish visibility rule as the report card: students off, staff on.
     const seeAll = includeDrafts(req);
-    const statusById = await examStatusMap(req.tenantId, req.branchId, marks);
+    const statusById = await examStatusMap(req, marks);
     const visible = marks.filter((m) => {
       if (seeAll) return true;
       const exam = statusById.get(String(m.examId));

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSelector } from "react-redux";
 import {
   Plus,
   Search,
@@ -83,14 +84,37 @@ const TABS = (counts) => [
 ];
 
 // refId maps to a role-specific identity field: Admission ID for students,
-// Staff ID for staff/teachers (manual, must match a Teachers & Staff record
-// created earlier — never generated here), and nothing for school admins.
+// Staff ID for staff/teachers (manual — linked to the Teachers & Staff record
+// when one carries that ID, and created alongside the account when none does),
+// and nothing for school admins.
 const REF_ID_FIELDS = {
   student: { label: "Admission ID", placeholder: "Enter Admission ID", required: true },
-  staff: { label: "Staff ID", placeholder: "Staff ID from Teachers & Staff", required: true },
-  teacher: { label: "Staff ID", placeholder: "Staff ID from Teachers & Staff", required: true },
+  staff: { label: "Staff ID", placeholder: "Staff ID (e.g. STF-101)", required: true },
+  teacher: { label: "Staff ID", placeholder: "Staff ID (e.g. TCH-101)", required: true },
   school_admin: { label: "Ref ID", disabled: true, placeholder: "Not required for this role" },
 };
+
+// The server links a teacher/staff account to a person record by
+// Staff.employeeId (unique per school) and refuses to invent one — it answers
+// with exactly this sentence when no record carries the typed ID. Catching it
+// here lets "New user" build the person record from the values already on the
+// form and retry the link, so a teacher is added in one step instead of
+// bouncing the admin to Teachers & Staff first. Every other failure (already
+// linked, wrong role, validation) still surfaces untouched.
+const STAFF_RECORD_MISSING_RE = /No pending Teacher\/Staff record exists/;
+
+const staffRecordFrom = (form) => ({
+  employeeId: form.refId.trim(),
+  name: form.name.trim(),
+  email: form.email.trim().toLowerCase(),
+  role: form.role === "staff" ? "staff" : "teacher",
+  designation:
+    form.role === "staff"
+      ? (form.designation === DESIGNATION_CUSTOM
+          ? (form.customDesignation || "").trim() || undefined
+          : form.designation || undefined)
+      : (form.teacherDesignation || "").trim() || "Teacher",
+});
 
 const refIdFieldFor = (role) => REF_ID_FIELDS[role] || null;
 
@@ -139,6 +163,9 @@ const emptyForm = () => ({
   role: "",
   designation: "",
   customDesignation: "",
+  // Designation written to a Staff record this form creates for a teacher
+  // (Staff.designation is mandatory; left blank the record gets "Teacher").
+  teacherDesignation: "",
   className: "",
   section: "",
   refId: "",
@@ -217,6 +244,14 @@ export default function Users() {
   // Campus list, shared by the parent picker in the create form, the campus
   // column and the 360° dialog.
   const { branches, loading: branchesLoading, nameOf: campusName } = useBranches();
+
+  // Platform owner context. Every role on this page is school-scoped, and the
+  // API takes the school from the tenant header — which only exists once a
+  // school is picked in the top switcher, and only accepts writes once editing
+  // is enabled there. Checked up front so the failure reads as itself instead
+  // of arriving as "schoolId is required" / "Impersonation session is
+  // read-only" after the form is already filled in.
+  const auth = useSelector((state) => state.auth);
 
   useEffect(() => {
     api.students
@@ -421,19 +456,53 @@ export default function Users() {
       (form.role === "staff" || form.role === "teacher") &&
       !form.refId.trim()
     ) {
-      toast("Staff ID is required — enter the Staff ID created in Teachers & Staff", "error");
+      toast("Staff ID is required — it links the account, and creates the person record if none exists", "error");
       return;
     }
     if (form.role === "parent" && !form.linkedStudentIds.length) {
       toast("Link at least one student to a parent account", "error");
       return;
     }
+    // Platform owner precondition (see the auth selector above): fail here with
+    // the real cause instead of letting the server reject a filled-in form.
+    if (auth.user?.role === "super_admin") {
+      if (!auth.activeSchoolId) {
+        toast("Pick a school in the top switcher first — accounts are created inside a school", "error");
+        return;
+      }
+      if (auth.impersonateReadOnly) {
+        toast("Editing is off for this school — enable editing in the top switcher, then try again", "error");
+        return;
+      }
+    }
     setBusy(true);
     try {
       // refId for staff-like roles is the manual Staff ID (Staff.employeeId) —
       // the server resolves it to the existing person record and links it.
-      await api.users.create(toUserPayload(form));
-      toast("User created");
+      const payload = toUserPayload(form);
+      let recordCreated = false;
+      try {
+        await api.users.create(payload);
+      } catch (err) {
+        const linkable =
+          (form.role === "staff" || form.role === "teacher") &&
+          Boolean(form.refId.trim());
+        if (!linkable || !STAFF_RECORD_MISSING_RE.test(err.message || "")) throw err;
+        // No person record carries this Staff ID yet: build it from the values
+        // already on this form (school and campus come from the tenant context)
+        // and retry the link, so record and account are made in one submit.
+        const record = staffRecordFrom(form);
+        if (!record.designation) {
+          // Staff.designation is mandatory on the record — ask for it here
+          // rather than letting the server reject the create with a schema
+          // error the form never saw coming.
+          throw new Error("Pick a designation for this Staff record, then try again");
+        }
+        await api.staff.create(record);
+        recordCreated = true;
+        await api.users.create(payload);
+      }
+      toast(recordCreated ? "Staff record created and account linked" : "User created");
       // Credentials are only shareable at creation time — the API never
       // returns the password again, so surface them in a copy dialog now.
       setCreatedCredential({
@@ -534,6 +603,16 @@ export default function Users() {
                   </option>
                 ))}
               </Select>
+              {form.role === "teacher" && (
+                <Input
+                  placeholder="Designation (e.g. PGT Mathematics)"
+                  autoComplete="off"
+                  value={form.teacherDesignation}
+                  onChange={(e) =>
+                    setForm({ ...form, teacherDesignation: e.target.value })
+                  }
+                />
+              )}
               {form.role === "staff" && (
                 <>
                   <Select
@@ -662,11 +741,12 @@ export default function Users() {
               !form.lockedRefId && (
                 <p className="text-[12px] text-slate-text/70 bg-paper border border-slate-200 rounded-lg px-3 py-2">
                   <Link2 size={12} className="inline -mt-0.5 mr-1" />
-                  Enter the Staff ID created in{" "}
-                  <span className="font-medium text-ink">Teachers &amp; Staff</span>. This
-                  links the account to that person record — no staff record is
-                  created here. If you don't have one yet, add the staff member
-                  there first.
+                  Enter the Staff ID for this person. If{" "}
+                  <span className="font-medium text-ink">Teachers &amp; Staff</span>{" "}
+                  already carries that ID, the account links to the existing
+                  record; if it doesn&apos;t, the record is created here from
+                  the details above and the account is linked to it in the same
+                  step. Person records stay editable from Teachers &amp; Staff.
                 </p>
               )}
             <div className="flex justify-end gap-2">
