@@ -15,6 +15,9 @@ import {
   UserCheck,
   Wallet,
   Trash2,
+  Plus,
+  Upload,
+  FileText,
 } from "lucide-react";
 import {
   PageIntro,
@@ -38,6 +41,7 @@ import { useSelector } from "react-redux";
 import { selectSchool } from "../store/selectors";
 import { isNonEmpty, isValidEmail, isValidPhone } from "../lib/validation.js";
 import StudentIdCard, { printIdCard } from "../components/idcard/StudentIdCard";
+import { printCharacterCertificate } from "../components/certificates/characterCertificate";
 
 const CLASS_OPTIONS_FALLBACK = [
   "All",
@@ -65,6 +69,8 @@ const HOUSE_OPTIONS = ["Aravali", "Nilgiri", "Shivalik", "Vindhya"];
 const GENDER_OPTIONS = ["Male", "Female"];
 const BLOOD_OPTIONS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 const MEDIUM_OPTIONS = ["English", "Hindi"];
+// Mirrors the Student.status enum in student-service/src/models/Student.js.
+const STATUS_OPTIONS = ["Active", "Inactive", "Alumni", "Transferred"];
 const FEE_STATUS_OPTIONS = ["Paid", "Partially Paid", "Pending"];
 const PAGE_SIZE = 20;
 
@@ -94,6 +100,7 @@ function emptyForm() {
     feeStatus: "Pending",
     attendance: 95,
     admissionNo: "",
+    status: "Active",
   };
 }
 
@@ -149,8 +156,84 @@ function toApiStudent(form, admissionNo) {
     parentName: form.fatherName,
     parentContact: form.contact,
     parentEmail: form.email,
-    status: "Active",
+    // Lifecycle status is preserved, never reset: hardcoding "Active" here
+    // flipped every Inactive / Alumni / Transferred student back to Active on
+    // any edit (C10).
+    status: form.status || "Active",
   };
+}
+
+// ── Bulk import (C11) ───────────────────────────────────────────────────────
+// Client-side CSV parsing so the admin can preview exactly what will be sent;
+// the server re-validates every row anyway (same code path as a single add).
+function parseCsv(text) {
+  const rows = [];
+  let row = [];
+  let field = "";
+  let quoted = false;
+  for (let i = 0; i < text.length; i += 1) {
+    const ch = text[i];
+    if (quoted) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i += 1; }
+        else quoted = false;
+      } else field += ch;
+    } else if (ch === '"') {
+      quoted = true;
+    } else if (ch === ",") {
+      row.push(field);
+      field = "";
+    } else if (ch === "\n" || ch === "\r") {
+      if (ch === "\r" && text[i + 1] === "\n") i += 1;
+      row.push(field);
+      rows.push(row);
+      row = [];
+      field = "";
+    } else {
+      field += ch;
+    }
+  }
+  if (field.length || row.length) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows.filter((r) => r.some((c) => String(c).trim() !== ""));
+}
+
+// Column aliases a school office is likely to use in its spreadsheet header.
+const CSV_ALIASES = {
+  admissionno: "admissionNo", "admission id": "admissionNo", admission: "admissionNo", id: "admissionNo",
+  name: "name", "student name": "name", "student": "name",
+  gender: "gender", sex: "gender",
+  class: "class", grade: "class", "class name": "class",
+  section: "section", sec: "section",
+  roll: "rollNo", rollno: "rollNo", "roll no": "rollNo", "roll number": "rollNo",
+  dob: "dob", "date of birth": "dob", birthday: "dob",
+  bloodgroup: "bloodGroup", "blood group": "bloodGroup",
+  medium: "medium",
+  address: "address", "full address": "address",
+  father: "fatherName", fathername: "fatherName", "father name": "fatherName",
+  parent: "fatherName", "parent name": "fatherName", parentname: "fatherName",
+  mother: "motherName", mothername: "motherName", "mother name": "motherName",
+  phone: "contact", contact: "contact", mobile: "contact", "parent contact": "contact", "phone number": "contact",
+  email: "email", "parent email": "email", "email address": "email",
+  status: "status",
+};
+
+function csvRowsToStudents(rows) {
+  if (!rows.length) return { columns: [], records: [] };
+  const header = rows[0].map((h) => String(h).trim());
+  const columns = header.map((h) => CSV_ALIASES[h.toLowerCase().replace(/[_-]+/g, " ")] || null);
+  const records = rows.slice(1).map((cells, idx) => {
+    const record = { __row: idx + 2 };
+    columns.forEach((key, i) => {
+      if (!key) return;
+      const value = String(cells[i] == null ? "" : cells[i]).trim();
+      if (value !== "") record[key] = value;
+    });
+    return record;
+  });
+  return { columns, records };
 }
 
 export default function Students() {
@@ -175,6 +258,16 @@ export default function Students() {
   // the trash so an admin can restore within the retention window.
   const [includeDeleted, setIncludeDeleted] = useState(false);
   const [busyAction, setBusyAction] = useState(false);
+  // Bulk import (C11): paste/upload a CSV, preview, then send one request.
+  const [showImport, setShowImport] = useState(false);
+  const [importName, setImportName] = useState("");
+  const [importRecords, setImportRecords] = useState([]);
+  const [importColumns, setImportColumns] = useState([]);
+  const [importError, setImportError] = useState("");
+  const [importBusy, setImportBusy] = useState(false);
+  const [importResult, setImportResult] = useState(null);
+  // Bumped after an import so the list refetches without a full remount.
+  const [reloadKey, setReloadKey] = useState(0);
   const filteredSections = useMemo(() => {
     if (cls === "All") return SECTION_OPTIONS;
     return ["All", ...[...new Set(rawSections.filter((s) => s.className === cls).map((s) => s.name))]];
@@ -200,7 +293,7 @@ export default function Students() {
     return () => {
       active = false;
     };
-  }, [includeDeleted]);
+  }, [includeDeleted, reloadKey]);
 
   const filtered = useMemo(() => {
     return list
@@ -298,6 +391,7 @@ export default function Students() {
       feeStatus: student.feeStatus || "Pending",
       attendance: student.attendance || 95,
       admissionNo: student.admissionNo || "",
+      status: student.status || "Active",
     });
     setShowModal(true);
     setSelected(null);
@@ -345,6 +439,81 @@ export default function Students() {
     }
   };
 
+  // ── Bulk import (C11) ─────────────────────────────────────────────────────
+  const resetImport = () => {
+    setShowImport(false);
+    setImportName("");
+    setImportRecords([]);
+    setImportColumns([]);
+    setImportError("");
+    setImportResult(null);
+  };
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files && event.target.files[0];
+    // Always clear so re-picking the same file fires a change event again.
+    event.target.value = "";
+    if (!file) return;
+    setImportError("");
+    setImportResult(null);
+    setImportName(file.name);
+    try {
+      const text = await file.text();
+      const { columns, records } = csvRowsToStudents(parseCsv(text));
+      if (!records.length) {
+        setImportRecords([]);
+        setImportColumns([]);
+        setImportError("That file has a header row but no data rows.");
+        return;
+      }
+      if (!columns.includes("admissionNo")) {
+        setImportRecords([]);
+        setImportColumns([]);
+        setImportError('Missing an "Admission ID" column — every row needs a unique Admission ID.');
+        return;
+      }
+      setImportColumns(columns);
+      setImportRecords(records);
+    } catch (error) {
+      setImportRecords([]);
+      setImportColumns([]);
+      setImportError(error.message || "Could not read that file");
+    }
+  };
+
+  const handleImportSubmit = async () => {
+    if (!importRecords.length) return;
+    const payload = importRecords.map(({ __row, ...row }) => row);
+    setImportBusy(true);
+    setImportError("");
+    setImportResult(null);
+    try {
+      const { data } = await api.students.bulkCreate(payload);
+      setImportResult(data);
+      setReloadKey((k) => k + 1);
+      if (data && data.failed === 0) {
+        toast(`Imported ${data.created} student${data.created === 1 ? "" : "s"}`);
+        resetImport();
+      } else if (data) {
+        toast(`${data.created} imported, ${data.failed} failed`, "error");
+      }
+    } catch (error) {
+      // The endpoint reports per-row outcomes in the body's `data` even when
+      // it answers 400 (every row failed) — surface them instead of losing
+      // which admission was rejected and why.
+      const failed = error && error.data;
+      if (failed && Array.isArray(failed.results)) {
+        setImportResult(failed);
+        setReloadKey((k) => k + 1);
+        setImportError(error.message || "Some rows failed to import");
+      } else {
+        setImportError(error.message || "Import failed");
+      }
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <PageIntro
@@ -354,6 +523,34 @@ export default function Students() {
           loading
             ? "Loading students..."
             : `${list.length} students enrolled across Nursery to Class 12.`
+        }
+        right={
+          <div className="flex flex-wrap items-center gap-2">
+            <PermissionGate permission="students:write">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  resetImport();
+                  setShowImport(true);
+                }}
+              >
+                <Upload size={15} /> Import CSV
+              </Button>
+            </PermissionGate>
+            <PermissionGate permission="students:write">
+              <Button
+                variant="primary"
+                onClick={() => {
+                  setEditId(null);
+                  setForm(emptyForm());
+                  setApiError("");
+                  setShowModal(true);
+                }}
+              >
+                <Plus size={15} /> Add Student
+              </Button>
+            </PermissionGate>
+          </div>
         }
       />
       {apiError && (
@@ -705,6 +902,24 @@ export default function Students() {
                     <Pencil size={14} /> Edit
                   </Button>
                 </PermissionGate>
+                {/* C9: printable Character Certificate. Reads only fields this
+                    modal already shows (students:read gate on the detail route),
+                    so it grants no extra data. */}
+                <PermissionGate permission="students:read">
+                  <Button
+                    variant="outline"
+                    className="flex-1 justify-center"
+                    onClick={() =>
+                      printCharacterCertificate({
+                        student: selected,
+                        school,
+                        conduct: "Good",
+                      })
+                    }
+                  >
+                    <FileText size={14} /> Certificate
+                  </Button>
+                </PermissionGate>
                 <Button
                   variant="primary"
                   className="flex-1 justify-center"
@@ -929,6 +1144,22 @@ export default function Students() {
 
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Status
+                  </label>
+                  <Select
+                    value={form.status || "Active"}
+                    onChange={(e) => updateForm("status", e.target.value)}
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     House
                   </label>
                   <Input
@@ -1041,6 +1272,142 @@ export default function Students() {
                 disabled={!form.name.trim() || !form.roll}
               >
                 <Save size={15} /> {editId ? "Update" : "Add"} Student
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showImport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
+            onClick={() => { if (!importBusy) resetImport(); }}
+          />
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden max-h-[92vh] flex flex-col">
+            <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
+              <div>
+                <h3 className="font-display font-semibold text-ink text-[17px]">
+                  Import Students from CSV
+                </h3>
+                <p className="text-[12.5px] text-slate-text/70 mt-0.5">
+                  One row per student. Required column: Admission ID. Every row is validated
+                  server-side exactly like a single add — bad rows are reported, not silently dropped.
+                </p>
+              </div>
+              <button
+                onClick={() => { if (!importBusy) resetImport(); }}
+                className="p-2 rounded-lg hover:bg-paper text-slate-text"
+              >
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4 overflow-y-auto">
+              <div className="rounded-xl border border-dashed border-slate-300 bg-paper/50 px-4 py-5 text-center">
+                <Upload size={22} className="mx-auto text-slate-text/50 mb-2" />
+                <p className="text-[13px] font-semibold text-ink">
+                  {importName || "Choose a .csv file"}
+                </p>
+                <p className="text-[12px] text-slate-text/70 mt-1">
+                  Columns: admissionNo, name, class, section, roll, gender, dob, father, mother,
+                  phone, email, address, medium, status
+                </p>
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  onChange={handleImportFile}
+                  className="mt-3 text-[12.5px] block mx-auto"
+                />
+              </div>
+
+              {importError && (
+                <p className="text-alert text-[13px]" role="alert">
+                  {importError}
+                </p>
+              )}
+
+              {importRecords.length > 0 && (
+                <div className="rounded-xl border border-slate-200 overflow-hidden">
+                  <div className="px-3.5 py-2.5 bg-paper text-[12px] font-semibold text-ink flex items-center justify-between">
+                    <span>
+                      {importRecords.length} row{importRecords.length === 1 ? "" : "s"} ready
+                      {importName ? ` from ${importName}` : ""}
+                    </span>
+                    {!importColumns.includes("admissionNo") && (
+                      <span className="text-alert">No Admission ID column</span>
+                    )}
+                  </div>
+                  <div className="max-h-64 overflow-auto">
+                    <table className="w-full text-[12.5px]">
+                      <thead className="bg-paper/70 text-slate-text/70">
+                        <tr>
+                          <th className="px-3 py-2 text-left font-semibold">Row</th>
+                          <th className="px-3 py-2 text-left font-semibold">Admission ID</th>
+                          <th className="px-3 py-2 text-left font-semibold">Name</th>
+                          <th className="px-3 py-2 text-left font-semibold">Class</th>
+                          <th className="px-3 py-2 text-left font-semibold">Section</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {importRecords.slice(0, 100).map((r) => (
+                          <tr key={r.__row}>
+                            <td className="px-3 py-1.5 text-slate-text/60">{r.__row}</td>
+                            <td className="px-3 py-1.5">
+                              {r.admissionNo || (
+                                <span className="text-alert font-semibold">missing</span>
+                              )}
+                            </td>
+                            <td className="px-3 py-1.5">{r.name || "—"}</td>
+                            <td className="px-3 py-1.5">{r.class || "—"}</td>
+                            <td className="px-3 py-1.5">{r.section || "—"}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    {importRecords.length > 100 && (
+                      <p className="px-3 py-2 text-[12px] text-slate-text/60">
+                        Showing the first 100 of {importRecords.length} rows — all rows will be
+                        imported.
+                      </p>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {importResult && (
+                <div className="rounded-xl border border-slate-200 p-3.5">
+                  <p className="text-[13px] font-semibold text-ink mb-2">
+                    {importResult.created} imported · {importResult.failed} failed ·{" "}
+                    {importResult.total} total
+                  </p>
+                  <div className="max-h-48 overflow-auto space-y-1">
+                    {(importResult.results || [])
+                      .filter((r) => !r.ok)
+                      .map((r) => (
+                        <p key={r.index} className="text-[12.5px] text-alert">
+                          Row {r.index + 1}
+                          {r.admissionNo ? ` (${r.admissionNo})` : ""}: {r.message}
+                        </p>
+                      ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
+              <Button variant="outline" onClick={resetImport} disabled={importBusy}>
+                {importResult && importResult.failed === 0 ? "Close" : "Cancel"}
+              </Button>
+              <Button
+                variant="primary"
+                onClick={handleImportSubmit}
+                disabled={importBusy || importRecords.length === 0}
+              >
+                <Upload size={15} />
+                {importBusy
+                  ? "Importing…"
+                  : `Import ${importRecords.length || ""} Student${importRecords.length === 1 ? "" : "s"}`}
               </Button>
             </div>
           </div>

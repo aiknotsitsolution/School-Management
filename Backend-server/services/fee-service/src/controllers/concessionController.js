@@ -5,7 +5,7 @@ const Concession = require("../models/Concession");
 // approved to Active (or rejected) by a fee-structure manager. Only Active
 // rows are applied when invoices are generated.
 
-const KINDS = ["Sibling", "Scholarship", "Manual"];
+const KINDS = ["Sibling", "Scholarship", "Manual", "RTE", "SC/ST"];
 
 const validate = (body) => {
   const { studentId, kind, name, type, value, session } = body || {};

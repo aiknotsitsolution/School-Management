@@ -9,7 +9,8 @@ const {
   authorizeRoles,
 } = require("../middleware/auth");
 
-router.use(verifyToken, resolveTenant, requireTenant, authorizeRoles("school_admin", "teacher", "staff"));
+const staffRoles = authorizeRoles("school_admin", "super_admin", "teacher", "staff");
+router.use(verifyToken, resolveTenant, requireTenant, staffRoles);
 
 router.get("/me/today", ctrl.getMyToday);
 router.get("/today", requirePermission("attendance:read"), ctrl.getTodayAll);

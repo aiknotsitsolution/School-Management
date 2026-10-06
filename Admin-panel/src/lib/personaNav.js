@@ -11,15 +11,16 @@ import Assignment from "@mui/icons-material/Assignment";
 import AssignmentTurnedIn from "@mui/icons-material/AssignmentTurnedIn";
 import AutoStories from "@mui/icons-material/AutoStories";
 import Campaign from "@mui/icons-material/Campaign";
-import Description from "@mui/icons-material/Description";
 import DirectionsBus from "@mui/icons-material/DirectionsBus";
 import Download from "@mui/icons-material/Download";
 import EventAvailable from "@mui/icons-material/EventAvailable";
 import FactCheck from "@mui/icons-material/FactCheck";
 import Group from "@mui/icons-material/Group";
 import InsertChart from "@mui/icons-material/InsertChart";
+import Mail from "@mui/icons-material/Mail";
 import PersonAdd from "@mui/icons-material/PersonAdd";
 import PersonSearch from "@mui/icons-material/PersonSearch";
+import Receipt from "@mui/icons-material/Receipt";
 import SpaceDashboard from "@mui/icons-material/SpaceDashboard";
 import Speed from "@mui/icons-material/Speed";
 import TrendingUp from "@mui/icons-material/TrendingUp";
@@ -52,17 +53,17 @@ const notices = {
   icon: Campaign,
   label: "Notices",
 };
-// Every staff designation can browse the Library: the physical catalogue plus
-// the class shelf of study materials / e-books (deep-linked to its tab).
+// Every staff designation EXCEPT transport can browse the Library: the
+// physical catalogue plus the class shelf of study materials / e-books (the
+// hub's tabs). One entry per persona — a second, tab-deep link to the same
+// page renders as a duplicate sidebar row (and both light up active, since
+// the matcher strips the query). Transport is excluded deliberately: it has
+// no library:read permission (see shared/src/utils/permissions.js), so a
+// nav entry there would be a dead redirect.
 const library = {
   to: "/library",
   icon: AutoStories,
   label: "Library",
-};
-const studyMaterials = {
-  to: "/library?tab=materials",
-  icon: Description,
-  label: "Study Materials",
 };
 
 function group(label, items) {
@@ -97,6 +98,8 @@ export const PERSONA_NAV = {
     group("Accountant Workspace", [
       { to: "/accountant", icon: SpaceDashboard, label: "Dashboard", end: true },
       { to: "/accountant/fees", icon: AccountBalanceWallet, label: "Manage Fees" },
+      { to: "/fees-collection", icon: Receipt, label: "Fee Collection" },
+      { to: "/messages", icon: Mail, label: "Messages" },
     ]),
     group("Staff Tools", [library, myWork, attendance, leave, notices, notifications]),
   ],
@@ -105,9 +108,12 @@ export const PERSONA_NAV = {
       { to: "/librarian", icon: SpaceDashboard, label: "Dashboard", end: true },
       { to: "/librarian/books", icon: AutoStories, label: "Books" },
       { to: "/librarian/circulation", icon: Download, label: "Circulation" },
-      studyMaterials,
+      // The librarian's core tool lives in their workspace, not the generic
+      // Staff Tools group every designation shares (Library there as well made
+      // the sidebar show it twice).
+      library,
     ]),
-    group("Staff Tools", [library, myWork, attendance, leave, notices, notifications]),
+    group("Staff Tools", [myWork, attendance, leave, notices, notifications]),
   ],
   transport: [
     group("Transport Workspace", [
@@ -116,7 +122,8 @@ export const PERSONA_NAV = {
       { to: "/transport/routes", icon: DirectionsBus, label: "Bus Routes" },
       { to: "/transport/allocations", icon: Speed, label: "Allocations" },
     ]),
-    group("Staff Tools", [library, myWork, attendance, leave, notices, notifications]),
+    // No Library entry: transport has no library:read permission.
+    group("Staff Tools", [myWork, attendance, leave, notices, notifications]),
   ],
   receptionist: [
     group("Reception Workspace", [

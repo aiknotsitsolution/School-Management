@@ -42,17 +42,22 @@ export default function Attendance() {
   const [marks, setMarks] = useState({});
   const [historyDate, setHistoryDate] = useState("");
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     if (!query) return;
     setLoading(true);
+    setLoadError(null);
     Promise.allSettled([
       api.students.list(`${query}&limit=500`),
       api.attendance.list(query),
     ]).then(([sr, ar]) => {
       setStudents(Array.isArray(sr.value?.data) ? sr.value.data : []);
       setRecords(Array.isArray(ar.value?.data) ? ar.value.data : []);
+      // A rejected load used to render as an empty roster with no explanation.
+      const failed = [sr, ar].find((r) => r.status === "rejected");
+      if (failed) setLoadError(failed.reason?.message || "Could not load attendance data");
       setLoading(false);
     });
   }, [query]);
@@ -301,6 +306,10 @@ export default function Attendance() {
         {loading ? (
           <p className="text-[13px] text-slate-text py-10 text-center">
             Loading students…
+          </p>
+        ) : loadError ? (
+          <p className="text-[13px] text-alert py-10 text-center">
+            {loadError}
           </p>
         ) : (students || []).length === 0 ? (
           <p className="text-[13px] text-slate-text py-10 text-center">

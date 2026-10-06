@@ -30,8 +30,31 @@ import { useMasterOptions } from "../../hooks/useMasterOptions";
 const SUBJECTS_FALLBACK = ["English", "Maths", "Science", "Social Studies", "Hindi", "Computer", "General Knowledge"];
 
 export default function Homework() {
-  const { options: SUBJECTS } = useMasterOptions("subjects", SUBJECTS_FALLBACK);
-  const { cls, section, assignment, query } = useTeacherContext();
+  const { options: ALL_SUBJECTS } = useMasterOptions("subjects", SUBJECTS_FALLBACK);
+  const { cls, section, assignment, query, teachingScopes, staffRecord } =
+    useTeacherContext();
+
+  // A2: the picker offered the school-wide subject list to every teacher. The
+  // server already tells us which subjects this teacher teaches (per-scope
+  // teaching assignments + the Staff profile list) — offer those first and
+  // fall back to the full list only when the record carries none.
+  const SUBJECTS = useMemo(() => {
+    const taught = new Set();
+    (Array.isArray(teachingScopes) ? teachingScopes : []).forEach((s) =>
+      (Array.isArray(s?.subjects) ? s.subjects : []).forEach((x) => x && taught.add(x)),
+    );
+    (Array.isArray(staffRecord?.subjects) ? staffRecord.subjects : []).forEach(
+      (x) => x && taught.add(x),
+    );
+    if (!taught.size) return ALL_SUBJECTS;
+    const scoped = ALL_SUBJECTS.filter((s) => taught.has(s));
+    // Anything taught but missing from the master list still needs an option.
+    taught.forEach((s) => {
+      if (!scoped.includes(s)) scoped.push(s);
+    });
+    return scoped;
+  }, [ALL_SUBJECTS, teachingScopes, staffRecord]);
+
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
@@ -56,9 +79,15 @@ export default function Homework() {
         .then(({ data }) => setItems(data || []))
         .catch((e) => toast(e.message, "error")),
       api.homework.submissions
-        .classList()
+        // Pass the class scope: without ?class= the endpoint 400s for any
+        // caller whose token carries no class-teacher scope (A5: the review
+        // queue silently rendered empty).
+        .classList(query)
         .then(({ data }) => setSubmissions(data || []))
-        .catch(() => setSubmissions([])),
+        .catch((e) => {
+          setSubmissions([]);
+          toast(e.message || "Could not load submissions", "error");
+        }),
     ]).finally(() => {
       setLoading(false);
       setLoadingSubs(false);
@@ -122,14 +151,16 @@ export default function Homework() {
 
   const openAdd = () => {
     setEditId(null);
-    setForm({ subject: "English", title: "", description: "", dueDate: "" });
+    // Default to a subject this teacher actually teaches — a hardcoded
+    // "English" left the select blank whenever English wasn't in scope.
+    setForm({ subject: SUBJECTS[0] || "", title: "", description: "", dueDate: "" });
     setShowModal(true);
   };
 
   const openEdit = (item) => {
     setEditId(item._id);
     setForm({
-      subject: item.subject || "English",
+      subject: item.subject || SUBJECTS[0] || "",
       title: item.title || "",
       description: item.description || "",
       dueDate: item.dueDate ? new Date(item.dueDate).toISOString().slice(0, 10) : "",
@@ -430,6 +461,13 @@ export default function Homework() {
                   value={form.subject}
                   onChange={(e) => update("subject", e.target.value)}
                 >
+                  {/* An item edited after its subject left this teacher's scope
+                      must stay visible in the select, or the value renders blank. */}
+                  {form.subject && !SUBJECTS.includes(form.subject) && (
+                    <option key={form.subject} value={form.subject}>
+                      {form.subject}
+                    </option>
+                  )}
                   {SUBJECTS.map((s) => (
                     <option key={s} value={s}>
                       {s}

@@ -347,8 +347,13 @@ export default function Profile() {
               </p>
             </div>
           </div>
-          <div className="mt-4 rounded-xl border border-slate-200 p-4 bg-warm">
-            <TeacherIdCard teacher={staff} school={school} />
+          {/* The card is a fixed 470px canvas (print-accurate), so on phones it
+              is wider than the column. Scroll rather than clip: without this the
+              right ~130px of the ID card is unreachable at 390px (A3). */}
+          <div className="mt-4 rounded-xl border border-slate-200 p-4 bg-warm overflow-x-auto">
+            <div className="min-w-max">
+              <TeacherIdCard teacher={staff} school={school} />
+            </div>
           </div>
         </Card>
       )}

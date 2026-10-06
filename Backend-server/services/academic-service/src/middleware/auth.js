@@ -102,6 +102,21 @@ const requirePermission = (permission) => (req, res, next) => {
   next();
 };
 
+// Satisfied by holding *any one* of the listed permissions. The study-material
+// writes use this: the shelf lives in the Library, so the librarian manages it
+// through library:manage, while teachers/admins reach it through homework:write
+// (their existing surface). Gating on one permission would either lock the
+// librarian out of e-book uploads or hand every staff designation homework
+// writes.
+const requireAnyPermission = (...permissions) => (req, res, next) => {
+  if (!req.user) return res.status(401).json({ success: false, message: "Not authenticated" });
+  const perms = getPermissionsFor(req.user);
+  if (!perms.includes("*") && !permissions.some((p) => perms.includes(p))) {
+    return res.status(403).json({ success: false, message: "Access denied for this role" });
+  }
+  next();
+};
+
 const authorizeRoles = (...roles) => (req, res, next) => {
   if (!req.user || !roles.includes(req.user.role)) {
     return res.status(403).json({ success: false, message: "Access denied for this role" });
@@ -172,4 +187,4 @@ const scopeStudentSchedule = ({ section = false } = {}) => (req, res, next) => {
 //
 // guardClassBody validates write bodies against req.teacherScope.allScopes.
 
-module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, authorizeRoles, scopeStudentQuery, scopeStudentSchedule, scopeClassTeacher, scopeClassTeacherAggregate, guardClassBody };
+module.exports = { verifyToken, resolveTenant, requireTenant, requirePermission, requireAnyPermission, authorizeRoles, scopeStudentQuery, scopeStudentSchedule, scopeClassTeacher, scopeClassTeacherAggregate, guardClassBody };

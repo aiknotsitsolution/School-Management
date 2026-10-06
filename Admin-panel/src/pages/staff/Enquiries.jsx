@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Plus, Search, Phone, Mail, UserRound } from "lucide-react";
+import { Plus, Search, Phone, Mail, UserRound, CalendarClock } from "lucide-react";
 import {
   PageIntro,
   Card,
@@ -15,6 +15,23 @@ import useStaffContext, { fmtDate } from "./useStaffContext";
 
 const STATUSES = ["New", "Contacted", "Campus Visit Scheduled", "Admitted", "Rejected"];
 const SOURCES = ["Website", "Referral", "Walk-in", "Phone", "Other"];
+
+/** Follow-up due date as a plain yyyy-mm-dd string (local time, not UTC). */
+const toDateInput = (value) => {
+  if (!value) return "";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
+/** A follow-up is "due" when it lands today or earlier (and hasn't been admitted/rejected). */
+const isFollowUpDue = (en) => {
+  if (!en?.followUpDate || ["Admitted", "Rejected"].includes(en.status)) return false;
+  const due = new Date(toDateInput(en.followUpDate));
+  const today = new Date(toDateInput(new Date()));
+  return due.getTime() <= today.getTime();
+};
 const emptyDraft = {
   childName: "",
   parentName: "",
@@ -33,6 +50,7 @@ export default function Enquiries() {
   const [showForm, setShowForm] = useState(false);
   const [draft, setDraft] = useState(emptyDraft);
   const [expanded, setExpanded] = useState(null);
+  const [followUpDate, setFollowUpDate] = useState("");
 
   const refresh = () => {
     setLoading(true);
@@ -49,7 +67,9 @@ export default function Enquiries() {
     const q = search.toLowerCase();
     return (enquiries || []).filter(
       (en) =>
-        (!statusFilter || en.status === statusFilter) &&
+        (statusFilter === "due"
+          ? isFollowUpDue(en)
+          : !statusFilter || en.status === statusFilter) &&
         (!q ||
           (en.childName || "").toLowerCase().includes(q) ||
           (en.parentName || "").toLowerCase().includes(q) ||
@@ -84,6 +104,21 @@ export default function Enquiries() {
     }
   };
 
+  /** Schedule (or clear) the next follow-up call for an enquiry. */
+  const saveFollowUp = async (id) => {
+    try {
+      await api.admissions.update(id, {
+        followUpDate: followUpDate ? new Date(followUpDate).toISOString() : null,
+      });
+      toast(followUpDate ? `Follow-up set for ${followUpDate}` : "Follow-up cleared", "success");
+      refresh();
+    } catch (e) {
+      toast(e.message, "error");
+    }
+  };
+
+  const dueCount = enquiries.filter(isFollowUpDue).length;
+
   return (
     <div className="space-y-6">
       <PageIntro
@@ -97,9 +132,10 @@ export default function Enquiries() {
         }
       />
 
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <StatCard icon={null} label="Total" value={String(enquiries.length)} accent="info" />
         <StatCard icon={null} label="New" value={String(byStatus["New"] || 0)} accent="primary" />
+        <StatCard icon={null} label="Follow-ups due" value={String(dueCount)} accent="warn" />
         <StatCard icon={null} label="Admitted" value={String(byStatus["Admitted"] || 0)} accent="success" />
         <StatCard icon={null} label="Rejected" value={String(byStatus["Rejected"] || 0)} accent="alert" />
       </div>
@@ -136,6 +172,7 @@ export default function Enquiries() {
             </div>
             <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="w-44">
               <option value="">All stages</option>
+              <option value="due">Follow-ups due</option>
               {STATUSES.map((s) => (
                 <option key={s} value={s}>{s}</option>
               ))}
@@ -166,7 +203,11 @@ export default function Enquiries() {
                     <tr
                       key={q._id}
                       className="border-t border-slate-200 hover:bg-paper/60 cursor-pointer"
-                      onClick={() => setExpanded(expanded === q._id ? null : q._id)}
+                      onClick={() => {
+                        const next = expanded === q._id ? null : q._id;
+                        setExpanded(next);
+                        setFollowUpDate(next ? toDateInput(q.followUpDate) : "");
+                      }}
                     >
                       <td className="px-5 py-2.5">
                         <div className="flex items-center gap-2.5">
@@ -186,7 +227,12 @@ export default function Enquiries() {
                       </td>
                       <td className="px-3 py-2.5"><Pill tone="neutral">{q.source}</Pill></td>
                       <td className="px-3 py-2.5">
-                        <Pill tone={q.status === "New" ? "info" : q.status === "Admitted" ? "success" : q.status === "Rejected" ? "alert" : "primary"}>{q.status}</Pill>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Pill tone={q.status === "New" ? "info" : q.status === "Admitted" ? "success" : q.status === "Rejected" ? "alert" : "primary"}>{q.status}</Pill>
+                          {isFollowUpDue(q) && (
+                            <Pill tone="warning"><CalendarClock size={11} className="mr-1 inline" />Due</Pill>
+                          )}
+                        </div>
                       </td>
                       <td className="px-3 py-2.5 text-right">
                         <Select value={q.status} onChange={(e) => updateStatus(q._id, e.target.value)} className="w-44 py-1.5" onClick={(e) => e.stopPropagation()}>
@@ -204,6 +250,34 @@ export default function Enquiries() {
                             <p className="text-slate-text/70 flex items-center gap-1.5"><Mail size={12} /> {q.email || "—"}</p>
                             <p className="text-slate-text/70">Logged {fmtDate(q.createdAt)}</p>
                             <p className="text-slate-text/70">Notes: {q.notes || "—"}</p>
+                          </div>
+                          <div
+                            className="mt-3 flex flex-wrap items-end gap-2"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <label className="block text-[12px] font-semibold text-slate-text/70">
+                              Next follow-up
+                              <span className="mt-1 block w-44">
+                                <Input
+                                  type="date"
+                                  value={followUpDate}
+                                  onChange={(e) => setFollowUpDate(e.target.value)}
+                                  className="py-1.5"
+                                />
+                              </span>
+                            </label>
+                            <Button
+                              type="button"
+                              className="px-3 py-2"
+                              onClick={() => saveFollowUp(q._id)}
+                            >
+                              Save follow-up
+                            </Button>
+                            {q.followUpDate && (
+                              <span className="pb-1.5 text-[12px] text-slate-text/60">
+                                Currently scheduled {fmtDate(q.followUpDate)}
+                              </span>
+                            )}
                           </div>
                         </td>
                       </tr>

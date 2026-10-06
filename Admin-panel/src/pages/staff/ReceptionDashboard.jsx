@@ -126,6 +126,20 @@ export default function ReceptionDashboard() {
     return enquiries.filter((q) => dateOf(q.createdAt) === today).length;
   }, [enquiries]);
 
+  /**
+   * Follow-ups scheduled for today or earlier and still open (not
+   * admitted/rejected) — the desk's call-back queue.
+   */
+  const followUpsDue = useMemo(() => {
+    const today = dateOf(new Date());
+    return enquiries.filter(
+      (q) =>
+        q.followUpDate &&
+        !["Admitted", "Rejected"].includes(q.status) &&
+        dateOf(new Date(q.followUpDate)) <= today,
+    );
+  }, [enquiries]);
+
   /** Pipeline split for the donut — empty statuses are dropped, not zeroed. */
   const pipelineSplit = useMemo(
     () =>
@@ -159,6 +173,12 @@ export default function ReceptionDashboard() {
       stats.new > 0
         ? { label: `${stats.new} new lead${stats.new === 1 ? "" : "s"} to call back`, tone: "info" }
         : null,
+      followUpsDue.length > 0
+        ? {
+            label: `${followUpsDue.length} follow-up${followUpsDue.length === 1 ? "" : "s"} due today`,
+            tone: "warning",
+          }
+        : null,
 emergencyCount > 0
         ? { label: `${emergencyCount} emergency notice${emergencyCount === 1 ? "" : "s"} live`, tone: "alert" }
         : null,
@@ -169,7 +189,7 @@ emergencyCount > 0
         ? { label: `${todayEnquiries} walk-in${todayEnquiries === 1 ? "" : "s"} logged today`, tone: "success" }
         : null,
     ].filter(Boolean),
-    [stats.new, stats.total, emergencyCount, conversionRate, todayEnquiries],
+    [stats.new, stats.total, emergencyCount, conversionRate, todayEnquiries, followUpsDue],
   );
 
   return (
@@ -303,7 +323,14 @@ emergencyCount > 0
                       }
                       title={q.childName || "—"}
                       meta={`Class ${q.classApplied || "—"} · ${q.contact || "—"} · ${fmtDate(q.createdAt)}`}
-                      trailing={<Badge tone={STATUS_TONE[q.status] || "neutral"}>{q.status}</Badge>}
+                      trailing={
+                        <span className="flex items-center gap-1.5">
+                          {followUpsDue.some((f) => f._id === q._id) && (
+                            <Badge tone="warning">Follow-up</Badge>
+                          )}
+                          <Badge tone={STATUS_TONE[q.status] || "neutral"}>{q.status}</Badge>
+                        </span>
+                      }
                     />
                   ))}
                 </div>

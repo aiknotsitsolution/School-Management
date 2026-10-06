@@ -290,6 +290,8 @@ export const api = {
     list: (params = "") => request(`/students${params ? `?${params}` : ""}`),
     get: (id) => request(`/students/${id}`),
     create: (student) => request("/students", json("POST", student)),
+    // Bulk import (C11): one request, per-row outcomes in the response.
+    bulkCreate: (students) => request("/students/bulk", json("POST", { students })),
     me: () => request("/students/me"),
     counsellorStats: () => request("/students/counsellor/stats"),
     // Student shells (userId null, produced by every confirmed admission)

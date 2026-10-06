@@ -652,7 +652,9 @@ export default function Attendance() {
           </div>
         }
         action={
-          <div className="flex items-center gap-1.5 shrink-0">
+          // Wraps on narrow screens (390px) — the four fixed-width controls
+          // side by side are ~580px, wider than a phone's card body.
+          <div className="flex flex-wrap items-center gap-1.5 max-w-full">
             <div className="relative">
               <Search
                 size={14}

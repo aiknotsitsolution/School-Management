@@ -7,6 +7,7 @@ const TeacherAssignment = require("../models/TeacherAssignment");
 const Staff = require("../models/Staff");
 const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination");
 const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
+const { resolveActiveSession } = require("@school-erp/shared/src/utils/teacherScope");
 
 const TYPES = ["teaching", "class_teacher"];
 const AVAILABLE_STATUSES = ["active", "ended"];
@@ -224,9 +225,31 @@ const listMyAssignments = async (req, res) => {
       .sort({ createdAt: -1 })
       .lean();
 
-    const activeTeaching = records.filter((r) => r.type === "teaching" && r.status === "active");
-    const activeCT = records.filter((r) => r.type === "class_teacher" && r.status === "active");
-    const history = records.filter((r) => r.status === "ended");
+    // The read scope (scopeClassTeacher in shared/middleware/teacherScopeAuth)
+    // only honours assignments belonging to the ACTIVE academic session, so
+    // this profile view must agree with it. A row from a previous session that
+    // is still status=active would otherwise show a class here that the
+    // students endpoint then rejects with 403 — rendered to the teacher as
+    // "no students found". Rows outside the active session are history.
+    // When no session can be resolved (school without session rows) the
+    // previous session-agnostic behaviour is kept so nothing breaks.
+    let activeSession = null;
+    try {
+      activeSession = await resolveActiveSession(req.tenantId);
+    } catch (err) {
+      activeSession = null;
+    }
+    const inCurrentSession = (r) => !activeSession || r.session === activeSession;
+
+    const activeTeaching = records.filter(
+      (r) => r.type === "teaching" && r.status === "active" && inCurrentSession(r),
+    );
+    const activeCT = records.filter(
+      (r) => r.type === "class_teacher" && r.status === "active" && inCurrentSession(r),
+    );
+    const history = records.filter(
+      (r) => r.status === "ended" || (r.status === "active" && !inCurrentSession(r)),
+    );
 
     // Derived convenience view: distinct (class, section) pairs & subjects the
     // teacher is currently assigned to teach, plus the homeroom scope.
@@ -247,11 +270,21 @@ const listMyAssignments = async (req, res) => {
     res.json({
       success: true,
       data: {
-        staff: { id: staff._id, name: staff.name, designation: staff.designation, employeeId: staff.employeeId },
+        staff: {
+          id: staff._id,
+          name: staff.name,
+          designation: staff.designation,
+          employeeId: staff.employeeId,
+          // Profile-level subject list (Staff.subjects). The homework/marks
+          // subject pickers scope to what this teacher actually teaches; without
+          // it they fall back to the school-wide catalog or a hardcoded list.
+          subjects: Array.isArray(staff.subjects) ? staff.subjects : [],
+        },
         classTeacher: activeCT,
         teaching: activeTeaching,
         teachingScopes,
         history,
+        currentSession: activeSession,
         primaryScope: activeCT[0] || activeTeaching[0] || null,
       },
     });

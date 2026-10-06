@@ -271,11 +271,13 @@ function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSave
     <Card
       title="Student Fee Summary"
       action={
-        <div className="flex items-center gap-2">
+        // Stacks full-width on a phone (390px): session + student selectors
+        // side by side are ~400px, wider than the card body at that size.
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-full">
           <Select
             value={sessionFilter}
             onChange={(event) => setSessionFilter(event.target.value)}
-            className="w-36"
+            className="w-full sm:w-36"
           >
             <option value="">Default session</option>
             {sessions.map((s) => (
@@ -287,7 +289,7 @@ function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSave
           <Select
             value={studentId}
             onChange={(event) => setStudentId(event.target.value)}
-            className="w-64"
+            className="w-full sm:w-64"
           >
             <option value="">Select a student...</option>
             {students.map((s) => (
@@ -1909,6 +1911,10 @@ export default function FeesCollection() {
                   >
                     <option value="Sibling">Sibling Discount</option>
                     <option value="Scholarship">Scholarship</option>
+                    {/* Statutory entitlements — government-backed quotas, not
+                        discretionary discounts. */}
+                    <option value="RTE">RTE Quota</option>
+                    <option value="SC/ST">SC / ST Concession</option>
                     <option value="Manual">Manual</option>
                   </Select>
                 </div>

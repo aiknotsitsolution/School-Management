@@ -12,7 +12,13 @@ const concessionSchema = new mongoose.Schema(
     // Campus the concession was granted at.
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     studentId: { type: String, required: true }, // admissionNo
-    kind: { type: String, enum: ["Sibling", "Scholarship", "Manual"], required: true },
+    kind: {
+      type: String,
+      // RTE and SC/ST are statutory concessions (government-backed quotas),
+      // distinct from the discretionary Sibling/Scholarship/Manual grants.
+      enum: ["Sibling", "Scholarship", "Manual", "RTE", "SC/ST"],
+      required: true,
+    },
     name: { type: String, required: true },
     type: { type: String, enum: ["percent", "flat"], required: true },
     value: { type: Number, required: true, min: 0 },

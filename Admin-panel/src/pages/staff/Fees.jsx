@@ -12,8 +12,13 @@ import {
 } from "../../components/UI";
 import { api } from "../../lib/api";
 import useStaffContext, { fmtMoney, fmtDate } from "./useStaffContext";
+import { useMasterOptions } from "../../hooks/useMasterOptions";
 
 const TABS = ["Invoices", "Students", "Fee Structure"];
+
+// Fee types the accountant bills for. Anything else still works — the field
+// falls back to a free-text input when "Other" is picked.
+const FEE_TYPES = ["Tuition", "Transport", "Hostel", "Exam", "Lab", "Library", "Other"];
 
 export default function Fees() {
   const [tab, setTab] = useState("Invoices");
@@ -26,6 +31,39 @@ export default function Fees() {
   const [search, setSearch] = useState("");
   const [collect, setCollect] = useState(null);
   const [showStructureForm, setShowStructureForm] = useState(false);
+
+  // E5: the structure form used free-text Class/Session/Fee-type boxes, so an
+  // accountant had to guess the exact spelling (and could type a stale year).
+  // Sessions come from the server when the role may read them; otherwise we
+  // fall back to the sessions already on this school's structures, and finally
+  // to a free-text box — never a hardcoded year.
+  const { options: masterClasses } = useMasterOptions("classes", []);
+  const [sessions, setSessions] = useState([]);
+  const [feeTypeChoice, setFeeTypeChoice] = useState("Tuition");
+  const [otherFeeType, setOtherFeeType] = useState("");
+
+  useEffect(() => {
+    api.sessions
+      .list()
+      .then(({ data }) => {
+        const rows = Array.isArray(data) ? data : [];
+        const labels = rows
+          .map((s) => String(s.name || s.label || s.session || "").trim())
+          .filter(Boolean);
+        if (labels.length) setSessions([...new Set(labels)]);
+      })
+      .catch(() => {
+        // Role may lack sessions:read — keep whatever the structures below
+        // already prove exists rather than blocking the form.
+      });
+  }, []);
+
+  // Sessions already in use by this school's structures (always readable with
+  // fees:read), so the select is never empty even without sessions:read.
+  const sessionOptions = useMemo(
+    () => [...new Set([...sessions, ...(structures || []).map((s) => s.session).filter(Boolean)])],
+    [sessions, structures],
+  );
 
   const refresh = () => {
     setLoading(true);
@@ -117,17 +155,27 @@ export default function Fees() {
   const handleStructure = async (e) => {
     e.preventDefault();
     const fd = new FormData(e.target);
+    const feeType =
+      feeTypeChoice === "Other"
+        ? String(otherFeeType || "").trim()
+        : feeTypeChoice;
+    if (!feeType) {
+      toast("Enter the fee type", "error");
+      return;
+    }
     try {
       await api.fees.structures.create({
         class: fd.get("class"),
         session: fd.get("session"),
-        feeType: fd.get("feeType"),
+        feeType,
         amount: Number(fd.get("amount")),
         frequency: fd.get("frequency"),
         dueDate: fd.get("dueDate") || null,
       });
       toast("Fee structure created", "success");
       setShowStructureForm(false);
+      setFeeTypeChoice("Tuition");
+      setOtherFeeType("");
       refresh();
     } catch (err) {
       toast(err.message, "error");
@@ -305,16 +353,63 @@ export default function Fees() {
         >
           {showStructureForm && (
             <form onSubmit={handleStructure} className="p-5 border-b border-slate-200 grid sm:grid-cols-3 gap-3">
-              <Input name="class" placeholder="Class (e.g. 6)" required />
-              <Input name="session" placeholder="Session (e.g. 2026-27)" required />
-              <Input name="feeType" placeholder="Fee type (e.g. Tuition)" required />
-              <Input name="amount" type="number" placeholder="Amount" required />
+              <div>
+                <label className="text-[12px] font-semibold text-ink mb-1.5 block">Class</label>
+                {masterClasses.length ? (
+                  <Select name="class" required defaultValue="">
+                    <option value="" disabled>Select class…</option>
+                    {masterClasses.filter((c) => c !== "All").map((c) => (
+                      <option key={c} value={c}>{c}</option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input name="class" placeholder="Class (e.g. 6)" required />
+                )}
+              </div>
+              <div>
+                <label className="text-[12px] font-semibold text-ink mb-1.5 block">Session</label>
+                {sessionOptions.length ? (
+                  <Select name="session" required defaultValue="">
+                    <option value="" disabled>Select session…</option>
+                    {sessionOptions.map((s) => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </Select>
+                ) : (
+                  <Input name="session" placeholder="Session (e.g. 2026-27)" required />
+                )}
+              </div>
+              <div>
+                <label className="text-[12px] font-semibold text-ink mb-1.5 block">Fee Type</label>
+                <Select
+                  value={feeTypeChoice}
+                  onChange={(e) => setFeeTypeChoice(e.target.value)}
+                  className="w-full"
+                >
+                  {FEE_TYPES.map((f) => (
+                    <option key={f} value={f}>{f}</option>
+                  ))}
+                </Select>
+                {feeTypeChoice === "Other" && (
+                  <Input
+                    className="mt-2"
+                    placeholder="Name this fee type"
+                    value={otherFeeType}
+                    onChange={(e) => setOtherFeeType(e.target.value)}
+                    required
+                  />
+                )}
+              </div>
+              <Input name="amount" type="number" placeholder="Amount (₹)" required />
               <Select name="frequency" defaultValue="Quarterly">
                 {["Monthly", "Quarterly", "Annually", "One-time"].map((f) => (
                   <option key={f} value={f}>{f}</option>
                 ))}
               </Select>
-              <Input name="dueDate" type="date" />
+              <div>
+                <label className="text-[12px] font-semibold text-ink mb-1.5 block">Due Date</label>
+                <Input name="dueDate" type="date" />
+              </div>
               <div className="sm:col-span-3 flex justify-end">
                 <Button type="submit">Save Structure</Button>
               </div>

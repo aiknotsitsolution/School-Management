@@ -17,6 +17,11 @@ const TEACHING_PERMISSIONS = [
   "timetable:read", "timetable:write", "homework:read", "homework:write",
   "exams:read", "marks:read", "notices:read", "notices:publish",
   "leaves:apply", "payroll:view",
+  // Read-only, tenant-scoped list of the school's academic sessions. The
+  // Report Card page is reachable by teachers (marks:read) and its session
+  // filter reads /auth/sessions; without this the request 403s and the
+  // dropdown silently renders empty.
+  "sessions:read",
   "library:read",
   "promotion:read", "transfer:read", "rollover:read",
   "health:read", "health:write", "conduct:read", "conduct:write",
@@ -24,10 +29,13 @@ const TEACHING_PERMISSIONS = [
 ];
 
 const STAFF_PERMISSIONS = {
-  // Every staff designation can READ the Library (catalogue + study materials):
-  // personaNav shows the entry to all five, and /library is guarded by
-  // library:read — without it the sidebar link is a dead redirect. Writes stay
-  // with librarian (library:manage) / admin+teacher (homework:write).
+  // Every staff designation EXCEPT transport can READ the Library (catalogue +
+  // study materials): personaNav shows the entry to those, and /library is
+  // guarded by library:read — without it the sidebar link would be a dead
+  // redirect. Transport has no library responsibility (see sales flow docs),
+  // so it gets neither the nav entry nor the permission; hiding only the menu
+  // would leave the API open. Writes stay with librarian (library:manage) /
+  // admin+teacher (homework:write).
   admission_counsellor: [
     "dashboard:view", "staff:read", "students:read", "students:write",
     "admissions:read", "admissions:write", "enquiries:read", "enquiries:write",
@@ -61,7 +69,6 @@ const STAFF_PERMISSIONS = {
     "transport:update",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
-    "library:read",
   ],
 };
 

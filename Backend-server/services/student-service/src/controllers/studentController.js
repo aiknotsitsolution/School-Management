@@ -104,7 +104,11 @@ if (!req.file)
   }
 };
 
-const createStudent = async (req, res) => {
+// ONE row-level create path shared by the single-create endpoint and bulk
+// import (C11) — validation, duplicate checks and academic-ref assertions must
+// behave identically no matter how the row arrived. Returns an HTTP-shaped
+// result instead of writing to `res` so a caller can report per-row outcomes.
+const createStudentRow = async (req, body) => {
   try {
     const {
       admissionNo,
@@ -113,14 +117,17 @@ const createStudent = async (req, res) => {
       phone,
       email,
       ...studentData
-    } = req.body;
+    } = body || {};
 
     const admissionId = String(admissionNo || "").trim();
     if (!admissionId) {
-      return res.status(400).json({
-        success: false,
-        message: "Admission ID (admissionNo) is required for a student record",
-      });
+      return {
+        status: 400,
+        body: {
+          success: false,
+          message: "Admission ID (admissionNo) is required for a student record",
+        },
+      };
     }
 
     const existing = await Student.findOne(scopeQuery(Student, req, {
@@ -128,21 +135,24 @@ const createStudent = async (req, res) => {
       admissionNo: admissionId,
     }));
     if (existing) {
-      return res.status(409).json({
-        success: false,
-        message: `Admission ID "${admissionId}" already exists in this school`,
-      });
+      return {
+        status: 409,
+        body: {
+          success: false,
+          message: `Admission ID "${admissionId}" already exists in this school`,
+        },
+      };
     }
 
     const studentName = String(studentData.name || "").trim();
     if (!studentName) {
-      return res.status(400).json({ success: false, message: "Student name is required" });
+      return { status: 400, body: { success: false, message: "Student name is required" } };
     }
     if (email !== undefined && String(email).trim() !== "" && !EMAIL_RE.test(String(email).trim())) {
-      return res.status(400).json({ success: false, message: "Please enter a valid email address" });
+      return { status: 400, body: { success: false, message: "Please enter a valid email address" } };
     }
     if (phone !== undefined && String(phone).trim() !== "" && !PHONE_RE.test(String(phone).trim())) {
-      return res.status(400).json({ success: false, message: "Please enter a valid phone number" });
+      return { status: 400, body: { success: false, message: "Please enter a valid phone number" } };
     }
 
     const data = {
@@ -173,14 +183,71 @@ const createStudent = async (req, res) => {
       kind: "student",
       link: "/students",
     });
-    res.status(201).json({ success: true, data: student });
+    return { status: 201, body: { success: true, data: student } };
   } catch (err) {
     if (isDuplicateKey(err)) {
-      return res.status(409).json({
+      return {
+        status: 409,
+        body: {
+          success: false,
+          message: "This Admission ID already exists in this school",
+        },
+      };
+    }
+    return { status: 400, body: { success: false, message: err.message } };
+  }
+};
+
+const createStudent = async (req, res) => {
+  const result = await createStudentRow(req, req.body);
+  res.status(result.status).json(result.body);
+};
+
+// Bulk import (C11): a spreadsheet's worth of rows in one request. Rows are
+// processed sequentially with the exact same validation as a single create,
+// one bad row never aborts the batch, and every row reports its own outcome so
+// the UI can show precisely which admissions landed. Hard deletes never happen
+// here — this endpoint only ever creates.
+const BULK_MAX_ROWS = 500;
+const bulkCreateStudents = async (req, res) => {
+  try {
+    const rows = req.body && Array.isArray(req.body.students) ? req.body.students : null;
+    if (!rows) {
+      return res.status(400).json({ success: false, message: "students array is required" });
+    }
+    if (!rows.length) {
+      return res.status(400).json({ success: false, message: "students array is empty" });
+    }
+    if (rows.length > BULK_MAX_ROWS) {
+      return res.status(400).json({
         success: false,
-        message: "This Admission ID already exists in this school",
+        message: `A single import is capped at ${BULK_MAX_ROWS} rows — split the file and import again`,
       });
     }
+
+    const results = [];
+    for (let i = 0; i < rows.length; i += 1) {
+      const row = rows[i] || {};
+      const outcome = await createStudentRow(req, row);
+      results.push({
+        index: i,
+        admissionNo: String(row.admissionNo || "").trim(),
+        ok: outcome.status === 201,
+        status: outcome.status,
+        message: outcome.body && outcome.body.success === false
+          ? outcome.body.message
+          : "Created",
+        name: outcome.body.data ? outcome.body.data.name : undefined,
+      });
+    }
+
+    const created = results.filter((r) => r.ok).length;
+    const failed = results.length - created;
+    res.status(created === 0 ? 400 : 201).json({
+      success: created > 0,
+      data: { created, failed, total: results.length, results },
+    });
+  } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }
 };
@@ -642,6 +709,7 @@ const bulkStats = async (req, res) => {
 module.exports = {
   uploadStudentPhoto,
   createStudent,
+  bulkCreateStudents,
   getStudents,
   getPendingRegistrations,
   getStudentById,

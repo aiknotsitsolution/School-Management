@@ -586,7 +586,7 @@ export function Panel({
         </span>
       )}
       {(title || action) && (
-        <div className="relative flex items-center justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-5">
+        <div className="relative flex flex-wrap items-center justify-between gap-3 px-5 pt-5 sm:px-6 sm:pt-5">
           <div className="flex min-w-0 items-center gap-2.5">
             {Icon && <PanelIcon tone={iconTone || ACCENTS.primary.icon}>{<Icon size={15} />}</PanelIcon>}
             <div className="min-w-0">
@@ -594,7 +594,9 @@ export function Panel({
               {subtitle && <p className="mt-0.5 text-[12px] text-slate-text/60">{subtitle}</p>}
             </div>
           </div>
-          {action && <div className="shrink-0">{action}</div>}
+          {/* Wraps onto its own line when the action row can't fit beside the
+              title (390px), instead of pushing past the card edge. */}
+          {action && <div className="max-w-full">{action}</div>}
         </div>
       )}
       <div className={`relative ${flush ? "" : bodyClassName}`}>{children}</div>

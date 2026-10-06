@@ -69,7 +69,8 @@ const emptyForm = () => ({
 // needed for school admins / platform owner.
 const REF_ID_FIELDS = {
   student: { label: "Admission ID", placeholder: "Enter Admission ID", required: true },
-  staff: { label: "Staff ID", placeholder: "Enter Staff ID", required: false },
+  staff: { label: "Staff ID", placeholder: "Enter Staff ID", required: true },
+  teacher: { label: "Staff ID", placeholder: "Enter Staff ID", required: true },
   school_admin: { label: "Ref ID", disabled: true, placeholder: "Not required for this role" },
   super_admin: null,
 };
@@ -275,6 +276,10 @@ export default function PlatformUsers() {
     }
     if (form.role === "student" && !form.refId.trim()) {
       toast("Admission ID is required for student accounts", "error");
+      return;
+    }
+    if ((form.role === "staff" || form.role === "teacher") && !form.refId.trim()) {
+      toast("Staff ID is required — enter the Staff ID created in Teachers & Staff", "error");
       return;
     }
     setBusy(true);

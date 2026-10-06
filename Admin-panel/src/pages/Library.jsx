@@ -145,11 +145,12 @@ export default function Library() {
   const [query, setQuery] = useState("");
   const [catFilter, setCatFilter] = useState("All");
   // Deep-linkable tabs: /library?tab=materials opens straight on the shelf
-  // (the sidebar's Study Materials entry and old /study-materials links use it).
-  // The URL is the single source of truth for the tab. A local copy of the
-  // param only synced at mount, so a client-side navigation from /library to
-  // /library?tab=materials (the sidebar's Study Materials link) left the tab
-  // on "books" — this component never remounts on a search-param change.
+  // (old /study-materials links and direct URLs use it). The URL is the single
+  // source of truth for the tab. A local copy of the param only synced at
+  // mount, so a client-side navigation from /library to /library?tab=materials
+  // left the tab on "books" — this component never remounts on a search-param
+  // change. (No sidebar entry deep-links here anymore: two nav rows for the
+  // same page rendered as a duplicate, so the hub is reached via "Library".)
   const [searchParams, setSearchParams] = useSearchParams();
   const wantedTab = searchParams.get("tab");
   const tab = ["books", "issues", "materials"].includes(wantedTab) ? wantedTab : "books";

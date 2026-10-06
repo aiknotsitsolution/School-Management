@@ -200,7 +200,10 @@ export default function TeacherDashboard() {
 
   useEffect(() => {
     Promise.allSettled([
-      api.staff.list(),
+      // Own person record (staff:read self-scope). The old call took the FIRST
+      // row of the school-wide staff list, which showed another person's
+      // designation (or none) on this teacher's dashboard.
+      api.staff.me(),
       api.notices.list(),
       cls ? api.students.list(`${q}&limit=500`) : Promise.resolve({ data: [] }),
       cls ? api.attendance.list(q) : Promise.resolve({ data: [] }),
@@ -211,8 +214,7 @@ export default function TeacherDashboard() {
     ]).then((res) => {
       const val = (i, key = "data") =>
         res[i].status === "fulfilled" ? res[i].value?.[key] : null;
-      const staffList = Array.isArray(val(0)) ? val(0) : [];
-      setStaff(staffList[0] || null);
+      setStaff(val(0) || null);
       setNotices(Array.isArray(val(1)) ? val(1) : []);
       setStudents(Array.isArray(val(2)) ? val(2) : []);
       setAttendance(Array.isArray(val(3)) ? val(3) : []);
@@ -220,6 +222,13 @@ export default function TeacherDashboard() {
       setExams(Array.isArray(val(5)) ? val(5) : []);
       setTimetable(Array.isArray(val(6)) ? val(6) : []);
       setAchievements(Array.isArray(val(7)) ? val(7) : []);
+      // Rejections used to be swallowed, leaving the dashboard silently empty.
+      const failed = res
+        .map((r, i) => (r.status === "rejected" ? r.reason : null))
+        .filter(Boolean);
+      if (failed.length) {
+        toast(failed[0]?.message || "Some dashboard data failed to load", "error");
+      }
       setLoading(false);
     });
   }, [cls, q]);
@@ -259,13 +268,9 @@ export default function TeacherDashboard() {
     return unsubscribe;
   }, [cls, q]);
 
-  useEffect(() => {
-    api.staff.attendance.meToday()
-      .then(({ data }) => {
-        if (!data) setShowCheckin(true);
-      })
-      .catch(() => setShowCheckin(true));
-  }, []);
+  // (Removed) an effect here called `setShowCheckin`, a state setter that does
+  // not exist in this component — every run threw a ReferenceError. Staff
+  // check-in lives on /staff/my-attendance, not on this dashboard.
 
   const marked = Object.values(markMap).filter(Boolean);
   const presentCount = marked.filter((s) => s === "Present").length;

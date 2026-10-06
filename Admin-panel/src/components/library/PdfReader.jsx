@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import {
+  BookOpen,
   ChevronLeft,
   ChevronRight,
   Download,
+  FileText,
   Loader2,
   Maximize2,
   Minimize2,
@@ -14,6 +16,7 @@ import {
   ZoomOut,
 } from "lucide-react";
 import pdfjsLib from "../../lib/pdfjs";
+import BookReader from "./BookReader";
 
 const THEMES = [
   // Bars use explicit colors (not theme vars): the reader is a self-themed
@@ -24,6 +27,7 @@ const THEMES = [
 ];
 
 const THEME_KEY = "zipschool-pdf-theme";
+const VIEW_KEY = "zipschool-pdf-view"; // "book" (flip) | "single"
 const progressKey = (src) => `zipschool-pdf-progress:${src}`;
 
 function loadTheme() {
@@ -35,13 +39,28 @@ function loadTheme() {
   }
 }
 
-// Full-screen, Google Play Books-style PDF reader. Page-by-page navigation
-// (arrows, tap zones, scrubber), zoom, light/sepia/night reading themes,
-// keyboard shortcuts and a remembered last-read page per document.
+function loadView() {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "single" ? "single" : "book";
+  } catch {
+    return "book";
+  }
+}
+
+// Full-screen PDF reader with two reading modes:
+//   • "book" (default) — PubHTML5-style two-page spread with a 3D page-turn
+//     animation (BookReader). Arrows/clicks/swipes flip, the scrubber jumps.
+//   • "single" — the original Google Play Books-style single page with
+//     tap zones, pinch-free zoom and fit-to-width.
+// Both share themes, keyboard shortcuts, download, fullscreen and the
+// remembered last-read page; the mode itself is remembered too.
 export default function PdfReader({ src, title, onClose }) {
   const [doc, setDoc] = useState(null);
   const [numPages, setNumPages] = useState(0);
   const [page, setPage] = useState(1);
+  const [spreadRight, setSpreadRight] = useState(null); // book mode: right-hand page of the spread
+  const [view, setView] = useState(loadView); // book | single
+  const [bookZoom, setBookZoom] = useState(1);
   const [scale, setScale] = useState(1);
   const [fitWidth, setFitWidth] = useState(true);
   const [themeKey, setThemeKey] = useState(loadTheme);
@@ -54,6 +73,7 @@ export default function PdfReader({ src, title, onClose }) {
   const docRef = useRef(null);
   const renderTaskRef = useRef(null);
   const pageRefRef = useRef(null);
+  const bookRef = useRef(null);
 
   const theme = THEMES.find((t) => t.key === themeKey) || THEMES[0];
 
@@ -111,9 +131,9 @@ export default function PdfReader({ src, title, onClose }) {
     []
   );
 
-  // --- page rendering -----------------------------------------------------
+  // --- page rendering (single view only — the book view owns its canvases) --
   useEffect(() => {
-    if (status !== "ready" || !docRef.current || !canvasRef.current) return undefined;
+    if (view !== "single" || status !== "ready" || !docRef.current || !canvasRef.current) return undefined;
     let cancelled = false;
 
     const render = async () => {
@@ -158,13 +178,21 @@ export default function PdfReader({ src, title, onClose }) {
     });
 
     return () => { cancelled = true; };
-  }, [status, doc, page, scale, fitWidth, computeFitScale]);
+  }, [status, doc, page, scale, fitWidth, view, computeFitScale]);
 
   // Remember the last-read page.
   useEffect(() => {
     if (status !== "ready" || !page) return;
     try { localStorage.setItem(progressKey(src), String(page)); } catch { /* ignore */ }
   }, [page, src, status]);
+
+  const toggleView = () => {
+    setView((v) => {
+      const next = v === "book" ? "single" : "book";
+      try { localStorage.setItem(VIEW_KEY, next); } catch { /* ignore */ }
+      return next;
+    });
+  };
 
   const goTo = useCallback(
     (next) => {
@@ -178,20 +206,38 @@ export default function PdfReader({ src, title, onClose }) {
     if (status !== "ready") return undefined;
     const onKey = (e) => {
       if (e.key === "Escape") { onClose(); return; }
-      if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") { e.preventDefault(); goTo(page + 1); }
-      else if (e.key === "ArrowLeft" || e.key === "PageUp") { e.preventDefault(); goTo(page - 1); }
-      else if (e.key === "+" || e.key === "=") { e.preventDefault(); setFitWidth(false); setScale((s) => Math.min(s + 0.15, 3)); }
-      else if (e.key === "-") { e.preventDefault(); setFitWidth(false); setScale((s) => Math.max(s - 0.15, 0.4)); }
+      const forward = e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ";
+      const backward = e.key === "ArrowLeft" || e.key === "PageUp";
+      if (forward || backward) {
+        e.preventDefault();
+        if (view === "book") {
+          // Animated flip rather than a jump — same gesture as a click.
+          if (forward) bookRef.current?.next();
+          else bookRef.current?.prev();
+        } else {
+          goTo(forward ? page + 1 : page - 1);
+        }
+      } else if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        if (view === "book") setBookZoom((z) => Math.min(z + 0.15, 3));
+        else { setFitWidth(false); setScale((s) => Math.min(s + 0.15, 3)); }
+      } else if (e.key === "-") {
+        e.preventDefault();
+        if (view === "book") setBookZoom((z) => Math.max(z - 0.15, 0.4));
+        else { setFitWidth(false); setScale((s) => Math.max(s - 0.15, 0.4)); }
+      } else if (e.key.toLowerCase() === "b" && !e.metaKey && !e.ctrlKey) {
+        toggleView();
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [status, page, goTo, onClose]);
+  }, [status, page, view, goTo, onClose]);
 
-  // --- swipe (touch) ------------------------------------------------------
+  // --- swipe (touch, single view only — the book view flips its own swipes)
   const touchX = useRef(null);
-  const onTouchStart = (e) => { touchX.current = e.touches[0].clientX; };
+  const onTouchStart = (e) => { if (view === "book") return; touchX.current = e.touches[0].clientX; };
   const onTouchEnd = (e) => {
-    if (touchX.current == null) return;
+    if (view === "book" || touchX.current == null) return;
     const dx = e.changedTouches[0].clientX - touchX.current;
     if (Math.abs(dx) > 60) goTo(page + (dx < 0 ? 1 : -1));
     touchX.current = null;
@@ -243,10 +289,19 @@ export default function PdfReader({ src, title, onClose }) {
           <p className={`text-[13.5px] font-semibold truncate ${theme.barText}`}>{title || "Document"}</p>
           {numPages > 0 && (
             <p className={`text-[11px] opacity-60 ${theme.barText}`}>
-              Page {page} of {numPages}
+              {view === "book" && spreadRight
+                ? `Pages ${page}–${spreadRight} of ${numPages}`
+                : `Page ${page} of ${numPages}`}
             </p>
           )}
         </div>
+        <button
+          onClick={toggleView}
+          className={`p-1.5 rounded-lg hover:bg-black/5 ${theme.barText}`}
+          title={view === "book" ? "Switch to single-page view (B)" : "Switch to book (flip) view (B)"}
+        >
+          {view === "book" ? <FileText size={17} /> : <BookOpen size={17} />}
+        </button>
         <button
           onClick={() => {
             const next = THEMES[(THEMES.findIndex((t) => t.key === themeKey) + 1) % THEMES.length].key;
@@ -287,7 +342,22 @@ export default function PdfReader({ src, title, onClose }) {
             </div>
           </div>
         )}
-        {status === "ready" && (
+        {status === "ready" && view === "book" && (
+          <BookReader
+            ref={bookRef}
+            doc={doc}
+            numPages={numPages}
+            startPage={page}
+            theme={theme}
+            page={page}
+            zoom={bookZoom}
+            onPageChange={(left, right) => {
+              setPage(left);
+              setSpreadRight(right);
+            }}
+          />
+        )}
+        {status === "ready" && view === "single" && (
           <>
             {/* Tap zones (like page turns in Play Books) */}
             {page > 1 && (
@@ -334,7 +404,7 @@ export default function PdfReader({ src, title, onClose }) {
       {/* Bottom bar: scrubber + zoom */}
       <div className={`flex items-center gap-3 border-t px-4 py-2.5 ${theme.barBorder}`} style={{ background: theme.bar }}>
         <button
-          onClick={() => goTo(page - 1)}
+          onClick={() => (view === "book" ? bookRef.current?.prev() : goTo(page - 1))}
           disabled={page <= 1 || status !== "ready"}
           className={`p-1.5 rounded-lg hover:bg-black/5 disabled:opacity-30 ${theme.barText}`}
           title="Previous page (←)"
@@ -352,10 +422,10 @@ export default function PdfReader({ src, title, onClose }) {
           aria-label="Page scrubber"
         />
         <span className={`text-[12px] font-semibold tabular-nums ${theme.barText}`}>
-          {page} / {numPages || "–"}
+          {view === "book" && spreadRight ? `${page}–${spreadRight} / ${numPages}` : `${page} / ${numPages || "–"}`}
         </span>
         <button
-          onClick={() => goTo(page + 1)}
+          onClick={() => (view === "book" ? bookRef.current?.next() : goTo(page + 1))}
           disabled={page >= numPages || status !== "ready"}
           className={`p-1.5 rounded-lg hover:bg-black/5 disabled:opacity-30 ${theme.barText}`}
           title="Next page (→)"
@@ -364,7 +434,10 @@ export default function PdfReader({ src, title, onClose }) {
         </button>
         <div className={`flex items-center gap-1 border-l pl-3 ml-1 ${theme.barBorder}`}>
           <button
-            onClick={() => { setFitWidth(false); setScale((s) => Math.max(s - 0.15, 0.4)); }}
+            onClick={() => {
+              if (view === "book") setBookZoom((z) => Math.max(z - 0.15, 0.4));
+              else { setFitWidth(false); setScale((s) => Math.max(s - 0.15, 0.4)); }
+            }}
             disabled={status !== "ready"}
             className={`p-1.5 rounded-lg hover:bg-black/5 disabled:opacity-30 ${theme.barText}`}
             title="Zoom out (−)"
@@ -372,14 +445,22 @@ export default function PdfReader({ src, title, onClose }) {
             <ZoomOut size={17} />
           </button>
           <button
-            onClick={async () => { setFitWidth(true); setScale(await computeFitScale(page)); }}
+            onClick={async () => {
+              if (view === "book") setBookZoom(1);
+              else { setFitWidth(true); setScale(await computeFitScale(page)); }
+            }}
             className={`px-1.5 text-[11.5px] font-semibold rounded hover:bg-black/5 ${theme.barText}`}
             title="Fit page"
           >
-            {fitWidth ? "Fit" : `${Math.round(scale * 100)}%`}
+            {view === "book"
+              ? (bookZoom === 1 ? "Fit" : `${Math.round(bookZoom * 100)}%`)
+              : (fitWidth ? "Fit" : `${Math.round(scale * 100)}%`)}
           </button>
           <button
-            onClick={() => { setFitWidth(false); setScale((s) => Math.min(s + 0.15, 3)); }}
+            onClick={() => {
+              if (view === "book") setBookZoom((z) => Math.min(z + 0.15, 3));
+              else { setFitWidth(false); setScale((s) => Math.min(s + 0.15, 3)); }
+            }}
             disabled={status !== "ready"}
             className={`p-1.5 rounded-lg hover:bg-black/5 disabled:opacity-30 ${theme.barText}`}
             title="Zoom in (+)"

@@ -15,15 +15,16 @@ const TEACHING_PERMISSIONS = [
   "timetable:read", "timetable:write", "homework:read", "homework:write",
   "exams:read", "marks:read", "notices:read", "notices:publish",
   "leaves:apply", "payroll:view",
-  "library:read",
+  "library:read", "sessions:read",
   "promotion:read", "transfer:read", "rollover:read",
   "health:read", "health:write", "conduct:read", "conduct:write",
   "achievements:read", "achievements:write",
 ];
 
-// Kept in sync with the backend STAFF_PERMISSIONS bundle: all five staff
-// designations carry library:read so the persona Library entry isn't a dead
-// redirect (writes stay with librarian/admin+teacher).
+// Kept in sync with the backend STAFF_PERMISSIONS bundle: four of the five
+// staff designations carry library:read so the persona Library entry isn't a
+// dead redirect (writes stay with librarian/admin+teacher). Transport has no
+// library responsibility, so it gets neither the permission nor the nav entry.
 const STAFF_PERMISSIONS = {
   admission_counsellor: [
     "dashboard:view", "staff:read", "students:read", "students:write",
@@ -58,7 +59,6 @@ const STAFF_PERMISSIONS = {
     "transport:update",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",
-    "library:read",
   ],
 };
 
@@ -132,6 +132,17 @@ export function usePermissions() {
 export function usePermission(permission) {
   const user = useSelector(selectUser);
   return hasPermission(user, permission);
+}
+
+// True when the user holds ANY of the listed permissions — the client mirror of
+// the backend's requireAnyPermission. Used by the Library's study-material
+// shelf, writable by teachers/admins (homework:write) and the librarian
+// (library:manage).
+export function useAnyPermission(...permissions) {
+  const user = useSelector(selectUser);
+  const perms = permissionsFor(user);
+  if (perms.includes("*")) return true;
+  return permissions.some((p) => perms.includes(p));
 }
 
 export function PermissionGate({ permission, children }) {

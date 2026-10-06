@@ -7,7 +7,6 @@ import {
   Pill,
   Avatar,
   StatCard,
-  toast,
 } from "../../components/UI";
 import PageArtwork from "../../components/PageArtwork";
 import { api } from "../../lib/api";
@@ -19,16 +18,20 @@ export default function MyClass() {
     useTeacherContext();
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
+  // A failed load must not masquerade as an empty roster — the teacher would
+  // conclude the class has no students (Sales report A1/A4).
+  const [loadError, setLoadError] = useState(null);
   const [search, setSearch] = useState("");
   const [profileId, setProfileId] = useState(null);
 
   useEffect(() => {
     if (!query) return;
     setLoading(true);
+    setLoadError(null);
     api.students
       .list(`${query}&limit=500`)
       .then(({ data }) => setStudents(data || []))
-      .catch((e) => toast(e.message, "error"))
+      .catch((e) => setLoadError(e.message || "Could not load students"))
       .finally(() => setLoading(false));
   }, [query]);
 
@@ -138,6 +141,28 @@ export default function MyClass() {
           <p className="text-[13px] text-slate-text py-10 text-center">
             Loading students…
           </p>
+        ) : loadError ? (
+          <div className="py-10 text-center">
+            <p className="text-[13.5px] font-semibold text-ink">
+              Could not load the class roster
+            </p>
+            <p className="text-[12.5px] text-slate-text/70 mt-1">{loadError}</p>
+            <button
+              type="button"
+              onClick={() => {
+                setLoading(true);
+                setLoadError(null);
+                api.students
+                  .list(`${query}&limit=500`)
+                  .then(({ data }) => setStudents(data || []))
+                  .catch((e) => setLoadError(e.message || "Could not load students"))
+                  .finally(() => setLoading(false));
+              }}
+              className="mt-3 rounded-xl bg-primary px-4 py-2 text-[12.5px] font-bold text-white transition-colors hover:bg-primary-dark"
+            >
+              Retry
+            </button>
+          </div>
         ) : list.length === 0 ? (
           <p className="text-[13px] text-slate-text py-10 text-center">
             No students found for this class and section.

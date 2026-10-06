@@ -5,48 +5,18 @@ import { PageIntro, Card, Button, Select, Input, toast } from "../components/UI"
 import { api } from "../lib/api";
 import { selectSchool } from "../store/selectors";
 import { setSchool as setSchoolAction } from "../store/authSlice";
-import { computeGrade, computePercentage } from "../lib/grading";
 import { usePermission } from "../lib/permissions";
 import { sessionLabel } from "../lib/session";
-
-const ACCENT_RE = /^#[0-9a-fA-F]{6}$/;
-const DEFAULT_ACCENT = "#0C47CF";
-
-// CCE co-scholastic (CLIENT-REQ-027): CBSE default areas + 6-point grade scale.
-const DEFAULT_CCE_AREAS = ["Work Education", "Art Education", "Health & Physical Education"];
-const CCE_GRADE_OPTIONS = [
-  { value: "", label: "—" },
-  { value: "A1", label: "A1 · Outstanding" },
-  { value: "A2", label: "A2 · Excellent" },
-  { value: "B1", label: "B1 · Very Good" },
-  { value: "B2", label: "B2 · Good" },
-  { value: "C", label: "C · Satisfactory" },
-  { value: "D", label: "D · Marginal" },
-];
-
-// DOB/date values arrive as ISO timestamps ("2019-07-08T00:00:00.000Z") — the
-// card only needs the date, never the time component.
-function fmtDate(value) {
-  if (!value) return "—";
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return String(value);
-  return d.toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  });
-}
-
-function mergeCceAreas(saved) {
-  const rows = Array.isArray(saved) ? saved : [];
-  return [
-    ...DEFAULT_CCE_AREAS.map((area) => {
-      const row = rows.find((r) => r.area === area);
-      return { area, grade: row?.grade || "", remark: row?.remark || "" };
-    }),
-    ...rows.filter((r) => !DEFAULT_CCE_AREAS.includes(r.area)),
-  ];
-}
+// The printable card itself lives in a shared sheet so this page, the student
+// "My Results" view and the server-rendered PDF can never drift apart.
+import ReportCardSheet from "../components/reportcard/ReportCardSheet";
+import {
+  ACCENT_RE,
+  CCE_GRADE_OPTIONS,
+  DEFAULT_ACCENT,
+  formatClass,
+  mergeCceAreas,
+} from "../components/reportcard/reportCardMeta";
 
 // Inline co-scholastic editor (staff only). Keyed per student+term+session by
 // the parent, so switching rows remounts it and local state resets naturally.
@@ -130,37 +100,14 @@ function CceEditor({ initial, studentId, term, session, cls, section, onSaved })
   );
 }
 
-function getRemark(pct) {
-  if (pct >= 90) return "Outstanding performance. Keep up the excellent work!";
-  if (pct >= 80) return "Very good performance. Continue the hard work.";
-  if (pct >= 70)
-    return "Good performance. Focus on weaker subjects for better results.";
-  if (pct >= 60)
-    return "Satisfactory. Needs more regular practice and revision.";
-  return "Needs significant improvement. Extra attention and support recommended.";
-}
-
-function formatClass(c) {
-  if (["Nursery", "LKG", "UKG"].includes(c)) return c;
-  if (String(c).startsWith("11") || String(c).startsWith("12"))
-    return `Class ${c}`;
-  return `Class ${c}`;
-}
-
 export default function ReportCard() {
   const dispatch = useDispatch();
   const school = useSelector(selectSchool);
-  const schoolName = school?.name || "Zipschool OS";
-  const schoolAddress = school?.address || "";
-  const schoolLogo = (school?.shortName || "S").slice(0, 1).toUpperCase();
   const session = sessionLabel(school) || String(new Date().getFullYear());
   const canCustomize = usePermission("school:settings");
   const reportCardSettings = school?.settings?.reportCard || {};
-  const schoolAffiliation =
-    reportCardSettings.affiliation || school?.affiliation || "";
-  const footerNote =
-    reportCardSettings.footerNote ||
-    "This is a computer-generated report card for demonstration purposes.";
+  // Initials badge shown by the logo picker before a logo is uploaded.
+  const schoolLogo = (school?.shortName || "S").slice(0, 1).toUpperCase();
   const accentColor = ACCENT_RE.test(reportCardSettings.accent)
     ? reportCardSettings.accent
     : DEFAULT_ACCENT;
@@ -281,38 +228,6 @@ export default function ReportCard() {
   }, [query, students]);
 
   const student = students.find((s) => s.id === selectedId) || students[0];
-
-  const results = useMemo(() => {
-    return (report?.subjects || []).map((item) => {
-      const marks = Number(item.marksObtained || 0);
-      const max = Number(item.maxMarks || 0);
-      return {
-        subject: item.subject,
-        marks,
-        max,
-        pct: Number(item.pct ?? (max ? (marks / max) * 100 : 0)),
-        passed:
-          item.passed != null
-            ? item.passed
-            : computePercentage(marks, max) >= Number(item.passingMarks || 33),
-        grade: item.grade || computeGrade(marks, max),
-        status: item.status || null,
-        session: item.session || null,
-      };
-    });
-  }, [report]);
-
-  const total = results.reduce((a, r) => a + r.marks, 0);
-  const maxTotal = results.reduce((a, r) => a + r.max, 0);
-  const pct = maxTotal ? ((total / maxTotal) * 100).toFixed(1) : 0;
-  const overallGrade = maxTotal ? computeGrade(total, maxTotal) : "—";
-  const remark = maxTotal ? getRemark(Number(pct)) : "";
-  const hasMarks = results.length > 0;
-
-  const attendance = report?.attendance || null;
-  const attendancePct = attendance ? attendance.pct : null;
-  const classRank = report?.classRank || null;
-  const totalStudents = report?.totalStudents || 0;
 
   const downloadPdf = async () => {
     if (!reportQuery || downloadingPdf) return;
@@ -508,288 +423,17 @@ export default function ReportCard() {
         />
       )}
 
-      {/* Report Card Preview */}
+      {/* Report Card Preview — shared sheet, identical to the student view. */}
       <Card bodyClassName="p-0">
-        <div className="p-6 sm:p-8 max-w-3xl mx-auto" id="report-card-print">
-          {/* Header */}
-          <div
-            className="text-center border-b-2 border-ink pb-5 mb-6"
-            style={{ borderColor: accentColor }}
-          >
-            {school?.logo ? (
-              <img
-                src={school.logo}
-                alt={`${schoolName} logo`}
-                className="h-16 max-w-[180px] w-auto object-contain mx-auto"
-              />
-            ) : (
-              <p className="w-16 h-16 rounded-2xl bg-primary text-white text-3xl font-display font-bold flex items-center justify-center mx-auto">
-                {schoolLogo}
-              </p>
-            )}
-            <h2 className="font-display text-2xl font-bold text-ink mt-2 tracking-tight">
-              {schoolName}
-            </h2>
-            <p className="text-[12.5px] text-slate-text mt-1">
-              {schoolAddress}
-            </p>
-            {schoolAffiliation && (
-              <p className="text-[11.5px] text-slate-text/70">
-                {schoolAffiliation}
-              </p>
-            )}
-            <div className="mt-3 inline-flex items-center gap-2">
-              <span
-                className="font-display font-semibold text-[14px]"
-                style={{ color: accentColor }}
-              >
-                {term.toUpperCase()} — PROGRESS REPORT
-              </span>
-              <span className="text-[12.5px] text-slate-text/60">
-                · {session}
-              </span>
-            </div>
-          </div>
-
-          {/* Student Info */}
-          <div className="flex items-start gap-5 mb-6">
-            <img
-              src={student.avatar}
-              alt={student.name}
-              className="w-20 h-20 rounded-xl object-cover border border-slate-300 shrink-0"
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-10 gap-y-2 text-[13px] flex-1">
-              <p>
-                <span className="text-slate-text/60">Student Name:</span>{" "}
-                <b className="text-ink">{student.name}</b>
-              </p>
-              <p>
-                <span className="text-slate-text/60">Admission ID:</span>{" "}
-                <b className="text-ink">{student.admissionNo || "—"}</b>
-              </p>
-              <p>
-                <span className="text-slate-text/60">Class / Section:</span>{" "}
-                <b className="text-ink">
-                  {formatClass(student.class)}-{student.section}
-                </b>
-              </p>
-              <p>
-                <span className="text-slate-text/60">Roll No.:</span>{" "}
-                <b className="text-ink">{student.roll}</b>
-              </p>
-              <p>
-                <span className="text-slate-text/60">Father's Name:</span>{" "}
-                <b className="text-ink">{student.fatherName}</b>
-              </p>
-              <p>
-                <span className="text-slate-text/60">Date of Birth:</span>{" "}
-                <b className="text-ink">{fmtDate(student.dob)}</b>
-              </p>
-            </div>
-          </div>
-
-          {/* Marks Table */}
-          {!hasMarks && (
-            <div className="rounded-xl border border-slate-200 p-6 mb-6 text-center">
-              <p className="text-[13.5px] font-semibold text-ink">
-                No marks recorded for {term} yet
-              </p>
-              <p className="text-[12.5px] text-slate-text/60 mt-1">
-                Enter marks for this exam to generate a report card.
-              </p>
-            </div>
-          )}
-          <div className="overflow-x-auto rounded-xl border border-slate-200 mb-6">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="bg-ink text-white text-left text-[11.5px] uppercase tracking-wide dark:bg-slate-200 dark:text-ink">
-                  <th className="px-4 py-3 font-semibold">Subject</th>
-                  <th className="px-4 py-3 font-semibold text-center">
-                    Max Marks
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-center">
-                    Marks Obtained
-                  </th>
-                  <th className="px-4 py-3 font-semibold text-center">Grade</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r, idx) => (
-                  <tr
-                    key={r.subject}
-                    className={idx % 2 === 0 ? "bg-white" : "bg-paper/60"}
-                  >
-                    <td className="px-4 py-2.5 font-semibold text-ink">
-                      {r.subject}
-                    </td>
-                    <td className="px-4 py-2.5 text-center text-slate-text">
-                      {r.max}
-                    </td>
-                    <td className="px-4 py-2.5 text-center font-semibold text-ink">
-                      {r.marks}
-                    </td>
-                    <td className="px-4 py-2.5 text-center">
-                      <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-0.5 rounded-md bg-ink/8 text-ink text-[12px] font-bold">
-                        {r.grade}
-                      </span>
-                      {r.status && r.status !== "published" && (
-                        <span className="block mt-1 text-[10px] font-semibold uppercase tracking-wide text-primary-dark">
-                          {r.status}
-                        </span>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-                <tr className="bg-ink/5 border-t-2 border-ink/20 font-semibold">
-                  <td className="px-4 py-3 text-ink">Total</td>
-                  <td className="px-4 py-3 text-center text-ink">{maxTotal}</td>
-                  <td className="px-4 py-3 text-center text-ink">{total}</td>
-                  <td className="px-4 py-3 text-center">
-                    <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-0.5 rounded-md bg-primary text-white text-[12px] font-bold">
-                      {overallGrade}
-                    </span>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* Summary boxes */}
-          <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mb-6">
-            <div className="rounded-xl border border-slate-200 p-3.5 text-center">
-              <p className="text-[11px] text-slate-text/60 uppercase tracking-wide font-semibold">
-                Percentage
-              </p>
-              <p className="font-display text-2xl font-bold text-ink mt-1">
-                {pct}%
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-3.5 text-center">
-              <p className="text-[11px] text-slate-text/60 uppercase tracking-wide font-semibold">
-                Overall Grade
-              </p>
-              <p className="font-display text-2xl font-bold text-primary-dark mt-1">
-                {overallGrade}
-              </p>
-            </div>
-            <div className="rounded-xl border border-slate-200 p-3.5 text-center">
-              <p className="text-[11px] text-slate-text/60 uppercase tracking-wide font-semibold">
-                Class Rank
-              </p>
-              <p className="font-display text-2xl font-bold text-ink mt-1">
-                {classRank || "—"}
-              </p>
-              {classRank && totalStudents > 0 && (
-                <p className="text-[10px] text-slate-text/60 mt-0.5">of {totalStudents}</p>
-              )}
-            </div>
-            <div className="rounded-xl border border-slate-200 p-3.5 text-center">
-              <p className="text-[11px] text-slate-text/60 uppercase tracking-wide font-semibold">
-                Attendance
-              </p>
-              <p className="font-display text-2xl font-bold text-success mt-1">
-                {attendancePct != null ? `${attendancePct}%` : "—"}
-              </p>
-              {attendance && (
-                <p className="text-[10px] text-slate-text/60 mt-0.5">
-                  {attendance.present}P · {attendance.absent}A · {attendance.leave}L
-                  {attendance.halfDays ? ` · ${attendance.halfDays}H` : ""}
-                </p>
-              )}
-            </div>
-            <div className="rounded-xl border border-slate-200 p-3.5 text-center">
-              <p className="text-[11px] text-slate-text/60 uppercase tracking-wide font-semibold">
-                Result
-              </p>
-              <p className="font-display text-lg font-bold text-success mt-1.5">
-                {hasMarks
-                  ? results.every((r) => r.passed)
-                    ? "PASS"
-                    : "FAIL"
-                  : "—"}
-              </p>
-            </div>
-          </div>
-
-          {/* Co-Scholastic Assessment (printed when a record exists or staff can add one) */}
-          {(cceDoc || canManageCce) && (
-            <div className="mb-6">
-              <p className="text-[11.5px] font-semibold text-slate-text/60 uppercase tracking-wide mb-2">
-                Co-Scholastic Assessment
-              </p>
-              <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="bg-ink text-white text-left text-[11.5px] uppercase tracking-wide dark:bg-slate-200 dark:text-ink">
-                      <th className="px-4 py-2.5 font-semibold">Area</th>
-                      <th className="px-4 py-2.5 font-semibold text-center">Grade</th>
-                      <th className="px-4 py-2.5 font-semibold">Remark</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {mergeCceAreas(cceDoc?.areas).map((row, idx) => (
-                      <tr
-                        key={row.area}
-                        className={`border-b border-slate-100 last:border-0 ${idx % 2 ? "bg-paper/40" : "bg-white"}`}
-                      >
-                        <td className="px-4 py-2.5 font-semibold text-ink">{row.area}</td>
-                        <td className="px-4 py-2.5 text-center">
-                          <span className="inline-flex items-center justify-center min-w-[36px] px-2 py-0.5 rounded-md bg-ink/8 text-ink text-[12px] font-bold">
-                            {row.grade || "—"}
-                          </span>
-                        </td>
-                        <td className="px-4 py-2.5 text-slate-text">{row.remark || "—"}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              {cceDoc?.comments && (
-                <p className="text-[12.5px] text-slate-text/80 mt-2">
-                  <span className="font-semibold">Comments:</span> {cceDoc.comments}
-                </p>
-              )}
-            </div>
-          )}
-
-          {/* Remarks */}
-          <div className="rounded-xl bg-paper border border-slate-200 p-4 mb-8">
-            <p className="text-[11.5px] font-semibold text-slate-text/60 uppercase tracking-wide mb-1.5">
-              Class Teacher's Remarks
-            </p>
-            <p className="text-[13.5px] text-ink leading-relaxed">{remark}</p>
-          </div>
-
-          {/* Signatures */}
-          <div className="grid grid-cols-3 gap-4 pt-6 border-t border-slate-200">
-            <div className="text-center">
-              <div className="h-12 mb-2" />
-              <div className="border-t border-slate-400 pt-2">
-                <p className="text-[12px] font-semibold text-ink">
-                  Class Teacher
-                </p>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="h-12 mb-2" />
-              <div className="border-t border-slate-400 pt-2">
-                <p className="text-[12px] font-semibold text-ink">Principal</p>
-              </div>
-            </div>
-            <div className="text-center">
-              <div className="h-12 mb-2" />
-              <div className="border-t border-slate-400 pt-2">
-                <p className="text-[12px] font-semibold text-ink">
-                  Parent / Guardian
-                </p>
-              </div>
-            </div>
-          </div>
-
-          <p className="text-center text-[11px] text-slate-text/50 mt-6">
-            {footerNote}
-          </p>
-        </div>
+        <ReportCardSheet
+          school={school}
+          student={student}
+          termLabel={term}
+          session={session}
+          report={report}
+          cce={cceDoc}
+          showCcePlaceholder={canManageCce}
+        />
       </Card>
 
       {/* Customize report card */}

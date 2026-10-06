@@ -60,6 +60,12 @@ export default function Performance() {
       ];
       setExamNames(names);
       setExamName(names[0] || "");
+      const failed = [sr, ar, er].find((r) => r.status === "rejected");
+      if (failed) {
+        // Rejections were swallowed before: the page rendered as "no exams yet"
+        // with no hint that the request had actually failed.
+        toast(failed.reason?.message || "Could not load performance data", "error");
+      }
       setLoading(false);
     });
   }, [query]);

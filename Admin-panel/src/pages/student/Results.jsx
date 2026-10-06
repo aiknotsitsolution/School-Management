@@ -1,229 +1,301 @@
 import { useEffect, useMemo, useState } from "react";
-import { FileBarChart } from "lucide-react";
-import { PageIntro, Card, Pill } from "../../components/UI";
+import { useSelector } from "react-redux";
+import { useSearchParams } from "react-router-dom";
+import { ArrowLeft, ChevronRight, Download, FileBarChart, FileText, Printer } from "lucide-react";
+import { PageIntro, Card, Button, Pill, toast } from "../../components/UI";
 import PageArtwork from "../../components/PageArtwork";
-import {
-  BarRowChart,
-  Donut,
-  ProgressRing,
-  SubjectRadar,
-  TrendArea,
-} from "../../components/studentcharts/StudentCharts";
-import { toneFor, toneKeyFor } from "../../components/studentcharts/theme";
+// One shared sheet renders the card for students and staff alike, so the two
+// portals (and the server PDF) can never show a different report card.
+import ReportCardSheet from "../../components/reportcard/ReportCardSheet";
+import { fmtDate } from "../../components/reportcard/reportCardMeta";
 import { api } from "../../lib/api";
 import { computeGrade } from "../../lib/grading";
+import { sessionLabel } from "../../lib/session";
+import { selectSchool, selectUser } from "../../store/selectors";
+
+/**
+ * The staff picker saves co-scholastic rows against a TERM label ("Term 1"),
+ * while marks snapshot the full exam name ("Term 1 — Unit Test"). Resolve the
+ * label from the exam record first and fall back to the name itself.
+ */
+function termLabelFor(examName, meta) {
+  if (meta?.term) return meta.term;
+  const name = String(examName || "");
+  const match = /term\s*([12])/i.exec(name);
+  if (match) return `Term ${match[1]}`;
+  if (/final/i.test(name)) return "Final";
+  return name;
+}
 
 export default function Results() {
-  const [marks, setMarks] = useState({ subjects: [], totalObtained: 0, totalMax: 0, percentage: "0.00" });
-  const [loading, setLoading] = useState(true);
+  const school = useSelector(selectSchool);
+  const user = useSelector(selectUser);
+  // The opened term lives in the URL, so refresh and browser-back behave the
+  // way a link to a document should.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const activeTerm = searchParams.get("exam") || "";
 
+  const [loading, setLoading] = useState(true);
+  const [summary, setSummary] = useState(null);
+  const [profile, setProfile] = useState(null);
+  const [exams, setExams] = useState([]);
+  const [card, setCard] = useState({ term: "", loading: false, data: null, error: "" });
+  const [cce, setCce] = useState({ term: "", data: null });
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+
+  // Term list + identity + exam calendar in one round trip. Any single miss
+  // still renders the list: the report card payload is the only hard need.
   useEffect(() => {
-    setLoading(true);
-    api.marks
-      .reportCard(null)
-      .then(({ data }) => setMarks(data || { subjects: [], totalObtained: 0, totalMax: 0, percentage: "0.00" }))
-      .catch(() => setMarks({ subjects: [], totalObtained: 0, totalMax: 0, percentage: "0.00" }))
-      .finally(() => setLoading(false));
+    let alive = true;
+    Promise.allSettled([
+      api.marks.reportCard(),
+      api.students.me(),
+      api.exams.list("limit=500"),
+    ]).then((settled) => {
+      if (!alive) return;
+      const dataOf = (i) =>
+        settled[i].status === "fulfilled" ? settled[i].value?.data ?? null : null;
+      setSummary(dataOf(0));
+      setProfile(dataOf(1));
+      setExams(dataOf(2) || []);
+      setLoading(false);
+    });
+    return () => {
+      alive = false;
+    };
   }, []);
 
-  const byExam = useMemo(() => {
-    const group = {};
-    (marks.subjects || []).forEach((m) => {
-      const key = m.examName || "All";
-      if (!group[key]) group[key] = [];
-      group[key].push(m);
+  /** examName -> exam record (term label, date, session) for the list rows. */
+  const examMeta = useMemo(() => {
+    const map = new Map();
+    (exams || []).forEach((exam) => {
+      if (exam?.examName && !map.has(exam.examName)) map.set(exam.examName, exam);
     });
-    return Object.entries(group)
+    return map;
+  }, [exams]);
+
+  /** Published terms, newest first, each with its own totals for the row. */
+  const terms = useMemo(() => {
+    const groups = new Map();
+    (summary?.subjects || []).forEach((row) => {
+      const key = row.examName || "All";
+      if (!groups.has(key)) groups.set(key, []);
+      groups.get(key).push(row);
+    });
+    return [...groups.entries()]
       .map(([examName, subjects]) => {
-        const sorted = [...subjects].sort((a, b) => String(a.subject || "").localeCompare(String(b.subject || "")));
-        const obtained = sorted.reduce((s, m) => s + (Number(m.marksObtained) || 0), 0);
-        const max = sorted.reduce((s, m) => s + (Number(m.maxMarks) || 0), 0);
-        const dates = sorted.map((m) => m.date).filter(Boolean).sort();
+        const obtained = subjects.reduce((sum, m) => sum + (Number(m.marksObtained) || 0), 0);
+        const max = subjects.reduce((sum, m) => sum + (Number(m.maxMarks) || 0), 0);
+        const meta = examMeta.get(examName) || null;
         return {
           examName,
-          subjects: sorted,
+          count: subjects.length,
           obtained,
           max,
           pct: max ? Math.round((obtained / max) * 100) : 0,
-          lastDate: dates.length ? dates[dates.length - 1] : "",
+          grade: max ? computeGrade(obtained, max) : "—",
+          date: meta?.date || "",
+          termLabel: termLabelFor(examName, meta),
         };
       })
-      .sort((a, b) => (a.lastDate || "").localeCompare(b.lastDate || ""));
-  }, [marks]);
+      .sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  }, [summary, examMeta]);
 
-  /** The most recent exam drives the headline subject visuals. */
-  const best = byExam[byExam.length - 1] || null;
+  // Opening a term fetches exactly that term's report card (and its
+  // co-scholastic row). Students are pinned to their own marks server-side, so
+  // the query only ever carries the term. Nothing is cleared synchronously:
+  // `card.term !== activeTerm` / `cce.term !== activeTerm` hide stale rows at
+  // render time instead, so there is no flash and no extra render pass.
+  useEffect(() => {
+    if (!activeTerm) return;
+    let alive = true;
 
-  /** Subject bars for the most recent exam, strongest first. */
-  const subjectBars = useMemo(() => {
-    if (!best) return [];
-    return best.subjects
-      .map((m) => ({
-        id: m._id,
-        label: m.subject,
-        value: m.maxMarks ? Math.round((m.marksObtained / m.maxMarks) * 100) : 0,
-        obtained: m.marksObtained,
-        maxMarks: m.maxMarks,
-        grade: m.grade || computeGrade(m.marksObtained, m.maxMarks),
-      }))
-      .sort((a, b) => b.value - a.value);
-  }, [best]);
+    api.marks
+      .reportCard(`examName=${encodeURIComponent(activeTerm)}`)
+      .then(({ data }) => {
+        if (alive) setCard({ term: activeTerm, loading: false, data, error: "" });
+      })
+      .catch((requestError) => {
+        if (alive)
+          setCard({
+            term: activeTerm,
+            loading: false,
+            data: null,
+            error: requestError.message || "Could not load this report card",
+          });
+      });
 
-  /** Radar needs a stable axis, so cap it at the six biggest subjects. */
-  const subjectRadar = useMemo(
-    () => subjectBars.slice(0, 6).map((s) => ({ subject: s.label, value: s.value, grade: s.grade })),
-    [subjectBars],
+    const termLabel = termLabelFor(activeTerm, examMeta.get(activeTerm) || null);
+    api.cce
+      .getCoScholastic(
+        `term=${encodeURIComponent(termLabel)}&session=${encodeURIComponent(
+          summary?.session || sessionLabel(school) || "",
+        )}`,
+      )
+      .then(({ data }) => {
+        if (alive) setCce({ term: activeTerm, data: data || null });
+      })
+      .catch(() => {
+        if (alive) setCce({ term: activeTerm, data: null });
+      });
+
+    return () => {
+      alive = false;
+    };
+  }, [activeTerm, examMeta, summary, school]);
+
+  /** Identity block for the sheet — profile first, report payload as backup. */
+  const cardStudent = useMemo(
+    () => ({
+      name: profile?.name || user?.name || "",
+      admissionNo: profile?.admissionNo || card.data?.studentId || "",
+      class: profile?.class || card.data?.class || "",
+      section: profile?.section || card.data?.section || "",
+      roll: profile?.rollNo || "",
+      fatherName: profile?.parentName || "",
+      dob: profile?.dob || null,
+      avatar: profile?.photoUrl || "",
+    }),
+    [profile, user, card.data],
   );
 
-  /** Overall % per exam so improvement across terms is visible. */
-  const examTrend = useMemo(
-    () => byExam.map((e) => ({ label: e.examName, value: e.pct })),
-    [byExam],
-  );
+  const openTerm = (examName) => setSearchParams({ exam: examName });
+  const backToTerms = () => setSearchParams({});
 
-  /** Grade distribution for the latest exam. */
-  const gradeSplit = useMemo(() => {
-    if (!best) return [];
-    const counts = best.subjects.reduce((acc, m) => {
-      const g = m.grade || computeGrade(m.marksObtained, m.maxMarks);
-      if (g) acc[g] = (acc[g] || 0) + 1;
-      return acc;
-    }, {});
-    return Object.entries(counts).map(([name, value]) => ({ name, value }));
-  }, [best]);
+  const downloadPdf = async () => {
+    if (!activeTerm || downloadingPdf) return;
+    setDownloadingPdf(true);
+    try {
+      await api.marks.downloadReportCardPdf(
+        `examName=${encodeURIComponent(activeTerm)}`,
+      );
+      toast("Report card downloaded");
+    } catch (e) {
+      toast(e.message || "Download failed", "error");
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
 
   if (loading) {
     return (
       <div className="space-y-6">
-        <PageIntro eyebrow="Academics" title="My Results" art="chart" description="Your report card for this session." />
+        <PageIntro eyebrow="Academics" title="My Results" art="chart" description="Your report cards for this session." />
         <div className="space-y-3">{[0, 1].map((i) => <div key={i} className="h-28 bg-white rounded-2xl border border-slate-200 animate-pulse" />)}</div>
       </div>
     );
   }
 
+  // ── Opened term: the report card itself ──────────────────────────────────
+  if (activeTerm) {
+    return (
+      <div className="space-y-6">
+        <div className="no-print">
+          <PageIntro
+            eyebrow="Academics"
+            title="Report Card"
+            art="exams"
+            description={activeTerm}
+            right={
+              <div className="flex flex-wrap gap-2">
+                <Button variant="outline" onClick={backToTerms}>
+                  <ArrowLeft size={15} /> All terms
+                </Button>
+                <Button variant="outline" onClick={downloadPdf} disabled={downloadingPdf}>
+                  <Download size={15} /> {downloadingPdf ? "Preparing..." : "Download PDF"}
+                </Button>
+                <Button variant="primary" onClick={() => window.print()}>
+                  <Printer size={15} /> Print
+                </Button>
+              </div>
+            }
+          />
+        </div>
+
+        {card.loading || card.term !== activeTerm ? (
+          <div className="mx-auto max-w-3xl h-[520px] bg-white rounded-2xl border border-slate-200 animate-pulse" />
+        ) : card.error ? (
+          <Card>
+            <div className="py-10 text-center">
+              <p className="text-[15px] font-semibold text-ink">Report card unavailable</p>
+              <p className="text-[13px] text-slate-text/70 mt-1">{card.error}</p>
+            </div>
+          </Card>
+        ) : (
+          <Card bodyClassName="p-0">
+            <ReportCardSheet
+              school={school}
+              student={cardStudent}
+              termLabel={activeTerm}
+              report={card.data}
+              cce={cce.term === activeTerm ? cce.data : null}
+            />
+          </Card>
+        )}
+      </div>
+    );
+  }
+
+  // ── Term list: pick a result to open ─────────────────────────────────────
   return (
     <div className="space-y-6">
-      <PageIntro eyebrow="Academics" title="My Results" art="chart" description="Your report card for this session." />
+      <PageIntro
+        eyebrow="Academics"
+        title="My Results"
+        art="chart"
+        description="Pick a term to open, print or download its report card."
+      />
 
-      {byExam.length === 0 ? (
+      {terms.length === 0 ? (
         <Card>
           <div className="py-10 text-center">
             <PageArtwork name="chart" size={64} className="mx-auto mb-4" />
             <p className="text-[15px] font-semibold text-ink">No results published</p>
-            <p className="text-[13px] text-slate-text/70 mt-1">Your marks will appear here once teachers publish them.</p>
+            <p className="text-[13px] text-slate-text/70 mt-1">Your report cards will appear here once teachers publish them.</p>
           </div>
         </Card>
       ) : (
-        <>
-          <div className="grid gap-4 lg:grid-cols-3">
-            <Card>
-              <div className="flex flex-col items-center gap-3 py-2">
-                <ProgressRing
-                  value={Number(marks.percentage) || 0}
-                  size={150}
-                  stroke={13}
-                  color={toneKeyFor(Number(marks.percentage) || 0)}
-                  label="Overall"
-                  sublabel="All exams"
-                  ariaLabel={`Overall percentage ${marks.percentage}`}
-                />
-                <Donut
-                  data={gradeSplit}
-                  height={132}
-                  centerValue={best ? best.subjects.length : 0}
-                  centerLabel="Subjects"
-                />
-              </div>
-            </Card>
-
-            <Card className="lg:col-span-2" title={`Subject Performance · ${best?.examName || ""}`} subtitle="Percentage scored in each subject">
-              <BarRowChart
-                data={subjectBars}
-                height={Math.max(180, subjectBars.length * 36)}
-                color="info"
-                colorFor={(d) => toneFor(d.value)}
-                tooltipLabel="Score"
-              />
-            </Card>
-          </div>
-
-          <div className="grid gap-4 lg:grid-cols-2">
-            <Card title="Subject Balance" subtitle="How your scores spread across subjects">
-              <SubjectRadar data={subjectRadar} height={270} color="violet" />
-            </Card>
-            <Card title="Progress Across Exams" subtitle="Overall percentage for each exam">
-              <TrendArea data={examTrend} height={270} color="violet" suffix="%" tooltipLabel="Overall" />
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-            <Card>
-              <div className="p-1">
-                <p className="font-display text-3xl font-bold text-ink">{marks.percentage}%</p>
-                <p className="text-[11px] text-slate-text/60 mt-1">Overall (all exams)</p>
-              </div>
-            </Card>
-            <Card><p className="font-display text-xl font-bold text-ink">{marks.totalObtained}</p><p className="text-[11px] text-slate-text/60 mt-1">Total obtained</p></Card>
-            <Card><p className="font-display text-xl font-bold text-ink">{marks.totalMax}</p><p className="text-[11px] text-slate-text/60 mt-1">Total maximum</p></Card>
-          </div>
-
-          {byExam.map((exam) => (
-            <Card
-              key={exam.examName}
-              title={exam.examName}
-              action={<Pill tone={exam.pct >= 40 ? "success" : "alert"}>{exam.pct}%</Pill>}
-            >
-              {exam.subjects.length > 1 && (
-                <div className="mb-4">
-                  <BarRowChart
-                    data={exam.subjects.map((m) => ({
-                      id: m._id,
-                      label: m.subject,
-                      value: m.maxMarks ? Math.round((m.marksObtained / m.maxMarks) * 100) : 0,
-                      obtained: m.marksObtained,
-                      maxMarks: m.maxMarks,
-                    }))}
-                    height={Math.max(140, exam.subjects.length * 32)}
-                    color="info"
-                    colorFor={(d) => toneFor(d.value)}
-                    tooltipLabel="Score"
+        <Card
+          title="Published results"
+          subtitle={summary?.session ? `Session ${summary.session}` : "Report cards for your class"}
+          bodyClassName="p-0"
+        >
+          <ul className="divide-y divide-slate-100">
+            {terms.map((t) => (
+              <li key={t.examName}>
+                <button
+                  type="button"
+                  onClick={() => openTerm(t.examName)}
+                  className="group flex w-full items-center gap-4 px-5 py-4 text-left transition-colors hover:bg-paper focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary/50"
+                >
+                  <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-primary/10 text-primary-dark">
+                    <FileText size={18} />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="flex flex-wrap items-center gap-2">
+                      <span className="truncate font-semibold text-ink">{t.examName}</span>
+                      {t.termLabel && t.termLabel !== t.examName && (
+                        <Pill tone="primary">{t.termLabel}</Pill>
+                      )}
+                    </span>
+                    <span className="mt-0.5 block text-[12.5px] text-slate-text/70">
+                      {t.count} {t.count === 1 ? "subject" : "subjects"} · {t.obtained} / {t.max} marks
+                      {t.date ? ` · ${fmtDate(t.date)}` : ""}
+                    </span>
+                  </span>
+                  <span className="shrink-0 text-right">
+                    <span className="block font-display text-xl font-bold text-ink">{t.pct}%</span>
+                    <Pill tone={t.pct >= 40 ? "success" : "alert"}>{t.grade}</Pill>
+                  </span>
+                  <ChevronRight
+                    size={16}
+                    className="shrink-0 text-slate-text/40 transition group-hover:translate-x-0.5 group-hover:text-primary"
                   />
-                </div>
-              )}
-              <div className="overflow-x-auto -mx-5">
-                <table className="w-full text-[13px]">
-                  <thead>
-                    <tr className="text-left text-[11px] text-slate-text/50 uppercase tracking-wide">
-                      <th className="px-5 py-2 font-semibold">Subject</th>
-                      <th className="px-3 py-2 font-semibold">Marks</th>
-                      <th className="px-3 py-2 font-semibold">Grade</th>
-                      <th className="px-5 py-2 font-semibold text-right">%</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {exam.subjects.map((m, i) => {
-                      const pct = m.maxMarks ? Math.round((m.marksObtained / m.maxMarks) * 100) : 0;
-                      return (
-                        <tr key={m._id || i} className="border-t border-slate-200">
-                          <td className="px-5 py-2.5 font-medium text-ink">{m.subject}</td>
-                          <td className="px-3 py-2.5">{m.marksObtained} / {m.maxMarks}</td>
-                          <td className="px-3 py-2.5"><Pill tone={["A+", "A", "B+"].includes(m.grade || computeGrade(m.marksObtained, m.maxMarks)) ? "success" : "neutral"}>{m.grade || computeGrade(m.marksObtained, m.maxMarks)}</Pill></td>
-                          <td className="px-5 py-2.5 text-right font-semibold text-ink">{pct}%</td>
-                        </tr>
-                      );
-                    })}
-                    <tr className="border-t-2 border-slate-300">
-                      <td className="px-5 py-2.5 font-bold text-ink">Total</td>
-                      <td className="px-3 py-2.5 font-semibold text-ink">{exam.obtained} / {exam.max}</td>
-                      <td className="px-3 py-2.5" />
-                      <td className="px-5 py-2.5 text-right font-bold text-ink">{exam.pct}%</td>
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          ))}
-        </>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </Card>
       )}
 
       <Card>

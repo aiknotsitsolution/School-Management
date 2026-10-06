@@ -43,6 +43,10 @@ const gateStudentRead = (req, res, next) => {
 };
 
 router.post("/", requirePermission("students:write"), ctrl.createStudent);
+// Bulk import (C11): same validation as a single create, applied per row.
+// Declared as a literal before any parameterized route so "bulk" can never be
+// parsed as an id.
+router.post("/bulk", requirePermission("students:write"), ctrl.bulkCreateStudents);
 router.get(
   "/stats/summary",
   requirePermission("students:read"),

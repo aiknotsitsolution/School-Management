@@ -4,7 +4,7 @@ const router = express.Router();
 const { validateObjectIdParam } = require("@school-erp/shared/src/middleware/objectId");
 router.param("id", validateObjectIdParam);
 const ctrl = require("../controllers/studyMaterialController");
-const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStudentSchedule, scopeClassTeacher, scopeClassTeacherAggregate, guardClassBody } = require("../middleware/auth");
+const { verifyToken, resolveTenant, requireTenant, requirePermission, requireAnyPermission, scopeStudentSchedule, scopeClassTeacher, scopeClassTeacherAggregate, guardClassBody } = require("../middleware/auth");
 
 router.use(verifyToken, resolveTenant, requireTenant);
 
@@ -25,12 +25,17 @@ const upload = multer({
 // resolved and to the sections they are assigned to; students are pinned to
 // their own class (and section) so one class can never read another's shelf.
 // Read sits on library:read (not homework:read) because the shelf now lives in
-// the Library, which every staff designation may browse — writes stay on
-// homework:write (school admin + teachers).
+// the Library, which every staff designation may browse.
+// Writes accept EITHER permission: homework:write (school admin + teachers —
+// their existing surface) or library:manage (the librarian, who uploads the
+// e-books staff and students read). scopeClassTeacher/guardClassBody only bind
+// role==="teacher", so the librarian (role "staff") passes through and may
+// file materials against any class.
+const writeMaterial = requireAnyPermission("homework:write", "library:manage");
 router.get("/", requirePermission("library:read"), scopeStudentSchedule({ section: true }), scopeClassTeacherAggregate, ctrl.getMaterials);
-router.post("/upload", requirePermission("homework:write"), upload.single("file"), ctrl.uploadMaterialFile);
-router.post("/", requirePermission("homework:write"), scopeClassTeacher, guardClassBody(), ctrl.createMaterial);
-router.patch("/:id", requirePermission("homework:write"), scopeClassTeacher, guardClassBody(), ctrl.updateMaterial);
-router.delete("/:id", requirePermission("homework:write"), scopeClassTeacher, ctrl.deleteMaterial);
+router.post("/upload", writeMaterial, upload.single("file"), ctrl.uploadMaterialFile);
+router.post("/", writeMaterial, scopeClassTeacher, guardClassBody(), ctrl.createMaterial);
+router.patch("/:id", writeMaterial, scopeClassTeacher, guardClassBody(), ctrl.updateMaterial);
+router.delete("/:id", writeMaterial, scopeClassTeacher, ctrl.deleteMaterial);
 
 module.exports = router;

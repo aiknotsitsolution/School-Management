@@ -1,8 +1,9 @@
 const Concession = require("../models/Concession");
 
-// Which concession wins when a student has several Active rows: scholarships
-// beat sibling discounts beat manual grants; ties go to the larger benefit.
-const KIND_PRIORITY = { Scholarship: 3, Sibling: 2, Manual: 1 };
+// Which concession wins when a student has several Active rows: statutory
+// entitlements (RTE quota, SC/ST) beat scholarships beat sibling discounts
+// beat manual grants; ties go to the larger benefit.
+const KIND_PRIORITY = { RTE: 4, "SC/ST": 4, Scholarship: 3, Sibling: 2, Manual: 1 };
 
 // Apply at most one concession to a gross amount. Returns the fields stored
 // on the invoice: grossAmount (pre-concession), concessionAmount (the

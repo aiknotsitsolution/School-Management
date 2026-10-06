@@ -607,6 +607,51 @@ body {
     margin: 8mm;
   }
 }
+
+/* ── Report card print ───────────────────────────────────────────────────
+   The payslip rule above hides the whole document except its own root, which
+   is why printing a report card used to come out blank. Re-show the printable
+   sheet, release the fixed-height scroll shell (a card has to be free to
+   paginate) and pin the colour variables back to the light palette: the sheet
+   is themed through the same CSS vars as the app, so a dark session would
+   otherwise print light-on-white. */
+@media print {
+  #report-card-print,
+  #report-card-print * {
+    visibility: visible !important;
+  }
+
+  html,
+  body,
+  .h-screen,
+  .overflow-hidden,
+  .overflow-y-auto {
+    height: auto !important;
+    overflow: visible !important;
+  }
+
+  #report-card-print {
+    --color-white: #ffffff;
+    --color-white-2: #ffffff;
+    --color-paper: #f8fafc;
+    --color-paper-2: #f1f5f9;
+    --color-ink: #172033;
+    --color-ink-light: #222d42;
+    --color-ink-dark: #0f172a;
+    --color-slate-text: #475569;
+    --color-line: #e2e8f0;
+    --color-slate-50: #f8fafc;
+    --color-slate-100: #f1f5f9;
+    --color-slate-200: #e2e8f0;
+    --color-slate-300: #cbd5e1;
+    --color-slate-400: #94a3b8;
+    --color-slate-500: #64748b;
+    --color-slate-600: #475569;
+    --color-slate-700: #cbd5e1;
+    --color-slate-800: #e2e8f0;
+    --color-slate-900: #0f172a;
+  }
+}
 /* Editorial cinematic base */
 @layer base {
   h1, h2, h3 {

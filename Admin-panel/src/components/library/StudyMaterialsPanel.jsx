@@ -3,7 +3,7 @@ import { BookOpenCheck, FileText, Pencil, Plus, RefreshCw, Search, Trash2, Uploa
 import { Card, Button, Input, Select, Pill, toast } from "../UI";
 import { Pagination } from "../Pagination";
 import { LoadingBlock, EmptyBlock, ErrorBlock } from "../StateViews";
-import { usePermission } from "../../lib/permissions";
+import { useAnyPermission } from "../../lib/permissions";
 import { useMasterOptions } from "../../hooks/useMasterOptions";
 import { api } from "../../lib/api";
 import { isPdfUrl, readPdfPageCount } from "../../lib/pdfjs";
@@ -43,11 +43,14 @@ const fmtSize = (bytes) => {
     : `${Math.max(1, Math.round(bytes / 1024))} KB`;
 };
 
-// The Library's "Study Materials" surface (admin/teacher): class-wise table
-// with PDF/image upload, edit, delete and an in-app reader for PDFs. Rendered
-// inside the Library page tabs and by the standalone /study-materials route.
+// The Library's "Study Materials" surface (admin/teacher/librarian): class-wise
+// table with PDF/image upload, edit, delete and an in-app reader for PDFs.
+// Rendered inside the Library page tabs and by the standalone /study-materials
+// route. Writes accept homework:write (teachers/admins) or library:manage
+// (the librarian, who uploads the e-books everyone reads) — the client mirror
+// of the route's requireAnyPermission.
 export default function StudyMaterialsPanel() {
-  const canWrite = usePermission("homework:write");
+  const canWrite = useAnyPermission("homework:write", "library:manage");
 
   const { options: classOptions } = useMasterOptions("classes", []);
   const { options: subjectOptions } = useMasterOptions("subjects", []);

@@ -112,7 +112,7 @@ export default function SupportChatbot() {
   };
 
   return (
-    <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3">
+    <div className="fixed bottom-4 right-4 z-40 flex flex-col items-end gap-3 no-print">
       {open && (
         <div className="w-[calc(100vw-2rem)] max-w-[360px] h-[480px] max-h-[72vh] bg-white rounded-2xl shadow-2xl border border-ink/10 overflow-hidden flex flex-col">
           {/* Header */}

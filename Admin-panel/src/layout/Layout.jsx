@@ -180,7 +180,7 @@ export default function Layout() {
         <Topbar onMenuClick={() => setOpen(true)} />
         <main className="flex-1 overflow-y-auto scrollbar-thin p-4 sm:p-6">
           {school && (
-            <div className="flex items-center gap-2 mb-4 text-[11.5px] text-slate-text/70">
+            <div className="flex items-center gap-2 mb-4 text-[11.5px] text-slate-text/70 no-print">
               <span className="font-semibold truncate">
                 {school.name} · {school.code}
               </span>

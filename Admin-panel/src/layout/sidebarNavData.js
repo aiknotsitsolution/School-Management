@@ -380,15 +380,6 @@ export const groups = [
         perm: "homework:read",
       },
       {
-        // The Library hub now carries the class shelf as its "Study Materials"
-        // tab (deep link: /library?tab=materials) — one nav entry, not two.
-        to: "/library?tab=materials",
-        icon: AutoStories,
-        label: "Study Materials",
-        perm: "library:read",
-        roles: ["school_admin", "super_admin", "teacher"],
-      },
-      {
         to: "/promotions",
         icon: WorkspacePremium,
         label: "Promotions",

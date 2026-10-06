@@ -891,9 +891,11 @@ export default function SidebarMui({
 
   const handleNavigate = useCallback(() => closeMobile(), [closeMobile]);
 
+  // The rail never prints: a printed page is the document, not the shell.
   return (
     <Drawer
       {...drawerProps}
+      className="no-print"
       variant={isMobile ? "temporary" : "permanent"}
       open={isMobile ? mobileOpen : true}
       onClose={closeMobile}

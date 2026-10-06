@@ -24,10 +24,11 @@ import DarkModeRoundedIcon from "@mui/icons-material/DarkModeRounded";
 import LightModeRoundedIcon from "@mui/icons-material/LightModeRounded";
 import LogoutRoundedIcon from "@mui/icons-material/LogoutRounded";
 import { selectRole, selectUser } from "../store/selectors";
-import { logout, setActiveSchoolId } from "../store/authSlice";
+import { logout } from "../store/authSlice";
 import { hasPermission, legacyRole } from "../lib/permissions";
 import { useThemeMode } from "../hooks/useThemeMode.jsx";
 import BranchSwitcher from "./BranchSwitcher.jsx";
+import SchoolSwitcher from "./SchoolSwitcher.jsx";
 import { api } from "../lib/api";
 import { onSocket } from "../lib/socket";
 
@@ -97,10 +98,6 @@ export default function Topbar({ onMenuClick }) {
   const { pathname } = useLocation();
   const user = useSelector(selectUser);
   const role = useSelector(selectRole);
-  // A tenant switcher is deliberately not rendered for the platform owner, so a
-  // school picked in an earlier session is dropped instead of silently keeping
-  // the platform user inside someone else's tenant.
-  const activeSchoolId = useSelector((s) => s.auth?.activeSchoolId);
   const { mode, toggle: toggleTheme } = useThemeMode();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState([]);
@@ -311,13 +308,8 @@ export default function Topbar({ onMenuClick }) {
     navigate("/login", { replace: true });
   };
 
-  // The platform owner is platform-scope only: no tenant switcher, no campus
-  // switcher, so a stale school from a previous session must not linger.
-  useEffect(() => {
-    if (role === "super_admin" && activeSchoolId) {
-      dispatch(setActiveSchoolId(null));
-    }
-  }, [role, activeSchoolId, dispatch]);
+  // The platform owner picks their tenant with SchoolSwitcher (rendered below);
+  // the selection must persist, so nothing here clears activeSchoolId.
 
   // One source of truth: `legacyRole` comes from lib/permissions and only
   // normalises the legacy "admin" role. Do not redeclare a role map here — a
@@ -346,7 +338,7 @@ export default function Topbar({ onMenuClick }) {
   const pageTitle = routeTitle(pathname);
 
   return (
-    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 shrink-0 sticky top-0 z-20">
+    <header className="h-16 bg-white border-b border-slate-200 flex items-center justify-between px-4 sm:px-6 shrink-0 sticky top-0 z-20 no-print">
       <div className="flex min-w-0 items-center gap-3">
         <button onClick={onMenuClick} className="lg:hidden text-ink p-1 -ml-1" aria-label="Open navigation">
           <Menu size={22} />
@@ -357,6 +349,7 @@ export default function Topbar({ onMenuClick }) {
       </div>
 
       <div className="flex items-center gap-2 sm:gap-4">
+        <SchoolSwitcher />
         <BranchSwitcher />
         {canSearchDirectory ? (
         <div className="hidden md:block relative" ref={searchRef}>

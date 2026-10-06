@@ -80,7 +80,7 @@ const QUICK_LINKS = [
   { to: "/accountant/fees", icon: Receipt, label: "Fee management", tone: ACCENTS.primary.icon },
   { to: "/accountant/fees", icon: Banknote, label: "Collect payment", tone: ACCENTS.success.icon },
   { to: "/accountant/fees", icon: CreditCard, label: "Online payments", tone: ACCENTS.info.icon },
-  { to: "/accountant/fees", icon: Printer, label: "Print receipts", tone: ACCENTS.violet.icon },
+  { to: "/fees-collection", icon: Printer, label: "Print receipts", tone: ACCENTS.violet.icon },
   { to: "/fees-collection", icon: Inbox, label: "Fee collection", tone: ACCENTS.warn.icon },
 ];
 
