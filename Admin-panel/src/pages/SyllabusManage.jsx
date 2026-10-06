@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { ClipboardList, ListPlus, Pencil, Plus, RefreshCw, Trash2, X, CheckCircle2 } from "lucide-react";
+import { ClipboardList, ListPlus, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { PageIntro, Card, Button, Input, Select, Pill, toast } from "../components/UI";
 import { LoadingBlock, EmptyBlock, ErrorBlock } from "../components/StateViews";
 import { usePermission } from "../lib/permissions"; 
@@ -222,6 +222,25 @@ export default function SyllabusManage() {
 
   const doneCount = (row) =>
     (row.topics || []).filter((t) => t.status === "completed").length;
+  const groupedRows = rows.reduce((classes, row) => {
+    let classGroup = classes.find((group) => group.name === row.class);
+    if (!classGroup) {
+      classGroup = { name: row.class, sections: [] };
+      classes.push(classGroup);
+    }
+    const sectionKey = row.sectionId || row.sectionName || "unassigned";
+    let sectionGroup = classGroup.sections.find((group) => group.key === sectionKey);
+    if (!sectionGroup) {
+      sectionGroup = {
+        key: sectionKey,
+        name: row.sectionName || "Unassigned",
+        subjects: [],
+      };
+      classGroup.sections.push(sectionGroup);
+    }
+    sectionGroup.subjects.push(row);
+    return classes;
+  }, []);
 
   return (
     <div className="space-y-5">
@@ -302,71 +321,103 @@ export default function SyllabusManage() {
             }
           />
         ) : (
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {rows.map((row) => {
-              const totalTopics = (row.topics || []).length;
-              const done = doneCount(row);
-              return (
-                <div
-                  key={row._id}
-                  className="rounded-xl border border-slate-200 p-4 hover:border-slate-300 transition-colors"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="font-semibold text-ink text-[14px] truncate">
-                        {row.class}
-                        {row.sectionName ? ` · ${row.sectionName}` : ""}
-                        {" · "}
-                        {row.subject}
-                      </p>
-                      <p className="text-[12px] text-slate-text/70 mt-0.5">{row.term}</p>
-                    </div>
-                    <Pill tone="neutral">{totalTopics} topics</Pill>
-                  </div>
-
-                  <div className="mt-3 flex items-center gap-2">
-                    <div className="flex-1 h-1.5 rounded-full bg-paper overflow-hidden">
-                      <div
-                        className="h-full bg-success transition-all"
-                        style={{
-                          width: totalTopics ? `${Math.round((done / totalTopics) * 100)}%` : "0%",
-                        }}
-                      />
-                    </div>
-                    <span className="text-[11.5px] font-semibold text-slate-text">
-                      {done}/{totalTopics}
-                    </span>
-                  </div>
-
-                  <div className="mt-3 flex items-center justify-between text-[12px] text-slate-text/70">
-                    <span>{row.totalHours || 0} hours planned</span>
-                    {done === totalTopics && totalTopics > 0 && (
-                      <span className="inline-flex items-center gap-1 text-success font-semibold">
-                        <CheckCircle2 size={12} /> Complete
-                      </span>
-                    )}
-                  </div>
-
-                  {canWrite && (
-                    <div className="mt-3 pt-3 border-t border-slate-100 flex items-center gap-2">
-                      <button
-                        onClick={() => openEdit(row)}
-                        className="flex-1 inline-flex items-center justify-center gap-1.5 px-2 py-1.5 rounded-lg text-[12px] font-semibold text-info hover:bg-info/10 transition-colors"
-                      >
-                        <Pencil size={13} /> Edit
-                      </button>
-                      <button
-                        onClick={() => handleDelete(row)}
-                        className="px-2 py-1.5 rounded-lg text-[12px] font-semibold text-slate-text/70 hover:bg-alert/10 hover:text-alert transition-colors"
-                        title="Delete syllabus"
-                      >
-                        <Trash2 size={13} />
-                      </button>
-                    </div>
-                  )}
+          <div className="space-y-5">
+            {groupedRows.map((classGroup) => (
+              <section
+                key={classGroup.name}
+                className="overflow-hidden rounded-xl border border-primary/20 bg-white"
+              >
+                <div className="flex items-center gap-2 border-b border-primary/10 bg-primary/5 px-4 py-3">
+                  <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
+                    Class
+                  </span>
+                  <h3 className="font-display text-[16px] font-semibold text-ink">
+                    {classGroup.name || "—"}
+                  </h3>
                 </div>
-              );
-            })}
+
+                <div className="space-y-4 p-4">
+                  {classGroup.sections.map((sectionGroup) => (
+                    <div
+                      key={sectionGroup.key}
+                      className="overflow-hidden rounded-lg border border-slate-200"
+                    >
+                      <div className="flex items-center gap-2 border-b border-slate-100 bg-paper/60 px-3 py-2">
+                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-text/60">
+                          Section
+                        </span>
+                        <h4 className="text-[13px] font-semibold text-ink">
+                          {sectionGroup.name}
+                        </h4>
+                        <span className="ml-auto text-[11px] text-slate-text/60">
+                          {sectionGroup.subjects.length} subject
+                          {sectionGroup.subjects.length === 1 ? "" : "s"}
+                        </span>
+                      </div>
+
+                      <div className="divide-y divide-slate-100">
+                        {sectionGroup.subjects.map((row) => {
+                          const totalTopics = (row.topics || []).length;
+                          const done = doneCount(row);
+                          return (
+                            <div
+                              key={row._id}
+                              className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center"
+                            >
+                              <div className="min-w-0 flex-1">
+                                <div className="flex flex-wrap items-center gap-2">
+                                  <p className="truncate text-[13px] font-semibold text-ink">
+                                    {row.subject || "—"}
+                                  </p>
+                                  <Pill tone="primary">{row.term || "Full Year"}</Pill>
+                                  <Pill tone="neutral">{totalTopics} topics</Pill>
+                                </div>
+                                <div className="mt-2 flex items-center gap-2">
+                                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-paper">
+                                    <div
+                                      className="h-full bg-success transition-all"
+                                      style={{
+                                        width: totalTopics
+                                          ? `${Math.round((done / totalTopics) * 100)}%`
+                                          : "0%",
+                                      }}
+                                    />
+                                  </div>
+                                  <span className="text-[11px] font-semibold text-slate-text">
+                                    {done}/{totalTopics} complete
+                                  </span>
+                                  <span className="hidden text-[11px] text-slate-text/60 sm:inline">
+                                    · {row.totalHours || 0} planned hours
+                                  </span>
+                                </div>
+                              </div>
+
+                              {canWrite && (
+                                <div className="flex shrink-0 items-center gap-1 border-t border-slate-100 pt-2 sm:border-0 sm:pt-0">
+                                  <button
+                                    onClick={() => openEdit(row)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-info transition-colors hover:bg-info/10"
+                                  >
+                                    <Pencil size={13} /> Edit
+                                  </button>
+                                  <button
+                                    onClick={() => handleDelete(row)}
+                                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-slate-text/70 transition-colors hover:bg-alert/10 hover:text-alert"
+                                    title="Delete syllabus"
+                                  >
+                                    <Trash2 size={13} /> Delete
+                                  </button>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </section>
+            ))}
           </div>
         )}
       </Card>
