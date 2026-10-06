@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { ClipboardList, ListPlus, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
-import { PageIntro, Card, Button, Input, Select, Pill, toast } from "../components/UI";
+import { PageIntro, Card, Button, Input, Select, toast } from "../components/UI";
 import { LoadingBlock, EmptyBlock, ErrorBlock } from "../components/StateViews";
 import { usePermission } from "../lib/permissions"; 
 import { useMasterOptions } from "../hooks/useMasterOptions";
@@ -321,103 +321,104 @@ export default function SyllabusManage() {
             }
           />
         ) : (
-          <div className="space-y-5">
-            {groupedRows.map((classGroup) => (
-              <section
-                key={classGroup.name}
-                className="overflow-hidden rounded-xl border border-primary/20 bg-white"
-              >
-                <div className="flex items-center gap-2 border-b border-primary/10 bg-primary/5 px-4 py-3">
-                  <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
-                    Class
-                  </span>
-                  <h3 className="font-display text-[16px] font-semibold text-ink">
-                    {classGroup.name || "—"}
-                  </h3>
-                </div>
-
-                <div className="space-y-4 p-4">
-                  {classGroup.sections.map((sectionGroup) => (
-                    <div
-                      key={sectionGroup.key}
-                      className="overflow-hidden rounded-lg border border-slate-200"
-                    >
-                      <div className="flex items-center gap-2 border-b border-slate-100 bg-paper/60 px-3 py-2">
-                        <span className="text-[10px] font-bold uppercase tracking-wider text-slate-text/60">
-                          Section
-                        </span>
-                        <h4 className="text-[13px] font-semibold text-ink">
-                          {sectionGroup.name}
-                        </h4>
-                        <span className="ml-auto text-[11px] text-slate-text/60">
-                          {sectionGroup.subjects.length} subject
-                          {sectionGroup.subjects.length === 1 ? "" : "s"}
-                        </span>
-                      </div>
-
-                      <div className="divide-y divide-slate-100">
-                        {sectionGroup.subjects.map((row) => {
-                          const totalTopics = (row.topics || []).length;
-                          const done = doneCount(row);
-                          return (
-                            <div
-                              key={row._id}
-                              className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center"
+          <div className="-mx-5 overflow-x-auto">
+            <table className="w-full min-w-[900px] border-collapse text-left text-[13px]">
+              <thead>
+                <tr className="border-y border-slate-200 bg-paper/70 text-[11px] uppercase tracking-wide text-slate-text/70">
+                  <th className="px-5 py-3 font-semibold">Class</th>
+                  <th className="px-4 py-3 font-semibold">Section</th>
+                  <th className="px-4 py-3 font-semibold">Subject</th>
+                  <th className="px-4 py-3 font-semibold">Term</th>
+                  <th className="px-4 py-3 font-semibold">Topics Progress</th>
+                  <th className="px-4 py-3 font-semibold">Planned Hours</th>
+                  {canWrite && <th className="px-4 py-3 text-right font-semibold">Actions</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {groupedRows.map((classGroup) => {
+                  const classRowCount = classGroup.sections.reduce(
+                    (total, section) => total + section.subjects.length,
+                    0,
+                  );
+                  return classGroup.sections.flatMap((sectionGroup, sectionIndex) =>
+                    sectionGroup.subjects.map((row, subjectIndex) => {
+                      const totalTopics = (row.topics || []).length;
+                      const done = doneCount(row);
+                      return (
+                        <tr
+                          key={row._id}
+                          className="border-b border-slate-100 transition-colors hover:bg-paper/40"
+                        >
+                          {sectionIndex === 0 && subjectIndex === 0 && (
+                            <td
+                              rowSpan={classRowCount}
+                              className="border-r border-slate-100 bg-primary/[0.03] px-5 py-3 align-top font-semibold text-ink"
                             >
-                              <div className="min-w-0 flex-1">
-                                <div className="flex flex-wrap items-center gap-2">
-                                  <p className="truncate text-[13px] font-semibold text-ink">
-                                    {row.subject || "—"}
-                                  </p>
-                                  <Pill tone="primary">{row.term || "Full Year"}</Pill>
-                                  <Pill tone="neutral">{totalTopics} topics</Pill>
-                                </div>
-                                <div className="mt-2 flex items-center gap-2">
-                                  <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-paper">
-                                    <div
-                                      className="h-full bg-success transition-all"
-                                      style={{
-                                        width: totalTopics
-                                          ? `${Math.round((done / totalTopics) * 100)}%`
-                                          : "0%",
-                                      }}
-                                    />
-                                  </div>
-                                  <span className="text-[11px] font-semibold text-slate-text">
-                                    {done}/{totalTopics} complete
-                                  </span>
-                                  <span className="hidden text-[11px] text-slate-text/60 sm:inline">
-                                    · {row.totalHours || 0} planned hours
-                                  </span>
-                                </div>
+                              {classGroup.name || "—"}
+                            </td>
+                          )}
+                          {subjectIndex === 0 && (
+                            <td
+                              rowSpan={sectionGroup.subjects.length}
+                              className="border-r border-slate-100 bg-paper/40 px-4 py-3 align-top font-medium text-ink"
+                            >
+                              {sectionGroup.name}
+                              <span className="ml-2 text-[10px] text-slate-text/50">
+                                {sectionGroup.subjects.length}
+                              </span>
+                            </td>
+                          )}
+                          <td className="px-4 py-3 font-semibold text-ink">
+                            {row.subject || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-slate-text">
+                            {row.term || "Full Year"}
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex min-w-[130px] items-center gap-2">
+                              <div className="h-1.5 flex-1 overflow-hidden rounded-full bg-paper">
+                                <div
+                                  className="h-full bg-success"
+                                  style={{
+                                    width: totalTopics
+                                      ? `${Math.round((done / totalTopics) * 100)}%`
+                                      : "0%",
+                                  }}
+                                />
                               </div>
-
-                              {canWrite && (
-                                <div className="flex shrink-0 items-center gap-1 border-t border-slate-100 pt-2 sm:border-0 sm:pt-0">
-                                  <button
-                                    onClick={() => openEdit(row)}
-                                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-info transition-colors hover:bg-info/10"
-                                  >
-                                    <Pencil size={13} /> Edit
-                                  </button>
-                                  <button
-                                    onClick={() => handleDelete(row)}
-                                    className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-slate-text/70 transition-colors hover:bg-alert/10 hover:text-alert"
-                                    title="Delete syllabus"
-                                  >
-                                    <Trash2 size={13} /> Delete
-                                  </button>
-                                </div>
-                              )}
+                              <span className="whitespace-nowrap text-[11px] text-slate-text">
+                                {done}/{totalTopics}
+                              </span>
                             </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </section>
-            ))}
+                          </td>
+                          <td className="px-4 py-3 text-slate-text">
+                            {row.totalHours || 0} hrs
+                          </td>
+                          {canWrite && (
+                            <td className="px-4 py-3">
+                              <div className="flex justify-end gap-1">
+                                <button
+                                  onClick={() => openEdit(row)}
+                                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12px] font-semibold text-info hover:bg-info/10"
+                                >
+                                  <Pencil size={13} /> Edit
+                                </button>
+                                <button
+                                  onClick={() => handleDelete(row)}
+                                  className="inline-flex items-center gap-1 rounded-lg px-2 py-1.5 text-[12px] font-semibold text-alert hover:bg-alert/10"
+                                >
+                                  <Trash2 size={13} /> Delete
+                                </button>
+                              </div>
+                            </td>
+                          )}
+                        </tr>
+                      );
+                    }),
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
         )}
       </Card>
