@@ -43,7 +43,11 @@ export default function CustomMasterModal({
     try {
       const payload = { name: trimmed };
       if (showDescription) payload.description = description.trim();
-      Object.assign(payload, parentValues);
+      parentFields
+        .filter((field) => field.persist !== false)
+        .forEach((field) => {
+          payload[field.name] = parentValues[field.name];
+        });
       if (editing) {
         const response = await api.examMasters.update(kind, initialItem._id, payload);
         toast(`${label} "${response.data.name}" updated`);
@@ -104,31 +108,49 @@ export default function CustomMasterModal({
             />
           </div>
 
-          {parentFields.map((field) => (
-            <div key={field.name}>
-              <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                {field.label}
-              </label>
-              <select
-                value={parentValues[field.name] || ""}
-                onChange={(e) =>
-                  setParentValues((values) => ({
-                    ...values,
-                    [field.name]: e.target.value,
-                  }))
-                }
-                required={field.required}
-                className="w-full h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
-              >
-                <option value="">{field.placeholder || `Select ${field.label.toLowerCase()}`}</option>
-                {field.options.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
+          {parentFields.map((field) => {
+            const options = field.optionsFor
+              ? field.optionsFor(parentValues)
+              : field.options;
+            const disabled = field.dependsOn
+              ? !parentValues[field.dependsOn]
+              : false;
+            return (
+              <div key={field.name}>
+                <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                  {field.label}
+                </label>
+                <select
+                  value={parentValues[field.name] || ""}
+                  onChange={(e) =>
+                    setParentValues((values) => {
+                      const next = { ...values, [field.name]: e.target.value };
+                      parentFields.forEach((dependentField) => {
+                        if (dependentField.dependsOn === field.name) {
+                          next[dependentField.name] = "";
+                        }
+                      });
+                      return next;
+                    })
+                  }
+                  required={field.required}
+                  disabled={disabled}
+                  className="w-full h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40 disabled:bg-slate-50 disabled:text-slate-400"
+                >
+                  <option value="">
+                    {disabled
+                      ? field.disabledPlaceholder || `Select ${field.dependsOnLabel || "parent"} first`
+                      : field.placeholder || `Select ${field.label.toLowerCase()}`}
                   </option>
-                ))}
-              </select>
-            </div>
-          ))}
+                  {options.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            );
+          })}
 
           {showDescription && (
             <div>

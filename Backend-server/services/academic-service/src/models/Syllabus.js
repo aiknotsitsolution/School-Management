@@ -6,6 +6,8 @@ const syllabusSchema = new mongoose.Schema(
     // Campus the syllabus belongs to.
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     class: { type: String, required: true, trim: true },
+    sectionId: { type: mongoose.Schema.Types.ObjectId, ref: "SchoolSection", default: null, index: true },
+    sectionName: { type: String, default: "", trim: true },
     subject: { type: String, required: true, trim: true },
     term: { type: String, enum: ["Term 1", "Term 2", "Full Year"], default: "Full Year" },
     topics: [
@@ -21,6 +23,6 @@ const syllabusSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
-syllabusSchema.index({ schoolId: 1, branchId: 1, class: 1, subject: 1 });
+syllabusSchema.index({ schoolId: 1, branchId: 1, class: 1, sectionId: 1, subject: 1 });
 
 module.exports = mongoose.model("Syllabus", syllabusSchema);

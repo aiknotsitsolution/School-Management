@@ -9,18 +9,34 @@ import { api } from "../lib/api";
 const TERMS = ["Term 1", "Term 2", "Full Year"];
 const STATUSES = ["pending", "in_progress", "completed"];
 
-const EMPTY_FORM = { class: "", subject: "", term: "Full Year", totalHours: "", topics: [] };
+const EMPTY_FORM = {
+  class: "",
+  sectionId: "",
+  subject: "",
+  sectionSubjects: {},
+  term: "Full Year",
+  totalHours: "",
+  topics: [],
+};
+const isActiveMaster = (item) =>
+  item && ("status" in item ? item.status === "active" : item.active !== false);
 
 export default function SyllabusManage() {
   const canWrite = usePermission("homework:write");
 
-  const { options: classOptions } = useMasterOptions("classes", []);
-  const { options: subjectOptions } = useMasterOptions("subjects", []);
+  const { rawItems: classMasters } = useMasterOptions("classes", []);
+  const { rawItems: sectionMasters } = useMasterOptions("sections", []);
+  const { rawItems: subjectMasters } = useMasterOptions("subjects", []);
 
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [filters, setFilters] = useState({ class: "", subject: "", term: "" });
+  const [filters, setFilters] = useState({
+    class: "",
+    sectionId: "",
+    subject: "",
+    term: "",
+  });
 
   const [showForm, setShowForm] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -33,6 +49,7 @@ export default function SyllabusManage() {
     try {
       const params = new URLSearchParams();
       if (filters.class) params.set("class", filters.class);
+      if (filters.sectionId) params.set("sectionId", filters.sectionId);
       if (filters.subject) params.set("subject", filters.subject);
       if (filters.term) params.set("term", filters.term);
       const res = await api.syllabus.list(params.toString());
@@ -49,11 +66,49 @@ export default function SyllabusManage() {
     load();
   }, [load]);
 
-  const setFilter = (key) => (e) => setFilters((f) => ({ ...f, [key]: e.target.value }));
+  const activeSections = sectionMasters.filter(isActiveMaster);
+  const activeSubjects = subjectMasters.filter(isActiveMaster);
+  const classOptions = classMasters.filter(isActiveMaster).map((item) => item.name);
+  const sectionsForClass = (className) => {
+    const schoolClass = classMasters.find((item) => item.name === className);
+    return activeSections.filter(
+      (section) =>
+        (schoolClass && String(section.classId) === String(schoolClass._id)) ||
+        (!section.classId && section.className === className),
+    );
+  };
+  const formSections = sectionsForClass(form.class);
+  const filterSections = sectionsForClass(filters.class);
+  const subjectsForSection = (sectionId) =>
+    activeSubjects.filter((subject) => String(subject.sectionId) === String(sectionId));
+  const formSubjects = subjectsForSection(form.sectionId);
+  const filterSubjects = subjectsForSection(filters.sectionId);
+  const toggleSectionSubject = (sectionId, subjectName) => {
+    setForm((current) => {
+      const selected = current.sectionSubjects[sectionId] || [];
+      const nextSelected = selected.includes(subjectName)
+        ? selected.filter((name) => name !== subjectName)
+        : [...selected, subjectName];
+      return {
+        ...current,
+        sectionSubjects: { ...current.sectionSubjects, [sectionId]: nextSelected },
+      };
+    });
+  };
+
+  const setFilter = (key) => (e) => {
+    const value = e.target.value;
+    setFilters((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "class" ? { sectionId: "", subject: "" } : {}),
+      ...(key === "sectionId" ? { subject: "" } : {}),
+    }));
+  };
 
   const openCreate = () => {
     setEditing(null);
-    setForm(EMPTY_FORM);
+    setForm({ ...EMPTY_FORM, sectionSubjects: {}, topics: [] });
     setShowForm(true);
   };
 
@@ -61,7 +116,9 @@ export default function SyllabusManage() {
     setEditing(row);
     setForm({
       class: row.class || "",
+      sectionId: row.sectionId || "",
       subject: row.subject || "",
+      sectionSubjects: {},
       term: row.term || "Full Year",
       totalHours: row.totalHours != null ? String(row.totalHours) : "",
       topics: (row.topics || []).map((t) => ({
@@ -73,7 +130,15 @@ export default function SyllabusManage() {
     setShowForm(true);
   };
 
-  const setFormValue = (key) => (e) => setForm((f) => ({ ...f, [key]: e.target.value }));
+  const setFormValue = (key) => (e) => {
+    const value = e.target.value;
+    setForm((current) => ({
+      ...current,
+      [key]: value,
+      ...(key === "class" ? { sectionId: "", subject: "", sectionSubjects: {} } : {}),
+      ...(key === "sectionId" ? { subject: "" } : {}),
+    }));
+  };
 
   const setTopic = (index, key) => (e) =>
     setForm((f) => ({
@@ -89,7 +154,24 @@ export default function SyllabusManage() {
 
   const handleSubmit = async () => {
     if (!form.class) return toast("Class is required", "error");
-    if (!form.subject) return toast("Subject is required", "error");
+    const selectedRows = editing
+      ? form.sectionId && form.subject
+        ? [{ sectionId: form.sectionId, subjects: [form.subject] }]
+        : []
+      : Object.entries(form.sectionSubjects)
+          .filter(([, subjects]) => subjects.length > 0)
+          .map(([sectionId, subjects]) => ({
+            class: form.class,
+            section: formSections.find((item) => item._id === sectionId)?.name,
+            sectionId,
+            subjects,
+          }));
+    if (selectedRows.length === 0) {
+      return toast(
+        editing ? "Select a section and subject" : "Select at least one subject",
+        "error",
+      );
+    }
     const topics = form.topics
       .map((t) => ({ ...t, title: t.title.trim(), description: (t.description || "").trim() }))
       .filter((t) => t.title);
@@ -98,16 +180,26 @@ export default function SyllabusManage() {
 
     setSaving(true);
     try {
-      const payload = {
+      const details = {
         class: form.class,
-        subject: form.subject,
         term: form.term,
         topics,
         totalHours: Number(form.totalHours) || 0,
       };
-      if (editing) await api.syllabus.update(editing._id, payload);
-      else await api.syllabus.create(payload);
-      toast(editing ? "Syllabus updated" : "Syllabus created", "success");
+      if (editing) {
+        await api.syllabus.update(editing._id, {
+          ...details,
+          sectionId: selectedRows[0].sectionId,
+          subject: selectedRows[0].subjects[0],
+        });
+        toast("Syllabus updated", "success");
+      } else {
+        const { data } = await api.syllabus.createBulk({
+          ...details,
+          sections: selectedRows,
+        });
+        toast(`${data.length} syllabus${data.length === 1 ? "" : "es"} created`, "success");
+      }
       setShowForm(false);
       load();
     } catch (err) {
@@ -157,11 +249,29 @@ export default function SyllabusManage() {
                 </option>
               ))}
             </Select>
-            <Select value={filters.subject} onChange={setFilter("subject")} className="w-36">
-              <option value="">All subjects</option>
-              {subjectOptions.map((s) => (
-                <option key={s} value={s}>
-                  {s}
+            <Select
+              value={filters.sectionId}
+              onChange={setFilter("sectionId")}
+              className="w-36"
+              disabled={!filters.class}
+            >
+              <option value="">{filters.class ? "All sections" : "Select class first"}</option>
+              {filterSections.map((section) => (
+                <option key={section._id} value={section._id}>
+                  {section.name}
+                </option>
+              ))}
+            </Select>
+            <Select
+              value={filters.subject}
+              onChange={setFilter("subject")}
+              className="w-36"
+              disabled={!filters.sectionId}
+            >
+              <option value="">{filters.sectionId ? "All subjects" : "Select section first"}</option>
+              {filterSubjects.map((subject) => (
+                <option key={subject._id} value={subject.name}>
+                  {subject.name}
                 </option>
               ))}
             </Select>
@@ -204,7 +314,10 @@ export default function SyllabusManage() {
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <p className="font-semibold text-ink text-[14px] truncate">
-                        {row.class} · {row.subject}
+                        {row.class}
+                        {row.sectionName ? ` · ${row.sectionName}` : ""}
+                        {" · "}
+                        {row.subject}
                       </p>
                       <p className="text-[12px] text-slate-text/70 mt-0.5">{row.term}</p>
                     </div>
@@ -282,7 +395,7 @@ export default function SyllabusManage() {
             </div>
 
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div className="grid grid-cols-2 gap-3">
+              <div className={`grid ${editing ? "grid-cols-3" : "grid-cols-1"} gap-3`}>
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Class *
@@ -296,20 +409,111 @@ export default function SyllabusManage() {
                     ))}
                   </Select>
                 </div>
-                <div>
+                {editing && (
+                  <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Subject *
+                    Section *
                   </label>
-                  <Select value={form.subject} onChange={setFormValue("subject")}>
-                    <option value="">Select subject</option>
-                    {subjectOptions.map((s) => (
-                      <option key={s} value={s}>
-                        {s}
+                  <Select
+                    value={form.sectionId}
+                    onChange={setFormValue("sectionId")}
+                    disabled={!form.class}
+                  >
+                    <option value="">
+                      {form.class ? "Select section" : "Select class first"}
+                    </option>
+                    {formSections.map((section) => (
+                      <option key={section._id} value={section._id}>
+                        {section.name}
                       </option>
                     ))}
                   </Select>
-                </div>
+                  </div>
+                )}
+                {editing && (
+                  <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Subject *
+                  </label>
+                  <Select
+                    value={form.subject}
+                    onChange={setFormValue("subject")}
+                    disabled={!form.sectionId}
+                  >
+                    <option value="">
+                      {form.sectionId ? "Select subject" : "Select section first"}
+                    </option>
+                    {formSubjects.map((subject) => (
+                      <option key={subject._id} value={subject.name}>
+                        {subject.name}
+                      </option>
+                    ))}
+                  </Select>
+                  </div>
+                )}
               </div>
+
+              {!editing && form.class && (
+                <div className="space-y-3">
+                  <div>
+                    <p className="text-[12px] font-semibold text-ink">
+                      Sections and subjects for {form.class}
+                    </p>
+                    <p className="mt-1 text-[11.5px] text-slate-text/60">
+                      Choose subjects for each section. Term, topics and planned hours below
+                      will apply to every selected subject.
+                    </p>
+                  </div>
+                  {formSections.length === 0 ? (
+                    <p className="rounded-lg bg-paper px-3 py-3 text-[12.5px] text-slate-text/70">
+                      No sections are configured for this class yet.
+                    </p>
+                  ) : (
+                    formSections.map((section) => {
+                      const sectionSubjects = subjectsForSection(section._id);
+                      const selectedSubjects = form.sectionSubjects[section._id] || [];
+                      return (
+                        <div
+                          key={section._id}
+                          className="rounded-lg border border-slate-200 p-3"
+                        >
+                          <div className="mb-2 flex items-center justify-between">
+                            <p className="text-[13px] font-semibold text-ink">
+                              Section {section.name}
+                            </p>
+                            <span className="text-[11.5px] text-slate-text/60">
+                              {selectedSubjects.length} selected
+                            </span>
+                          </div>
+                          {sectionSubjects.length === 0 ? (
+                            <p className="text-[12px] text-slate-text/60">
+                              No subjects are configured for this section.
+                            </p>
+                          ) : (
+                            <div className="flex flex-wrap gap-x-4 gap-y-2">
+                              {sectionSubjects.map((subject) => (
+                                <label
+                                  key={subject._id}
+                                  className="inline-flex items-center gap-2 text-[12.5px] text-slate-text"
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={selectedSubjects.includes(subject.name)}
+                                    onChange={() =>
+                                      toggleSectionSubject(section._id, subject.name)
+                                    }
+                                  />
+                                  {subject.name}
+                                </label>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
+                  )}
+                </div>
+              )}
 
               <div className="grid grid-cols-2 gap-3">
                 <div>

@@ -112,11 +112,41 @@ const getPayments = async (req, res) => {
     if (mode) filter.mode = mode;
     if (clearanceStatus) filter.clearanceStatus = clearanceStatus;
     const { page, limit, skip } = paginate(req.query);
-    const [data, total] = await Promise.all([
+    const [data, total, summary] = await Promise.all([
       Payment.find(filter).sort({ paidOn: -1 }).skip(skip).limit(limit),
       Payment.countDocuments(filter),
+      Payment.aggregate([
+        { $match: filter },
+        {
+          $group: {
+            _id: null,
+            totalRecorded: { $sum: "$amount" },
+            bouncedAmount: {
+              $sum: {
+                $cond: [{ $eq: ["$clearanceStatus", "Bounced"] }, "$amount", 0],
+              },
+            },
+            successfulCount: {
+              $sum: {
+                $cond: [{ $eq: ["$clearanceStatus", "Bounced"] }, 0, 1],
+              },
+            },
+          },
+        },
+      ]),
     ]);
-    res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
+    const totals = summary[0] || { totalRecorded: 0, bouncedAmount: 0, successfulCount: 0 };
+    res.json({
+      success: true,
+      count: data.length,
+      total,
+      ...pageInfo(total, page, limit),
+      data,
+      paymentSummary: {
+        ...totals,
+        netCollected: totals.totalRecorded - totals.bouncedAmount,
+      },
+    });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

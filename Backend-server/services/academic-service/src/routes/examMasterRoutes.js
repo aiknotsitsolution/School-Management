@@ -24,6 +24,7 @@ const readMaster = requireAnyPermission("exams:read", "library:manage", "fees:st
 router.get("/:kind", readMaster, ctrl.list);
 router.get("/:kind/:id", readMaster, ctrl.getById);
 router.post("/validate-refs", requirePermission("exams:read"), ctrl.validateRefs);
+router.post("/subjects/bulk", requirePermission("exams:write"), ctrl.createSubjectsForSections);
 router.post("/:kind", requirePermission("exams:write"), ctrl.create);
 router.patch("/:kind/:id/deactivate", requirePermission("exams:write"), ctrl.deactivate);
 router.patch("/:kind/:id/restore", requirePermission("exams:write"), ctrl.restore);

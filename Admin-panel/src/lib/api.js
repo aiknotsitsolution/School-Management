@@ -363,6 +363,7 @@ export const api = {
   syllabus: {
     list: (params = "") => request(`/syllabus${params ? `?${params}` : ""}`),
     create: (item) => request("/syllabus", json("POST", item)),
+    createBulk: (item) => request("/syllabus/bulk", json("POST", item)),
     update: (id, item) => request(`/syllabus/${id}`, json("PATCH", item)),
     remove: (id) => request(`/syllabus/${id}`, { method: "DELETE" }),
   },
@@ -454,6 +455,8 @@ export const api = {
     list: (kind, params = "") =>
       request(`/exam-masters/${kind}${params ? `?${params}` : ""}`),
     create: (kind, item) => request(`/exam-masters/${kind}`, json("POST", item)),
+    createSubjectsForSections: (item) =>
+      request("/exam-masters/subjects/bulk", json("POST", item)),
     update: (kind, id, item) =>
       request(`/exam-masters/${kind}/${id}`, json("PATCH", item)),
     deactivate: (kind, id) =>

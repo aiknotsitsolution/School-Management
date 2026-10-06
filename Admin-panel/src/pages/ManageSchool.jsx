@@ -8,6 +8,7 @@ import {
   Pencil,
   School,
   BookOpen,
+  BookPlus,
   Layers,
   Wallet,
   X,
@@ -36,6 +37,7 @@ import {
 } from "../components/UI";
 import { Pagination } from "../components/Pagination";
 import CustomMasterModal from "../components/CustomMasterModal";
+import BulkSubjectModal from "../components/BulkSubjectModal";
 import { selectSchool, selectUser } from "../store/selectors";
 import { setSchool as setSchoolAction } from "../store/authSlice";
 import { hasPermission } from "../lib/permissions";
@@ -595,6 +597,7 @@ export default function ManageSchool() {
   });
   const [loading, setLoading] = useState(true);
   const [customModal, setCustomModal] = useState(null);
+  const [showBulkSubjectModal, setShowBulkSubjectModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [sectionsClassId, setSectionsClassId] = useState("");
   const [subjectsClassId, setSubjectsClassId] = useState("");
@@ -714,7 +717,13 @@ export default function ManageSchool() {
       ? items.subjects.filter((subject) => !subject.sectionId)
       : subjectsSectionId
         ? items.subjects.filter((subject) => subject.sectionId === subjectsSectionId)
-        : [];
+        : subjectsClassId
+          ? items.subjects.filter((subject) =>
+              subjectSectionOptions.some(
+                (section) => String(section._id) === String(subject.sectionId),
+              ),
+            )
+          : [];
   const parentFields =
     customModal?.kind === "sections"
       ? [
@@ -731,13 +740,29 @@ export default function ManageSchool() {
       : customModal?.kind === "subjects"
         ? [
             {
+              name: "classSelector",
+              label: "Class",
+              persist: false,
+              options: activeClasses.map((item) => ({
+                value: item._id,
+                label: item.name,
+              })),
+            },
+            {
               name: "sectionId",
               label: "Section",
               required: true,
-              options: items.sections.filter(isActiveItem).map((section) => ({
-                value: section._id,
-                label: `${classById.get(section.classId)?.name || section.className || "Unassigned"} · ${section.name}`,
-              })),
+              dependsOn: "classSelector",
+              dependsOnLabel: "class",
+              optionsFor: (values) =>
+                sectionsForClass(
+                  classById.get(values.classSelector)?.name || "",
+                )
+                  .filter(isActiveItem)
+                  .map((section) => ({
+                    value: section._id,
+                    label: section.name,
+                  })),
             },
           ]
         : [];
@@ -745,10 +770,23 @@ export default function ManageSchool() {
     customModal?.kind === "sections"
       ? { classId: sectionsClassId }
       : customModal?.kind === "subjects"
-        ? {
-            sectionId:
-              subjectsSectionId === "__unassigned__" ? "" : subjectsSectionId,
-          }
+        ? (() => {
+          const sectionId = customModal.initialItem
+            ? customModal.initialItem.sectionId || ""
+            : subjectsSectionId === "__unassigned__"
+              ? ""
+              : subjectsSectionId;
+          const section = items.sections.find(
+            (item) => String(item._id) === String(sectionId),
+          );
+            const sectionClass =
+              classById.get(section?.classId) ||
+              activeClasses.find((item) => item.name === section?.className);
+            return {
+              classSelector: sectionClass?._id || "",
+              sectionId: sectionId || "",
+            };
+          })()
         : {};
 
   return (
@@ -831,6 +869,15 @@ export default function ManageSchool() {
                 </button>
               )}
             </div>
+            {activeTab === "subjects" && (
+              <Button
+                variant="outline"
+                onClick={() => setShowBulkSubjectModal(true)}
+              >
+                <BookPlus size={15} />
+                Add Subject to Class
+              </Button>
+            )}
             <Button
               variant="primary"
               onClick={() =>
@@ -893,7 +940,7 @@ export default function ManageSchool() {
                     disabled={!subjectsClassId}
                   >
                     <option value="">
-                      {subjectsClassId ? "Select a section" : "Select a class first"}
+                      {subjectsClassId ? "All sections" : "Select a class first"}
                     </option>
                     {subjectSectionOptions.map((section) => (
                       <option key={section._id} value={section._id}>
@@ -1011,6 +1058,23 @@ export default function ManageSchool() {
           onClose={() => setCustomModal(null)}
           onCreated={(newItem) => handleCreated(customModal.kind, newItem)}
           onUpdated={(updatedItem) => handleUpdated(customModal.kind, updatedItem)}
+        />
+      )}
+      {showBulkSubjectModal && (
+        <BulkSubjectModal
+          classes={items.classes}
+          sections={items.sections}
+          onClose={() => setShowBulkSubjectModal(false)}
+          onCreated={(result) => {
+            invalidateMasterCache("subjects");
+            (result.created || []).forEach((item) => handleCreated("subjects", item));
+          }}
+          onManageSections={(classId) => {
+            setShowBulkSubjectModal(false);
+            setSectionsClassId(classId);
+            setActiveTab("sections");
+            setSearchQuery("");
+          }}
         />
       )}
     </div>

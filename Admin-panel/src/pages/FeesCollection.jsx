@@ -2,7 +2,8 @@ import { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { api } from "../lib/api";
 import { hasPermission } from "../lib/permissions";
-import { selectUser } from "../store/selectors";
+import { sessionLabel } from "../lib/session";
+import { selectSchool, selectUser } from "../store/selectors";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import {
   Plus,
@@ -640,6 +641,7 @@ function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSave
 
 export default function FeesCollection() {
   const user = useSelector(selectUser);
+  const school = useSelector(selectSchool);
   const canStructure = hasPermission(user, "fees:structure");
   const canCollect = hasPermission(user, "fees:collect");
 
@@ -660,6 +662,7 @@ export default function FeesCollection() {
   const [structures, setStructures] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
+  const [paymentSummary, setPaymentSummary] = useState(null);
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -731,6 +734,7 @@ export default function FeesCollection() {
         setStructures(structureResponse.data || []);
         setInvoices(invoiceResponse.data || []);
         setPayments(paymentResponse.data || []);
+        setPaymentSummary(paymentResponse.paymentSummary || null);
         setOrders(orderResponse.data || []);
         setConcessions(concessionResponse.data || []);
         setLoadError("");
@@ -917,10 +921,7 @@ export default function FeesCollection() {
   }, [structures, sessionFilter]);
 
   const stats = useMemo(() => {
-    const collected = payments.reduce(
-      (sum, payment) => sum + Number(payment.amount || 0),
-      0,
-    );
+    const collected = Number(paymentSummary?.netCollected || 0);
     const outstanding = invoices.reduce(
       (sum, invoice) =>
         sum +
@@ -936,8 +937,15 @@ export default function FeesCollection() {
         (Number(invoice.paidAmount || 0) > 0 &&
           Number(invoice.paidAmount || 0) < Number(invoice.amount)),
     ).length;
-    return { collected, count: payments.length, outstanding, overdue, paidCount, partial };
-  }, [payments, invoices]);
+    return {
+      collected,
+      count: paymentSummary?.successfulCount ?? payments.length,
+      outstanding,
+      overdue,
+      paidCount,
+      partial,
+    };
+  }, [paymentSummary, payments, invoices]);
 
   const outstandingForStudent = (studentId) => {
     return invoices
@@ -1053,7 +1061,7 @@ export default function FeesCollection() {
 
   const openNewStructure = () => {
     setEditingStructure(null);
-    setStructureForm(emptyStructureForm());
+    setStructureForm({ ...emptyStructureForm(), session: sessionLabel(school) || "" });
     setShowStructureModal(true);
   };
 
@@ -1283,8 +1291,14 @@ export default function FeesCollection() {
         <StatCard
           icon={Wallet}
           label="Collected (All Time)"
-          value={`₹${(stats.collected / 100000).toFixed(1)}L`}
-          sub={`${stats.count} successful payments`}
+          value={paymentSummary ? `₹${stats.collected.toLocaleString("en-IN")}` : "—"}
+          sub={
+            paymentSummary
+              ? `${stats.count} successful payments`
+              : loadError
+                ? "Collection total unavailable"
+                : "Loading collection total…"
+          }
           accent="success"
         />
         <StatCard

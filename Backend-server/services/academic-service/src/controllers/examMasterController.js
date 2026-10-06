@@ -18,7 +18,10 @@ const {
   clean,
   normalizeKey,
 } = require("@school-erp/shared/src/master-data");
-const { withBranchScope } = require("@school-erp/shared/src/middleware/branchScope");
+const {
+  withBranchScope,
+  branchIdForWrite,
+} = require("@school-erp/shared/src/middleware/branchScope");
 const { findMissingMasterRefs, missingMessage } = require("../utils/masterRefs");
 const { writeMasterAudit } = require("../utils/audit");
 
@@ -451,6 +454,132 @@ const validateRefs = async (req, res) => {
   }
 };
 
+const createSubjectsForSections = async (req, res, next) => {
+  try {
+    const name = clean(req.body.name);
+    const description = clean(req.body.description);
+    const sectionIds = [...new Set(req.body.sectionIds || [])];
+    if (!name || sectionIds.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Subject name and at least one section are required",
+      });
+    }
+    if (sectionIds.some((id) => !OBJECT_ID_RE.test(String(id)))) {
+      return res.status(400).json({ success: false, message: "One or more section IDs are invalid" });
+    }
+
+    const sections = await SchoolSection.find(withBranchScope(req, {
+      _id: { $in: sectionIds },
+      schoolId: req.tenantId,
+      active: true,
+    })).lean();
+    if (sections.length !== sectionIds.length) {
+      return res.status(400).json({
+        success: false,
+        message: "One or more selected sections are inactive or unavailable",
+      });
+    }
+
+    const classes = await Promise.all(sections.map(async (section) => {
+      const filter = section.classId
+        ? { _id: section.classId, schoolId: req.tenantId, active: true }
+        : { name: section.className, schoolId: req.tenantId, active: true };
+      return SchoolClass.findOne(withBranchScope(req, filter)).lean();
+    }));
+    if (classes.some((schoolClass) => !schoolClass)) {
+      return res.status(400).json({
+        success: false,
+        message: "A selected section is not linked to an active class",
+      });
+    }
+    if (new Set(classes.map((schoolClass) => String(schoolClass._id))).size !== 1) {
+      return res.status(400).json({
+        success: false,
+        message: "Select sections from one class only",
+      });
+    }
+
+    const normalizedName = normalizeKey(name);
+    const existing = [];
+    const newSections = [];
+    const branchId = branchIdForWrite(req);
+    const subjectKey = (section) => ({
+      scope: "tenant",
+      schoolId: req.tenantId,
+      branchId,
+      className: classes[0].name,
+      sectionId: section._id,
+      normalizedName,
+    });
+    const findExisting = (section) =>
+      SchoolSubject.findOne(subjectKey(section)).lean();
+
+    for (const section of sections) {
+      const found = await findExisting(section);
+      if (found) {
+        existing.push(found);
+      } else {
+        newSections.push(section);
+      }
+    }
+
+    const created = [];
+    for (const section of newSections) {
+      try {
+        const subject = await SchoolSubject.create({
+          scope: "tenant",
+          schoolId: req.tenantId,
+          tenantId: req.tenantId,
+          branchId,
+          createdBy: req.user?._id || req.user?.id || null,
+          name,
+          normalizedName,
+          description,
+          className: classes[0].name,
+          sectionId: section._id,
+          sectionName: section.name,
+          status: "active",
+        });
+        created.push(subject);
+      } catch (err) {
+        if (!err || err.code !== 11000) throw err;
+        const found = await findExisting(section);
+        if (!found) throw err;
+        existing.push(found);
+      }
+    }
+
+    await Promise.all(created.map((item) =>
+      writeMasterAudit({
+        req,
+        action: "master.created",
+        targetId: item._id,
+        message: `subjects "${name}" created in section "${item.sectionName}"`,
+      }).catch((err) => {
+        console.error("[master-audit] bulk subject audit failed:", err.message);
+      }),
+    ));
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        created,
+        existing: existing.map((item) => ({
+          _id: item._id,
+          sectionId: item.sectionId,
+          sectionName: item.sectionName,
+          name: item.name,
+          status: item.status,
+        })),
+        className: classes[0].name,
+      },
+    });
+  } catch (err) {
+    return next(err);
+  }
+};
+
 module.exports = {
   list: controller.list,
   getById: controller.getById,
@@ -459,6 +588,7 @@ module.exports = {
   deactivate: controller.deactivate,
   restore: controller.restore,
   validateRefs,
+  createSubjectsForSections,
   MASTERS,
   timeSlotLabel,
 };
