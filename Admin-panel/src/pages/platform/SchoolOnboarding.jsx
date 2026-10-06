@@ -222,8 +222,16 @@ export default function SchoolOnboarding() {
       {stepIndex === 0 && (
         <Card title="Step 1 · School profile">
           <div className="grid sm:grid-cols-2 gap-3.5">
-            <Input required placeholder="School name" value={form.name} onChange={set("name")} />
             <div>
+              <label className="block text-[12px] font-medium text-slate-text/70 mb-1">
+                School name *
+              </label>
+              <Input required placeholder="Enter school name" value={form.name} onChange={set("name")} />
+            </div>
+            <div>
+              <label className="block text-[12px] font-medium text-slate-text/70 mb-1">
+                School code *
+              </label>
               <Input
                 required
                 placeholder="e.g. brightwood-academy"
@@ -236,30 +244,49 @@ export default function SchoolOnboarding() {
                 after onboarding.
               </p>
             </div>
-            <Input placeholder="Short name" value={form.shortName} onChange={set("shortName")} />
+            <div>
+              <label className="block text-[12px] font-medium text-slate-text/70 mb-1">
+                Short name <span className="text-slate-text/50">(optional)</span>
+              </label>
+              <Input placeholder="Enter short name" value={form.shortName} onChange={set("shortName")} />
+            </div>
             <div className="grid sm:col-span-2 grid-cols-1 sm:grid-cols-2 gap-3.5">
-              <div>
-                <label className="block text-[12px] font-medium text-slate-text/70 mb-1">
-                  Academic session start *
-                </label>
+              <label className="block text-[12px] font-medium text-slate-text/70">
+                Academic session start *
                 <Input type="date" value={form.sessionStart} onChange={set("sessionStart")} />
-              </div>
-              <div>
-                <label className="block text-[12px] font-medium text-slate-text/70 mb-1">
-                  Academic session end *
-                </label>
+              </label>
+              <label className="block text-[12px] font-medium text-slate-text/70">
+                Academic session end *
                 <Input type="date" value={form.sessionEnd} onChange={set("sessionEnd")} />
-              </div>
+              </label>
             </div>
             <p className="text-[11px] text-slate-text/60">
               Session name (e.g. 2026-27) is derived from these dates automatically and can be adjusted later in Organisation Profile.
             </p>
-            <Input type="email" placeholder="School email" value={form.email} onChange={set("email")} />
-            <Input placeholder="Phone" value={form.phone} onChange={set("phone")} />
-            <Input placeholder="Address" value={form.address} onChange={set("address")} className="sm:col-span-2" />
-            <Input placeholder="City" value={form.city} onChange={set("city")} />
-            <Input placeholder="State" value={form.state} onChange={set("state")} />
-            <Input placeholder="Enter 6-digit pincode" value={form.pincode} onChange={set("pincode")} />
+            <label className="block text-[12px] font-medium text-slate-text/70">
+              School email <span className="text-slate-text/50">(optional)</span>
+              <Input type="email" placeholder="name@school.com" value={form.email} onChange={set("email")} />
+            </label>
+            <label className="block text-[12px] font-medium text-slate-text/70">
+              Phone <span className="text-slate-text/50">(optional)</span>
+              <Input placeholder="Enter phone number" value={form.phone} onChange={set("phone")} />
+            </label>
+            <label className="block text-[12px] font-medium text-slate-text/70 sm:col-span-2">
+              Address <span className="text-slate-text/50">(optional)</span>
+              <Input placeholder="Enter school address" value={form.address} onChange={set("address")} />
+            </label>
+            <label className="block text-[12px] font-medium text-slate-text/70">
+              City <span className="text-slate-text/50">(optional)</span>
+              <Input placeholder="Enter city" value={form.city} onChange={set("city")} />
+            </label>
+            <label className="block text-[12px] font-medium text-slate-text/70">
+              State <span className="text-slate-text/50">(optional)</span>
+              <Input placeholder="Enter state" value={form.state} onChange={set("state")} />
+            </label>
+            <label className="block text-[12px] font-medium text-slate-text/70">
+              Pincode <span className="text-slate-text/50">(optional)</span>
+              <Input placeholder="Enter 6-digit pincode" value={form.pincode} onChange={set("pincode")} />
+            </label>
           </div>
           <div className="flex justify-end mt-5">
             <Button variant="primary" onClick={goToStep1}>
@@ -272,23 +299,34 @@ export default function SchoolOnboarding() {
       {stepIndex === 1 && (
         <Card title="Step 2 · School admin account">
           <div className="grid sm:grid-cols-2 gap-3.5">
-            <Input placeholder="Full name" value={admin.name} onChange={(e) => setAdmin({ ...admin, name: e.target.value })} />
-            <Input
-              type="email"
-              placeholder="Email (login)"
-              autoComplete="off"
-              value={admin.email}
-              onChange={(e) => setAdmin({ ...admin, email: e.target.value })}
-            />
-            <Input
-              type="password"
-              placeholder="Password (min 8 chars)"
-              minLength={8}
-              autoComplete="new-password"
-              value={admin.password}
-              onChange={(e) => setAdmin({ ...admin, password: e.target.value })}
-              wrapperClassName="sm:col-span-2"
-            />
+            <label className="block text-[12px] font-medium text-slate-text/70">
+              Full name *
+              <Input placeholder="Enter full name" value={admin.name} onChange={(e) => setAdmin({ ...admin, name: e.target.value })} />
+            </label>
+            <label className="block text-[12px] font-medium text-slate-text/70">
+              Email (login) *
+              <Input
+                type="email"
+                placeholder="name@school.com"
+                autoComplete="off"
+                value={admin.email}
+                onChange={(e) => setAdmin({ ...admin, email: e.target.value })}
+              />
+            </label>
+            <div className="sm:col-span-2">
+              <label htmlFor="school-admin-password" className="block text-[12px] font-medium text-slate-text/70 mb-1">
+                Password * <span className="text-slate-text/50">(minimum 8 characters)</span>
+              </label>
+              <Input
+                id="school-admin-password"
+                type="password"
+                placeholder="Enter password"
+                minLength={8}
+                autoComplete="new-password"
+                value={admin.password}
+                onChange={(e) => setAdmin({ ...admin, password: e.target.value })}
+              />
+            </div>
           </div>
           <div className="flex justify-between mt-5">
             <Button variant="outline" onClick={() => setStepIndex(0)}>

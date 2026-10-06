@@ -12,7 +12,7 @@ import { setTokens } from "../store/authSlice";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
-  "https://school-management-production-e239.up.railway.app/api";
+  "/api";
 
 let refreshPromise = null;
 let refreshTimer = null;

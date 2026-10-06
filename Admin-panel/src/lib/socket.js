@@ -15,7 +15,7 @@ import { refreshAccessToken } from "./tokenRefresh";
 // retried once after the shared refresh helper has rotated it.
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
-  "https://school-management-production-e239.up.railway.app/api";
+  "/api";
 
 // The gateway serves REST under /api but the socket upgrade is a bare-origin
 // path, so strip the /api suffix. VITE_SOCKET_URL overrides this for a split
