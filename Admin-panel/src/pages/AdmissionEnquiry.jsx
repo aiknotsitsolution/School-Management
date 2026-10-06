@@ -51,6 +51,7 @@ const PROGRESS_STAGES = [
 ];
 
 const STAGES = [
+  { key: "All Leads", label: "All Leads", color: "bg-sky-500", dot: "bg-sky-500" },
   { key: "New", label: "New Leads", color: "bg-sky-500", dot: "bg-sky-500" },
   { key: "Contacted", label: "Contacted", color: "bg-amber-500", dot: "bg-amber-500" },
   { key: "Campus Visit Scheduled", label: "Campus Visit", color: "bg-violet-500", dot: "bg-violet-500" },
@@ -451,7 +452,8 @@ export default function AdmissionEnquiry() {
   };
 
   const toggleStage = (key) => {
-    setStatusFilter((current) => (current === key ? "All" : key));
+    const nextKey = key === "All Leads" ? "All" : key;
+    setStatusFilter((current) => (current === nextKey ? "All" : nextKey));
   };
 
   return (
@@ -472,11 +474,13 @@ export default function AdmissionEnquiry() {
         </p>
       )}
 
+     
+
       {/* ========== PIPELINE STAGES ========== */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
         {STAGES.map((stage) => {
-          const n = counts[stage.key] || 0;
-          const active = statusFilter === stage.key;
+          const n = stage.key === "All Leads" ? counts.total : counts[stage.key] || 0;
+          const active = stage.key === "All Leads" ? statusFilter === "All" : statusFilter === stage.key;
           const pct = counts.total ? Math.round((n / counts.total) * 100) : 0;
           return (
             <button
@@ -521,7 +525,7 @@ export default function AdmissionEnquiry() {
                   : "bg-paper text-slate-text hover:bg-slate-200"
               }`}
             >
-              All · {counts.total}
+              All Leads · {counts.total}
             </button>
             {STAGES.map((stage) => (
               <button
