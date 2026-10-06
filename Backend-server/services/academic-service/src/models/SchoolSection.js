@@ -6,6 +6,7 @@ const schoolSectionSchema = new mongoose.Schema(
     schoolId: { type: mongoose.Schema.Types.ObjectId, ref: "School", required: true, index: true },
     // Campus this section belongs to (see SchoolClass.branchId).
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
+    classId: { type: mongoose.Schema.Types.ObjectId, ref: "SchoolClass", default: null, index: true },
     className: { type: String, default: "", trim: true },
     name: { type: String, required: true, trim: true },
     key: { type: String, required: true },

@@ -19,6 +19,8 @@ export default function CustomMasterModal({
   title,
   showDescription = false,
   initialItem = null,
+  parentFields = [],
+  defaultParentValues = {},
   onClose,
   onCreated,
   onUpdated,
@@ -26,6 +28,12 @@ export default function CustomMasterModal({
   const editing = Boolean(initialItem && initialItem._id);
   const [name, setName] = useState(initialItem?.name || "");
   const [description, setDescription] = useState(initialItem?.description || "");
+  const [parentValues, setParentValues] = useState(() =>
+    parentFields.reduce((values, field) => {
+      values[field.name] = initialItem?.[field.name] || defaultParentValues[field.name] || "";
+      return values;
+    }, {}),
+  );
   const [saving, setSaving] = useState(false);
 
   const submit = async () => {
@@ -35,6 +43,7 @@ export default function CustomMasterModal({
     try {
       const payload = { name: trimmed };
       if (showDescription) payload.description = description.trim();
+      Object.assign(payload, parentValues);
       if (editing) {
         const response = await api.examMasters.update(kind, initialItem._id, payload);
         toast(`${label} "${response.data.name}" updated`);
@@ -95,6 +104,32 @@ export default function CustomMasterModal({
             />
           </div>
 
+          {parentFields.map((field) => (
+            <div key={field.name}>
+              <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                {field.label}
+              </label>
+              <select
+                value={parentValues[field.name] || ""}
+                onChange={(e) =>
+                  setParentValues((values) => ({
+                    ...values,
+                    [field.name]: e.target.value,
+                  }))
+                }
+                required={field.required}
+                className="w-full h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
+              >
+                <option value="">{field.placeholder || `Select ${field.label.toLowerCase()}`}</option>
+                {field.options.map((option) => (
+                  <option key={option.value} value={option.value}>
+                    {option.label}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ))}
+
           {showDescription && (
             <div>
               <label className="text-[12px] font-semibold text-ink mb-1.5 block">
@@ -118,7 +153,13 @@ export default function CustomMasterModal({
           <Button
             variant="primary"
             onClick={submit}
-            disabled={saving || !name.trim()}
+            disabled={
+              saving ||
+              !name.trim() ||
+              parentFields.some(
+                (field) => field.required && !parentValues[field.name],
+              )
+            }
           >
             {saving ? "Saving..." : `${editing ? "Save Changes" : `Add ${label}`}`}
           </Button>

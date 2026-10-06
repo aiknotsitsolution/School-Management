@@ -25,6 +25,8 @@ const schoolSubjectSchema = new mongoose.Schema(
     // "" = school-wide subject; otherwise the class code (e.g. "11-Sci") the
     // subject is scoped to. Preserves class-subject relationships where used.
     className: { type: String, default: "", trim: true },
+    sectionId: { type: mongoose.Schema.Types.ObjectId, ref: "SchoolSection", default: null, index: true },
+    sectionName: { type: String, default: "", trim: true },
     name: { type: String, required: true, trim: true },
     // normalizedName = lowercase(trim(collapseWhitespace(name))) — the logical
     // uniqueness key within its scope.
@@ -50,13 +52,14 @@ schoolSubjectSchema.pre("validate", function (next) {
   next();
 });
 
-// Unique tenant-scoped name (schoolId + branchId + className + normalizedName).
+// Unique tenant-scoped name (schoolId + branchId + className + sectionId +
+// normalizedName). sectionId permits the same subject in distinct sections.
 // branchId is in the key so two campuses can each offer their own syllabus.
-// Migrating an existing deployment: drop the previous
-// `{ scope, schoolId, className, normalizedName }` index first — see
+// Migrating an existing deployment: replace the previous
+// `{ scope, schoolId, branchId, className, normalizedName }` index — see
 // scripts/backfill-branches.js.
 schoolSubjectSchema.index(
-  { scope: 1, schoolId: 1, branchId: 1, className: 1, normalizedName: 1 },
+  { scope: 1, schoolId: 1, branchId: 1, className: 1, sectionId: 1, normalizedName: 1 },
   { unique: true, partialFilterExpression: { scope: "tenant" } }
 );
 // Legacy global uniqueness index (pre-migration rows only; no new global rows

@@ -143,10 +143,13 @@ function formatTimeSlot(item) {
 }
 
 export default function Examination() {
-  const { options: masterClasses } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
-  const { options: masterSections, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
-  const CLASS_OPTIONS = ["All", ...masterClasses.filter((c) => c !== "All")];
-  const SECTION_OPTIONS = ["All", ...masterSections.filter((s) => s !== "All")];
+  const { options: masterClasses, rawItems: rawClasses } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
+  const { rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
+  const { rawItems: rawSubjects } = useMasterOptions("subjects", []);
+  const CLASS_OPTIONS = useMemo(
+    () => ["All", ...masterClasses.filter((c) => c !== "All")],
+    [masterClasses],
+  );
   const [exams, setExams] = useState([]);
   const [cls, setCls] = useState("All");
   const [sec, setSec] = useState("All");
@@ -160,11 +163,75 @@ export default function Examination() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [editId, setEditId] = useState(null);
+  const [selectedStat, setSelectedStat] = useState(null);
   const [customModal, setCustomModal] = useState(null); // { kind, label, showDescription? } | null
-  const filteredSections = useMemo(() => {
-    if (cls === "All") return SECTION_OPTIONS;
-    return ["All", ...[...new Set(rawSections.filter((s) => s.className === cls).map((s) => s.name))]];
-  }, [cls, SECTION_OPTIONS, rawSections]);
+  const selectedClassSections = useMemo(() => {
+    const selectedClass = rawClasses.find(
+      (item) => String(item._id) === String(form.classId),
+    );
+    if (!selectedClass) return [];
+    return rawSections.filter(
+      (section) =>
+        String(section.classId || "") === String(selectedClass._id) ||
+        (!section.classId && section.className === selectedClass.name),
+    );
+  }, [form.classId, rawClasses, rawSections]);
+  const filteredExamSections = useMemo(() => {
+    const sections =
+      cls === "All"
+        ? rawSections
+        : rawSections.filter((section) => {
+            const selectedClass = rawClasses.find((item) => item.name === cls);
+            return selectedClass
+              ? String(section.classId || "") === String(selectedClass._id) ||
+                  (!section.classId && section.className === selectedClass.name)
+              : section.className === cls;
+          });
+    return [
+      "All",
+      ...new Set(sections.map((section) => section.name).filter(Boolean)),
+    ];
+  }, [cls, rawClasses, rawSections]);
+  const filteredSubjects = useMemo(
+    () =>
+      form.sectionId
+        ? rawSubjects.filter(
+            (subject) =>
+              String(subject.sectionId || "") === String(form.sectionId),
+          )
+        : [],
+    [form.sectionId, rawSubjects],
+  );
+  const modalParentFields =
+    customModal?.kind === "sections"
+      ? [
+          {
+            name: "classId",
+            label: "Class",
+            required: true,
+            options: rawClasses
+              .filter((item) => item.active !== false)
+              .map((item) => ({ value: item._id, label: formatClassLabel(item.name) })),
+          },
+        ]
+      : customModal?.kind === "subjects"
+        ? [
+            {
+              name: "sectionId",
+              label: "Section",
+              required: true,
+              options: selectedClassSections
+                .filter((item) => item.active !== false)
+                .map((item) => ({ value: item._id, label: item.name })),
+            },
+          ]
+        : [];
+  const modalParentDefaults =
+    customModal?.kind === "sections"
+      ? { classId: form.classId }
+      : customModal?.kind === "subjects"
+        ? { sectionId: form.sectionId }
+        : {};
   const canManageExams = usePermission("exams:write");
 
   useEffect(() => {
@@ -213,6 +280,51 @@ export default function Examination() {
       upcoming,
     };
   }, [exams]);
+  const statDetails = useMemo(() => {
+    if (selectedStat === "classes") {
+      const classes = new Map();
+      exams.forEach((exam) => {
+        const key = `${exam.class}||${exam.section || ""}`;
+        const current = classes.get(key) || {
+          class: exam.class,
+          section: exam.section || "",
+          exams: 0,
+          subjects: new Set(),
+        };
+        current.exams += 1;
+        current.subjects.add(exam.subject);
+        classes.set(key, current);
+      });
+      return [...classes.values()].sort((a, b) =>
+        `${a.class}${a.section}`.localeCompare(`${b.class}${b.section}`, undefined, {
+          numeric: true,
+        }),
+      );
+    }
+    if (selectedStat === "subjects") {
+      const subjects = new Map();
+      exams.forEach((exam) => {
+        const current = subjects.get(exam.subject) || {
+          subject: exam.subject,
+          exams: 0,
+          classes: new Set(),
+        };
+        current.exams += 1;
+        current.classes.add(
+          `${formatClassLabel(exam.class)}${exam.section ? ` · Section ${exam.section}` : ""}`,
+        );
+        subjects.set(exam.subject, current);
+      });
+      return [...subjects.values()].sort((a, b) =>
+        a.subject.localeCompare(b.subject),
+      );
+    }
+    const rows =
+      selectedStat === "upcoming"
+        ? exams.filter((exam) => new Date(exam.date) >= new Date())
+        : exams;
+    return [...rows].sort((a, b) => new Date(a.date) - new Date(b.date));
+  }, [exams, selectedStat]);
 
   const openAdd = () => {
     setEditId(null);
@@ -372,6 +484,8 @@ export default function Examination() {
           value={String(stats.total)}
           sub="All scheduled papers"
           accent="info"
+          onClick={() => setSelectedStat("total")}
+          className={selectedStat === "total" ? "ring-2 ring-info/40" : ""}
         />
         <StatCard
           icon={Users}
@@ -379,6 +493,8 @@ export default function Examination() {
           value={String(stats.classes)}
           sub="With active schedule"
           accent="primary"
+          onClick={() => setSelectedStat("classes")}
+          className={selectedStat === "classes" ? "ring-2 ring-primary/40" : ""}
         />
         <StatCard
           icon={BookOpen}
@@ -386,6 +502,8 @@ export default function Examination() {
           value={String(stats.subjects)}
           sub="Unique subjects"
           accent="success"
+          onClick={() => setSelectedStat("subjects")}
+          className={selectedStat === "subjects" ? "ring-2 ring-success/40" : ""}
         />
         <StatCard
           icon={Calendar}
@@ -393,8 +511,127 @@ export default function Examination() {
           value={String(stats.upcoming)}
           sub="From today onwards"
           accent="alert"
+          onClick={() => setSelectedStat("upcoming")}
+          className={selectedStat === "upcoming" ? "ring-2 ring-alert/40" : ""}
         />
       </div>
+
+      {selectedStat && (
+        <Card
+          title={
+            {
+              total: "All Exam Details",
+              classes: "Classes Covered Details",
+              subjects: "Subject Details",
+              upcoming: "Upcoming Exam Details",
+            }[selectedStat]
+          }
+          subtitle={
+            selectedStat === "classes"
+              ? `${statDetails.length} class and section combinations`
+              : selectedStat === "subjects"
+                ? `${statDetails.length} unique subjects`
+                : `${statDetails.length} exams`
+          }
+          action={
+            <Button variant="outline" onClick={() => setSelectedStat(null)}>
+              <X size={14} /> Close
+            </Button>
+          }
+        >
+          {statDetails.length === 0 ? (
+            <p className="py-8 text-center text-[13px] text-slate-text/60">
+              No data available for this card yet.
+            </p>
+          ) : selectedStat === "classes" ? (
+            <div className="divide-y divide-slate-100">
+              {statDetails.map((item) => (
+                <button
+                  key={`${item.class}-${item.section}`}
+                  type="button"
+                  onClick={() => {
+                    setCls(item.class);
+                    setSec(item.section || "All");
+                    setSelectedStat(null);
+                  }}
+                  className="flex w-full items-center justify-between gap-3 py-3 text-left hover:bg-paper/50"
+                >
+                  <span>
+                    <span className="block text-[13px] font-semibold text-ink">
+                      {formatClassLabel(item.class)}
+                      {item.section ? ` · Section ${item.section}` : ""}
+                    </span>
+                    <span className="text-[11.5px] text-slate-text/60">
+                      {item.subjects.size} subjects
+                    </span>
+                  </span>
+                  <Pill tone="primary">
+                    {item.exams} exam{item.exams === 1 ? "" : "s"}
+                  </Pill>
+                </button>
+              ))}
+            </div>
+          ) : selectedStat === "subjects" ? (
+            <div className="divide-y divide-slate-100">
+              {statDetails.map((item) => (
+                <button
+                  key={item.subject}
+                  type="button"
+                  onClick={() => {
+                    setQuery(item.subject);
+                    setSelectedStat(null);
+                  }}
+                  className="flex w-full items-center justify-between gap-3 py-3 text-left hover:bg-paper/50"
+                >
+                  <span>
+                    <span className="block text-[13px] font-semibold text-ink">
+                      {item.subject}
+                    </span>
+                    <span className="text-[11.5px] text-slate-text/60">
+                      {[...item.classes].join(", ")}
+                    </span>
+                  </span>
+                  <Pill tone="success">
+                    {item.exams} exam{item.exams === 1 ? "" : "s"}
+                  </Pill>
+                </button>
+              ))}
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-[13px]">
+                <thead>
+                  <tr className="border-b border-slate-200 text-left text-[11.5px] uppercase tracking-wide text-slate-text/60">
+                    <th className="py-2.5 pr-3 font-semibold">Exam</th>
+                    <th className="py-2.5 pr-3 font-semibold">Class / Section</th>
+                    <th className="py-2.5 pr-3 font-semibold">Subject</th>
+                    <th className="py-2.5 pr-3 font-semibold">Date</th>
+                    <th className="py-2.5 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statDetails.map((exam) => (
+                    <tr key={exam.id} className="border-b border-slate-100 last:border-0">
+                      <td className="py-3 pr-3 font-medium text-ink">{exam.exam}</td>
+                      <td className="py-3 pr-3 text-slate-text">
+                        {formatClassLabel(exam.class)}
+                        {exam.section ? ` · Section ${exam.section}` : ""}
+                      </td>
+                      <td className="py-3 pr-3 text-slate-text">{exam.subject}</td>
+                      <td className="py-3 pr-3 text-slate-text">{formatDate(exam.date)}</td>
+                      <td className="py-3">
+                        <Pill tone={STATUS_CONFIG[exam.status]?.tone || "neutral"}>
+                          {STATUS_CONFIG[exam.status]?.label || exam.status}
+                        </Pill>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
 
       {/* Filters */}
       <Card
@@ -422,7 +659,7 @@ export default function Examination() {
               className="min-w-[140px]"
             />
             <SearchableSelect
-              options={filteredSections}
+              options={filteredExamSections}
               value={sec}
               onChange={setSec}
               renderLabel={(s) => (s === "All" ? "All Sections" : `Section ${s}`)}
@@ -852,9 +1089,16 @@ export default function Examination() {
                     value={form.classId}
                     fallbackLabel={form.class ? formatClassLabel(form.class) : ""}
                     renderLabel={(item) => formatClassLabel(item.name)}
-                    onChange={(id, item) =>
-                      updateFormFields({ classId: id, class: item ? item.name : "" })
-                    }
+                    onChange={(id, item) => {
+                      updateFormFields({
+                        classId: id,
+                        class: item ? item.name : "",
+                        sectionId: "",
+                        section: "",
+                        subjectId: "",
+                        subject: "",
+                      });
+                    }}
                     canAdd
                     onAdd={() => setCustomModal({ kind: "classes", label: "Class" })}
                   />
@@ -869,14 +1113,28 @@ export default function Examination() {
                     placeholder="Select section"
                     value={form.sectionId}
                     fallbackLabel={form.section || ""}
-                    filterItems={(rows) =>
-                      Array.from(new Map(rows.map((r) => [r.name, r])).values())
+                    disabled={!form.classId}
+                    emptyLabel={
+                      form.classId
+                        ? "No sections configured for this class"
+                        : "Select a class first"
                     }
-                    onChange={(id, item) =>
-                      updateFormFields({ sectionId: id, section: item ? item.name : "" })
-                    }
+                    filterItems={() => selectedClassSections}
+                    onChange={(id, item) => {
+                      updateFormFields({
+                        sectionId: id,
+                        section: item ? item.name : "",
+                        subjectId: "",
+                        subject: "",
+                      });
+                    }}
                     canAdd
-                    onAdd={() => setCustomModal({ kind: "sections", label: "Section" })}
+                    onAdd={() =>
+                      setCustomModal({
+                        kind: "sections",
+                        label: "Section",
+                      })
+                    }
                   />
                 </div>
               </div>
@@ -893,12 +1151,23 @@ export default function Examination() {
                     searchLabel="Search subjects..."
                     value={form.subjectId}
                     fallbackLabel={form.subject}
+                    disabled={!form.sectionId}
+                    emptyLabel={
+                      form.sectionId
+                        ? "No subjects configured for this section"
+                        : "Select a class and section first"
+                    }
+                    filterItems={() => filteredSubjects}
                     onChange={(id, item) =>
                       updateFormFields({ subjectId: id, subject: item ? item.name : "" })
                     }
                     canAdd
                     onAdd={() =>
-                      setCustomModal({ kind: "subjects", label: "Subject", showDescription: true })
+                      setCustomModal({
+                        kind: "subjects",
+                        label: "Subject",
+                        showDescription: true,
+                      })
                     }
                   />
                 </div>
@@ -1002,6 +1271,8 @@ export default function Examination() {
           kind={customModal.kind}
           label={customModal.label}
           showDescription={customModal.showDescription}
+          parentFields={modalParentFields}
+          defaultParentValues={modalParentDefaults}
           onClose={() => setCustomModal(null)}
           onCreated={(created) => {
             invalidateMasterCache(customModal.kind);
@@ -1014,7 +1285,21 @@ export default function Examination() {
             } else if (customModal.kind === "classes") {
               updateFormFields({ classId: created._id, class: created.name });
             } else if (customModal.kind === "sections") {
-              updateFormFields({ sectionId: created._id, section: created.name });
+              updateFormFields({
+                ...(created.classId
+                  ? {
+                      classId: created.classId,
+                      class:
+                        rawClasses.find(
+                          (item) => String(item._id) === String(created.classId),
+                        )?.name || form.class,
+                    }
+                  : {}),
+                sectionId: created._id,
+                section: created.name,
+                subjectId: "",
+                subject: "",
+              });
             } else if (customModal.kind === "time-slots") {
               updateFormFields({
                 timeSlotId: created._id,

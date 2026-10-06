@@ -33,6 +33,7 @@ export default function MasterSelect({
   fallbackLabel = "",
   filterItems = null,
   className = "",
+  disabled = false,
 }) {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -66,6 +67,7 @@ export default function MasterSelect({
   };
 
   const toggle = () => {
+    if (disabled) return;
     const next = !open;
     if (next) {
       if (!getMasterCache(kind)) load();
@@ -101,7 +103,10 @@ export default function MasterSelect({
       <button
         type="button"
         onClick={toggle}
-        className="w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-slate-300 text-[13px] outline-none focus:border-primary bg-white text-left"
+        disabled={disabled}
+        className={`w-full flex items-center justify-between px-3.5 py-2.5 rounded-lg border border-slate-300 text-[13px] outline-none focus:border-primary bg-white text-left ${
+          disabled ? "cursor-not-allowed opacity-50" : ""
+        }`}
       >
         <span className={selected ? "text-ink" : "text-slate-text/60"}>
           {selected ? renderLabel(selected) : fallbackLabel || placeholder}

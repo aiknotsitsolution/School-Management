@@ -47,8 +47,11 @@ const INDEX_MIGRATIONS = {
   ],
   schoolsubjects: [
     {
-      from: { scope: 1, schoolId: 1, className: 1, normalizedName: 1 },
-      to: { scope: 1, schoolId: 1, branchId: 1, className: 1, normalizedName: 1 },
+      froms: [
+        { scope: 1, schoolId: 1, className: 1, normalizedName: 1 },
+        { scope: 1, schoolId: 1, branchId: 1, className: 1, normalizedName: 1 },
+      ],
+      to: { scope: 1, schoolId: 1, branchId: 1, className: 1, sectionId: 1, normalizedName: 1 },
       unique: true,
       partialFilterExpression: { scope: "tenant" },
     },
@@ -391,14 +394,14 @@ async function migrateIndexes() {
       const coll = conn.db.collection(collName);
       const names = await indexNames(coll);
       for (const migration of INDEX_MIGRATIONS[collName]) {
-        const oldKey = keyOf(migration.from);
+        const oldKeys = (migration.froms || [migration.from]).map(keyOf);
         const newKey = keyOf(migration.to);
         const newName = migration.name || newKey;
-        const hasOld = names.has(oldKey);
+        const oldIndexes = oldKeys.filter((oldKey) => names.has(oldKey));
         const hasNew = names.has(newName);
 
         if (APPLY) {
-          if (hasOld) {
+          for (const oldKey of oldIndexes) {
             await coll.dropIndex(oldKey);
             log(`    ${collName}: dropped ${oldKey}`);
           }
@@ -411,7 +414,7 @@ async function migrateIndexes() {
             log(`    ${collName}: built   ${newName}`);
           }
         } else {
-          log(`    ${collName}: ${hasOld ? "would drop" : "no old "} ${oldKey} -> ${hasNew ? "already built" : "would build"} ${newName}`);
+          log(`    ${collName}: ${oldIndexes.length ? "would drop" : "no old "} ${oldIndexes.length ? oldIndexes.join(", ") : oldKeys.join(" or ")} -> ${hasNew ? "already built" : "would build"} ${newName}`);
         }
       }
     }

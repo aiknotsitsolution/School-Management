@@ -451,7 +451,8 @@ export const api = {
     saveCoScholastic: (body) => request("/cce/co-scholastic", json("PUT", body)),
   },
   examMasters: {
-    list: (kind) => request(`/exam-masters/${kind}`),
+    list: (kind, params = "") =>
+      request(`/exam-masters/${kind}${params ? `?${params}` : ""}`),
     create: (kind, item) => request(`/exam-masters/${kind}`, json("POST", item)),
     update: (kind, id, item) =>
       request(`/exam-masters/${kind}/${id}`, json("PATCH", item)),

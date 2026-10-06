@@ -18,10 +18,38 @@ const {
   clean,
   normalizeKey,
 } = require("@school-erp/shared/src/master-data");
+const { withBranchScope } = require("@school-erp/shared/src/middleware/branchScope");
 const { findMissingMasterRefs, missingMessage } = require("../utils/masterRefs");
 const { writeMasterAudit } = require("../utils/audit");
 
 const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+const OBJECT_ID_RE = /^[a-f\d]{24}$/i;
+
+async function resolveClass(req, classId) {
+  if (!OBJECT_ID_RE.test(String(classId || ""))) {
+    throw httpError(400, "A valid class is required");
+  }
+  const schoolClass = await SchoolClass.findOne(withBranchScope(req, {
+    _id: classId,
+    schoolId: req.tenantId,
+    active: true,
+  })).lean();
+  if (!schoolClass) throw httpError(400, "Selected class is not active or does not belong to this school");
+  return schoolClass;
+}
+
+async function resolveSection(req, sectionId) {
+  if (!OBJECT_ID_RE.test(String(sectionId || ""))) {
+    throw httpError(400, "A valid section is required");
+  }
+  const section = await SchoolSection.findOne(withBranchScope(req, {
+    _id: sectionId,
+    schoolId: req.tenantId,
+    active: true,
+  })).lean();
+  if (!section) throw httpError(400, "Selected section is not active or does not belong to this school");
+  return section;
+}
 
 // ---------------------------------------------------------------- formatters
 function format12h(time) {
@@ -98,16 +126,23 @@ const SUBJECT_KIND = {
   build(payload) {
     const name = clean(payload.name);
     if (!name) throw httpError(400, "Subject name is required");
-    const out = { name, className: clean(payload.className) };
+    const out = {
+      name,
+      className: clean(payload.className),
+      sectionId: payload.sectionId || null,
+      sectionName: clean(payload.sectionName),
+    };
     if (payload.description != null) out.description = clean(payload.description);
     return out;
   },
-  // Subject names are unique per school on the logical (normalized) name.
-  // className is intentionally excluded so a school cannot hold two
-  // "Mathematics" rows under one scope.
+  // Linked subjects are unique within their section. Legacy unlinked subjects
+  // retain their previous school-wide uniqueness behavior.
   dupFilter(payload) {
     const name = payload.normalizedName || normalizeKey(payload.name);
-    return name ? { normalizedName: name } : null;
+    if (!name) return null;
+    return payload.sectionId
+      ? { sectionId: payload.sectionId, normalizedName: name }
+      : { normalizedName: name };
   },
   lifecycle: { field: "status", active: "active", inactive: "inactive" },
   // scope is retained on the model for DB compatibility with pre-migration
@@ -116,6 +151,13 @@ const SUBJECT_KIND = {
   seeds: () => SUBJECT_SEEDS.map((name) => ({ name, className: "" })),
   // Campus-owned: each branch can run its own subject list.
   branchScoped: true,
+  async validatePayload(payload, req) {
+    if (payload.sectionId) {
+      const section = await resolveSection(req, payload.sectionId);
+      payload.sectionName = section.name;
+      payload.className = section.className;
+    }
+  },
 };
 
 const MASTERS = {
@@ -157,11 +199,32 @@ const MASTERS = {
     build(payload) {
       const name = clean(payload.name);
       if (!name) throw httpError(400, "Section name is required");
-      return { name, className: clean(payload.className) };
+      return {
+        name,
+        classId: payload.classId || null,
+        className: clean(payload.className),
+      };
     },
     dupFilter(payload) {
       const name = normalizeKey(payload.name);
       return name ? { className: clean(payload.className), key: name } : null;
+    },
+    async validatePayload(payload, req) {
+      if (payload.classId) {
+        const schoolClass = await resolveClass(req, payload.classId);
+        payload.className = schoolClass.name;
+      }
+    },
+    async listFilter(req) {
+      const { classId } = req.query;
+      if (!classId) return {};
+      const schoolClass = await resolveClass(req, classId);
+      return {
+        $or: [
+          { classId: schoolClass._id },
+          { classId: null, className: schoolClass.name },
+        ],
+      };
     },
     seeds: () =>
       CLASS_SEEDS.flatMap((className) =>
@@ -169,7 +232,15 @@ const MASTERS = {
       ),
     branchScoped: true,
   },
-  subjects: SUBJECT_KIND,
+  subjects: {
+    ...SUBJECT_KIND,
+    async listFilter(req) {
+      const { sectionId } = req.query;
+      if (!sectionId) return {};
+      const section = await resolveSection(req, sectionId);
+      return { sectionId: section._id };
+    },
+  },
   "time-slots": {
     // Deliberately school-wide: a shared bell schedule is one per school, so
     // every branch's timetables resolve against the same period boundaries.

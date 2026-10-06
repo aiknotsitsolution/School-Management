@@ -457,6 +457,7 @@ export function MetricCard({
   to,
   onClick,
   delay = 0,
+  className = "",
 }) {
   const t = accentOf(accent, tone);
   const Wrapper = to ? Link : onClick ? "button" : "div";
@@ -471,7 +472,7 @@ export function MetricCard({
     <Wrapper
       {...wrapperProps}
       style={delay ? { animationDelay: `${delay}ms` } : undefined}
-      className={`group relative block w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:-translate-y-1 ${t.edge} ${t.glow} ${
+      className={`group relative block w-full overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 text-left shadow-[0_1px_2px_rgba(15,23,42,0.04)] transition-all duration-300 hover:-translate-y-1 ${t.edge} ${t.glow} ${className} ${
         interactive
           ? "cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40"
           : ""

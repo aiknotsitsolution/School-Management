@@ -414,7 +414,7 @@ const setLifecycle = (item, active) =>
     ? { ...item, status: active ? "active" : "inactive" }
     : { ...item, active };
 
-function SectionRow({ item, onDeactivate, onReactivate }) {
+function SectionRow({ item, className, onDeactivate, onReactivate, onEdit }) {
   const isActive = item.active !== false;
   return (
     <div className="flex items-center justify-between gap-3 py-2.5 px-3 rounded-lg hover:bg-paper/50 transition-colors">
@@ -423,12 +423,19 @@ function SectionRow({ item, onDeactivate, onReactivate }) {
           Section {item.name}
         </p>
         <p className="text-[11.5px] text-slate-text/60">
-          {item.className ? `Class ${item.className}` : "All classes"}
+          {className ? `Class ${className}` : item.className ? `Class ${item.className}` : "Unassigned"}
         </p>
       </div>
       <Pill tone={isActive ? "success" : "neutral"}>
         {isActive ? "Active" : "Inactive"}
       </Pill>
+      <button
+        onClick={() => onEdit(item)}
+        className="p-2 rounded-lg text-slate-text hover:bg-paper transition-colors"
+        title={`Edit section ${item.name}`}
+      >
+        <Pencil size={15} />
+      </button>
       <button
         onClick={() => (isActive ? onDeactivate(item._id) : onReactivate(item._id))}
         className={`p-2 rounded-lg transition-colors ${
@@ -589,6 +596,9 @@ export default function ManageSchool() {
   const [loading, setLoading] = useState(true);
   const [customModal, setCustomModal] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [sectionsClassId, setSectionsClassId] = useState("");
+  const [subjectsClassId, setSubjectsClassId] = useState("");
+  const [subjectsSectionId, setSubjectsSectionId] = useState("");
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -686,6 +696,60 @@ export default function ManageSchool() {
   const hostelBlockCount = items["hostel-blocks"].filter((i) => isActiveItem(i)).length;
 
   const tab = TABS.find((t) => t.key === activeTab);
+  const activeClasses = items.classes.filter(isActiveItem);
+  const classById = new Map(activeClasses.map((item) => [item._id, item]));
+  const sectionsForClass = (classId) => {
+    const schoolClass = classById.get(classId);
+    if (!schoolClass) return [];
+    return items.sections.filter(
+      (section) =>
+        section.classId === classId ||
+        (!section.classId && section.className === schoolClass.name),
+    );
+  };
+  const visibleSections = sectionsForClass(sectionsClassId);
+  const subjectSectionOptions = sectionsForClass(subjectsClassId).filter(isActiveItem);
+  const visibleSubjects =
+    subjectsSectionId === "__unassigned__"
+      ? items.subjects.filter((subject) => !subject.sectionId)
+      : subjectsSectionId
+        ? items.subjects.filter((subject) => subject.sectionId === subjectsSectionId)
+        : [];
+  const parentFields =
+    customModal?.kind === "sections"
+      ? [
+          {
+            name: "classId",
+            label: "Class",
+            required: true,
+            options: activeClasses.map((item) => ({
+              value: item._id,
+              label: item.name,
+            })),
+          },
+        ]
+      : customModal?.kind === "subjects"
+        ? [
+            {
+              name: "sectionId",
+              label: "Section",
+              required: true,
+              options: items.sections.filter(isActiveItem).map((section) => ({
+                value: section._id,
+                label: `${classById.get(section.classId)?.name || section.className || "Unassigned"} · ${section.name}`,
+              })),
+            },
+          ]
+        : [];
+  const defaultParentValues =
+    customModal?.kind === "sections"
+      ? { classId: sectionsClassId }
+      : customModal?.kind === "subjects"
+        ? {
+            sectionId:
+              subjectsSectionId === "__unassigned__" ? "" : subjectsSectionId,
+          }
+        : {};
 
   return (
     <div className="space-y-6">
@@ -779,8 +843,78 @@ export default function ManageSchool() {
           </div>
         }
       >
+        {(activeTab === "sections" || activeTab === "subjects") && (
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            {activeTab === "sections" ? (
+              <div className="w-full max-w-xs">
+                <label className="mb-1.5 block text-[12px] font-semibold text-ink">
+                  Class
+                </label>
+                <Select
+                  value={sectionsClassId}
+                  onChange={(event) => setSectionsClassId(event.target.value)}
+                >
+                  <option value="">Select a class</option>
+                  {activeClasses.map((item) => (
+                    <option key={item._id} value={item._id}>
+                      {item.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+            ) : (
+              <>
+                <div className="w-full max-w-xs">
+                  <label className="mb-1.5 block text-[12px] font-semibold text-ink">
+                    Class
+                  </label>
+                  <Select
+                    value={subjectsClassId}
+                    onChange={(event) => {
+                      setSubjectsClassId(event.target.value);
+                      setSubjectsSectionId("");
+                    }}
+                  >
+                    <option value="">Select a class</option>
+                    {activeClasses.map((item) => (
+                      <option key={item._id} value={item._id}>
+                        {item.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div className="w-full max-w-xs">
+                  <label className="mb-1.5 block text-[12px] font-semibold text-ink">
+                    Section
+                  </label>
+                  <Select
+                    value={subjectsSectionId}
+                    onChange={(event) => setSubjectsSectionId(event.target.value)}
+                    disabled={!subjectsClassId}
+                  >
+                    <option value="">
+                      {subjectsClassId ? "Select a section" : "Select a class first"}
+                    </option>
+                    {subjectSectionOptions.map((section) => (
+                      <option key={section._id} value={section._id}>
+                        {section.name}
+                      </option>
+                    ))}
+                    <option value="__unassigned__">Unassigned subjects</option>
+                  </Select>
+                </div>
+              </>
+            )}
+          </div>
+        )}
         <MasterList
-          items={items[activeTab] || []}
+          items={
+            activeTab === "sections"
+              ? visibleSections
+              : activeTab === "subjects"
+                ? visibleSubjects
+                : items[activeTab] || []
+          }
           loading={loading}
           kind={activeTab}
           label={tab?.label}
@@ -796,11 +930,65 @@ export default function ManageSchool() {
                   <SectionRow
                     key={item._id}
                     item={item}
-                    classOptions={items.classes}
+                    className={classById.get(item.classId)?.name}
                     onDeactivate={(id) => handleDeactivate("sections", id)}
                     onReactivate={(id) => handleRestore("sections", id)}
+                    onEdit={(section) =>
+                      setCustomModal({
+                        kind: "sections",
+                        label: "Section",
+                        initialItem: section,
+                      })
+                    }
                   />
                 )
+              : activeTab === "subjects"
+                ? (item) => (
+                    <div
+                      key={item._id}
+                      className="flex items-center justify-between gap-3 rounded-lg px-3 py-2.5 hover:bg-paper/50"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-[13px] font-medium text-ink">{item.name}</p>
+                        <p className="text-[11.5px] text-slate-text/60">
+                          {item.sectionName
+                            ? `${item.sectionName} · Class ${item.className || "—"}`
+                            : "Unassigned to a section"}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() =>
+                          setCustomModal({
+                            kind: "subjects",
+                            label: "Subject",
+                            initialItem: item,
+                          })
+                        }
+                        className="rounded-lg p-2 text-slate-text transition-colors hover:bg-paper"
+                        title={`Edit ${item.name}`}
+                      >
+                        <Pencil size={15} />
+                      </button>
+                      <Pill tone={isActiveItem(item) ? "success" : "neutral"}>
+                        {isActiveItem(item) ? "Active" : "Inactive"}
+                      </Pill>
+                      <button
+                        onClick={() =>
+                          isActiveItem(item)
+                            ? handleDeactivate("subjects", item._id)
+                            : handleRestore("subjects", item._id)
+                        }
+                        className={`rounded-lg p-2 transition-colors ${
+                          isActiveItem(item)
+                            ? "text-alert hover:bg-alert/10"
+                            : "text-success hover:bg-success/10"
+                        }`}
+                        title={isActiveItem(item) ? "Deactivate" : "Reactivate"}
+                      >
+                        {isActiveItem(item) ? <Trash2 size={15} /> : <RotateCcw size={15} />}
+                      </button>
+                    </div>
+                  )
               : undefined
           }
         />
@@ -818,6 +1006,8 @@ export default function ManageSchool() {
           }
           showDescription={customModal.kind === "subjects"}
           initialItem={customModal.initialItem}
+          parentFields={parentFields}
+          defaultParentValues={defaultParentValues}
           onClose={() => setCustomModal(null)}
           onCreated={(newItem) => handleCreated(customModal.kind, newItem)}
           onUpdated={(updatedItem) => handleUpdated(customModal.kind, updatedItem)}

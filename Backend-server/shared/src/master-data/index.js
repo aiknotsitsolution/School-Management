@@ -125,7 +125,8 @@ function createMasterController(config) {
       if (!ctx) return res.status(404).json({ success: false, message: "Unknown master type" });
 
       const lc = lifecycleOf(ctx);
-      const filter = readScope(req, ctx, { [lc.field]: lc.active });
+      const listFilter = ctx.listFilter ? await ctx.listFilter(req) : {};
+      const filter = readScope(req, ctx, { ...listFilter, [lc.field]: lc.active });
       let docs = await ctx.model.find(filter).sort(ctx.sort).lean();
       if (docs.length === 0 && canWrite(req.user) && (await seedDefaults(ctx, req.tenantId, branchOf(req, ctx)))) {
         docs = await ctx.model.find(filter).sort(ctx.sort).lean();
@@ -158,6 +159,7 @@ function createMasterController(config) {
       if (!ctx) return res.status(404).json({ success: false, message: "Unknown master type" });
 
       const payload = ctx.build(req.body || {});
+      if (ctx.validatePayload) await ctx.validatePayload(payload, req);
       const dupFilter = ctx.dupFilter ? ctx.dupFilter(payload) : null;
       if (dupFilter) {
         const existing = await findDuplicate(ctx, req, dupFilter);
@@ -201,6 +203,7 @@ function createMasterController(config) {
       const payload = ctx.build(req.body || {});
       const doc = await ctx.model.findOne(readScope(req, ctx, { _id: req.params.id })).exec();
       if (!doc) return res.status(404).json({ success: false, message: `${ctx.label} not found` });
+      if (ctx.validatePayload) await ctx.validatePayload(payload, req, doc);
 
       const dupFilter = ctx.dupFilter ? ctx.dupFilter(payload) : null;
       if (dupFilter) {
