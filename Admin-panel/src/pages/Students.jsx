@@ -35,7 +35,12 @@ import SearchableSelect from "../components/SearchableSelect";
 import { Pagination } from "../components/Pagination";
 const initialStudents = [];
 import { api } from "../lib/api";
-import { PermissionGate } from "../lib/permissions";
+import { PermissionGate, usePermission } from "../lib/permissions";
+import {
+  deriveFeeStatus,
+  groupInvoicesByStudent,
+  loadAllInvoices,
+} from "../lib/feeStatus";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import { useSelector } from "react-redux";
 import { selectSchool } from "../store/selectors";
@@ -71,7 +76,6 @@ const BLOOD_OPTIONS = ["A+", "A-", "B+", "B-", "O+", "O-", "AB+", "AB-"];
 const MEDIUM_OPTIONS = ["English", "Hindi"];
 // Mirrors the Student.status enum in student-service/src/models/Student.js.
 const STATUS_OPTIONS = ["Active", "Inactive", "Alumni", "Transferred"];
-const FEE_STATUS_OPTIONS = ["Paid", "Partially Paid", "Pending"];
 const PAGE_SIZE = 20;
 
 function formatClass(c) {
@@ -163,6 +167,20 @@ function toApiStudent(form, admissionNo) {
   };
 }
 
+// One derivation for the Fee Status shown in the list, the stats strip and the
+// profile drawer. Invoice-less students keep their own record status (Pending
+// from onboarding), never a default invented by this page.
+function withFeeStatus(rows, invoices) {
+  const byStudent = groupInvoicesByStudent(invoices);
+  return rows.map((row) => ({
+    ...row,
+    feeStatus: deriveFeeStatus(
+      byStudent.get(String(row.admissionNo)) || [],
+      row.feeStatus,
+    ),
+  }));
+}
+
 // ── Bulk import (C11) ───────────────────────────────────────────────────────
 // Client-side CSV parsing so the admin can preview exactly what will be sent;
 // the server re-validates every row anyway (same code path as a single add).
@@ -238,11 +256,16 @@ function csvRowsToStudents(rows) {
 
 export default function Students() {
   const school = useSelector(selectSchool);
+  // Fee status is derived from invoices, and GET /fees needs fees:read — roles
+  // without it (teacher, librarian, transport…) simply keep the record's own
+  // status instead of hitting a 403.
+  const canReadFees = usePermission("fees:read");
   const { options: masterClasses } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
   const { options: masterSections, rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
   const CLASS_OPTIONS = ["All", ...masterClasses.filter((c) => c !== "All")];
   const SECTION_OPTIONS = ["All", ...masterSections.filter((s) => s !== "All")];
   const [list, setList] = useState(initialStudents);
+  const [invoices, setInvoices] = useState([]);
   const [loading, setLoading] = useState(true);
   const [apiError, setApiError] = useState("");
   const [query, setQuery] = useState("");
@@ -279,10 +302,21 @@ export default function Students() {
 
   useEffect(() => {
     let active = true;
-    api.students
-      .list(`limit=1000${includeDeleted ? "&includeDeleted=true" : ""}`)
-      .then(({ data }) => {
-        if (active && Array.isArray(data)) setList(data.map(normalizeStudent));
+    const studentsRequest = api.students.list(
+      `limit=1000${includeDeleted ? "&includeDeleted=true" : ""}`,
+    );
+    // One load, one source of truth: students and their invoices arrive
+    // together so the Fee Status column can never lag behind the record.
+    const invoicesRequest = canReadFees
+      ? loadAllInvoices().catch(() => [])
+      : Promise.resolve([]);
+    Promise.all([studentsRequest, invoicesRequest])
+      .then(([studentResponse, loadedInvoices]) => {
+        if (!active) return;
+        if (Array.isArray(studentResponse.data)) {
+          setList(withFeeStatus(studentResponse.data.map(normalizeStudent), loadedInvoices));
+        }
+        setInvoices(loadedInvoices);
       })
       .catch((error) => {
         if (active) setApiError(error.message);
@@ -293,7 +327,7 @@ export default function Students() {
     return () => {
       active = false;
     };
-  }, [includeDeleted, reloadKey]);
+  }, [includeDeleted, reloadKey, canReadFees]);
 
   const filtered = useMemo(() => {
     return list
@@ -344,7 +378,7 @@ export default function Students() {
       setSelected(null);
       api.students
         .list(`limit=1000${includeDeleted ? "&includeDeleted=true" : ""}`)
-        .then(({ data }) => { if (Array.isArray(data)) setList(data.map(normalizeStudent)); })
+        .then(({ data }) => { if (Array.isArray(data)) setList(withFeeStatus(data.map(normalizeStudent), invoices)); })
         .catch(() => {});
     } catch (e) {
       toast(e.message, "error");
@@ -359,10 +393,10 @@ export default function Students() {
     try {
       const { data } = await api.students.restore(selected.id);
       toast("Student restored");
-      setSelected(data ? normalizeStudent(data) : null);
+      setSelected(data ? withFeeStatus([normalizeStudent(data)], invoices)[0] : null);
       api.students
         .list(`limit=1000${includeDeleted ? "&includeDeleted=true" : ""}`)
-        .then(({ data: rows }) => { if (Array.isArray(rows)) setList(rows.map(normalizeStudent)); })
+        .then(({ data: rows }) => { if (Array.isArray(rows)) setList(withFeeStatus(rows.map(normalizeStudent), invoices)); })
         .catch(() => {});
     } catch (e) {
       toast(e.message, "error");
@@ -424,7 +458,7 @@ export default function Students() {
       const response = editId
         ? await api.students.update(editId, payload)
         : await api.students.create(payload);
-      const saved = normalizeStudent(response.data);
+      const saved = withFeeStatus([normalizeStudent(response.data)], invoices)[0];
       setList((prev) =>
         editId
           ? prev.map((student) => (student.id === editId ? saved : student))
@@ -1179,16 +1213,15 @@ export default function Students() {
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                     Fee Status
                   </label>
-                  <Select
-                    value={form.feeStatus}
-                    onChange={(e) => updateForm("feeStatus", e.target.value)}
-                  >
-                    {FEE_STATUS_OPTIONS.map((f) => (
-                      <option key={f} value={f}>
-                        {f}
-                      </option>
-                    ))}
-                  </Select>
+                  {/* Derived from the student's invoices, so it is read-only
+                      here — an editable value would never persist (the API has
+                      no feeStatus field) and would disagree with the list. */}
+                  <div className="flex items-center gap-2 h-9 px-3 rounded-xl border border-slate-200 bg-slate-50">
+                    <Pill tone={statusTone(form.feeStatus)}>{form.feeStatus}</Pill>
+                    <span className="text-[11px] text-slate-text/70 ml-auto">
+                      Set from fee invoices
+                    </span>
+                  </div>
                 </div>
 
                 <div>

@@ -205,6 +205,8 @@ export default function Homework() {
   const [showDutyModal, setShowDutyModal] = useState(false);
   const [dutyForm, setDutyForm] = useState(emptyDutyForm(session));
   const [dutyError, setDutyError] = useState("");
+  // Whose assignments are expanded inline on the roster row ("View assignments").
+  const [openAssignments, setOpenAssignments] = useState(null);
 
   const reload = () => {
     api.homework
@@ -247,14 +249,22 @@ export default function Homework() {
   const dutyLabel = (s) => `${s.name} (${s.employeeId || s.designation || "Teacher"})`;
   const dutyOptions = useMemo(() => teacherStaff.map(dutyLabel), [teacherStaff]);
 
+  // The tab used to open on an empty list — its badge counted assigned WORK,
+  // so the people you assign to stayed invisible until a task existed. Show
+  // this tab's roster first; the work list below still carries the items.
+  const roster = useMemo(
+    () =>
+      staffList.filter((s) =>
+        tab === "teacher" ? s.role === "teacher" : s.role !== "teacher"
+      ),
+    [staffList, tab]
+  );
+
   const selectTab = (key) => {
     const next = new URLSearchParams(searchParams);
     next.set("tab", key);
     next.delete("staff");
     setSearchParams(next, { replace: true });
-    // "Academic duty" doesn't exist off the Teacher tab — carrying it over
-    // would leave the staff list with nothing in it.
-    if (typeFilter === "duty") setTypeFilter("All");
   };
 
   const openDuty = (person) => {
@@ -298,17 +308,17 @@ export default function Homework() {
     const q = query.trim().toLowerCase();
     const now = Date.now();
     const soon = now + 7 * 864e5;
-    return [...tabDuties.map(dutyRow), ...tabTasks.map(taskRow)]
+    // The list below is TASKS ONLY. Duties are shown on the person's own row
+    // (button state + View assignments), so printing them here too made the
+    // same duty appear twice.
+    return tabTasks
+      .map(taskRow)
       .filter((r) => {
         if (typeFilter !== "All" && r.category !== typeFilter) return false;
-        // Status, priority and deadline only describe TASKS. Choosing any of
-        // them narrows the view to tasks alone — a duty has none of those
-        // fields, and pretending otherwise would mean showing empty columns.
-        if (statusFilter !== "All" && (r.kind !== "task" || r.status !== statusFilter)) return false;
-        if (priorityFilter !== "All" && (r.kind !== "task" || r.priority !== priorityFilter))
-          return false;
+        if (statusFilter !== "All" && r.status !== statusFilter) return false;
+        if (priorityFilter !== "All" && r.priority !== priorityFilter) return false;
         if (dueFilter !== "All") {
-          if (r.kind !== "task" || !r.dueDate) return false;
+          if (!r.dueDate) return false;
           const t = new Date(r.dueDate).getTime();
           if (dueFilter === "Overdue" && !(t < now && r.status !== "Completed")) return false;
           if (dueFilter === "Next 7 days" && !(t >= now && t <= soon)) return false;
@@ -321,14 +331,8 @@ export default function Homework() {
         }
         return true;
       })
-      .sort((a, b) => {
-        if (a.kind !== b.kind) return a.kind === "duty" ? -1 : 1;
-        if (a.kind === "task" && b.kind === "task") {
-          return new Date(a.dueDate || 0) - new Date(b.dueDate || 0);
-        }
-        return 0;
-      });
-  }, [tabTasks, tabDuties, query, typeFilter, statusFilter, priorityFilter, dueFilter]);
+      .sort((a, b) => new Date(a.dueDate || 0) - new Date(b.dueDate || 0));
+  }, [tabTasks, query, typeFilter, statusFilter, priorityFilter, dueFilter]);
 
   const counts = useMemo(() => {
     const c = { total: tabTasks.length, Pending: 0, "In Progress": 0, Completed: 0, Overdue: 0 };
@@ -339,6 +343,18 @@ export default function Homework() {
   }, [tabTasks]);
 
   const activeDuties = useMemo(() => tabDuties.filter((d) => d.status === "active").length, [tabDuties]);
+
+  // Duties keyed by staff id so each roster row can show its own state
+  // (button turned "assigned" + the View assignments link).
+  const dutiesByStaff = useMemo(() => {
+    const map = {};
+    tabDuties.forEach((d) => {
+      const key = String(d.staffId || "");
+      if (!key) return;
+      (map[key] = map[key] || []).push(d);
+    });
+    return map;
+  }, [tabDuties]);
 
   const filtersActive =
     query.trim() !== "" ||
@@ -359,6 +375,20 @@ export default function Homework() {
     setEditId(null);
     setForm(emptyForm());
     setShowModal(true);
+  };
+
+  // Roster row's "Assign work" opens the same form with the person already
+  // picked — the picker lists userOptions (name + role), so match on both.
+  const openAddFor = (person) => {
+    openAdd();
+    const wantedRole = person.role === "teacher" ? "teacher" : "staff";
+    const match = users.find((u) => u.name === person.name && u.role === wantedRole);
+    if (match) {
+      setForm((f) => ({
+        ...f,
+        assignedTo: `${match.name} (${ROLE_LABELS[match.role] || match.role})`,
+      }));
+    }
   };
 
   const openEdit = (item) => {
@@ -500,7 +530,6 @@ export default function Homework() {
     tab === "teacher"
       ? [
           ["All", "All types"],
-          ["duty", "Academic duty"],
           ["teaching", "Teaching"],
           ["external", "External"],
         ]
@@ -533,10 +562,12 @@ export default function Homework() {
       <SegmentedTabs
         tabs={TABS.map((t) => ({
           ...t,
+          // Badge counts PEOPLE on this tab — how many you can assign work to.
+          // Assigned-work totals live on the stat cards and the work card.
           count:
             t.id === "teacher"
-              ? items.filter((h) => h.assignedToRole === "teacher").length + duties.length
-              : items.filter((h) => h.assignedToRole !== "teacher").length,
+              ? staffList.filter((s) => s.role === "teacher").length
+              : staffList.filter((s) => s.role !== "teacher").length,
         }))}
         active={tab}
         onChange={selectTab}
@@ -559,7 +590,14 @@ export default function Homework() {
         />
       </div>
 
-      <Card title={tab === "teacher" ? "Teacher Work" : "Other Staff Work"}>
+      <Card
+        title={tab === "teacher" ? "Teacher Work" : "Other Staff Work"}
+        subtitle={
+          tab === "teacher"
+            ? `${tabTasks.length} tasks · ${tabDuties.length} academic duties`
+            : `${tabTasks.length} tasks`
+        }
+      >
         {/* Smart filter — one bar narrows both work kinds at once. */}
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
@@ -604,17 +642,166 @@ export default function Homework() {
           </span>
         </div>
 
+        {/* People live in this same card — pick one, then assign. The work
+            list underneath stays exactly as it was. */}
+        <div className="mb-5 border-t border-slate-200 pt-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+            <p className="text-[13px] font-semibold text-ink">
+              {tab === "teacher" ? "Teachers" : "Staff"} ({roster.length})
+            </p>
+            <p className="text-[12.5px] text-slate-text/70">
+              {tab === "teacher"
+                ? "Pick a teacher to assign work or an academic duty."
+                : "Pick a staff member to assign work."}
+            </p>
+          </div>
+          {roster.length === 0 ? (
+            <p className="text-[13px] text-slate-text/60">
+              {tab === "teacher" ? "No teachers" : "No staff"} on this tab yet — add them
+              from Add Staff.
+            </p>
+          ) : (
+            <div className="space-y-3">
+              {roster.map((p) => {
+                const initials = (p.name || "?")
+                  .split(" ")
+                  .map((w) => w[0])
+                  .slice(0, 2)
+                  .join("")
+                  .toUpperCase();
+                // This person's own duties — they drive the button state and
+                // the "View assignments" link, so a duty is never printed
+                // twice (once here, once in the list below).
+                const myDuties = dutiesByStaff[String(p.id)] || [];
+                const myActive = myDuties.filter((d) => d.status === "active");
+                const assigned = myActive.length > 0;
+                const isOpen = openAssignments === p.id;
+                // Active first, history below — and the link/panel only show
+                // while a duty is live, so an ended one leaves a clean row.
+                const panelDuties = [...myDuties].sort(
+                  (a, b) =>
+                    (a.status === "active" ? 0 : 1) - (b.status === "active" ? 0 : 1)
+                );
+                return (
+                  <div
+                    key={p.id}
+                    className="rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-paper/40 transition-colors"
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-3 p-4">
+                      <div className="w-11 h-11 rounded-xl bg-primary/10 text-primary-dark flex items-center justify-center shrink-0 text-[13px] font-semibold">
+                        {initials}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-[14px] font-semibold text-ink">{p.name}</p>
+                          <Pill tone="info">{ROLE_LABELS[p.role] || p.role || "Staff"}</Pill>
+                          <Pill tone={(p.status || "Active") === "Active" ? "success" : "neutral"}>
+                            {p.status || "Active"}
+                          </Pill>
+                        </div>
+                        <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-[12px] text-slate-text/65">
+                          <span className="inline-flex items-center gap-1">
+                            <Briefcase size={12} /> {p.designation || "—"}
+                          </span>
+                          {p.employeeId && <span>ID {p.employeeId}</span>}
+                          {Array.isArray(p.subjects) && p.subjects.length > 0 && (
+                            <span className="inline-flex items-center gap-1">
+                              <GraduationCap size={12} /> {p.subjects.join(", ")}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="flex flex-col items-stretch gap-1.5 shrink-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          {tab === "teacher" &&
+                            (assigned ? (
+                              <Button
+                                variant="outline"
+                                className="border-success/40 bg-success/10 text-success hover:bg-success/15"
+                                onClick={() => setOpenAssignments(isOpen ? null : p.id)}
+                              >
+                                <CheckCircle2 size={15} /> Duty assigned
+                              </Button>
+                            ) : (
+                              <Button variant="outline" onClick={() => openDuty(p)}>
+                                <Link2 size={15} /> Academic duty
+                              </Button>
+                            ))}
+                          <Button variant="primary" onClick={() => openAddFor(p)}>
+                            <Plus size={15} /> Assign work
+                          </Button>
+                        </div>
+                        {tab === "teacher" && myActive.length > 0 && (
+                          <button
+                            onClick={() => setOpenAssignments(isOpen ? null : p.id)}
+                            className="self-end text-[12px] font-medium text-info hover:underline inline-flex items-center gap-1"
+                          >
+                            <Link2 size={12} />
+                            {isOpen ? "Hide assignments" : `View assignments (${myActive.length})`}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Assignments inline — same shape as the Add Staff list. */}
+                    {isOpen && panelDuties.length > 0 && (
+                      <div className="px-4 pb-4 pt-3 border-t border-slate-100 space-y-2">
+                        {panelDuties.map((d) => {
+                          const r = dutyRow(d);
+                          return (
+                            <div
+                              key={r.key}
+                              className="flex flex-wrap items-center justify-between gap-2 text-[12px] rounded-lg bg-paper/60 px-3 py-2"
+                            >
+                              <div className="flex flex-wrap items-center gap-2">
+                                <Pill tone={d.type === "class_teacher" ? "primary" : "info"}>
+                                  {d.type === "class_teacher" ? "Class Teacher" : "Teaching"}
+                                </Pill>
+                                <span className="text-ink font-medium">{r.title}</span>
+                                <span className="text-slate-text/50">{r.detail}</span>
+                                <Pill tone={workTone(r.status)}>{r.status}</Pill>
+                              </div>
+                              {d.status === "active" ? (
+                                <Button
+                                  variant="outline"
+                                  className="px-2 py-1 text-[11px]"
+                                  onClick={() => endDuty(d)}
+                                >
+                                  End duty
+                                </Button>
+                              ) : (
+                                <span className="text-[11px] text-slate-text/40">Ended</span>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+
+
         {filtered.length === 0 ? (
           <div className="py-14 text-center">
             <Briefcase size={36} className="mx-auto text-slate-text/30 mb-3" />
             <p className="text-[14px] font-medium text-ink">
-              {filtersActive ? "Nothing matches these filters" : "No work assigned yet"}
+              {filtersActive
+                ? "Nothing matches these filters"
+                : tabDuties.length > 0
+                ? "No tasks assigned yet"
+                : "No work assigned yet"}
             </p>
             <p className="text-[13px] text-slate-text/60 mt-1">
               {filtersActive
                 ? "Try widening the search or clearing the filters."
                 : tab === "teacher"
-                ? "Assign a teaching duty or a task to a teacher to get started."
+                ? tabDuties.length > 0
+                  ? "Duties show on the teacher's row above — use Assign work to add a task."
+                  : "Assign a teaching duty or a task to a teacher to get started."
                 : "Assign tasks to your support staff to get started."}
             </p>
             {!filtersActive && (
@@ -630,14 +817,8 @@ export default function Homework() {
                 key={r.key}
                 className="flex flex-col sm:flex-row sm:items-start gap-3 p-4 rounded-xl border border-slate-200 hover:border-slate-300 hover:bg-paper/40 transition-colors"
               >
-                <div
-                  className={
-                    r.kind === "duty"
-                      ? "w-11 h-11 rounded-xl bg-primary/10 text-primary-dark flex items-center justify-center shrink-0"
-                      : "w-11 h-11 rounded-xl bg-info/15 text-info flex items-center justify-center shrink-0"
-                  }
-                >
-                  {r.kind === "duty" ? <Link2 size={20} /> : <Briefcase size={20} />}
+                <div className="w-11 h-11 rounded-xl bg-info/15 text-info flex items-center justify-center shrink-0">
+                  <Briefcase size={20} />
                 </div>
 
                 <div className="flex-1 min-w-0">
@@ -645,11 +826,9 @@ export default function Homework() {
                     <p className="text-[14px] font-semibold text-ink">{r.title}</p>
                     <Pill tone={TYPE_TONES[r.category] || "neutral"}>{TYPE_LABELS[r.category]}</Pill>
                     <Pill tone={workTone(r.status)}>{r.status}</Pill>
-                    {r.kind === "task" && (
-                      <Pill tone={r.priority === "High" ? "alert" : r.priority === "Low" ? "success" : "info"}>
-                        {r.priority}
-                      </Pill>
-                    )}
+                    <Pill tone={r.priority === "High" ? "alert" : r.priority === "Low" ? "success" : "info"}>
+                      {r.priority}
+                    </Pill>
                   </div>
                   {r.description && (
                     <p className="text-[13px] text-ink/70 mt-1 leading-snug line-clamp-2">{r.description}</p>
@@ -664,51 +843,39 @@ export default function Homework() {
                       </span>
                     )}
                     <span className="inline-flex items-center gap-1">
-                      {r.kind === "duty" ? <Link2 size={12} /> : <Calendar size={12} />}
+                      <Calendar size={12} />
                       {r.detail}
                     </span>
                   </div>
                 </div>
 
                 <div className="flex items-center gap-2 shrink-0 sm:flex-col sm:items-end">
-                  {r.kind === "task" ? (
-                    <>
-                      <Select
-                        value={r.status}
-                        onChange={(e) => changeStatus(r.id, e.target.value)}
-                        className="text-[12px] py-1.5 min-w-[110px]"
-                      >
-                        <option value="Pending">Pending</option>
-                        <option value="In Progress">In Progress</option>
-                        <option value="Completed">Completed</option>
-                        <option value="Overdue">Overdue</option>
-                      </Select>
-                      <div className="flex items-center gap-1">
-                        <button
-                          onClick={() => openEdit(r.raw)}
-                          className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-info transition-colors"
-                          title="Edit"
-                        >
-                          <Pencil size={15} />
-                        </button>
-                        <button
-                          onClick={() => removeTask(r.id)}
-                          className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-alert transition-colors"
-                          title="Delete"
-                        >
-                          <Trash2 size={15} />
-                        </button>
-                      </div>
-                    </>
-                  ) : r.raw.status === "active" ? (
-                    <Button
-                      variant="outline"
-                      className="px-3 py-1.5 text-[12px]"
-                      onClick={() => endDuty(r.raw)}
+                  <Select
+                    value={r.status}
+                    onChange={(e) => changeStatus(r.id, e.target.value)}
+                    className="text-[12px] py-1.5 min-w-[110px]"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="In Progress">In Progress</option>
+                    <option value="Completed">Completed</option>
+                    <option value="Overdue">Overdue</option>
+                  </Select>
+                  <div className="flex items-center gap-1">
+                    <button
+                      onClick={() => openEdit(r.raw)}
+                      className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-info transition-colors"
+                      title="Edit"
                     >
-                      End duty
-                    </Button>
-                  ) : null}
+                      <Pencil size={15} />
+                    </button>
+                    <button
+                      onClick={() => removeTask(r.id)}
+                      className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-alert transition-colors"
+                      title="Delete"
+                    >
+                      <Trash2 size={15} />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}

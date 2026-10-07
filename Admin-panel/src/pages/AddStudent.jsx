@@ -16,7 +16,6 @@ import {
   Select,
   Input,
   Avatar,
-  Pill,
   toast,
 } from "../components/UI";
 import SearchableSelect from "../components/SearchableSelect";
@@ -138,10 +137,22 @@ function SectionHeading({ icon: Icon, title, subtitle }) {
   );
 }
 
+function initialsOf(name) {
+  return (
+    String(name || "?")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((w) => w[0].toUpperCase())
+      .join("") || "?"
+  );
+}
+
 function PreviewRow({ label, value, className = "" }) {
   return (
     <div className={className}>
-      <p className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-text/50">
+      <p className="text-[10.5px] font-semibold uppercase tracking-wider text-slate-text/70">
         {label}
       </p>
       <p className="text-[13px] font-semibold text-ink mt-0.5 break-words">
@@ -643,7 +654,7 @@ export default function AddStudent() {
               <div className="relative">
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/55">
+                    <p className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-white/80">
                       <span className="w-1.5 h-1.5 rounded-full bg-[#16A34A] inline-block animate-pulse" />
                       Student ID · Live Preview
                     </p>
@@ -652,18 +663,20 @@ export default function AddStudent() {
                     </p>
                   </div>
                   <div className="w-14 h-14 rounded-full overflow-hidden ring-2 ring-white/25 shrink-0">
-                    <Avatar
-                      src={photoPreview || undefined}
-                      name={form.name || "New Student"}
-                      size={56}
-                    />
+                    {photoPreview ? (
+                      <Avatar src={photoPreview} name={form.name || "New Student"} size={56} />
+                    ) : (
+                      <div className="w-14 h-14 rounded-full bg-white/20 text-white font-display font-bold flex items-center justify-center text-[19px]">
+                        {initialsOf(form.name || "New Student")}
+                      </div>
+                    )}
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-1.5 mt-4">
                   {form.class && (
-                    <Pill tone="primary">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11.5px] font-semibold whitespace-nowrap bg-white text-primary-dark">
                       {formatClassLabel(form.class)} · Section {form.section || "—"}
-                    </Pill>
+                    </span>
                   )}
                   {form.rollNo && (
                     <span className="inline-flex items-center px-2.5 py-1 rounded-full text-[11px] font-semibold bg-white/15 text-white">

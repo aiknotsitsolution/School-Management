@@ -10,6 +10,7 @@ import {
   AlarmClock,
   ClipboardCheck,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
 import {
   PageIntro,
@@ -61,6 +62,8 @@ export default function Homework() {
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
   const [form, setForm] = useState({ subject: "English", title: "", description: "", dueDate: "" });
+  // Assign/Update round-trip — drives the button loader and blocks double submits.
+  const [saving, setSaving] = useState(false);
 
   const [submissions, setSubmissions] = useState([]);
   const [loadingSubs, setLoadingSubs] = useState(true);
@@ -181,6 +184,7 @@ export default function Homework() {
       dueDate: form.dueDate,
     };
     try {
+      setSaving(true);
       if (editId) {
         const { data } = await api.homework.update(editId, payload);
         setItems((prev) => prev.map((i) => (i._id === editId ? data : i)));
@@ -193,6 +197,8 @@ export default function Homework() {
       setShowModal(false);
     } catch (e) {
       toast(e.message, "error");
+    } finally {
+      setSaving(false);
     }
   };
 
@@ -516,9 +522,18 @@ export default function Homework() {
               <Button
                 variant="primary"
                 onClick={handleSave}
-                disabled={!form.title.trim() || !form.dueDate}
+                disabled={saving || !form.title.trim() || !form.dueDate}
               >
-                <Save size={15} /> {editId ? "Update" : "Assign"}
+                {saving ? (
+                  <>
+                    <Loader2 size={15} className="animate-spin" />{" "}
+                    {editId ? "Saving…" : "Assigning…"}
+                  </>
+                ) : (
+                  <>
+                    <Save size={15} /> {editId ? "Update" : "Assign"}
+                  </>
+                )}
               </Button>
             </div>
           </div>

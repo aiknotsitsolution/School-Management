@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { api } from "../lib/api";
+import { deriveFeeStatus, groupInvoicesByStudent, loadAllInvoices } from "../lib/feeStatus";
 import {
   ShieldCheck,
   Search,
@@ -83,30 +84,28 @@ export default function OnlinePayment() {
       : api.students.list("limit=1000");
     Promise.all([
       studentsRequest,
-      api.fees.invoices.list(),
+      // Paginated on purpose: a single page can miss invoices and misreport a
+      // student as "Pending". Same loader the Student Database uses.
+      loadAllInvoices(),
       api.fees.orders.list(),
     ])
-      .then(([studentResponse, invoiceResponse, orderResponse]) => {
-        const loadedInvoices = invoiceResponse.data || [];
-        const loadedStudents = (studentResponse.data || []).map((item) => {
-          const studentInvoices = loadedInvoices.filter(
-            (invoice) => String(invoice.studentId) === String(item.admissionNo),
-          );
-          const pendingAmount = studentInvoices.reduce(
-            (sum, invoice) =>
-              sum + Math.max(0, Number(invoice.amount) - Number(invoice.paidAmount || 0)),
-            0,
-          );
-          return {
-            ...item,
-            id: item._id,
-            displayId: item.admissionNo,
-            avatar:
-              item.photoUrl ||
-              `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=172033&color=fff&bold=true`,
-            feeStatus: pendingAmount === 0 ? "Paid" : "Pending",
-          };
-        });
+      .then(([studentResponse, loadedInvoices, orderResponse]) => {
+        const invoicesByStudent = groupInvoicesByStudent(loadedInvoices);
+        const loadedStudents = (studentResponse.data || []).map((item) => ({
+          ...item,
+          id: item._id,
+          displayId: item.admissionNo,
+          avatar:
+            item.photoUrl ||
+            `https://ui-avatars.com/api/?name=${encodeURIComponent(item.name)}&background=172033&color=fff&bold=true`,
+          // Same derivation the Student Database runs — no invoice raised yet
+          // keeps the record's own status ("Pending" from onboarding) instead
+          // of inventing a payment that never happened.
+          feeStatus: deriveFeeStatus(
+            invoicesByStudent.get(String(item.admissionNo)) || [],
+            item.feeStatus,
+          ),
+        }));
         setStudents(loadedStudents);
         setInvoices(loadedInvoices);
         setOrders(orderResponse.data || []);
@@ -414,6 +413,11 @@ export default function OnlinePayment() {
                 {creating ? "Creating order…" : `Create payment order · ₹${total.toLocaleString("en-IN")}`}
               </Button>
             </>
+          ) : feeStructure.length === 0 ? (
+            <div className="text-center py-5 mt-2">
+              {/* Nothing raised yet, so nothing is paid — never "Fees paid". */}
+              <Pill tone="neutral">Pending</Pill>
+            </div>
           ) : (
             <div className="text-center py-5 mt-2">
               <Pill tone="success">Fees paid</Pill>

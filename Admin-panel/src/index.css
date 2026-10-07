@@ -781,3 +781,29 @@ body {
   .animate-kenburns,
   .animate-progress-fill { animation: none; }
 }
+
+/* ── Global async-button feedback (src/lib/inflight.js) ─────────────────────
+   installInflightTracker() appends this spinner to whichever button started
+   the fetch and blocks it until the response lands — no per-call-site wiring. */
+button[data-async-loading] {
+  pointer-events: none;
+  cursor: progress;
+}
+button[data-async-loading]::after {
+  content: "";
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  margin-left: 0.35em;
+  vertical-align: -0.12em;
+  border: 2px solid currentColor;
+  border-right-color: transparent;
+  border-radius: 50%;
+  animation: async-btn-spin 0.7s linear infinite;
+}
+@keyframes async-btn-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  button[data-async-loading]::after { animation-duration: 1.6s; }
+}
