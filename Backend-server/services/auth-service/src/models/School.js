@@ -16,6 +16,12 @@ const schoolSchema = new mongoose.Schema(
     domain: { type: String, lowercase: true, trim: true },
     // Affiliation & Recognition
     board: { type: String, trim: true },
+    examFormat: { type: String, trim: true },
+    examFormatType: { type: String, trim: true },
+    examFormats: [{
+      name: { type: String, trim: true },
+      types: [{ type: String, trim: true }],
+    }],
     recognitionNumber: { type: String, trim: true },
     recognitionAuthority: { type: String, trim: true },
     recognitionVerified: { type: Boolean, default: false },

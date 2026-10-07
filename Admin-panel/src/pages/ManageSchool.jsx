@@ -45,6 +45,7 @@ import { sessionLabel } from "../lib/session";
 
 const TABS = [
   { key: "school-profile", label: "School Profile", singular: "School Profile", icon: Building2, kind: "school-profile" },
+  { key: "school-board", label: "School Board", singular: "School Board", icon: BookOpen, kind: "school-board" },
   { key: "classes", label: "Classes", singular: "Class", icon: School, kind: "classes" },
   { key: "sections", label: "Sections", singular: "Section", icon: Layers, kind: "sections" },
   { key: "subjects", label: "Subjects", singular: "Subject", icon: BookOpen, kind: "subjects" },
@@ -61,6 +62,213 @@ const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const PHONE_RE = /^[+]?[(]?[0-9]{1,4}[)]?[-\s./0-9]*$/;
 const PINCODE_RE = /^[1-9][0-9]{5}$/;
 
+function SchoolBoardForm({ school }) {
+  const dispatch = useDispatch();
+  const [form, setForm] = useState({
+    board: school?.board || "",
+    examFormats: school?.examFormats?.length
+      ? school.examFormats.map((format) => ({
+          name: format.name || "",
+          types: Array.isArray(format.types) && format.types.length ? [...format.types] : [""],
+        }))
+      : school?.examFormat
+        ? [{ name: school.examFormat, types: school.examFormatType ? [school.examFormatType] : [""] }]
+        : [{ name: "", types: [""] }],
+  });
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setForm({
+      board: school?.board || "",
+      examFormats: school?.examFormats?.length
+        ? school.examFormats.map((format) => ({
+            name: format.name || "",
+            types: Array.isArray(format.types) && format.types.length ? [...format.types] : [""],
+          }))
+        : school?.examFormat
+          ? [{ name: school.examFormat, types: school.examFormatType ? [school.examFormatType] : [""] }]
+          : [{ name: "", types: [""] }],
+    });
+  }, [school?.board, school?.examFormat, school?.examFormatType, school?.examFormats]);
+
+  const save = async () => {
+    const examFormats = form.examFormats
+      .map((format) => ({
+        name: format.name.trim(),
+        types: format.types.map((type) => type.trim()).filter(Boolean),
+      }))
+      .filter((format) => format.name);
+    if (!form.board && examFormats.length > 0) {
+      toast("Select a board before setting exam formats", "error");
+      return;
+    }
+    if (form.examFormats.some((format) => !format.name.trim() && format.types.some((type) => type.trim()))) {
+      toast("Enter an exam format before adding its types", "error");
+      return;
+    }
+    setSaving(true);
+    try {
+      const { data } = await api.school.update({
+        board: form.board,
+        examFormats,
+        examFormat: examFormats[0]?.name || "",
+        examFormatType: examFormats[0]?.types[0] || "",
+      });
+      dispatch(setSchoolAction(data));
+      localStorage.setItem("erp_school", JSON.stringify(data));
+      toast("School board configuration saved");
+    } catch (error) {
+      toast(error.message || "Could not save school board configuration", "error");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card
+      title="School Board Configuration"
+      subtitle="Add one or more exam formats and the result types used by each format."
+    >
+      <div className="space-y-4">
+        <div className="rounded-xl border border-primary/20 bg-primary/5 p-4">
+          <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-primary">
+            Category · School Board
+          </p>
+          <select
+            value={form.board}
+            onChange={(event) => setForm((current) => ({
+              ...current,
+              board: event.target.value,
+              examFormats: event.target.value === current.board
+                ? current.examFormats
+                : [{ name: "", types: [""] }],
+            }))}
+            className="w-full h-[40px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40 sm:max-w-md"
+          >
+            <option value="">Select board</option>
+            <option value="CBSE">CBSE</option>
+            <option value="ICSE">ICSE</option>
+            <option value="State Board">State Board</option>
+            <option value="IGCSE">IGCSE</option>
+            <option value="IB">IB (International Baccalaureate)</option>
+            <option value="NIOS">NIOS</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+
+        {form.examFormats.map((format, formatIndex) => (
+          <div key={`format-${formatIndex}`} className="ml-3 rounded-xl border border-slate-200 bg-white p-4 sm:ml-8">
+            <div className="mb-2 flex items-center justify-between gap-3">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-slate-text/70">
+                Subcategory · Exam Format {formatIndex + 1}
+              </p>
+              {form.examFormats.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => setForm((current) => ({
+                    ...current,
+                    examFormats: current.examFormats.filter((_, index) => index !== formatIndex),
+                  }))}
+                  className="rounded-lg p-1.5 text-alert hover:bg-alert/10"
+                  aria-label={`Remove exam format ${formatIndex + 1}`}
+                >
+                  <Trash2 size={14} />
+                </button>
+              )}
+            </div>
+            <Input
+              value={format.name}
+              onChange={(event) => setForm((current) => ({
+                ...current,
+                examFormats: current.examFormats.map((item, index) =>
+                  index === formatIndex ? { ...item, name: event.target.value } : item,
+                ),
+              }))}
+              placeholder="e.g. Annual, Semester, or Term-based"
+              disabled={!form.board}
+            />
+
+            <div className="ml-3 mt-3 space-y-2 border-l-2 border-primary/15 pl-3 sm:ml-6 sm:pl-4">
+              {format.types.map((type, typeIndex) => (
+                <div key={`format-${formatIndex}-type-${typeIndex}`}>
+                  <div className="mb-1.5 flex items-center justify-between gap-3">
+                    <p className="text-[10.5px] font-bold uppercase tracking-wide text-slate-text/60">
+                      Sub-subcategory · Format Type {typeIndex + 1}
+                    </p>
+                    {format.types.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => setForm((current) => ({
+                          ...current,
+                          examFormats: current.examFormats.map((item, index) =>
+                            index === formatIndex
+                              ? { ...item, types: item.types.filter((_, itemIndex) => itemIndex !== typeIndex) }
+                              : item,
+                          ),
+                        }))}
+                        className="rounded-lg p-1.5 text-alert hover:bg-alert/10"
+                        aria-label={`Remove format type ${typeIndex + 1}`}
+                      >
+                        <Trash2 size={13} />
+                      </button>
+                    )}
+                  </div>
+                  <Input
+                    value={type}
+                    onChange={(event) => setForm((current) => ({
+                      ...current,
+                      examFormats: current.examFormats.map((item, index) =>
+                        index === formatIndex
+                          ? { ...item, types: item.types.map((value, itemIndex) => itemIndex === typeIndex ? event.target.value : value) }
+                          : item,
+                      ),
+                    }))}
+                    placeholder="e.g. Marks, Grades, or GPA"
+                    disabled={!form.board || !format.name.trim()}
+                  />
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                className="text-[11px]"
+                onClick={() => setForm((current) => ({
+                  ...current,
+                  examFormats: current.examFormats.map((item, index) =>
+                    index === formatIndex ? { ...item, types: [...item.types, ""] } : item,
+                  ),
+                }))}
+                disabled={!form.board || !format.name.trim()}
+              >
+                <Plus size={13} /> Add Format Type
+              </Button>
+            </div>
+          </div>
+        ))}
+
+        <div className="ml-3 sm:ml-8">
+          <Button
+            variant="outline"
+            onClick={() => setForm((current) => ({
+              ...current,
+              examFormats: [...current.examFormats, { name: "", types: [""] }],
+            }))}
+            disabled={!form.board}
+          >
+            <Plus size={14} /> Add Exam Format
+          </Button>
+        </div>
+
+        <div className="flex justify-end pt-1">
+          <Button variant="primary" onClick={save} disabled={saving}>
+            <Save size={15} />
+            {saving ? "Saving…" : "Save School Board"}
+          </Button>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 function SchoolProfileForm({ school, user, onSave }) {
   const dispatch = useDispatch();
   const logoInputRef = useRef(null);
@@ -74,7 +282,6 @@ function SchoolProfileForm({ school, user, onSave }) {
     city: school?.city || "",
     state: school?.state || "",
     pincode: school?.pincode || "",
-    board: school?.board || "",
     recognitionNumber: school?.recognitionNumber || "",
     recognitionAuthority: school?.recognitionAuthority || "",
   });
@@ -92,11 +299,10 @@ function SchoolProfileForm({ school, user, onSave }) {
       city: school?.city || "",
       state: school?.state || "",
       pincode: school?.pincode || "",
-      board: school?.board || "",
       recognitionNumber: school?.recognitionNumber || "",
       recognitionAuthority: school?.recognitionAuthority || "",
     });
-  }, [school?.name, school?.shortName, school?.email, school?.phone, school?.address, school?.city, school?.state, school?.pincode, school?.board, school?.recognitionNumber, school?.recognitionAuthority]);
+  }, [school?.name, school?.shortName, school?.email, school?.phone, school?.address, school?.city, school?.state, school?.pincode, school?.recognitionNumber, school?.recognitionAuthority]);
 
   const save = async () => {
     if (form.email && !EMAIL_RE.test(form.email.trim())) {
@@ -122,7 +328,6 @@ function SchoolProfileForm({ school, user, onSave }) {
         city: form.city.trim() || undefined,
         state: form.state.trim() || undefined,
         pincode: form.pincode.trim() || undefined,
-        board: form.board.trim() || undefined,
         recognitionNumber: form.recognitionNumber.trim() || undefined,
         recognitionAuthority: form.recognitionAuthority.trim() || undefined,
       });
@@ -137,7 +342,6 @@ function SchoolProfileForm({ school, user, onSave }) {
         city: data.city || "",
         state: data.state || "",
         pincode: data.pincode || "",
-        board: data.board || "",
         recognitionNumber: data.recognitionNumber || "",
         recognitionAuthority: data.recognitionAuthority || "",
       });
@@ -356,35 +560,6 @@ function SchoolProfileForm({ school, user, onSave }) {
           <label className="text-[12px] font-semibold text-ink mb-1.5 block">Pincode</label>
           <Input value={form.pincode} onChange={(e) => setForm((f) => ({ ...f, pincode: e.target.value }))} placeholder="6-digit pincode" />
         </div>
-      </div>
-
-      <div className="border-t border-slate-100 pt-4 mt-2">
-        <h4 className="text-[13px] font-bold text-ink mb-3">Affiliation & Recognition</h4>
-        <div className="grid sm:grid-cols-3 gap-4">
-          <div>
-            <label className="text-[12px] font-semibold text-ink mb-1.5 block">Board</label>
-            <select
-              value={form.board}
-              onChange={(e) => setForm((f) => ({ ...f, board: e.target.value }))}
-              className="w-full h-[38px] rounded-lg border border-slate-300 bg-white px-3 text-[13px] text-ink focus:outline-none focus:ring-2 focus:ring-primary/40"
-            >
-              <option value="">Select board</option>
-              <option value="CBSE">CBSE</option>
-              <option value="ICSE">ICSE</option>
-              <option value="State Board">State Board</option>
-              <option value="IGCSE">IGCSE</option>
-              <option value="IB">IB (International Baccalaureate)</option>
-              <option value="NIOS">NIOS</option>
-              <option value="Other">Other</option>
-            </select>
-          </div>
-        </div>
-        {school?.recognitionVerified && (
-          <div className="mt-2 flex items-center gap-2 text-[12px] text-success font-medium">
-            <span className="w-2 h-2 rounded-full bg-success inline-block" />
-            Verified on {new Date(school.recognitionVerifiedAt).toLocaleDateString("en-IN")}
-          </div>
-        )}
       </div>
 
       <div className="flex items-center justify-end pt-2">
@@ -832,7 +1007,9 @@ export default function ManageSchool() {
                     activeTab === t.key ? "text-white/60" : "text-slate-text/60"
                   }`}
                 >
-                  {counts[t.key]} active
+                  {t.key === "school-board"
+                    ? school?.board ? "Configured" : "Set up"
+                    : `${counts[t.key] || 0} active`}
                 </p>
               </div>
             </button>
@@ -844,6 +1021,8 @@ export default function ManageSchool() {
         <Card title="School Profile">
           <SchoolProfileForm school={school} user={user} onSave={(data) => dispatch(setSchoolAction(data))} />
         </Card>
+      ) : activeTab === "school-board" ? (
+        <SchoolBoardForm school={school} />
       ) : (
         <Card
         title={tab?.label}

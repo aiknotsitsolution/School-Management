@@ -60,6 +60,9 @@ const SCHOOL_EDITABLE_FIELDS = [
   "plan",
   "status",
   "board",
+  "examFormat",
+  "examFormatType",
+  "examFormats",
   "recognitionNumber",
   "recognitionAuthority",
   "recognitionVerified",
@@ -631,7 +634,7 @@ const login = async (req, res) =>
         refreshToken,
         user: await toPublicUserWithAvatar(user),
         school: school
-          ? { id: school._id, name: school.name, code: school.code, shortName: school.shortName, logo: school.logo, session: school.session, currentSession, academicConfigConfirmed: Boolean(school.academicConfigConfirmed), plan: school.plan, status: school.status, onboarding: school.onboarding?.status || "live", city: school.city, state: school.state, pincode: school.pincode, board: school.board || "", recognitionNumber: school.recognitionNumber || "", recognitionAuthority: school.recognitionAuthority || "", recognitionVerified: Boolean(school.recognitionVerified), settings: school.settings || {} }
+          ? { id: school._id, name: school.name, code: school.code, shortName: school.shortName, logo: school.logo, session: school.session, currentSession, academicConfigConfirmed: Boolean(school.academicConfigConfirmed), plan: school.plan, status: school.status, onboarding: school.onboarding?.status || "live", city: school.city, state: school.state, pincode: school.pincode, board: school.board || "", examFormat: school.examFormat || "", examFormatType: school.examFormatType || "", examFormats: school.examFormats || [], recognitionNumber: school.recognitionNumber || "", recognitionAuthority: school.recognitionAuthority || "", recognitionVerified: Boolean(school.recognitionVerified), settings: school.settings || {} }
           : null,
       },
     });
@@ -684,12 +687,12 @@ const getMe = async (req, res) =>
     if (user.schoolId)
     {
       const doc = await School.findById(user.schoolId)
-        .select("name code shortName city state pincode logo session plan status settings")
+        .select("name code shortName city state pincode logo session plan status settings board examFormat examFormatType examFormats recognitionNumber recognitionAuthority recognitionVerified recognitionVerifiedAt academicConfigConfirmed")
         .lean();
       if (doc)
       {
         const currentSession = await resolveCurrentSessionInfo(doc._id);
-        school = { id: doc._id, name: doc.name, code: doc.code, shortName: doc.shortName, logo: doc.logo, session: doc.session, currentSession, academicConfigConfirmed: Boolean(doc.academicConfigConfirmed), plan: doc.plan, status: doc.status, city: doc.city, state: doc.state, pincode: doc.pincode, board: doc.board || "", recognitionNumber: doc.recognitionNumber || "", recognitionAuthority: doc.recognitionAuthority || "", recognitionVerified: Boolean(doc.recognitionVerified), settings: doc.settings || {} };
+        school = { id: doc._id, name: doc.name, code: doc.code, shortName: doc.shortName, logo: doc.logo, session: doc.session, currentSession, academicConfigConfirmed: Boolean(doc.academicConfigConfirmed), plan: doc.plan, status: doc.status, city: doc.city, state: doc.state, pincode: doc.pincode, board: doc.board || "", examFormat: doc.examFormat || "", examFormatType: doc.examFormatType || "", examFormats: doc.examFormats || [], recognitionNumber: doc.recognitionNumber || "", recognitionAuthority: doc.recognitionAuthority || "", recognitionVerified: Boolean(doc.recognitionVerified), settings: doc.settings || {} };
       }
     }
 
@@ -1747,6 +1750,9 @@ const publicSchool = (s) =>
     website: s.website || "",
     logo: s.logo || "",
     board: s.board || "",
+    examFormat: s.examFormat || "",
+    examFormatType: s.examFormatType || "",
+    examFormats: s.examFormats || [],
     recognitionNumber: s.recognitionNumber || "",
     recognitionAuthority: s.recognitionAuthority || "",
     recognitionVerified: Boolean(s.recognitionVerified),
@@ -1860,6 +1866,35 @@ const updateMySchool = async (req, res) =>
       set.website = ws;
     }
     if (req.body.board !== undefined) set.board = String(req.body.board ?? "").trim();
+    if (req.body.examFormat !== undefined) set.examFormat = String(req.body.examFormat ?? "").trim();
+    if (req.body.examFormatType !== undefined) set.examFormatType = String(req.body.examFormatType ?? "").trim();
+    if (req.body.examFormats !== undefined)
+    {
+      if (!Array.isArray(req.body.examFormats))
+      {
+        return res.status(400).json({ success: false, message: "examFormats must be an array" });
+      }
+      const examFormats = [];
+      for (const format of req.body.examFormats)
+      {
+        if (!format || typeof format !== "object" || Array.isArray(format) || !Array.isArray(format.types))
+        {
+          return res.status(400).json({ success: false, message: "Each exam format must include a types array" });
+        }
+        const name = String(format.name ?? "").trim();
+        const types = format.types.map((type) => String(type ?? "").trim()).filter(Boolean);
+        if (!name && types.length)
+        {
+          return res.status(400).json({ success: false, message: "Each exam format type must belong to a named format" });
+        }
+        if (name) examFormats.push({ name, types });
+      }
+      if (examFormats.length && !String(req.body.board ?? school.board ?? "").trim())
+      {
+        return res.status(400).json({ success: false, message: "Select a board before adding exam formats" });
+      }
+      set.examFormats = examFormats;
+    }
     if (req.body.recognitionNumber !== undefined)
     {
       set.recognitionNumber = String(req.body.recognitionNumber ?? "").trim();
