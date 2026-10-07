@@ -1247,6 +1247,38 @@ export default function FeesCollection() {
     }
   };
 
+  const handleGenerateSingleInvoice = async (record) => {
+    const selectedStructure = filteredStructures.find(
+      (structure) => String(structure._id) === String(feeStructureBreakdown?.structureId),
+    );
+    if (!selectedStructure) {
+      toast("Fee structure not found for this invoice", "error");
+      return;
+    }
+    const studentId = record?.student?.admissionNo || record?.student?.id || record?.student?._id;
+    if (!studentId) {
+      toast("Student is missing for this invoice", "error");
+      return;
+    }
+    setInvoiceBusy(true);
+    try {
+      await api.fees.invoices.create({
+        studentId,
+        class: feeStructureBreakdown.className,
+        feeType: feeStructureBreakdown.feeType,
+        session: activeSession,
+        amount: Number(selectedStructure.amount || 0),
+        dueDate: selectedStructure.dueDate || undefined,
+      });
+      toast(`Invoice generated for ${record.student.name || studentId}`);
+      reload();
+    } catch (err) {
+      toast(err.message, "error");
+    } finally {
+      setInvoiceBusy(false);
+    }
+  };
+
   const handlePreviewInvoices = async () => {
     const session = activeSession.trim();
     if (!invoiceForm.class || !invoiceForm.feeType) {
@@ -1786,21 +1818,37 @@ export default function FeesCollection() {
                         {record.student.admissionNo || "—"}
                       </td>
                       <td className="px-4 py-3">
-                        <Pill
-                          tone={
-                            record.paid
-                              ? "success"
-                              : record.invoice && record.paidAmount > 0
-                                ? "warning"
-                                : "alert"
-                          }
-                        >
-                          {record.paid
-                            ? "Paid"
-                            : record.invoice
-                              ? record.paidAmount > 0 ? "Partially Paid" : "Pending"
-                              : "Invoice not generated"}
-                        </Pill>
+                        <div className="flex items-center gap-2">
+                          <Pill
+                            tone={
+                              record.paid
+                                ? "success"
+                                : record.invoice && record.paidAmount > 0
+                                  ? "warning"
+                                  : "alert"
+                            }
+                          >
+                            {record.paid
+                              ? "Paid"
+                              : record.invoice
+                                ? record.paidAmount > 0 ? "Partially Paid" : "Pending"
+                                : "Invoice not generated"}
+                          </Pill>
+                          {!record.invoice ? (
+                            <Button
+                              variant="primary"
+                              className="px-2.5 py-1 text-[11px]"
+                              onClick={() => handleGenerateSingleInvoice(record)}
+                              disabled={invoiceBusy}
+                            >
+                              <FilePlus2 size={12} /> Generate
+                            </Button>
+                          ) : (
+                            <span className="text-[11px] font-medium text-slate-text/70">
+                              Already generated
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="px-4 py-3 text-right tabular-nums text-slate-text">
                         {inr(record.invoice ? record.amount : 0)}
