@@ -580,6 +580,24 @@ export const api = {
       generateConfirm: (item) =>
         request("/fees/generate/confirm", json("POST", item)),
       pdfUrl: (id) => `${API_BASE_URL}/fees/${id}/pdf`,
+      // Object URL of the PDF, for in-page previews — a bare /fees/:id/pdf link
+      // can't carry the Authorization header the endpoint requires.
+      previewUrl: async (id) =>
+      {
+        const { auth } = store.getState();
+        const token = auth.accessToken || localStorage.getItem("erp_access_token");
+        const response = await fetch(`${API_BASE_URL}/fees/${id}/pdf`, {
+          headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+        });
+        if (!response.ok)
+        {
+          const body = await response.json().catch(() => ({}));
+          const err = new Error(body.message || "Preview failed");
+          err.status = response.status;
+          throw err;
+        }
+        return URL.createObjectURL(await response.blob());
+      },
       downloadPdf: async (id) =>
       {
         const { auth } = store.getState();

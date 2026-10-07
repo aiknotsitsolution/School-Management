@@ -1494,6 +1494,11 @@ export default function FeesCollection() {
         description="Track payments, dues and receipts across the school."
         right={
           <div className="flex items-center gap-2">
+            {canStructure && (
+              <Button variant="outline" onClick={openNewStructure}>
+                <Plus size={15} /> Add Fee Structure
+              </Button>
+            )}
             {canCollect && (
               <Button
                 variant="primary"

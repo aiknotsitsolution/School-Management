@@ -29,6 +29,7 @@ import {
 import { api } from "../lib/api";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import SearchableSelect from "../components/SearchableSelect";
+import { Pagination } from "../components/Pagination";
 
 const initialEnquiries = [];
 
@@ -209,6 +210,8 @@ export default function AdmissionEnquiry() {
   const [loadError, setLoadError] = useState("");
   const [query, setQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(10);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
   const [formErrors, setFormErrors] = useState({});
@@ -280,6 +283,13 @@ export default function AdmissionEnquiry() {
       declined: map.Declined,
     };
   }, [list]);
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const paged = useMemo(() => {
+    const start = (safePage - 1) * pageSize;
+    return filtered.slice(start, start + pageSize);
+  }, [filtered, safePage, pageSize]);
 
   const selected = useMemo(
     () => list.find((e) => e.id === selectedId) || null,
@@ -454,6 +464,9 @@ export default function AdmissionEnquiry() {
   const toggleStage = (key) => {
     const nextKey = key === "All Leads" ? "All" : key;
     setStatusFilter((current) => (current === nextKey ? "All" : nextKey));
+    // A stage change reshapes the result set — restart at page 1 so the user
+    // is never left parked past the end of it.
+    setPage(1);
   };
 
   return (
@@ -518,7 +531,7 @@ export default function AdmissionEnquiry() {
         title={
           <div className="flex items-center gap-2 flex-wrap">
             <button
-              onClick={() => setStatusFilter("All")}
+              onClick={() => { setStatusFilter("All"); setPage(1); }}
               className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-[11.5px] font-semibold transition-all ${
                 statusFilter === "All"
                   ? "bg-primary text-white shadow-sm"
@@ -552,7 +565,7 @@ export default function AdmissionEnquiry() {
             <Input
               placeholder="Search..."
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => { setQuery(e.target.value); setPage(1); }}
               className="pl-8 w-48 h-8 text-[12px]"
             />
           </div>
@@ -587,7 +600,7 @@ export default function AdmissionEnquiry() {
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((e) => (
+                {paged.map((e) => (
                   <tr
                     key={e.id}
                     onClick={() => setSelectedId(e.id)}
@@ -665,6 +678,26 @@ export default function AdmissionEnquiry() {
               </tbody>
             </table>
           </div>
+        )}
+        {filtered.length > 0 && (
+          <>
+            {/* Pagination */}
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-[12px] text-slate-text/55">
+                Showing {(safePage - 1) * pageSize + 1}–{Math.min(safePage * pageSize, filtered.length)} of {filtered.length}
+              </p>
+              <Select
+                value={pageSize}
+                onChange={(e) => { setPageSize(Number(e.target.value)); setPage(1); }}
+                className="text-[12px]"
+              >
+                {[5, 10, 20, 50].map((n) => (
+                  <option key={n} value={n}>{n} / page</option>
+                ))}
+              </Select>
+            </div>
+            <Pagination page={safePage} pages={totalPages} onPage={setPage} info={false} />
+          </>
         )}
       </Card>
 

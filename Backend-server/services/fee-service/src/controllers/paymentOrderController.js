@@ -14,7 +14,7 @@ const GATEWAY_MODES = ["platform", "razorpay", "stripe", "phonepe", "upi", "qr",
 // UPI ID) — CLIENT-REQ-037.
 const createOrder = async (req, res) => {
   try {
-    const { invoiceId, mode } = req.body || {};
+    const { invoiceId, mode, amount } = req.body || {};
     if (!invoiceId) return res.status(400).json({ success: false, message: "invoiceId is required" });
 
     const invoice = await FeeInvoice.findOne(scopeQuery(FeeInvoice, req, { _id: invoiceId, schoolId: req.tenantId }));
@@ -27,6 +27,100 @@ const createOrder = async (req, res) => {
 
     const due = Number(invoice.amount) - Number(invoice.paidAmount || 0);
     if (due <= 0) return res.status(400).json({ success: false, message: "Invoice is already fully paid" });
+
+    // Partial payments: the payer may pick any amount up to what is still
+    // outstanding. Omitting `amount` keeps the old behaviour — the full due.
+    let requested = due;
+    if (amount !== undefined && amount !== null && String(amount).trim() !== "") {
+      requested = Number(amount);
+      if (!Number.isFinite(requested) || requested <= 0) {
+        return res.status(400).json({ success: false, message: "Order amount must be greater than 0" });
+      }
+      if (requested > due) {
+        return res.status(400).json({ success: false, message: "Order amount exceeds outstanding balance" });
+      }
+      // Same rule the checkout UI enforces: a partial payment starts at
+      // ₹1,000 and lands on ₹100 denominations (1000, 1500, 2200 …) — the
+      // invoice's exact due amount is always allowed so paying everything
+      // never breaks, however odd the total is.
+      if (requested !== due && (requested < 1000 || requested % 100 !== 0)) {
+        return res.status(400).json({
+          success: false,
+          message: "Partial payments must be at least ₹1,000 in ₹100 steps (1000, 1500, 2200 …)",
+        });
+      }
+    }
+
+    // One live order per invoice. Re-posting the same amount resumes the order
+    // that is already open — "Pay now" may legitimately be pressed again after
+    // an abandoned checkout — while a different amount supersedes it: the old
+    // order is cancelled first so two orders can never race for the same rupee.
+    const LIVE_STATUSES = ["pending", "awaiting_confirmation", "awaiting_manual_confirm", "failed"];
+    const liveOrders = await PaymentOrder.find(
+      scopeQuery(PaymentOrder, req, {
+        schoolId: req.tenantId,
+        invoiceId: invoice._id,
+        status: { $in: LIVE_STATUSES },
+      }),
+    );
+    const resumable = liveOrders.find((o) => Number(o.amount) === Number(requested));
+    if (resumable) {
+      const resumeGateway = await engine.resolveGateway(req.tenantId);
+      return res.status(200).json({
+        success: true,
+        // Tells the client this is the order it already had, not a new one.
+        reused: true,
+        data: {
+          _id: resumable._id,
+          id: resumable._id,
+          invoiceId: resumable.invoiceId,
+          studentId: resumable.studentId,
+          purpose: resumable.purpose,
+          gatewayMode: resumable.gatewayMode,
+          amount: resumable.amount,
+          currency: resumable.currency,
+          provider: resumable.provider,
+          providerOrderId: resumable.providerOrderId,
+          externalRef: resumable.externalRef,
+          status: resumable.status,
+          checkout: engine.buildCheckout(resumable, resumeGateway),
+          createdAt: resumable.createdAt,
+        },
+      });
+    }
+    if (liveOrders.length) {
+      await PaymentOrder.updateMany(
+        scopeQuery(PaymentOrder, req, {
+          schoolId: req.tenantId,
+          invoiceId: invoice._id,
+          status: { $in: LIVE_STATUSES },
+        }),
+        { $set: { status: "cancelled" } },
+      );
+    }
+
+    // Orders that can still complete (pending / provider confirmation / office
+    // verification / retryable failure) already commit their value against this
+    // invoice. Together with the new order they must never exceed `due`,
+    // otherwise two live orders could pay the same rupee twice.
+    const exposure = await PaymentOrder.aggregate([
+      {
+        $match: scopeQuery(PaymentOrder, req, {
+          schoolId: req.tenantId,
+          invoiceId: invoice._id,
+          status: { $in: LIVE_STATUSES },
+        }),
+      },
+      { $group: { _id: null, total: { $sum: "$amount" } } },
+    ]);
+    const inFlight = Number(exposure?.[0]?.total || 0);
+    if (inFlight + requested > due) {
+      const free = Math.max(0, due - inFlight);
+      return res.status(400).json({
+        success: false,
+        message: `₹${inFlight.toLocaleString("en-IN")} of this invoice is already under a live payment order — you can order up to ₹${free.toLocaleString("en-IN")} more`,
+      });
+    }
 
     const gateway = await engine.resolveGateway(req.tenantId);
     let gatewayMode = gateway.mode;
@@ -52,7 +146,7 @@ const createOrder = async (req, res) => {
       admissionNo: req.user.role === "student" ? req.user.refId : invoice.studentId,
       purpose: "fee",
       gatewayMode,
-      amount: due,
+      amount: requested,
       currency: invoice.currency || "INR",
       provider: gatewayMode,
       providerOrderId: null,
