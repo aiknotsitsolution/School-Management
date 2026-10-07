@@ -977,7 +977,8 @@ export default function FeesCollection() {
         const summary = {
           records,
           paidCount: records.filter((record) => record.paid).length,
-          pendingCount: records.filter((record) => !record.paid).length,
+          pendingCount: records.filter((record) => record.invoice && !record.paid).length,
+          notInvoicedCount: records.filter((record) => !record.invoice).length,
           pendingAmount: records.reduce((total, record) => total + record.balance, 0),
         };
         return [String(structure._id), summary];
@@ -989,7 +990,11 @@ export default function FeesCollection() {
     ? feeStructureSummaries.get(feeStructureBreakdown.structureId)
     : null;
   const selectedStructureRecords = selectedStructureSummary?.records.filter((record) =>
-    feeStructureBreakdown.status === "paid" ? record.paid : !record.paid,
+    feeStructureBreakdown.status === "paid"
+      ? record.paid
+      : feeStructureBreakdown.status === "pending"
+        ? record.invoice && !record.paid
+        : !record.invoice,
   ) || [];
 
   const stats = useMemo(() => {
@@ -1416,7 +1421,7 @@ export default function FeesCollection() {
         <StatCard
           icon={AlertTriangle}
           label="Outstanding Dues"
-          value={`₹${(stats.outstanding / 100000).toFixed(1)}L`}
+          value={inr(stats.outstanding)}
           sub={`${payableStudents.length} students with dues`}
           accent="alert"
           onClick={() => setSelectedMetric("outstanding")}
@@ -1563,47 +1568,51 @@ export default function FeesCollection() {
             No fee structures{activeSession ? ` for session ${activeSession}` : ""} configured yet
           </p>
         ) : (
-          <div className="overflow-x-auto -mx-5">
-            <table className="w-full text-[13px]">
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
+            <table className="w-full min-w-[1120px] text-[13px]">
               <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
-                  <th className="px-5 py-2.5 font-semibold">Fee Type</th>
-                  <th className="px-5 py-2.5 font-semibold">Class</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Students</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Paid</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Pending</th>
-                  <th className="px-5 py-2.5 text-right font-semibold">Pending Amount</th>
-                  <th className="px-5 py-2.5 font-semibold">Session</th>
-                  <th className="px-5 py-2.5 font-semibold">Amount</th>
-                  <th className="px-5 py-2.5 font-semibold">Frequency</th>
-                  <th className="px-5 py-2.5 font-semibold">Due Date</th>
-                  <th className="px-5 py-2.5 font-semibold">Status</th>
+                <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10.5px] uppercase tracking-wide text-slate-text/70">
+                  <th className="px-4 py-3 font-semibold">Fee Type</th>
+                  <th className="px-4 py-3 font-semibold">Class</th>
+                  <th className="px-4 py-3 text-right font-semibold">Students</th>
+                  <th className="px-4 py-3 text-right font-semibold">Paid</th>
+                  <th className="px-4 py-3 text-right font-semibold">Pending</th>
+                  <th className="px-4 py-3 text-right font-semibold">Not Invoiced</th>
+                  <th className="px-4 py-3 text-right font-semibold">Pending Amount</th>
+                  <th className="px-4 py-3 font-semibold">Session</th>
+                  <th className="px-4 py-3 font-semibold">Fee Amount</th>
+                  <th className="px-4 py-3 font-semibold">Frequency</th>
+                  <th className="px-4 py-3 font-semibold">Due Date</th>
+                  <th className="px-4 py-3 font-semibold">Status</th>
                   {canStructure && (
-                    <th className="px-5 py-2.5 font-semibold text-right">Actions</th>
+                    <th className="px-4 py-3 text-right font-semibold">Actions</th>
                   )}
                 </tr>
               </thead>
               <tbody>
                 {filteredStructures.slice(0, 50).map((structure) => {
                   const summary = feeStructureSummaries.get(String(structure._id));
+                  const paidPercent = summary?.records.length
+                    ? Math.round((summary.paidCount / summary.records.length) * 100)
+                    : 0;
                   return (
                     <tr
                       key={structure._id}
-                      className="border-b border-slate-100 hover:bg-paper/60"
+                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"
                     >
-                      <td className="px-5 py-3 font-semibold text-ink">
+                      <td className="px-4 py-3 font-semibold text-ink">
                         {structure.feeType}
                       </td>
-                      <td className="px-5 py-3 text-slate-text">
+                      <td className="px-4 py-3 text-slate-text">
                         {structure.class}
                       </td>
-                      <td className="px-5 py-3 text-right text-slate-text">
+                      <td className="px-4 py-3 text-right font-medium tabular-nums text-slate-text">
                         {summary?.records.length || 0}
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-4 py-3 text-right">
                         <button
                           type="button"
-                          className="font-semibold text-success hover:underline disabled:cursor-default disabled:no-underline"
+                          className="inline-flex min-w-10 items-center justify-center rounded-full bg-success/10 px-2.5 py-1 font-semibold tabular-nums text-success transition hover:bg-success/20 disabled:cursor-default disabled:bg-slate-100 disabled:text-slate-text/40"
                           disabled={!summary?.paidCount}
                           onClick={() => setFeeStructureBreakdown({
                             structureId: String(structure._id),
@@ -1614,11 +1623,17 @@ export default function FeesCollection() {
                         >
                           {summary?.paidCount || 0}
                         </button>
+                        <div className="mt-1 h-1 overflow-hidden rounded-full bg-slate-100">
+                          <div
+                            className="h-full rounded-full bg-success transition-all"
+                            style={{ width: `${paidPercent}%` }}
+                          />
+                        </div>
                       </td>
-                      <td className="px-5 py-3 text-right">
+                      <td className="px-4 py-3 text-right">
                         <button
                           type="button"
-                          className="font-semibold text-alert hover:underline disabled:cursor-default disabled:no-underline"
+                          className="inline-flex min-w-10 items-center justify-center rounded-full bg-alert/10 px-2.5 py-1 font-semibold tabular-nums text-alert transition hover:bg-alert/20 disabled:cursor-default disabled:bg-slate-100 disabled:text-slate-text/40"
                           disabled={!summary?.pendingCount}
                           onClick={() => setFeeStructureBreakdown({
                             structureId: String(structure._id),
@@ -1630,28 +1645,43 @@ export default function FeesCollection() {
                           {summary?.pendingCount || 0}
                         </button>
                       </td>
-                      <td className="px-5 py-3 text-right font-medium text-slate-text">
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          type="button"
+                          className="inline-flex min-w-10 items-center justify-center rounded-full bg-amber-50 px-2.5 py-1 font-semibold tabular-nums text-amber-700 transition hover:bg-amber-100 disabled:cursor-default disabled:bg-slate-100 disabled:text-slate-text/40"
+                          disabled={!summary?.notInvoicedCount}
+                          onClick={() => setFeeStructureBreakdown({
+                            structureId: String(structure._id),
+                            feeType: structure.feeType,
+                            className: structure.class,
+                            status: "not-invoiced",
+                          })}
+                        >
+                          {summary?.notInvoicedCount || 0}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold tabular-nums text-ink">
                         {inr(summary?.pendingAmount || 0)}
                       </td>
-                      <td className="px-5 py-3 text-slate-text">
+                      <td className="px-4 py-3 text-slate-text">
                         {structure.session}
                       </td>
-                      <td className="px-5 py-3 text-slate-text font-medium">
+                      <td className="px-4 py-3 font-medium tabular-nums text-slate-text">
                         ₹{Number(structure.amount).toLocaleString("en-IN")}
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-3">
                         <Pill>{structure.frequency}</Pill>
                       </td>
-                      <td className="px-5 py-3 text-slate-text whitespace-nowrap">
+                      <td className="px-4 py-3 whitespace-nowrap text-slate-text">
                         {formatDate(structure.dueDate)}
                       </td>
-                      <td className="px-5 py-3">
+                      <td className="px-4 py-3">
                         <Pill tone={structure.active !== false ? "success" : "neutral"}>
                           {structure.active !== false ? "Active" : "Inactive"}
                         </Pill>
                       </td>
                       {canStructure && (
-                        <td className="px-5 py-3">
+                        <td className="px-4 py-3">
                           <div className="flex items-center justify-end gap-1">
                             <button
                               onClick={() => openEditStructure(structure)}
@@ -1685,6 +1715,92 @@ export default function FeesCollection() {
           </div>
         )}
       </Card>
+
+      {feeStructureBreakdown && (
+        <Card
+          title={`${feeStructureBreakdown.feeType} · Class ${feeStructureBreakdown.className} · ${
+            feeStructureBreakdown.status === "paid"
+              ? "Paid students"
+              : feeStructureBreakdown.status === "pending"
+                ? "Pending students"
+                : "Students without invoices"
+          }`}
+          subtitle={`${activeSession} · ${selectedStructureRecords.length} student${selectedStructureRecords.length === 1 ? "" : "s"}${
+            feeStructureBreakdown.status === "pending"
+              ? ` · ${inr(selectedStructureRecords.reduce((total, record) => total + record.balance, 0))} outstanding`
+              : ""
+          }`}
+          action={
+            <Button variant="ghost" onClick={() => setFeeStructureBreakdown(null)}>
+              <X size={15} /> Close
+            </Button>
+          }
+        >
+          {selectedStructureRecords.length === 0 ? (
+            <p className="py-6 text-center text-[13px] text-slate-text/70">
+              {feeStructureBreakdown.status === "not-invoiced"
+                ? "All active students in this class have an invoice for this fee."
+                : `No ${feeStructureBreakdown.status} students found for this fee structure.`}
+            </p>
+          ) : (
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full min-w-[760px] text-[13px]">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10.5px] uppercase tracking-wide text-slate-text/70">
+                    <th className="px-4 py-3 font-semibold">Student</th>
+                    <th className="px-4 py-3 font-semibold">Admission No.</th>
+                    <th className="px-4 py-3 font-semibold">Payment Status</th>
+                    <th className="px-4 py-3 text-right font-semibold">Billed</th>
+                    <th className="px-4 py-3 text-right font-semibold">Paid</th>
+                    <th className="px-4 py-3 text-right font-semibold">Pending</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {selectedStructureRecords.map((record) => (
+                    <tr
+                      key={record.student.admissionNo || record.student.id || record.student._id}
+                      className="border-b border-slate-100 last:border-0 hover:bg-slate-50/70"
+                    >
+                      <td className="px-4 py-3 font-medium text-ink">
+                        {record.student.name || "—"}
+                      </td>
+                      <td className="px-4 py-3 text-slate-text">
+                        {record.student.admissionNo || "—"}
+                      </td>
+                      <td className="px-4 py-3">
+                        <Pill
+                          tone={
+                            record.paid
+                              ? "success"
+                              : record.invoice && record.paidAmount > 0
+                                ? "warning"
+                                : "alert"
+                          }
+                        >
+                          {record.paid
+                            ? "Paid"
+                            : record.invoice
+                              ? record.paidAmount > 0 ? "Partially Paid" : "Pending"
+                              : "Invoice not generated"}
+                        </Pill>
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-slate-text">
+                        {inr(record.invoice ? record.amount : 0)}
+                      </td>
+                      <td className="px-4 py-3 text-right tabular-nums text-slate-text">
+                        {inr(record.paidAmount)}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold tabular-nums text-ink">
+                        {inr(record.balance)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </Card>
+      )}
 
       <Card
         title="Reconciliation"
