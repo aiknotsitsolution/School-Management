@@ -649,6 +649,7 @@ export default function FeesCollection() {
   const [invoices, setInvoices] = useState([]);
   const [payments, setPayments] = useState([]);
   const [paymentSummary, setPaymentSummary] = useState(null);
+  const [selectedMetric, setSelectedMetric] = useState("");
   const [query, setQuery] = useState("");
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -659,6 +660,7 @@ export default function FeesCollection() {
   const [editingStructure, setEditingStructure] = useState(null);
   const [structureForm, setStructureForm] = useState(emptyStructureForm());
   const [structureBusy, setStructureBusy] = useState(false);
+  const [feeStructureBreakdown, setFeeStructureBreakdown] = useState(null);
   const [activeSession, setActiveSession] = useState("");
 
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
@@ -933,6 +935,63 @@ export default function FeesCollection() {
     return structures.filter((structure) => structure.session === activeSession);
   }, [activeSession, structures]);
 
+  const feeStructureSummaries = useMemo(() => {
+    return new Map(
+      filteredStructures.map((structure) => {
+        const classKey = String(structure.class || "").trim().toLowerCase();
+        const classStudents = students.filter(
+          (student) =>
+            String(student.class || "").trim().toLowerCase() === classKey &&
+            String(student.status || "Active").toLowerCase() === "active",
+        );
+        const classStudentIds = new Set(
+          classStudents.map((student) => String(student.admissionNo || student.id || student._id)),
+        );
+        const studentInvoices = new Map(
+          invoices
+            .filter(
+              (invoice) =>
+                classStudentIds.has(String(invoice.studentId)) &&
+                invoice.session === activeSession &&
+                invoice.feeType === structure.feeType,
+            )
+            .map((invoice) => [String(invoice.studentId), invoice]),
+        );
+        const records = classStudents.map((student) => {
+          const studentId = String(student.admissionNo || student.id || student._id);
+          const invoice = studentInvoices.get(studentId) || null;
+          const amount = Number(invoice?.amount || 0);
+          const paidAmount = Number(invoice?.paidAmount || 0);
+          return {
+            student,
+            invoice,
+            amount,
+            paidAmount,
+            balance: Math.max(0, amount - paidAmount),
+            paid: Boolean(
+              invoice &&
+              (invoice.status === "Paid" || paidAmount >= amount),
+            ),
+          };
+        });
+        const summary = {
+          records,
+          paidCount: records.filter((record) => record.paid).length,
+          pendingCount: records.filter((record) => !record.paid).length,
+          pendingAmount: records.reduce((total, record) => total + record.balance, 0),
+        };
+        return [String(structure._id), summary];
+      }),
+    );
+  }, [activeSession, filteredStructures, invoices, students]);
+
+  const selectedStructureSummary = feeStructureBreakdown
+    ? feeStructureSummaries.get(feeStructureBreakdown.structureId)
+    : null;
+  const selectedStructureRecords = selectedStructureSummary?.records.filter((record) =>
+    feeStructureBreakdown.status === "paid" ? record.paid : !record.paid,
+  ) || [];
+
   const stats = useMemo(() => {
     const collected = Number(paymentSummary?.netCollected || 0);
     const outstanding = invoices.reduce(
@@ -959,6 +1018,20 @@ export default function FeesCollection() {
       partial,
     };
   }, [paymentSummary, payments, invoices]);
+
+  const metricInvoices = useMemo(() => {
+    if (selectedMetric === "outstanding") {
+      return invoices.filter(
+        (invoice) => Number(invoice.amount) - Number(invoice.paidAmount || 0) > 0,
+      );
+    }
+    return invoices;
+  }, [invoices, selectedMetric]);
+
+  const collectedDetailPayments = useMemo(
+    () => enrichedPayments.filter((payment) => payment.clearanceStatus !== "Bounced"),
+    [enrichedPayments],
+  );
 
   const outstandingForStudent = (studentId) => {
     return invoices
@@ -1330,6 +1403,7 @@ export default function FeesCollection() {
                 : "Loading collection total…"
           }
           accent="success"
+          onClick={() => setSelectedMetric("collected")}
         />
         <StatCard
           icon={TrendingUp}
@@ -1337,6 +1411,7 @@ export default function FeesCollection() {
           value={`${stats.collected > 0 || stats.outstanding > 0 ? Math.min(100, Math.round((stats.collected / (stats.collected + stats.outstanding)) * 100)) : 0}%`}
           sub="Collected vs outstanding"
           accent="primary"
+          onClick={() => setSelectedMetric("collection-rate")}
         />
         <StatCard
           icon={AlertTriangle}
@@ -1344,6 +1419,7 @@ export default function FeesCollection() {
           value={`₹${(stats.outstanding / 100000).toFixed(1)}L`}
           sub={`${payableStudents.length} students with dues`}
           accent="alert"
+          onClick={() => setSelectedMetric("outstanding")}
         />
         <StatCard
           icon={Receipt}
@@ -1351,8 +1427,104 @@ export default function FeesCollection() {
           value={String(invoices.length)}
           sub={`${stats.paidCount} paid · ${stats.partial} partial · ${stats.overdue} overdue`}
           accent="info"
+          onClick={() => setSelectedMetric("invoices")}
         />
       </div>
+
+      {selectedMetric && (
+        <Card
+          title={`${{
+            collected: "Collected Payments",
+            "collection-rate": "Collection Rate Details",
+            outstanding: "Outstanding Dues",
+            invoices: "Active Season Invoices",
+          }[selectedMetric]}${activeSession ? ` · ${activeSession}` : ""}`}
+          action={
+            <Button variant="ghost" onClick={() => setSelectedMetric("")} aria-label="Close details">
+              <X size={16} /> Close
+            </Button>
+          }
+        >
+          {selectedMetric === "collected" ? (
+            collectedDetailPayments.length === 0 ? (
+              <p className="py-6 text-center text-[13px] text-slate-text/70">
+                No payments found for {activeSession || "the active season"}.
+              </p>
+            ) : (
+              <div className="overflow-x-auto -mx-5">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11.5px] uppercase tracking-wide text-slate-text/60">
+                      <th className="px-5 py-2.5 font-semibold">Receipt</th>
+                      <th className="px-5 py-2.5 font-semibold">Student</th>
+                      <th className="px-5 py-2.5 font-semibold">Fee Type</th>
+                      <th className="px-5 py-2.5 font-semibold">Date</th>
+                      <th className="px-5 py-2.5 text-right font-semibold">Amount</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {collectedDetailPayments.map((payment) => (
+                      <tr key={payment.id} className="border-b border-slate-100">
+                        <td className="px-5 py-3 font-mono text-slate-text">{payment.receiptNo}</td>
+                        <td className="px-5 py-3 font-medium text-ink">{payment.studentName}</td>
+                        <td className="px-5 py-3 text-slate-text">{payment.feeType}</td>
+                        <td className="px-5 py-3 text-slate-text">{formatDate(payment.paidOn)}</td>
+                        <td className="px-5 py-3 text-right font-semibold text-ink">{inr(payment.amount)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )
+          ) : (
+            metricInvoices.length === 0 ? (
+              <p className="py-6 text-center text-[13px] text-slate-text/70">
+                {selectedMetric === "outstanding"
+                  ? "No outstanding invoices for this season."
+                  : "No invoices found for this season."}
+              </p>
+            ) : (
+              <div className="overflow-x-auto -mx-5">
+                <table className="w-full text-[13px]">
+                  <thead>
+                    <tr className="border-b border-slate-200 text-left text-[11.5px] uppercase tracking-wide text-slate-text/60">
+                      <th className="px-5 py-2.5 font-semibold">Student</th>
+                      <th className="px-5 py-2.5 font-semibold">Fee Type</th>
+                      <th className="px-5 py-2.5 font-semibold">Due Date</th>
+                      <th className="px-5 py-2.5 font-semibold">Status</th>
+                      <th className="px-5 py-2.5 text-right font-semibold">Billed</th>
+                      <th className="px-5 py-2.5 text-right font-semibold">Paid</th>
+                      <th className="px-5 py-2.5 text-right font-semibold">Balance</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {metricInvoices.map((invoice) => {
+                      const student = studentByAdmission.get(String(invoice.studentId));
+                      const balance = Math.max(
+                        0,
+                        Number(invoice.amount) - Number(invoice.paidAmount || 0),
+                      );
+                      return (
+                        <tr key={invoice._id} className="border-b border-slate-100">
+                          <td className="px-5 py-3 font-medium text-ink">
+                            {student?.name || invoice.studentId}
+                          </td>
+                          <td className="px-5 py-3 text-slate-text">{invoice.feeType}</td>
+                          <td className="px-5 py-3 text-slate-text">{formatDate(invoice.dueDate)}</td>
+                          <td className="px-5 py-3"><Pill>{invoice.status}</Pill></td>
+                          <td className="px-5 py-3 text-right text-slate-text">{inr(invoice.amount)}</td>
+                          <td className="px-5 py-3 text-right text-slate-text">{inr(invoice.paidAmount)}</td>
+                          <td className="px-5 py-3 text-right font-semibold text-ink">{inr(balance)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )
+          )}
+        </Card>
+      )}
 
       {/* One place: per-student package vs billed vs collected vs balance. */}
       <StudentFeeSummary
@@ -1397,6 +1569,10 @@ export default function FeesCollection() {
                 <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                   <th className="px-5 py-2.5 font-semibold">Fee Type</th>
                   <th className="px-5 py-2.5 font-semibold">Class</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Students</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Paid</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Pending</th>
+                  <th className="px-5 py-2.5 text-right font-semibold">Pending Amount</th>
                   <th className="px-5 py-2.5 font-semibold">Session</th>
                   <th className="px-5 py-2.5 font-semibold">Amount</th>
                   <th className="px-5 py-2.5 font-semibold">Frequency</th>
@@ -1408,63 +1584,102 @@ export default function FeesCollection() {
                 </tr>
               </thead>
               <tbody>
-                {filteredStructures.slice(0, 50).map((structure) => (
-                  <tr
-                    key={structure._id}
-                    className="border-b border-slate-100 hover:bg-paper/60"
-                  >
-                    <td className="px-5 py-3 font-semibold text-ink">
-                      {structure.feeType}
-                    </td>
-                    <td className="px-5 py-3 text-slate-text">
-                      {structure.class}
-                    </td>
-                    <td className="px-5 py-3 text-slate-text">
-                      {structure.session}
-                    </td>
-                    <td className="px-5 py-3 text-slate-text font-medium">
-                      ₹{Number(structure.amount).toLocaleString("en-IN")}
-                    </td>
-                    <td className="px-5 py-3">
-                      <Pill>{structure.frequency}</Pill>
-                    </td>
-                    <td className="px-5 py-3 text-slate-text whitespace-nowrap">
-                      {formatDate(structure.dueDate)}
-                    </td>
-                    <td className="px-5 py-3">
-                      <Pill tone={structure.active !== false ? "success" : "neutral"}>
-                        {structure.active !== false ? "Active" : "Inactive"}
-                      </Pill>
-                    </td>
-                    {canStructure && (
-                      <td className="px-5 py-3">
-                        <div className="flex items-center justify-end gap-1">
-                          <button
-                            onClick={() => openEditStructure(structure)}
-                            className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-ink"
-                            title="Edit"
-                          >
-                            <Pencil size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleToggleStructure(structure)}
-                            className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-primary"
-                            title={structure.active !== false ? "Deactivate" : "Activate"}
-                          >
-                            <Power size={14} />
-                          </button>
-                          <button
-                            onClick={() => handleDeleteStructure(structure)}
-                            className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-alert"
-                            title="Delete"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
+                {filteredStructures.slice(0, 50).map((structure) => {
+                  const summary = feeStructureSummaries.get(String(structure._id));
+                  return (
+                    <tr
+                      key={structure._id}
+                      className="border-b border-slate-100 hover:bg-paper/60"
+                    >
+                      <td className="px-5 py-3 font-semibold text-ink">
+                        {structure.feeType}
                       </td>
-                    )}
-                  </tr>
-                ))}
+                      <td className="px-5 py-3 text-slate-text">
+                        {structure.class}
+                      </td>
+                      <td className="px-5 py-3 text-right text-slate-text">
+                        {summary?.records.length || 0}
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <button
+                          type="button"
+                          className="font-semibold text-success hover:underline disabled:cursor-default disabled:no-underline"
+                          disabled={!summary?.paidCount}
+                          onClick={() => setFeeStructureBreakdown({
+                            structureId: String(structure._id),
+                            feeType: structure.feeType,
+                            className: structure.class,
+                            status: "paid",
+                          })}
+                        >
+                          {summary?.paidCount || 0}
+                        </button>
+                      </td>
+                      <td className="px-5 py-3 text-right">
+                        <button
+                          type="button"
+                          className="font-semibold text-alert hover:underline disabled:cursor-default disabled:no-underline"
+                          disabled={!summary?.pendingCount}
+                          onClick={() => setFeeStructureBreakdown({
+                            structureId: String(structure._id),
+                            feeType: structure.feeType,
+                            className: structure.class,
+                            status: "pending",
+                          })}
+                        >
+                          {summary?.pendingCount || 0}
+                        </button>
+                      </td>
+                      <td className="px-5 py-3 text-right font-medium text-slate-text">
+                        {inr(summary?.pendingAmount || 0)}
+                      </td>
+                      <td className="px-5 py-3 text-slate-text">
+                        {structure.session}
+                      </td>
+                      <td className="px-5 py-3 text-slate-text font-medium">
+                        ₹{Number(structure.amount).toLocaleString("en-IN")}
+                      </td>
+                      <td className="px-5 py-3">
+                        <Pill>{structure.frequency}</Pill>
+                      </td>
+                      <td className="px-5 py-3 text-slate-text whitespace-nowrap">
+                        {formatDate(structure.dueDate)}
+                      </td>
+                      <td className="px-5 py-3">
+                        <Pill tone={structure.active !== false ? "success" : "neutral"}>
+                          {structure.active !== false ? "Active" : "Inactive"}
+                        </Pill>
+                      </td>
+                      {canStructure && (
+                        <td className="px-5 py-3">
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => openEditStructure(structure)}
+                              className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-ink"
+                              title="Edit"
+                            >
+                              <Pencil size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleToggleStructure(structure)}
+                              className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-primary"
+                              title={structure.active !== false ? "Deactivate" : "Activate"}
+                            >
+                              <Power size={14} />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteStructure(structure)}
+                              className="p-1.5 rounded-lg hover:bg-paper text-slate-text/60 hover:text-alert"
+                              title="Delete"
+                            >
+                              <Trash2 size={14} />
+                            </button>
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
