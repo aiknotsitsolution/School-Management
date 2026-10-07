@@ -662,6 +662,9 @@ export default function FeesCollection() {
   const [structureBusy, setStructureBusy] = useState(false);
   const [feeStructureBreakdown, setFeeStructureBreakdown] = useState(null);
   const [activeSession, setActiveSession] = useState("");
+  const [feeFilters, setFeeFilters] = useState({ class: "", section: "", feeType: "", status: "all" });
+  const [structurePage, setStructurePage] = useState(1);
+  const STRUCTURE_PAGE_SIZE = 10;
 
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState({
@@ -943,10 +946,72 @@ export default function FeesCollection() {
     return [...set].sort();
   }, [structures]);
 
+  const sectionFilterOptions = useMemo(() => {
+    if (!feeFilters.class) return [];
+    return [...new Set(
+      rawSections
+        .filter((section) => String(section.className || "") === String(feeFilters.class))
+        .map((section) => section.name)
+        .filter(Boolean),
+    )];
+  }, [feeFilters.class, rawSections]);
+
+  const filteredStudentIds = useMemo(() => {
+    const studentIds = new Set();
+    for (const student of students) {
+      const sectionMatches = !feeFilters.section || String(student.section || "") === String(feeFilters.section);
+      const classMatches = !feeFilters.class || String(student.class || "") === String(feeFilters.class);
+      if (classMatches && sectionMatches) {
+        studentIds.add(String(student.admissionNo || student.id || student._id));
+      }
+    }
+    return studentIds;
+  }, [students, feeFilters.class, feeFilters.section]);
+
+  const filteredInvoices = useMemo(() => {
+    return invoices.filter((invoice) => {
+      if (feeFilters.feeType && String(invoice.feeType || "") !== String(feeFilters.feeType)) return false;
+      if (!filteredStudentIds.size) {
+        if (feeFilters.class || feeFilters.section) return false;
+        return true;
+      }
+      return filteredStudentIds.has(String(invoice.studentId));
+    });
+  }, [invoices, feeFilters.feeType, feeFilters.class, feeFilters.section, filteredStudentIds]);
+
+  const filteredPayments = useMemo(() => {
+    return payments.filter((payment) => {
+      const studentId = String(payment.studentId || "");
+      if (feeFilters.class || feeFilters.section) {
+        if (!filteredStudentIds.has(studentId)) return false;
+      }
+      const invoice = invoiceMap.get(String(payment.invoiceId));
+      if (feeFilters.feeType && (!invoice || String(invoice.feeType || "") !== String(feeFilters.feeType))) return false;
+      return true;
+    });
+  }, [payments, invoiceMap, feeFilters.class, feeFilters.section, feeFilters.feeType, filteredStudentIds]);
+
   const filteredStructures = useMemo(() => {
     if (!activeSession) return [];
-    return structures.filter((structure) => structure.session === activeSession);
-  }, [activeSession, structures]);
+    return structures.filter((structure) => {
+      if (structure.session !== activeSession) return false;
+      if (feeFilters.class && String(structure.class || "") !== String(feeFilters.class)) return false;
+      if (feeFilters.feeType && String(structure.feeType || "") !== String(feeFilters.feeType)) return false;
+      if (feeFilters.status === "active" && structure.active === false) return false;
+      if (feeFilters.status === "inactive" && structure.active !== false) return false;
+      return true;
+    });
+  }, [activeSession, structures, feeFilters]);
+
+  useEffect(() => {
+    setStructurePage(1);
+  }, [activeSession, feeFilters.class, feeFilters.section, feeFilters.feeType, feeFilters.status]);
+
+  const totalStructurePages = Math.max(1, Math.ceil(filteredStructures.length / STRUCTURE_PAGE_SIZE));
+  const paginatedStructures = useMemo(
+    () => filteredStructures.slice((structurePage - 1) * STRUCTURE_PAGE_SIZE, structurePage * STRUCTURE_PAGE_SIZE),
+    [filteredStructures, structurePage],
+  );
 
   const feeStructureSummaries = useMemo(() => {
     return new Map(
@@ -955,7 +1020,8 @@ export default function FeesCollection() {
         const classStudents = students.filter(
           (student) =>
             String(student.class || "").trim().toLowerCase() === classKey &&
-            String(student.status || "Active").toLowerCase() === "active",
+            String(student.status || "Active").toLowerCase() === "active" &&
+            (!feeFilters.section || String(student.section || "") === String(feeFilters.section)),
         );
         const classStudentIds = new Set(
           classStudents.map((student) => String(student.admissionNo || student.id || student._id)),
@@ -997,7 +1063,7 @@ export default function FeesCollection() {
         return [String(structure._id), summary];
       }),
     );
-  }, [activeSession, filteredStructures, invoices, students]);
+  }, [activeSession, feeFilters.section, filteredStructures, invoices, students]);
 
   const selectedStructureSummary = feeStructureBreakdown
     ? feeStructureSummaries.get(feeStructureBreakdown.structureId)
@@ -1011,17 +1077,17 @@ export default function FeesCollection() {
   ) || [];
 
   const stats = useMemo(() => {
-    const collected = Number(paymentSummary?.netCollected || 0);
-    const outstanding = invoices.reduce(
+    const adjustedPayments = filteredPayments.filter((payment) => payment.clearanceStatus !== "Bounced");
+    const collected = adjustedPayments.reduce((sum, payment) => sum + Number(payment.amount || 0), 0);
+    const outstanding = filteredInvoices.reduce(
       (sum, invoice) =>
         sum +
         Math.max(0, Number(invoice.amount) - Number(invoice.paidAmount || 0)),
       0,
     );
-    const overdue = invoices.filter((invoice) => invoice.status === "Overdue")
-      .length;
-    const paidCount = invoices.filter((invoice) => invoice.status === "Paid").length;
-    const partial = invoices.filter(
+    const overdue = filteredInvoices.filter((invoice) => invoice.status === "Overdue").length;
+    const paidCount = filteredInvoices.filter((invoice) => invoice.status === "Paid").length;
+    const partial = filteredInvoices.filter(
       (invoice) =>
         invoice.status === "Partially Paid" ||
         (Number(invoice.paidAmount || 0) > 0 &&
@@ -1029,26 +1095,39 @@ export default function FeesCollection() {
     ).length;
     return {
       collected,
-      count: paymentSummary?.successfulCount ?? payments.length,
+      count: adjustedPayments.length,
       outstanding,
       overdue,
       paidCount,
       partial,
     };
-  }, [paymentSummary, payments, invoices]);
+  }, [filteredInvoices, filteredPayments]);
 
   const metricInvoices = useMemo(() => {
     if (selectedMetric === "outstanding") {
-      return invoices.filter(
+      return filteredInvoices.filter(
         (invoice) => Number(invoice.amount) - Number(invoice.paidAmount || 0) > 0,
       );
     }
-    return invoices;
-  }, [invoices, selectedMetric]);
+    return filteredInvoices;
+  }, [filteredInvoices, selectedMetric]);
 
   const collectedDetailPayments = useMemo(
-    () => enrichedPayments.filter((payment) => payment.clearanceStatus !== "Bounced"),
-    [enrichedPayments],
+    () => enrichedPayments.filter((payment) => {
+      if (payment.clearanceStatus === "Bounced") return false;
+      if (feeFilters.class || feeFilters.section) {
+        const student = studentByAdmission.get(String(payment.studentId)) || studentMap.get(String(payment.studentId));
+        if (!student) return false;
+        if (feeFilters.class && String(student.class || "") !== String(feeFilters.class)) return false;
+        if (feeFilters.section && String(student.section || "") !== String(feeFilters.section)) return false;
+      }
+      if (feeFilters.feeType) {
+        const invoice = invoiceMap.get(String(payment.invoiceId));
+        if (!invoice || String(invoice.feeType || "") !== String(feeFilters.feeType)) return false;
+      }
+      return true;
+    }),
+    [enrichedPayments, feeFilters, invoiceMap, studentByAdmission, studentMap],
   );
 
   const outstandingForStudent = (studentId) => {
@@ -1399,9 +1478,13 @@ export default function FeesCollection() {
     }
   };
 
-  const payableStudents = students.filter(
-    (student) => outstandingForStudent(student.admissionNo || student.id) > 0,
+  const payableStudents = new Set(
+    filteredInvoices
+      .filter((invoice) => Number(invoice.amount) - Number(invoice.paidAmount || 0) > 0)
+      .map((invoice) => String(invoice.studentId)),
   );
+
+  const clearFeeFilters = () => setFeeFilters({ class: "", section: "", feeType: "", status: "all" });
 
   return (
     <div className="space-y-6">
@@ -1445,6 +1528,84 @@ export default function FeesCollection() {
         </Card>
       )}
 
+      <div className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="text-sm font-semibold text-ink">Filter collection overview</h2>
+            <p className="text-xs text-slate-text/70">
+              Filter collected fees, dues, and invoice counts by class and section.
+            </p>
+          </div>
+          <span className="rounded-full bg-primary/10 px-2.5 py-1 text-[11px] font-semibold text-primary">
+            {activeSession || "No active session"}
+          </span>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-text/70">
+              Class
+            </label>
+            <SearchableSelect
+              options={classOptions}
+              value={feeFilters.class}
+              onChange={(value) => setFeeFilters((prev) => ({ ...prev, class: value, section: "" }))}
+              placeholder="All classes"
+              className="w-full"
+            />
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-text/70">
+              Section
+            </label>
+            <Select
+              value={feeFilters.section}
+              onChange={(event) => setFeeFilters((prev) => ({ ...prev, section: event.target.value }))}
+              className="w-full"
+              disabled={!feeFilters.class || sectionFilterOptions.length === 0}
+            >
+              <option value="">All sections</option>
+              {sectionFilterOptions.map((sectionName) => (
+                <option key={sectionName} value={sectionName}>{sectionName}</option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-text/70">
+              Fee Type
+            </label>
+            <Select
+              value={feeFilters.feeType}
+              onChange={(event) => setFeeFilters((prev) => ({ ...prev, feeType: event.target.value }))}
+              className="w-full"
+            >
+              <option value="">All fee types</option>
+              {feeTypeOptions.map((feeType) => (
+                <option key={feeType} value={feeType}>{feeType}</option>
+              ))}
+            </Select>
+          </div>
+          <div>
+            <label className="mb-1 block text-[11px] font-semibold uppercase tracking-wide text-slate-text/70">
+              Structure Status
+            </label>
+            <Select
+              value={feeFilters.status}
+              onChange={(event) => setFeeFilters((prev) => ({ ...prev, status: event.target.value }))}
+              className="w-full"
+            >
+              <option value="all">All statuses</option>
+              <option value="active">Active</option>
+              <option value="inactive">Inactive</option>
+            </Select>
+          </div>
+          <div className="flex items-end">
+            <Button variant="outline" className="w-full" onClick={clearFeeFilters}>
+              Clear filters
+            </Button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={Wallet}
@@ -1472,14 +1633,14 @@ export default function FeesCollection() {
           icon={AlertTriangle}
           label="Outstanding Dues"
           value={inr(stats.outstanding)}
-          sub={`${payableStudents.length} students with dues`}
+          sub={`${payableStudents.size} students with dues`}
           accent="alert"
           onClick={() => setSelectedMetric("outstanding")}
         />
         <StatCard
           icon={Receipt}
           label="Invoices Overview"
-          value={String(invoices.length)}
+          value={String(filteredInvoices.length)}
           sub={`${stats.paidCount} paid · ${stats.partial} partial · ${stats.overdue} overdue`}
           accent="info"
           onClick={() => setSelectedMetric("invoices")}
@@ -1613,34 +1774,61 @@ export default function FeesCollection() {
           </div>
         }
       >
+
         {filteredStructures.length === 0 ? (
           <p className="py-10 text-center text-[13px] text-slate-text/60">
             No fee structures{activeSession ? ` for session ${activeSession}` : ""} configured yet
           </p>
         ) : (
-          <div className="overflow-x-auto rounded-xl border border-slate-200">
-            <table className="w-full min-w-[1120px] text-[13px]">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10.5px] uppercase tracking-wide text-slate-text/70">
-                  <th className="px-4 py-3 font-semibold">Fee Type</th>
-                  <th className="px-4 py-3 font-semibold">Class</th>
-                  <th className="px-4 py-3 text-right font-semibold">Students</th>
-                  <th className="px-4 py-3 text-right font-semibold">Paid</th>
-                  <th className="px-4 py-3 text-right font-semibold">Pending</th>
-                  <th className="px-4 py-3 text-right font-semibold">Not Invoiced</th>
-                  <th className="px-4 py-3 text-right font-semibold">Pending Amount</th>
-                  <th className="px-4 py-3 font-semibold">Session</th>
-                  <th className="px-4 py-3 font-semibold">Fee Amount</th>
-                  <th className="px-4 py-3 font-semibold">Frequency</th>
-                  <th className="px-4 py-3 font-semibold">Due Date</th>
-                  <th className="px-4 py-3 font-semibold">Status</th>
-                  {canStructure && (
-                    <th className="px-4 py-3 text-right font-semibold">Actions</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {filteredStructures.slice(0, 50).map((structure) => {
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2 text-[12px] text-slate-text/70">
+              <span>
+                Showing {filteredStructures.length === 0 ? 0 : (structurePage - 1) * STRUCTURE_PAGE_SIZE + 1}-{Math.min(structurePage * STRUCTURE_PAGE_SIZE, filteredStructures.length)} of {filteredStructures.length} records
+              </span>
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  className="px-2.5 py-1.5 text-[11px]"
+                  onClick={() => setStructurePage((p) => Math.max(1, p - 1))}
+                  disabled={structurePage === 1}
+                >
+                  Prev
+                </Button>
+                <span className="min-w-10 text-center font-medium text-ink">{structurePage}/{totalStructurePages}</span>
+                <Button
+                  variant="outline"
+                  className="px-2.5 py-1.5 text-[11px]"
+                  onClick={() => setStructurePage((p) => Math.min(totalStructurePages, p + 1))}
+                  disabled={structurePage >= totalStructurePages}
+                >
+                  Next
+                </Button>
+              </div>
+            </div>
+
+            <div className="overflow-x-auto rounded-xl border border-slate-200">
+              <table className="w-full min-w-[1120px] text-[13px]">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-left text-[10.5px] uppercase tracking-wide text-slate-text/70">
+                    <th className="px-4 py-3 font-semibold">Fee Type</th>
+                    <th className="px-4 py-3 font-semibold">Class</th>
+                    <th className="px-4 py-3 text-right font-semibold">Students</th>
+                    <th className="px-4 py-3 text-right font-semibold">Paid</th>
+                    <th className="px-4 py-3 text-right font-semibold">Pending</th>
+                    <th className="px-4 py-3 text-right font-semibold">Not Invoiced</th>
+                    <th className="px-4 py-3 text-right font-semibold">Pending Amount</th>
+                    <th className="px-4 py-3 font-semibold">Session</th>
+                    <th className="px-4 py-3 font-semibold">Fee Amount</th>
+                    <th className="px-4 py-3 font-semibold">Frequency</th>
+                    <th className="px-4 py-3 font-semibold">Due Date</th>
+                    <th className="px-4 py-3 font-semibold">Status</th>
+                    {canStructure && (
+                      <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                    )}
+                  </tr>
+                </thead>
+                <tbody>
+                {paginatedStructures.map((structure) => {
                   const summary = feeStructureSummaries.get(String(structure._id));
                   const paidPercent = summary?.records.length
                     ? Math.round((summary.paidCount / summary.records.length) * 100)
@@ -1763,6 +1951,7 @@ export default function FeesCollection() {
               </tbody>
             </table>
           </div>
+        </div>
         )}
       </Card>
 
