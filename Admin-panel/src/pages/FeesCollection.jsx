@@ -666,15 +666,28 @@ export default function FeesCollection() {
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState({
     class: "",
-    section: "",
+    section: [],
     feeType: "",
     session: "",
     dueDate: "",
   });
+  const selectedInvoiceSections = useMemo(
+    () => (Array.isArray(invoiceForm.section) ? invoiceForm.section.filter(Boolean) : invoiceForm.section ? [invoiceForm.section] : []),
+    [invoiceForm.section],
+  );
   const filteredInvoiceSections = useMemo(() => {
     if (!invoiceForm.class) return sectionOptions;
     return [...new Set(rawSections.filter((s) => s.className === invoiceForm.class).map((s) => s.name))];
   }, [invoiceForm.class, sectionOptions, rawSections]);
+  const toggleInvoiceSection = (sectionName) => {
+    setInvoiceForm((prev) => {
+      const current = Array.isArray(prev.section) ? prev.section : prev.section ? [prev.section] : [];
+      const next = current.includes(sectionName)
+        ? current.filter((item) => item !== sectionName)
+        : [...current, sectionName];
+      return { ...prev, section: next };
+    });
+  };
   const [invoicePreview, setInvoicePreview] = useState(null);
   const [invoiceBusy, setInvoiceBusy] = useState(false);
   const [invoiceStep, setInvoiceStep] = useState("form");
@@ -1246,7 +1259,11 @@ export default function FeesCollection() {
     }
     setInvoiceBusy(true);
     try {
-      const payload = { ...invoiceForm, session };
+      const payload = {
+        ...invoiceForm,
+        section: selectedInvoiceSections.length ? selectedInvoiceSections : undefined,
+        session,
+      };
       const { data } = await api.fees.invoices.generatePreview(payload);
       setInvoicePreview(data);
       setInvoiceStep("preview");
@@ -1283,7 +1300,7 @@ export default function FeesCollection() {
       setShowInvoiceModal(false);
       setInvoicePreview(null);
       setInvoiceStep("form");
-      setInvoiceForm({ class: "", section: "", feeType: "", session: "", dueDate: "" });
+      setInvoiceForm({ class: "", section: [], feeType: "", session: "", dueDate: "" });
       reload();
     } catch (err) {
       toast(err.message, "error");
@@ -1373,6 +1390,7 @@ export default function FeesCollection() {
                   setInvoiceForm((prev) => ({
                     ...prev,
                     session: activeSession,
+                    section: Array.isArray(prev.section) ? prev.section : prev.section ? [prev.section] : [],
                   }));
                   setShowInvoiceModal(true);
                   setInvoiceStep("form");
@@ -2782,7 +2800,7 @@ export default function FeesCollection() {
                          options={classOptions}
                          value={invoiceForm.class}
                          onChange={(val) =>
-                           setInvoiceForm({ ...invoiceForm, class: val, section: "" })
+                           setInvoiceForm((prev) => ({ ...prev, class: val, section: [] }))
                          }
                          placeholder="Select class..."
                          className="w-full"
@@ -2792,15 +2810,40 @@ export default function FeesCollection() {
                       <label className="text-[12px] font-semibold text-ink mb-1.5 block">
                         Section
                       </label>
-                       <SearchableSelect
-                         options={filteredInvoiceSections}
-                         value={invoiceForm.section}
-                         onChange={(val) =>
-                           setInvoiceForm({ ...invoiceForm, section: val })
-                         }
-                         placeholder="All sections"
-                         className="w-full"
-                       />
+                      <div className="rounded-xl border border-slate-300 bg-white p-2">
+                        <div className="mb-2 flex items-center justify-between gap-2 text-[11px] text-slate-text/70">
+                          <span>{selectedInvoiceSections.length ? `${selectedInvoiceSections.length} selected` : "All sections"}</span>
+                          {filteredInvoiceSections.length > 0 && (
+                            <button
+                              type="button"
+                              className="font-medium text-primary-dark hover:text-primary"
+                              onClick={() => setInvoiceForm((prev) => ({ ...prev, section: [] }))}
+                            >
+                              Clear
+                            </button>
+                          )}
+                        </div>
+                        {filteredInvoiceSections.length === 0 ? (
+                          <p className="text-[12px] text-slate-text/60">Select a class to load sections.</p>
+                        ) : (
+                          <div className="max-h-40 space-y-1.5 overflow-y-auto pr-1">
+                            {filteredInvoiceSections.map((sectionName) => (
+                              <label
+                                key={sectionName}
+                                className="flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 hover:bg-paper text-[12.5px] text-ink"
+                              >
+                                <input
+                                  type="checkbox"
+                                  checked={selectedInvoiceSections.includes(sectionName)}
+                                  onChange={() => toggleInvoiceSection(sectionName)}
+                                  className="h-3.5 w-3.5 rounded border-slate-300 text-primary focus:ring-primary"
+                                />
+                                <span>{sectionName}</span>
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   </div>
 

@@ -11,6 +11,8 @@ const { paginate, pageInfo } = require("@school-erp/shared/src/utils/pagination"
 const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
 const { generateFeeInvoicePdf } = require("../utils/feeInvoicePdf");
 const { applyConcession, findApplicableConcessions } = require("../utils/concession");
+const { notifyByRefIds, sendEmailViaAuth } = require("../utils/notify");
+const { resolveRecipients } = require("../services/feeReminders");
 const mongoose = require("mongoose");
 
 // Mass-assignment guard: only these fields may be set from the request body.
@@ -21,6 +23,35 @@ const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
 
 const dupKey = (inv) => `${inv.feeType}||${inv.session}||${String(inv.studentId)}`;
+
+const notifyInvoiceIssued = async (invoice) => {
+  if (!invoice?.schoolId || !invoice?.studentId) return;
+  const { refIds, emails } = await resolveRecipients(invoice.schoolId, invoice.studentId);
+  if (refIds.length === 0) return;
+
+  const dueLabel = invoice.dueDate
+    ? new Date(invoice.dueDate).toLocaleDateString("en-IN", { day: "numeric", month: "short", year: "numeric" })
+    : "as scheduled";
+  const title = "New fee invoice generated";
+  const message = `${invoice.feeType || "Fee"} invoice for Rs. ${(Number(invoice.amount || 0)).toLocaleString("en-IN")} has been generated. Due on ${dueLabel}.`;
+
+  const result = await notifyByRefIds({
+    schoolId: invoice.schoolId,
+    refIds,
+    kind: "fee_invoice",
+    link: "/fees",
+    title,
+    message,
+  });
+
+  if (result && emails.length > 0) {
+    await sendEmailViaAuth({
+      to: emails,
+      subject: `${title} — ${invoice.feeType || "Fee"}`,
+      html: `<p>${message}</p><p>Please log in to the school portal to view and pay your invoice.</p>`,
+    });
+  }
+};
 
 const createInvoice = async (req, res) => {
   try {
@@ -58,6 +89,7 @@ const createInvoice = async (req, res) => {
       schoolId: req.tenantId,
       branchId: branchIdForWrite(req),
     });
+    await notifyInvoiceIssued(invoice.toObject ? invoice.toObject() : invoice);
     res.status(201).json({ success: true, data: invoice });
   } catch (err) {
     if (err.code === 11000) {
@@ -108,6 +140,12 @@ const generatePreview = async (req, res) => {
     }
     await assertAcademicRefs({ req, values: { class: className, feeType } });
 
+    const selectedSections = Array.isArray(section)
+      ? section.map((name) => String(name).trim()).filter(Boolean)
+      : section
+        ? [String(section).trim()].filter(Boolean)
+        : [];
+
     const structure = await FeeStructure.findOne(scopeQuery(FeeStructure, req, {
       schoolId: req.tenantId,
       class: className,
@@ -134,9 +172,9 @@ const generatePreview = async (req, res) => {
     }
 
       const query = withBranchScope(req, { schoolId: req.tenantId, class: className, status: "Active" });
-    if (section) query.section = section;
+    if (selectedSections.length) query.section = { $in: selectedSections };
 
-    const students = await Student.find(query).select("admissionNo name").lean();
+    const students = await Student.find(query).select("admissionNo name section").lean();
 
     const admissions = students.map((s) => String(s.admissionNo));
     const existingDocs = admissions.length
@@ -296,6 +334,10 @@ const confirmGenerate = async (req, res) => {
       const unexpected = rejected.filter((r) => !r.reason || r.reason.code !== 11000);
       racedDuplicates = duplicates.length;
       if (unexpected.length) throw unexpected[0].reason;
+    }
+
+    if (created.length) {
+      await Promise.allSettled(created.map((invoice) => notifyInvoiceIssued(invoice.toObject ? invoice.toObject() : invoice)));
     }
 
     // Idempotent confirm: if every requested invoice already existed, nothing
