@@ -1859,6 +1859,19 @@ const updateMySchool = async (req, res) =>
       }
       set.website = ws;
     }
+    if (req.body.board !== undefined) set.board = String(req.body.board ?? "").trim();
+    if (req.body.recognitionNumber !== undefined)
+    {
+      set.recognitionNumber = String(req.body.recognitionNumber ?? "").trim();
+    }
+    if (req.body.recognitionAuthority !== undefined)
+    {
+      set.recognitionAuthority = String(req.body.recognitionAuthority ?? "").trim();
+    }
+    if (req.body.recognitionVerified !== undefined)
+    {
+      set.recognitionVerified = Boolean(req.body.recognitionVerified);
+    }
 
     const rc = req.body.reportCard;
     if (rc && typeof rc === "object")
