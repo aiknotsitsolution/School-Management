@@ -713,6 +713,14 @@ export default function FeesCollection() {
       const structureQuery = new URLSearchParams({
         session: currentName || "__no_active_session__",
       }).toString();
+      const invoiceQuery = new URLSearchParams({
+        session: currentName || "__no_active_session__",
+        limit: "1000",
+      }).toString();
+      const paymentQuery = new URLSearchParams({
+        session: currentName || "__no_active_session__",
+        limit: "1000",
+      }).toString();
       const [
         studentResponse,
         structureResponse,
@@ -723,8 +731,8 @@ export default function FeesCollection() {
       ] = await Promise.all([
         api.students.list("limit=1000"),
         api.fees.structures.list(structureQuery),
-        api.fees.invoices.list().catch(() => ({ data: [] })),
-        api.fees.payments.list().catch(() => ({ data: [] })),
+        api.fees.invoices.list(invoiceQuery).catch(() => ({ data: [] })),
+        api.fees.payments.list(paymentQuery),
         api.fees.orders.list("limit=50").catch(() => ({ data: [] })),
         api.fees.concessions.list().catch(() => ({ data: [] })),
       ]);
@@ -742,6 +750,8 @@ export default function FeesCollection() {
     } catch (err) {
       if (!currentSessionLoaded) setActiveSession("");
       setStructures([]);
+      setPayments([]);
+      setPaymentSummary(null);
       setLoadError(err.message || "Could not load the active academic session");
     }
   };
@@ -1310,11 +1320,11 @@ export default function FeesCollection() {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard
           icon={Wallet}
-          label="Collected (All Time)"
+          label="Collected (Active Season)"
           value={paymentSummary ? `₹${stats.collected.toLocaleString("en-IN")}` : "—"}
           sub={
             paymentSummary
-              ? `${stats.count} successful payments`
+              ? `${stats.count} successful payments${activeSession ? ` · ${activeSession}` : ""}`
               : loadError
                 ? "Collection total unavailable"
                 : "Loading collection total…"
@@ -1460,9 +1470,6 @@ export default function FeesCollection() {
           </div>
         )}
       </Card>
-
-      {/* Payment order verification queue (manual modes + gateway follow-ups) */}
-    
 
       <Card
         title="Reconciliation"

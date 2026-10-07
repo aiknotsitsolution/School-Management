@@ -15,6 +15,14 @@ const {
 } = require("../utils/paymentWrite");
 const { generateFeeReceiptPdf } = require("../utils/receiptPdf");
 
+const castAggregateScopeIds = (filter) => ({
+  ...filter,
+  schoolId: filter.schoolId ? new mongoose.Types.ObjectId(String(filter.schoolId)) : filter.schoolId,
+  ...(filter.branchId
+    ? { branchId: new mongoose.Types.ObjectId(String(filter.branchId)) }
+    : {}),
+});
+
 const recordPayment = async (req, res) => {
   try {
     const { invoiceId, amount, mode, transactionId, receivedRef, chequeNo, chequeDate, bankName, receiptNo } = req.body;
@@ -106,42 +114,84 @@ const recordPayment = async (req, res) => {
 
 const getPayments = async (req, res) => {
   try {
-    const { studentId, mode, clearanceStatus } = req.query;
-    const filter = scopeQuery(Payment, req, { schoolId: req.tenantId })
+    const { studentId, mode, clearanceStatus, session } = req.query;
+    const filter = castAggregateScopeIds(
+      scopeQuery(Payment, req, { schoolId: req.tenantId }),
+    );
     if (studentId) filter.studentId = studentId;
     if (mode) filter.mode = mode;
     if (clearanceStatus) filter.clearanceStatus = clearanceStatus;
-    const { page, limit, skip } = paginate(req.query);
-    const [data, total, summary] = await Promise.all([
-      Payment.find(filter).sort({ paidOn: -1 }).skip(skip).limit(limit),
-      Payment.countDocuments(filter),
-      Payment.aggregate([
-        { $match: filter },
+    const pipeline = [{ $match: filter }];
+    if (session) {
+      const invoiceFilter = castAggregateScopeIds(
+        scopeQuery(FeeInvoice, req, {
+          schoolId: req.tenantId,
+          session: String(session).trim(),
+        }),
+      );
+      pipeline.push(
         {
-          $group: {
-            _id: null,
-            totalRecorded: { $sum: "$amount" },
-            bouncedAmount: {
-              $sum: {
-                $cond: [{ $eq: ["$clearanceStatus", "Bounced"] }, "$amount", 0],
+          $lookup: {
+            from: FeeInvoice.collection.name,
+            let: { paymentInvoiceId: { $toString: "$invoiceId" } },
+            pipeline: [
+              { $match: invoiceFilter },
+              {
+                $match: {
+                  $expr: {
+                    $eq: [{ $toString: "$_id" }, "$$paymentInvoiceId"],
+                  },
+                },
               },
-            },
-            successfulCount: {
-              $sum: {
-                $cond: [{ $eq: ["$clearanceStatus", "Bounced"] }, 0, 1],
-              },
-            },
+              { $project: { _id: 1 } },
+            ],
+            as: "sessionInvoice",
           },
         },
-      ]),
+        { $match: { $expr: { $gt: [{ $size: "$sessionInvoice" }, 0] } } },
+        { $project: { sessionInvoice: 0 } },
+      );
+    }
+    const { page, limit, skip } = paginate(req.query);
+    const [result] = await Payment.aggregate([
+      ...pipeline,
+      {
+        $facet: {
+          data: [{ $sort: { paidOn: -1 } }, { $skip: skip }, { $limit: limit }],
+          summary: [
+            {
+              $group: {
+                _id: null,
+                totalRecorded: { $sum: "$amount" },
+                bouncedAmount: {
+                  $sum: {
+                    $cond: [{ $eq: ["$clearanceStatus", "Bounced"] }, "$amount", 0],
+                  },
+                },
+                successfulCount: {
+                  $sum: {
+                    $cond: [{ $eq: ["$clearanceStatus", "Bounced"] }, 0, 1],
+                  },
+                },
+              },
+            },
+          ],
+          metadata: [{ $count: "total" }],
+        },
+      },
     ]);
-    const totals = summary[0] || { totalRecorded: 0, bouncedAmount: 0, successfulCount: 0 };
+    const totals = result?.summary[0] || {
+      totalRecorded: 0,
+      bouncedAmount: 0,
+      successfulCount: 0,
+    };
+    const total = result?.metadata[0]?.total || 0;
     res.json({
       success: true,
-      count: data.length,
+      count: result?.data.length || 0,
       total,
       ...pageInfo(total, page, limit),
-      data,
+      data: result?.data || [],
       paymentSummary: {
         ...totals,
         netCollected: totals.totalRecorded - totals.bouncedAmount,
