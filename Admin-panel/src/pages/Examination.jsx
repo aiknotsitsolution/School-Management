@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { useSelector } from "react-redux";
 import {
   Plus,
   MapPin,
@@ -29,6 +30,7 @@ import { invalidateMasterCache } from "../lib/masterCache";
 import { usePermission } from "../lib/permissions";
 import CustomMasterModal from "../components/CustomMasterModal";
 import { useMasterOptions } from "../hooks/useMasterOptions";
+import { selectSchool } from "../store/selectors";
 
 const SYSTEM_CLASSES = [
   "Nursery",
@@ -89,9 +91,37 @@ function emptyForm() {
     roomId: "",
     room: "",
     maxMarks: 80,
+    passingMarks: 33,
     kind: "other",
     term: "",
     cceTool: "",
+  };
+}
+
+function emptySubjectSchedule() {
+  return {
+    subjectId: "",
+    subject: "",
+    date: "",
+    timeSlotId: "",
+    startTime: "",
+    endTime: "",
+    roomId: "",
+    room: "",
+    maxMarks: 80,
+    passingMarks: 33,
+  };
+}
+
+function emptyBulkForm(school) {
+  return {
+    board: school?.board || "",
+    examFormat: "",
+    examFormatType: "",
+    classId: "",
+    class: "",
+    sectionIds: [],
+    schedules: [emptySubjectSchedule()],
   };
 }
 
@@ -143,6 +173,7 @@ function formatTimeSlot(item) {
 }
 
 export default function Examination() {
+  const school = useSelector(selectSchool);
   const { options: masterClasses, rawItems: rawClasses } = useMasterOptions("classes", CLASS_OPTIONS_FALLBACK);
   const { rawItems: rawSections } = useMasterOptions("sections", SECTION_OPTIONS_FALLBACK);
   const { rawItems: rawSubjects } = useMasterOptions("subjects", []);
@@ -162,6 +193,8 @@ export default function Examination() {
   const [rollupLoading, setRollupLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm());
+  const [bulkForm, setBulkForm] = useState(() => emptyBulkForm(school));
+  const [bulkSaving, setBulkSaving] = useState(false);
   const [editId, setEditId] = useState(null);
   const [selectedStat, setSelectedStat] = useState(null);
   const [customModal, setCustomModal] = useState(null); // { kind, label, showDescription? } | null
@@ -176,6 +209,36 @@ export default function Examination() {
         (!section.classId && section.className === selectedClass.name),
     );
   }, [form.classId, rawClasses, rawSections]);
+  const schoolExamFormats = useMemo(() => {
+    if (school?.examFormats?.length) return school.examFormats;
+    return school?.examFormat
+      ? [{ name: school.examFormat, types: school.examFormatType ? [school.examFormatType] : [] }]
+      : [];
+  }, [school]);
+  const selectedExamFormat = useMemo(
+    () => schoolExamFormats.find((item) => item.name === bulkForm.examFormat),
+    [schoolExamFormats, bulkForm.examFormat],
+  );
+  const bulkClassSections = useMemo(() => {
+    const selectedClass = rawClasses.find((item) => String(item._id) === String(bulkForm.classId));
+    if (!selectedClass) return [];
+    return rawSections.filter(
+      (section) =>
+        String(section.classId || "") === String(selectedClass._id) ||
+        (!section.classId && section.className === selectedClass.name),
+    );
+  }, [bulkForm.classId, rawClasses, rawSections]);
+  const bulkClassSubjects = useMemo(() => {
+    const sectionIds = new Set(bulkClassSections.map((section) => String(section._id)));
+    const uniqueSubjects = new Map();
+    rawSubjects
+      .filter((subject) => sectionIds.has(String(subject.sectionId || "")))
+      .forEach((subject) => {
+        const key = String(subject.name || "").trim().toLowerCase();
+        if (key && !uniqueSubjects.has(key)) uniqueSubjects.set(key, subject);
+      });
+    return [...uniqueSubjects.values()];
+  }, [bulkClassSections, rawSubjects]);
   const filteredExamSections = useMemo(() => {
     const sections =
       cls === "All"
@@ -329,6 +392,7 @@ export default function Examination() {
   const openAdd = () => {
     setEditId(null);
     setForm(emptyForm());
+    setBulkForm(emptyBulkForm(school));
     setShowModal(true);
   };
 
@@ -354,6 +418,7 @@ export default function Examination() {
       roomId: item.roomId || "",
       room: item.room,
       maxMarks: item.maxMarks,
+      passingMarks: item.passingMarks ?? 33,
       kind: item.kind || "other",
       term: item.term || "",
       cceTool: item.cceTool || "",
@@ -369,7 +434,132 @@ export default function Examination() {
     setForm((f) => ({ ...f, ...fields }));
   };
 
+  const handleSaveBulk = async () => {
+    if (bulkSaving) return;
+    if (!bulkForm.board || !bulkForm.examFormat || !bulkForm.examFormatType) {
+      toast("Select the school board, exam format, and format type", "error");
+      return;
+    }
+    if (!bulkForm.classId || bulkForm.sectionIds.length === 0) {
+      toast("Select a class and at least one section", "error");
+      return;
+    }
+    const schedules = bulkForm.schedules.filter((item) => item.subjectId);
+    if (!schedules.length) {
+      toast("Add at least one subject schedule", "error");
+      return;
+    }
+    const invalidSchedule = schedules.find((item) =>
+      !item.date ||
+      !item.startTime ||
+      !item.endTime ||
+      item.endTime <= item.startTime ||
+      Number(item.maxMarks) <= 0 ||
+      Number(item.passingMarks) < 0 ||
+      Number(item.passingMarks) > 100,
+    );
+    if (invalidSchedule) {
+      toast("Each subject needs a date, valid start/end times, positive max marks, and a pass percentage from 0 to 100", "error");
+      return;
+    }
+    if (new Set(schedules.map((item) => String(item.subjectId))).size !== schedules.length) {
+      toast("A subject can only be scheduled once per exam format", "error");
+      return;
+    }
+
+    const selectedClass = rawClasses.find((item) => String(item._id) === String(bulkForm.classId));
+    if (!selectedClass) {
+      toast("Selected class is no longer available", "error");
+      return;
+    }
+
+    const selectedSections = bulkForm.sectionIds.map((sectionId) =>
+      bulkClassSections.find((item) => String(item._id) === String(sectionId)),
+    );
+    if (selectedSections.some((section) => !section)) {
+      toast("One or more selected sections are no longer available. Please review your selection.", "error");
+      return;
+    }
+    const requests = selectedSections.flatMap((section) => {
+      const sectionId = String(section._id);
+      return schedules.map((schedule) => {
+        const sectionSubject = rawSubjects.find(
+          (item) =>
+            String(item.sectionId || "") === String(sectionId) &&
+            String(item.name || "").trim().toLowerCase() === String(schedule.subject || "").trim().toLowerCase(),
+        );
+        if (!sectionSubject) {
+          return { error: `Subject "${schedule.subject}" is not configured for section ${section.name}.` };
+        }
+        return {
+          examName: bulkForm.examFormatType,
+          board: bulkForm.board,
+          examFormat: bulkForm.examFormat,
+          examFormatType: bulkForm.examFormatType,
+          class: selectedClass.name,
+          classId: selectedClass._id,
+          section: section.name,
+          sectionId: section._id,
+          subject: schedule.subject,
+          subjectId: sectionSubject._id,
+          date: schedule.date,
+          startTime: schedule.startTime,
+          endTime: schedule.endTime,
+          room: schedule.room,
+          ...(schedule.roomId ? { roomId: schedule.roomId } : {}),
+          ...(schedule.timeSlotId ? { timeSlotId: schedule.timeSlotId } : {}),
+          maxMarks: Number(schedule.maxMarks),
+          passingMarks: Number(schedule.passingMarks),
+          kind: form.kind || "other",
+          term: form.term || "",
+          cceTool: form.kind === "fa" || form.kind === "sa" ? form.cceTool || "" : "",
+        };
+      });
+    });
+    const subjectMismatch = requests.find((request) => request.error);
+    if (subjectMismatch) {
+      toast(subjectMismatch.error, "error");
+      return;
+    }
+
+    const created = [];
+    const failures = [];
+    setBulkSaving(true);
+    try {
+      for (const payload of requests) {
+        try {
+          const response = await api.exams.create(payload);
+          created.push(normalizeExam(response.data));
+        } catch (error) {
+          failures.push({ payload, message: error.message || "Request failed" });
+        }
+      }
+
+      if (created.length) {
+        setExams((previous) => [...previous, ...created]);
+      }
+      if (failures.length) {
+        setShowModal(false);
+        toast(
+          `${created.length} exam(s) scheduled; ${failures.length} failed. First error: ${failures[0].message}`,
+          "error",
+        );
+        return;
+      }
+
+      setShowModal(false);
+      setBulkForm(emptyBulkForm(school));
+      toast(`${created.length} exam(s) scheduled across ${bulkForm.sectionIds.length} section(s)`);
+    } finally {
+      setBulkSaving(false);
+    }
+  };
+
   const handleSave = async () => {
+    if (!editId) {
+      await handleSaveBulk();
+      return;
+    }
     if (!form.exam || !form.class || !form.subject || !form.date) {
       toast("Exam type, class, subject and date are required", "error");
       return;
@@ -387,6 +577,7 @@ export default function Examination() {
       endTime,
       room: form.room,
       maxMarks: Number(form.maxMarks) || 80,
+      passingMarks: Number(form.passingMarks),
       kind: form.kind || "other",
       term: form.term || "",
       cceTool: form.kind === "fa" || form.kind === "sa" ? form.cceTool || "" : "",
@@ -982,7 +1173,7 @@ export default function Examination() {
             className="absolute inset-0 bg-ink/50 backdrop-blur-sm"
             onClick={() => setShowModal(false)}
           />
-          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden">
+          <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden">
             {/* Header */}
             <div className="flex items-center justify-between px-5 py-4 border-b border-slate-200">
               <div>
@@ -990,7 +1181,9 @@ export default function Examination() {
                   {editId ? "Edit Exam" : "Schedule Exam"}
                 </h3>
                 <p className="text-[12.5px] text-slate-text/70 mt-0.5">
-                  Fill the details and save.
+                  {editId
+                    ? "Update this scheduled subject exam."
+                    : "Select the exam structure, then add subject schedules for one or more sections."}
                 </p>
               </div>
               <button
@@ -1003,262 +1196,199 @@ export default function Examination() {
 
             {/* Form */}
             <div className="px-5 py-4 space-y-4 max-h-[70vh] overflow-y-auto">
-              <div>
-                <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Exam Type
-                </label>
-                <MasterSelect
-                  kind="exam-types"
-                  label="Exam Type"
-                  placeholder="Select exam type"
-                  value={form.examTypeId}
-                  fallbackLabel={form.exam}
-                  onChange={(id, item) =>
-                    updateFormFields({ examTypeId: id, exam: item ? item.name : "" })
-                  }
-                  canAdd
-                  onAdd={() => setCustomModal({ kind: "exam-types", label: "Exam Type" })}
-                />
-              </div>
+              {editId ? (
+                <>
+                  <div>
+                    <label className="mb-1.5 block text-[12px] font-semibold text-ink">Exam Type</label>
+                    <MasterSelect
+                      kind="exam-types"
+                      label="Exam Type"
+                      placeholder="Select exam type"
+                      value={form.examTypeId}
+                      fallbackLabel={form.exam}
+                      onChange={(id, item) => updateFormFields({ examTypeId: id, exam: item ? item.name : "" })}
+                      canAdd
+                      onAdd={() => setCustomModal({ kind: "exam-types", label: "Exam Type" })}
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Class</label>
+                      <MasterSelect
+                        kind="classes"
+                        label="Class"
+                        placeholder="Select class"
+                        value={form.classId}
+                        fallbackLabel={form.class ? formatClassLabel(form.class) : ""}
+                        renderLabel={(item) => formatClassLabel(item.name)}
+                        onChange={(id, item) => updateFormFields({ classId: id, class: item?.name || "", sectionId: "", section: "", subjectId: "", subject: "" })}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Section</label>
+                      <MasterSelect
+                        kind="sections"
+                        label="Section"
+                        placeholder="Select section"
+                        value={form.sectionId}
+                        fallbackLabel={form.section}
+                        disabled={!form.classId}
+                        filterItems={() => selectedClassSections}
+                        onChange={(id, item) => updateFormFields({ sectionId: id, section: item?.name || "", subjectId: "", subject: "" })}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Subject</label>
+                      <MasterSelect
+                        kind="subjects"
+                        label="Subject"
+                        placeholder="Select subject"
+                        value={form.subjectId}
+                        fallbackLabel={form.subject}
+                        disabled={!form.sectionId}
+                        filterItems={() => filteredSubjects}
+                        onChange={(id, item) => updateFormFields({ subjectId: id, subject: item?.name || "" })}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Exam Day</label>
+                      <Input type="date" value={form.date} onChange={(event) => updateForm("date", event.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Start Time</label>
+                      <Input type="time" value={form.startTime} onChange={(event) => updateForm("startTime", event.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">End Time</label>
+                      <Input type="time" value={form.endTime} onChange={(event) => updateForm("endTime", event.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Room</label>
+                      <MasterSelect
+                        kind="rooms"
+                        label="Room"
+                        placeholder="Select room"
+                        value={form.roomId}
+                        fallbackLabel={form.room}
+                        onChange={(id, item) => updateFormFields({ roomId: id, room: item?.name || "" })}
+                        canAdd
+                        onAdd={() => setCustomModal({ kind: "rooms", label: "Room" })}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Maximum Marks</label>
+                      <Input type="number" min="1" value={form.maxMarks} onChange={(event) => updateForm("maxMarks", event.target.value)} />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Passing Percentage (%)</label>
+                      <Input type="number" min="0" max="100" value={form.passingMarks ?? 33} onChange={(event) => updateForm("passingMarks", event.target.value)} />
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Board</label>
+                      <Select value={bulkForm.board} disabled={!school?.board} onChange={(event) => setBulkForm((current) => ({ ...current, board: event.target.value, examFormat: "", examFormatType: "" }))}>
+                        <option value="">{school?.board ? "Select board" : "Configure board first"}</option>
+                        {school?.board && <option value={school.board}>{school.board}</option>}
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Category · Exam Format</label>
+                      <Select value={bulkForm.examFormat} disabled={!bulkForm.board || !schoolExamFormats.length} onChange={(event) => setBulkForm((current) => ({ ...current, examFormat: event.target.value, examFormatType: "" }))}>
+                        <option value="">Select exam format</option>
+                        {schoolExamFormats.map((format, index) => <option key={`${format.name}-${index}`} value={format.name}>{format.name}</option>)}
+                      </Select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Subcategory · Format Type</label>
+                      <Select value={bulkForm.examFormatType} disabled={!bulkForm.examFormat} onChange={(event) => setBulkForm((current) => ({ ...current, examFormatType: event.target.value }))}>
+                        <option value="">Select format type</option>
+                        {(selectedExamFormat?.types || []).map((type, index) => <option key={`${type}-${index}`} value={type}>{type}</option>)}
+                      </Select>
+                    </div>
+                  </div>
+                  {!schoolExamFormats.length && <p className="rounded-lg bg-amber-50 px-3 py-2 text-[12px] text-amber-800">Add an exam format and format type in Manage School → School Board before scheduling.</p>}
 
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Kind
-                  </label>
-                  <Select
-                    value={form.kind}
-                    onChange={(e) => updateForm("kind", e.target.value)}
-                  >
-                    {KIND_OPTIONS.map((k) => (
-                      <option key={k.value} value={k.value}>
-                        {k.label}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Term
-                  </label>
-                  <Select
-                    value={form.term}
-                    onChange={(e) => updateForm("term", e.target.value)}
-                  >
-                    <option value="">None</option>
-                    {TERM_OPTIONS.map((t) => (
-                      <option key={t} value={t}>
-                        {t}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              </div>
+                  <div className="grid gap-3 lg:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-[12px] font-semibold text-ink">Class</label>
+                      <MasterSelect kind="classes" label="Class" placeholder="Select class" value={bulkForm.classId} fallbackLabel={bulkForm.class ? formatClassLabel(bulkForm.class) : ""} renderLabel={(item) => formatClassLabel(item.name)} onChange={(id, item) => setBulkForm((current) => ({ ...current, classId: id, class: item?.name || "", sectionIds: [], schedules: [emptySubjectSchedule()] }))} />
+                    </div>
+                    <div className="rounded-xl border border-slate-200 p-3">
+                      <div className="mb-2 flex items-center justify-between gap-2">
+                        <label className="text-[12px] font-semibold text-ink">Sections · Select multiple</label>
+                        <div className="flex gap-2">
+                          <button type="button" disabled={!bulkClassSections.length} className="text-[11px] font-semibold text-primary hover:underline disabled:opacity-40" onClick={() => setBulkForm((current) => ({ ...current, sectionIds: bulkClassSections.filter((section) => section.active !== false).map((section) => String(section._id)) }))}>Select all</button>
+                          <button type="button" className="text-[11px] font-semibold text-slate-text hover:underline" onClick={() => setBulkForm((current) => ({ ...current, sectionIds: [] }))}>Clear</button>
+                        </div>
+                      </div>
+                      {!bulkForm.classId ? <p className="text-[12px] text-slate-text/60">Select a class first.</p> : !bulkClassSections.length ? <p className="text-[12px] text-slate-text/60">No sections configured for this class.</p> : (
+                        <div className="flex flex-wrap gap-2">
+                          {bulkClassSections.filter((section) => section.active !== false).map((section) => {
+                            const sectionId = String(section._id);
+                            return <label key={sectionId} className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[12px] text-ink hover:bg-slate-50"><input type="checkbox" checked={bulkForm.sectionIds.includes(sectionId)} onChange={() => setBulkForm((current) => ({ ...current, sectionIds: current.sectionIds.includes(sectionId) ? current.sectionIds.filter((id) => id !== sectionId) : [...current.sectionIds, sectionId] }))} />{section.name}</label>;
+                          })}
+                        </div>
+                      )}
+                    </div>
+                  </div>
 
-              {(form.kind === "fa" || form.kind === "sa") && (
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    CCE Tool
-                  </label>
-                  <Select
-                    value={form.cceTool}
-                    onChange={(e) => updateForm("cceTool", e.target.value)}
-                  >
-                    <option value="">Not tagged</option>
-                    {["FA1", "FA2", "FA3", "FA4", "SA1", "SA2"].map((tool) => (
-                      <option key={tool} value={tool}>
-                        {tool}
-                      </option>
+                  <div className="space-y-3">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <div><h4 className="text-[13px] font-semibold text-ink">Subject schedules</h4><p className="text-[11.5px] text-slate-text/60">Set day, time, room, and marks separately for each subject. Schedules are copied to every selected section.</p></div>
+                      <Button variant="outline" className="text-[11px]" disabled={!bulkForm.classId} onClick={() => setBulkForm((current) => ({ ...current, schedules: [...current.schedules, emptySubjectSchedule()] }))}><Plus size={13} /> Add Subject</Button>
+                    </div>
+                    {bulkForm.schedules.map((schedule, index) => (
+                      <div key={`schedule-${index}`} className="rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                        <div className="mb-3 flex items-center justify-between"><p className="text-[12px] font-semibold text-ink">Subject {index + 1}</p>{bulkForm.schedules.length > 1 && <button type="button" onClick={() => setBulkForm((current) => ({ ...current, schedules: current.schedules.filter((_, itemIndex) => itemIndex !== index) }))} className="rounded-lg p-1.5 text-alert hover:bg-alert/10" aria-label={`Remove subject ${index + 1}`}><X size={14} /></button>}</div>
+                        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                          <div><label className="mb-1 block text-[11px] font-semibold text-ink">Subject</label><Select value={schedule.subjectId} disabled={!bulkForm.classId} onChange={(event) => { const subject = bulkClassSubjects.find((item) => String(item._id) === event.target.value); setBulkForm((current) => ({ ...current, schedules: current.schedules.map((row, rowIndex) => rowIndex === index ? { ...row, subjectId: event.target.value, subject: subject?.name || "" } : row) })); }}><option value="">Select subject</option>{bulkClassSubjects.map((subject) => <option key={subject._id} value={subject._id}>{subject.name}</option>)}</Select></div>
+                          <div><label className="mb-1 block text-[11px] font-semibold text-ink">Exam Day</label><Input type="date" value={schedule.date} onChange={(event) => setBulkForm((current) => ({ ...current, schedules: current.schedules.map((row, rowIndex) => rowIndex === index ? { ...row, date: event.target.value } : row) }))} /></div>
+                          <div><label className="mb-1 block text-[11px] font-semibold text-ink">Room</label><MasterSelect kind="rooms" label="Room" placeholder="Select room" value={schedule.roomId} fallbackLabel={schedule.room} onChange={(id, item) => setBulkForm((current) => ({ ...current, schedules: current.schedules.map((row, rowIndex) => rowIndex === index ? { ...row, roomId: id, room: item?.name || "" } : row) }))} canAdd onAdd={() => setCustomModal({ kind: "rooms", label: "Room", bulk: true, scheduleIndex: index })} /></div>
+                          <div><label className="mb-1 block text-[11px] font-semibold text-ink">Start Time</label><Input type="time" value={schedule.startTime} onChange={(event) => setBulkForm((current) => ({ ...current, schedules: current.schedules.map((row, rowIndex) => rowIndex === index ? { ...row, startTime: event.target.value } : row) }))} /></div>
+                          <div><label className="mb-1 block text-[11px] font-semibold text-ink">End Time</label><Input type="time" value={schedule.endTime} onChange={(event) => setBulkForm((current) => ({ ...current, schedules: current.schedules.map((row, rowIndex) => rowIndex === index ? { ...row, endTime: event.target.value } : row) }))} /></div>
+                          <div><label className="mb-1 block text-[11px] font-semibold text-ink">Maximum Marks</label><Input type="number" min="1" value={schedule.maxMarks} onChange={(event) => setBulkForm((current) => ({ ...current, schedules: current.schedules.map((row, rowIndex) => rowIndex === index ? { ...row, maxMarks: event.target.value } : row) }))} /></div>
+                          <div><label className="mb-1 block text-[11px] font-semibold text-ink">Passing Percentage (%)</label><Input type="number" min="0" max="100" value={schedule.passingMarks} onChange={(event) => setBulkForm((current) => ({ ...current, schedules: current.schedules.map((row, rowIndex) => rowIndex === index ? { ...row, passingMarks: event.target.value } : row) }))} /></div>
+                        </div>
+                      </div>
                     ))}
-                  </Select>
-                  <p className="text-[11.5px] text-slate-text/50 mt-1">
-                    Tags the paper with its CCE round (FA1–FA4 / SA1–SA2).
-                  </p>
-                </div>
+                  </div>
+
+                </>
               )}
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Class
-                  </label>
-                  <MasterSelect
-                    kind="classes"
-                    label="Class"
-                    placeholder="Select class"
-                    value={form.classId}
-                    fallbackLabel={form.class ? formatClassLabel(form.class) : ""}
-                    renderLabel={(item) => formatClassLabel(item.name)}
-                    onChange={(id, item) => {
-                      updateFormFields({
-                        classId: id,
-                        class: item ? item.name : "",
-                        sectionId: "",
-                        section: "",
-                        subjectId: "",
-                        subject: "",
-                      });
-                    }}
-                    canAdd
-                    onAdd={() => setCustomModal({ kind: "classes", label: "Class" })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Section
-                  </label>
-                  <MasterSelect
-                    kind="sections"
-                    label="Section"
-                    placeholder="Select section"
-                    value={form.sectionId}
-                    fallbackLabel={form.section || ""}
-                    disabled={!form.classId}
-                    emptyLabel={
-                      form.classId
-                        ? "No sections configured for this class"
-                        : "Select a class first"
-                    }
-                    filterItems={() => selectedClassSections}
-                    onChange={(id, item) => {
-                      updateFormFields({
-                        sectionId: id,
-                        section: item ? item.name : "",
-                        subjectId: "",
-                        subject: "",
-                      });
-                    }}
-                    canAdd
-                    onAdd={() =>
-                      setCustomModal({
-                        kind: "sections",
-                        label: "Section",
-                      })
-                    }
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Subject
-                  </label>
-                  <MasterSelect
-                    kind="subjects"
-                    label="Subject"
-                    placeholder="Select subject"
-                    searchLabel="Search subjects..."
-                    value={form.subjectId}
-                    fallbackLabel={form.subject}
-                    disabled={!form.sectionId}
-                    emptyLabel={
-                      form.sectionId
-                        ? "No subjects configured for this section"
-                        : "Select a class and section first"
-                    }
-                    filterItems={() => filteredSubjects}
-                    onChange={(id, item) =>
-                      updateFormFields({ subjectId: id, subject: item ? item.name : "" })
-                    }
-                    canAdd
-                    onAdd={() =>
-                      setCustomModal({
-                        kind: "subjects",
-                        label: "Subject",
-                        showDescription: true,
-                      })
-                    }
-                  />
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Date
-                  </label>
-                  <Input
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => updateForm("date", e.target.value)}
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Time
-                  </label>
-                  <MasterSelect
-                    kind="time-slots"
-                    label="Time"
-                    placeholder="Select time slot"
-                    value={form.timeSlotId}
-                    renderLabel={formatTimeSlot}
-                    fallbackLabel={
-                      form.startTime || form.endTime
-                        ? [form.startTime, form.endTime].filter(Boolean).join(" – ")
-                        : ""
-                    }
-                    onChange={(id, item) =>
-                      updateFormFields({
-                        timeSlotId: id,
-                        startTime: item ? item.startTime : "",
-                        endTime: item ? item.endTime : "",
-                      })
-                    }
-                    canAdd
-                    onAdd={() => setCustomModal({ kind: "time-slots", label: "Time Slot" })}
-                  />
-                </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                    Room
-                  </label>
-                  <MasterSelect
-                    kind="rooms"
-                    label="Room"
-                    placeholder="Select room"
-                    value={form.roomId}
-                    fallbackLabel={form.room}
-                    onChange={(id, item) =>
-                      updateFormFields({ roomId: id, room: item ? item.name : "" })
-                    }
-                    canAdd
-                    onAdd={() => setCustomModal({ kind: "rooms", label: "Room" })}
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="text-[12px] font-semibold text-ink mb-1.5 block">
-                  Max Marks
-                </label>
-                <Input
-                  type="number"
-                  min="10"
-                  max="100"
-                  value={form.maxMarks}
-                  onChange={(e) => updateForm("maxMarks", e.target.value)}
-                />
-              </div>
             </div>
-
             {/* Footer */}
             <div className="px-5 py-4 border-t border-slate-200 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowModal(false)}>
+              <Button variant="outline" disabled={bulkSaving} onClick={() => setShowModal(false)}>
                 Cancel
               </Button>
               <Button
                 variant="primary"
                 onClick={handleSave}
                 disabled={
-                  !form.exam ||
-                  !form.class ||
-                  !form.subject ||
-                  !form.date
+                  bulkSaving ||
+                  (editId
+                    ? !form.exam || !form.class || !form.subject || !form.date
+                    : !bulkForm.board ||
+                      !bulkForm.examFormat ||
+                      !bulkForm.examFormatType ||
+                      !bulkForm.classId ||
+                      bulkForm.sectionIds.length === 0 ||
+                      !bulkForm.schedules.some((schedule) =>
+                        schedule.subjectId &&
+                        schedule.date &&
+                        schedule.startTime &&
+                        schedule.endTime &&
+                        Number(schedule.maxMarks) > 0 &&
+                        Number(schedule.passingMarks) >= 0 &&
+                        Number(schedule.passingMarks) <= 100,
+                      ))
                 }
               >
-                <Save size={15} /> {editId ? "Update" : "Schedule"} Exam
+                <Save size={15} /> {bulkSaving ? "Scheduling..." : editId ? "Update Exam" : "Schedule Exams"}
               </Button>
             </div>
           </div>
@@ -1276,7 +1406,16 @@ export default function Examination() {
           onClose={() => setCustomModal(null)}
           onCreated={(created) => {
             invalidateMasterCache(customModal.kind);
-            if (customModal.kind === "subjects") {
+            if (customModal.kind === "rooms" && customModal.bulk) {
+              setBulkForm((current) => ({
+                ...current,
+                schedules: current.schedules.map((schedule, index) =>
+                  index === customModal.scheduleIndex
+                    ? { ...schedule, roomId: created._id, room: created.name }
+                    : schedule,
+                ),
+              }));
+            } else if (customModal.kind === "subjects") {
               updateFormFields({ subjectId: created._id, subject: created.name });
             } else if (customModal.kind === "exam-types") {
               updateFormFields({ examTypeId: created._id, exam: created.name });

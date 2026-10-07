@@ -6,6 +6,9 @@ const examSchema = new mongoose.Schema(
     // Campus the exam is held at (see SchoolClass.branchId).
     branchId: { type: mongoose.Schema.Types.ObjectId, ref: "Branch", default: null, index: true },
     examName: { type: String, required: true }, // e.g. "Term 2 - Mid Term"
+    board: { type: String, default: "" },
+    examFormat: { type: String, default: "" },
+    examFormatType: { type: String, default: "" },
     class: { type: String, required: true },
     section: { type: String, default: "" },
     subject: { type: String, required: true },

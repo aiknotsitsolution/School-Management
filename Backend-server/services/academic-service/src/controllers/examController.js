@@ -24,7 +24,7 @@ const { notifyClassStudents } = require("../utils/notify");
 
 // Mass-assignment guard: only these fields may be set from the request body.
 const EXAM_FIELDS = [
-  "examName", "class", "section", "subject", "date", "startTime", "endTime", "room", "maxMarks", "passingMarks", "session",
+  "examName", "board", "examFormat", "examFormatType", "class", "section", "subject", "date", "startTime", "endTime", "room", "maxMarks", "passingMarks", "session",
   "kind", "term", "cceTool",
 ];
 // Optional reference to the master entity that produced the snapshot string.
