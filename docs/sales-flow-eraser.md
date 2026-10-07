@@ -306,7 +306,7 @@ TeacherLogin > TDash
 // My Teaching
 MyTeaching [color: green] {
     MyClass [icon: users, color: green, label: "My Class\nView Students"]
-    MarkAttendance [icon: check-square, color: green, label: "Student Attendance\nMark P / A / HD / L"]
+    MarkAttendance [icon: check-square, color: green, label: "Student Attendance\nMark P / A / L"]
     MyTimetable [icon: calendar, color: green, label: "Timetable\nMy Schedule"]
     MyHomework [icon: book, color: green, label: "Homework\nAssign & Track"]
     MyExams [icon: clipboard, color: green, label: "Examinations\nView Scheduled"]

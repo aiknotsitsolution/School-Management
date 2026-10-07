@@ -8,7 +8,6 @@ const RING_C = 2 * Math.PI * RING_R;
 
 const DOT_TONE = {
   Present: "bg-emerald-500",
-  "Half Day": "bg-sky-400",
   Leave: "bg-amber-400",
   Absent: "bg-rose-400",
 };

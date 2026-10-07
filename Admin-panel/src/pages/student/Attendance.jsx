@@ -12,7 +12,7 @@ import { ATT_ORDER, ATT_STATUS } from "../../components/studentcharts/theme";
 import { api } from "../../lib/api";
 import { fmtDate, dateOf } from "./useStudentContext";
 
-const POLICY = { Present: "success", Absent: "alert", Leave: "info", "Half Day": "warning" };
+const POLICY = { Present: "success", Absent: "alert", Leave: "info" };
 
 export default function Attendance() {
   const [records, setRecords] = useState([]);
@@ -31,9 +31,9 @@ export default function Attendance() {
   useEffect(refresh, []);
 
   const summary = useMemo(() => {
-    const m = { Present: 0, Absent: 0, Leave: 0, "Half Day": 0 };
+    const m = { Present: 0, Absent: 0, Leave: 0 };
     records.forEach((r) => { if (m[r.status] !== undefined) m[r.status] += 1; });
-    const counted = m.Present + m["Half Day"];
+    const counted = m.Present;
     const total = records.length;
     return { ...m, total, pct: total ? Math.round((counted / total) * 100) : 0 };
   }, [records]);
@@ -63,7 +63,7 @@ export default function Attendance() {
       if (!weeks.has(key)) weeks.set(key, { label: monday.toLocaleDateString("en-IN", { day: "numeric", month: "short" }), hit: 0, total: 0 });
       const w = weeks.get(key);
       w.total += 1;
-      if (r.status === "Present" || r.status === "Half Day") w.hit += 1;
+      if (r.status === "Present") w.hit += 1;
     });
     return [...weeks.values()]
       .sort((a, b) => a.label.localeCompare(b.label))
@@ -81,7 +81,7 @@ export default function Attendance() {
       if (Number.isNaN(d.getTime())) return;
       const idx = (d.getDay() + 6) % 7;
       buckets[idx].total += 1;
-      if (r.status === "Present" || r.status === "Half Day") buckets[idx].hit += 1;
+      if (r.status === "Present") buckets[idx].hit += 1;
     });
     return buckets
       .filter((b) => b.total > 0)
@@ -145,7 +145,6 @@ export default function Attendance() {
         <Card><p className="font-display text-xl font-bold text-success">{summary.Present}</p><p className="text-[11px] text-slate-text/60 mt-1">Present</p></Card>
         <Card><p className="font-display text-xl font-bold text-alert">{summary.Absent}</p><p className="text-[11px] text-slate-text/60 mt-1">Absent</p></Card>
         <Card><p className="font-display text-xl font-bold text-info">{summary.Leave}</p><p className="text-[11px] text-slate-text/60 mt-1">Leave</p></Card>
-        <Card><p className="font-display text-xl font-bold text-amber-700">{summary["Half Day"]}</p><p className="text-[11px] text-slate-text/60 mt-1">Half Day</p></Card>
       </div>
 
       <Card

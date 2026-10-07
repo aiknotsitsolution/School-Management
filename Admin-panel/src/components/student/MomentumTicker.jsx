@@ -35,9 +35,7 @@ export default function MomentumTicker({
     const out = [];
 
     if (attendance.length > 0) {
-      const present = attendance.filter(
-        (a) => a.status === "Present" || a.status === "Half Day",
-      ).length;
+      const present = attendance.filter((a) => a.status === "Present").length;
       out.push({
         icon: CheckCircle2,
         tone: "text-emerald-600",

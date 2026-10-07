@@ -16,7 +16,7 @@ export const LEVELS = [
   { level: 6, title: "Legend", min: 1400 },
 ];
 
-const isPresent = (a) => a?.status === "Present" || a?.status === "Half Day";
+const isPresent = (a) => a?.status === "Present";
 
 function isoOf(value) {
   const d = new Date(value);

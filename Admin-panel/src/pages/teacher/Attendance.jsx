@@ -3,7 +3,6 @@ import {
   X,
   Save,
   UserCheck,
-  UserX,
   CalendarCheck,
   Clock3,
 } from "lucide-react";
@@ -31,7 +30,6 @@ import { useTeacherContext, todayISO, fmtDate } from "./useTeacherContext";
 const STATUS_CONFIG = {
   Present: { label: "P", full: "Present", tone: "success", active: "bg-success text-white border-success" },
   Absent: { label: "A", full: "Absent", tone: "alert", active: "bg-alert text-white border-alert" },
-  "Half Day": { label: "HD", full: "Half Day", tone: "warning", active: "bg-warning text-white border-warning" },
   Leave: { label: "L", full: "Leave", tone: "info", active: "bg-info text-white border-info" },
 };
 
@@ -105,7 +103,7 @@ export default function Attendance() {
   };
 
   const counts = useMemo(() => {
-    const c = { Present: 0, Absent: 0, "Half Day": 0, Leave: 0, Unmarked: 0 };
+    const c = { Present: 0, Absent: 0, Leave: 0, Unmarked: 0 };
     (students || []).forEach((s) => {
       const st = marks[s._id];
       if (st) c[st] = (c[st] || 0) + 1;
@@ -229,9 +227,9 @@ export default function Attendance() {
         />
         <StatCard
           icon={Clock3}
-          label="Half Day"
-          value={String(counts["Half Day"])}
-          sub="Marked as late today"
+          label="Leave"
+          value={String(counts.Leave)}
+          sub="Marked on leave today"
           accent="info"
         />
       </div>
@@ -294,7 +292,7 @@ export default function Attendance() {
                 disabled={!students.length}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-paper text-slate-text hover:bg-black/5 disabled:opacity-50"
               >
-                Mark all {status === "Half Day" ? "Half Day" : status}
+                Mark all {status}
               </button>
             ))}
           </div>
@@ -360,7 +358,6 @@ export default function Attendance() {
             <div className="text-[12.5px] text-slate-text/70">
               Present <strong className="text-success">{counts.Present}</strong>
               {" · "}Absent <strong className="text-alert">{counts.Absent}</strong>
-              {" · "}Half Day <strong className="text-amber-700">{counts["Half Day"]}</strong>
               {" · "}Leave <strong className="text-info">{counts.Leave}</strong>
             </div>
             <Button variant="primary" onClick={saveAttendance} disabled={saving}>

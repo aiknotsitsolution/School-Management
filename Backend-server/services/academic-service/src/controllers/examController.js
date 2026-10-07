@@ -546,22 +546,18 @@ async function buildReportCard(req, opts) {
       let present = 0;
       let absent = 0;
       let leave = 0;
-      let halfDays = 0;
       for (const row of rows) {
         if (row.status === "Present") present += 1;
         else if (row.status === "Absent") absent += 1;
         else if (row.status === "Leave") leave += 1;
-        else if (row.status === "Half Day") halfDays += 1;
       }
       const workingDays = rows.length;
-      const attended = present + halfDays * 0.5;
       attendance = {
         present,
         absent,
         leave,
-        halfDays,
         workingDays,
-        pct: +((attended / workingDays) * 100).toFixed(1),
+        pct: +((present / workingDays) * 100).toFixed(1),
         window: window ? { startDate: window.startDate, endDate: window.endDate } : null,
       };
     }
