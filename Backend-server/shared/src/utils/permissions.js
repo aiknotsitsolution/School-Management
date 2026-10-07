@@ -45,7 +45,7 @@ const STAFF_PERMISSIONS = {
   ],
   accountant: [
     "dashboard:view", "staff:read", "students:read", "fees:read", "fees:collect",
-    "fees:structure", "fees:reports", "reports:view", "attendance:read",
+    "fees:structure", "fees:reports", "sessions:read", "reports:view", "attendance:read",
     "accounting:read", "accounting:journal",
     "notices:read", "notices:publish",
     "leaves:apply", "payroll:view",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { CalendarDays, CheckCircle2, Flag, Play, Plus, Save, Trash2, X } from "lucide-react";
 import { PageIntro, Card, Button, Input, Pill, toast } from "../components/UI";
 import { api } from "../lib/api";
@@ -25,6 +25,10 @@ const validate = (form) => {
 export default function AcademicSessions() {
   const canWrite = usePermission("sessions:write");
   const [sessions, setSessions] = useState([]);
+  const visibleSessions = useMemo(
+    () => sessions.filter((session) => session.isCurrent),
+    [sessions],
+  );
   const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editId, setEditId] = useState(null);
@@ -147,16 +151,16 @@ export default function AcademicSessions() {
         bodyClassName="p-0"
         action={
           <div className="flex items-center gap-2 text-[12px] text-slate-text/70">
-            <CalendarDays size={14} /> {sessions.length} scheduled
+            <CalendarDays size={14} /> {visibleSessions.length} active
           </div>
         }
       >
         {loading ? (
           <div className="p-6 text-[13px] text-slate-text/70">Loading sessions...</div>
-        ) : sessions.length === 0 ? (
+        ) : visibleSessions.length === 0 ? (
           <div className="p-6 text-center">
             <p className="text-[13px] text-slate-text mb-3">
-              No academic sessions defined yet. Create the first one and it becomes the current session.
+              No active academic session is currently configured. Create or activate one to continue.
             </p>
             {canWrite && (
               <Button onClick={openAdd}>
@@ -166,7 +170,7 @@ export default function AcademicSessions() {
           </div>
         ) : (
           <div className="divide-y divide-slate-200">
-            {sessions.map((session) => (
+            {visibleSessions.map((session) => (
               <div key={session._id} className="flex flex-col sm:flex-row sm:items-center gap-3 px-5 py-4">
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">

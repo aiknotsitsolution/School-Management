@@ -2,8 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useSelector } from "react-redux";
 import { api } from "../lib/api";
 import { hasPermission } from "../lib/permissions";
-import { sessionLabel } from "../lib/session";
-import { selectSchool, selectUser } from "../store/selectors";
+import { selectUser } from "../store/selectors";
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import {
   Plus,
@@ -104,11 +103,6 @@ function emptyConcessionForm() {
 
 const inr = (value) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 
-const currentSession = () => {
-  const year = new Date().getFullYear();
-  return `${year}-${String(year + 1).slice(2)}`;
-};
-
 // Small stat tile inside the student summary (keeps the Card markup readable).
 function SummaryStat({ label, value, sub, tone }) {
   return (
@@ -142,48 +136,42 @@ function SummaryStat({ label, value, sub, tone }) {
 // head by head, with the receipt trail underneath. Managers (fees:structure)
 // can create the package from the class structure and edit it in place.
 // ---------------------------------------------------------------------------
-function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSaved }) {
+function StudentFeeSummary({ students, activeSession, feeTypeOptions, canEdit, onSaved }) {
   const [studentId, setStudentId] = useState("");
-  const [sessionFilter, setSessionFilter] = useState("");
   const [summary, setSummary] = useState(null);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const [requestState, setRequestState] = useState({ key: "", error: "" });
   const [busy, setBusy] = useState(false);
   const [editing, setEditing] = useState(false);
   const [heads, setHeads] = useState([]);
-  const [planSession, setPlanSession] = useState("");
 
   useEffect(() => {
-    if (!studentId) {
-      setSummary(null);
-      setError("");
-      setEditing(false);
-      return undefined;
-    }
+    if (!studentId || !activeSession) return undefined;
+    const key = `${studentId}\u0000${activeSession}`;
     let cancelled = false;
-    setLoading(true);
-    setError("");
     api.fees.plans
-      .summary(studentId, sessionFilter || "")
+      .summary(studentId, activeSession)
       .then(({ data }) => {
         if (!cancelled) {
           setSummary(data);
           setEditing(false);
+          setRequestState({ key, error: "" });
         }
       })
       .catch((err) => {
-        if (!cancelled) setError(err.message || "Could not load the fee summary");
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setRequestState({ key, error: err.message || "Could not load the fee summary" });
+        }
       });
     return () => {
       cancelled = true;
     };
-  }, [studentId, sessionFilter]);
+  }, [activeSession, studentId]);
 
+  const requestKey = `${studentId}\u0000${activeSession}`;
+  const loading = Boolean(studentId && activeSession && requestState.key !== requestKey);
+  const error = requestState.key === requestKey ? requestState.error : "";
   const refresh = async () => {
-    const { data } = await api.fees.plans.summary(studentId, sessionFilter || "");
+    const { data } = await api.fees.plans.summary(studentId, activeSession);
     setSummary(data);
   };
 
@@ -192,10 +180,7 @@ function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSave
     try {
       // Response body is { success, created, data } — `created` is top level, the
       // plan document lives under `data`.
-      const res = await api.fees.plans.ensure({
-        studentId,
-        session: planSession || sessionFilter || summary?.session || currentSession(),
-      });
+      const res = await api.fees.plans.ensure({ studentId, session: activeSession });
       toast(
         res && res.created
           ? "Fee package created from the class fee structure"
@@ -220,7 +205,6 @@ function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSave
         active: head.active !== false,
       })),
     );
-    setPlanSession(plan?.session || sessionFilter || summary?.session || currentSession());
     setEditing(true);
   };
 
@@ -248,7 +232,7 @@ function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSave
       } else {
         await api.fees.plans.create({
           studentId,
-          session: planSession || currentSession(),
+          session: activeSession,
           class: summary?.class || undefined,
           heads: cleaned,
         });
@@ -276,16 +260,15 @@ function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSave
         // side by side are ~400px, wider than the card body at that size.
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 max-w-full">
           <Select
-            value={sessionFilter}
-            onChange={(event) => setSessionFilter(event.target.value)}
+            value={activeSession}
+            disabled
             className="w-full sm:w-36"
           >
-            <option value="">Default session</option>
-            {sessions.map((s) => (
-              <option key={s} value={s}>
-                {s}
-              </option>
-            ))}
+            {activeSession ? (
+              <option value={activeSession}>{activeSession}</option>
+            ) : (
+              <option value="">No active session</option>
+            )}
           </Select>
           <Select
             value={studentId}
@@ -309,13 +292,17 @@ function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSave
         </p>
       )}
 
-      {studentId && loading && (
+      {studentId && activeSession && loading && (
         <p className="py-8 text-center text-[13px] text-slate-text/60">Loading summary…</p>
       )}
 
-      {studentId && !loading && error && <p className="py-4 text-sm text-alert">{error}</p>}
+      {studentId && !activeSession && (
+        <p className="py-4 text-sm text-alert">No active academic session is configured</p>
+      )}
 
-      {studentId && !loading && !error && summary && (
+      {studentId && activeSession && !loading && error && <p className="py-4 text-sm text-alert">{error}</p>}
+
+      {studentId && activeSession && !loading && !error && summary && (
         <div className="space-y-5">
           <div>
             <p className="text-[13px] font-semibold text-ink">
@@ -641,7 +628,6 @@ function StudentFeeSummary({ students, sessions, feeTypeOptions, canEdit, onSave
 
 export default function FeesCollection() {
   const user = useSelector(selectUser);
-  const school = useSelector(selectSchool);
   const canStructure = hasPermission(user, "fees:structure");
   const canCollect = hasPermission(user, "fees:collect");
 
@@ -673,7 +659,7 @@ export default function FeesCollection() {
   const [editingStructure, setEditingStructure] = useState(null);
   const [structureForm, setStructureForm] = useState(emptyStructureForm());
   const [structureBusy, setStructureBusy] = useState(false);
-  const [sessionFilter, setSessionFilter] = useState("");
+  const [activeSession, setActiveSession] = useState("");
 
   const [showInvoiceModal, setShowInvoiceModal] = useState(false);
   const [invoiceForm, setInvoiceForm] = useState({
@@ -717,29 +703,47 @@ export default function FeesCollection() {
       .catch(() => setRecon(null));
   }, [reconFrom, reconTo]);
 
-  const reload = () => {
-    Promise.all([
-      api.students.list("limit=1000"),
-      api.fees.structures.list().catch(() => ({ data: [] })),
-      api.fees.invoices.list().catch(() => ({ data: [] })),
-      api.fees.payments.list().catch(() => ({ data: [] })),
-      api.fees.orders.list("limit=50").catch(() => ({ data: [] })),
-      api.fees.concessions.list().catch(() => ({ data: [] })),
-    ])
-      .then(([studentResponse, structureResponse, invoiceResponse, paymentResponse, orderResponse, concessionResponse]) => {
-        setStudents((studentResponse.data || []).map((item) => ({
-          ...item,
-          id: item._id,
-        })));
-        setStructures(structureResponse.data || []);
-        setInvoices(invoiceResponse.data || []);
-        setPayments(paymentResponse.data || []);
-        setPaymentSummary(paymentResponse.paymentSummary || null);
-        setOrders(orderResponse.data || []);
-        setConcessions(concessionResponse.data || []);
-        setLoadError("");
-      })
-      .catch((err) => setLoadError(err.message));
+  const reload = async () => {
+    let currentSessionLoaded = false;
+    try {
+      const { data: currentSessionData } = await api.sessions.current();
+      currentSessionLoaded = true;
+      const currentName = currentSessionData?.name || "";
+      setActiveSession(currentName);
+      const structureQuery = new URLSearchParams({
+        session: currentName || "__no_active_session__",
+      }).toString();
+      const [
+        studentResponse,
+        structureResponse,
+        invoiceResponse,
+        paymentResponse,
+        orderResponse,
+        concessionResponse,
+      ] = await Promise.all([
+        api.students.list("limit=1000"),
+        api.fees.structures.list(structureQuery),
+        api.fees.invoices.list().catch(() => ({ data: [] })),
+        api.fees.payments.list().catch(() => ({ data: [] })),
+        api.fees.orders.list("limit=50").catch(() => ({ data: [] })),
+        api.fees.concessions.list().catch(() => ({ data: [] })),
+      ]);
+      setStudents((studentResponse.data || []).map((item) => ({
+        ...item,
+        id: item._id,
+      })));
+      setStructures(structureResponse.data || []);
+      setInvoices(invoiceResponse.data || []);
+      setPayments(paymentResponse.data || []);
+      setPaymentSummary(paymentResponse.paymentSummary || null);
+      setOrders(orderResponse.data || []);
+      setConcessions(concessionResponse.data || []);
+      setLoadError("");
+    } catch (err) {
+      if (!currentSessionLoaded) setActiveSession("");
+      setStructures([]);
+      setLoadError(err.message || "Could not load the active academic session");
+    }
   };
 
   const confirmOrderManually = async (order) => {
@@ -906,9 +910,8 @@ export default function FeesCollection() {
   }, [enrichedPayments, query]);
 
   const distinctSessions = useMemo(() => {
-    const set = new Set(structures.map((s) => s.session).filter(Boolean));
-    return [...set].sort();
-  }, [structures]);
+    return activeSession ? [activeSession] : [];
+  }, [activeSession]);
 
   const distinctFeeTypes = useMemo(() => {
     const set = new Set(structures.map((s) => s.feeType).filter(Boolean));
@@ -916,9 +919,9 @@ export default function FeesCollection() {
   }, [structures]);
 
   const filteredStructures = useMemo(() => {
-    if (!sessionFilter) return structures;
-    return structures.filter((s) => s.session === sessionFilter);
-  }, [structures, sessionFilter]);
+    if (!activeSession) return [];
+    return structures.filter((structure) => structure.session === activeSession);
+  }, [activeSession, structures]);
 
   const stats = useMemo(() => {
     const collected = Number(paymentSummary?.netCollected || 0);
@@ -1060,8 +1063,12 @@ export default function FeesCollection() {
   };
 
   const openNewStructure = () => {
+    if (!activeSession) {
+      toast("Activate an academic session before creating a fee structure", "error");
+      return;
+    }
     setEditingStructure(null);
-    setStructureForm({ ...emptyStructureForm(), session: sessionLabel(school) || "" });
+    setStructureForm({ ...emptyStructureForm(), session: activeSession });
     setShowStructureModal(true);
   };
 
@@ -1080,15 +1087,17 @@ export default function FeesCollection() {
 
   const handleSaveStructure = async () => {
     const amount = Number(structureForm.amount);
+    const session = activeSession.trim();
     const payload = {
       ...structureForm,
       amount,
+      session,
     };
     if (!payload.class || !payload.feeType) {
       toast("Class and fee type are required", "error");
       return;
     }
-    if (!String(payload.session || "").trim()) {
+    if (!session) {
       toast("Session is required", "error");
       return;
     }
@@ -1138,17 +1147,19 @@ export default function FeesCollection() {
   };
 
   const handlePreviewInvoices = async () => {
+    const session = activeSession.trim();
     if (!invoiceForm.class || !invoiceForm.feeType) {
       toast("Class and fee type are required", "error");
       return;
     }
-    if (!String(invoiceForm.session || "").trim()) {
+    if (!session) {
       toast("Session is required", "error");
       return;
     }
     setInvoiceBusy(true);
     try {
-      const { data } = await api.fees.invoices.generatePreview(invoiceForm);
+      const payload = { ...invoiceForm, session };
+      const { data } = await api.fees.invoices.generatePreview(payload);
       setInvoicePreview(data);
       setInvoiceStep("preview");
     } catch (err) {
@@ -1165,6 +1176,7 @@ export default function FeesCollection() {
       toast("No new invoices to generate", "info");
       return;
     }
+    const session = activeSession.trim();
     setInvoiceBusy(true);
     try {
       await api.fees.invoices.generateConfirm({
@@ -1172,7 +1184,7 @@ export default function FeesCollection() {
           studentId: r.studentId,
           class: invoiceForm.class,
           feeType: invoiceForm.feeType,
-          session: invoiceForm.session,
+          session,
           // Server re-applies concessions on the GROSS amount — never post the
           // already-netted figure or a student would be discounted twice.
           amount: r.grossAmount != null ? r.grossAmount : r.amount,
@@ -1266,6 +1278,14 @@ export default function FeesCollection() {
               <Button
                 variant="primary"
                 onClick={() => {
+                  if (!activeSession) {
+                    toast("Activate an academic session before generating invoices", "error");
+                    return;
+                  }
+                  setInvoiceForm((prev) => ({
+                    ...prev,
+                    session: activeSession,
+                  }));
                   setShowInvoiceModal(true);
                   setInvoiceStep("form");
                   setInvoicePreview(null);
@@ -1327,7 +1347,7 @@ export default function FeesCollection() {
       {/* One place: per-student package vs billed vs collected vs balance. */}
       <StudentFeeSummary
         students={students}
-        sessions={distinctSessions}
+        activeSession={activeSession}
         feeTypeOptions={feeTypeOptions}
         canEdit={canStructure}
         onSaved={reload}
@@ -1339,8 +1359,7 @@ export default function FeesCollection() {
           <div className="flex items-center gap-2">
             {distinctSessions.length > 0 && (
               <Select
-                value={sessionFilter}
-                onChange={(e) => setSessionFilter(e.target.value)}
+                value={activeSession}
                 className="text-[12px] py-1.5 px-2.5"
               >
                 <option value="">All Sessions</option>
@@ -1359,7 +1378,7 @@ export default function FeesCollection() {
       >
         {filteredStructures.length === 0 ? (
           <p className="py-10 text-center text-[13px] text-slate-text/60">
-            No fee structures{sessionFilter ? ` for session ${sessionFilter}` : ""} configured yet
+            No fee structures{activeSession ? ` for session ${activeSession}` : ""} configured yet
           </p>
         ) : (
           <div className="overflow-x-auto -mx-5">
@@ -1443,73 +1462,7 @@ export default function FeesCollection() {
       </Card>
 
       {/* Payment order verification queue (manual modes + gateway follow-ups) */}
-      <Card
-        title="Payment Orders"
-        action={
-          <span className="text-[12px] text-slate-text/70">
-            {orders.filter((o) => o.status === "awaiting_manual_confirm").length} awaiting verification
-          </span>
-        }
-      >
-        {orders.length === 0 ? (
-          <p className="py-6 text-center text-[13px] text-slate-text/60">
-            No payment orders yet. Orders created from Online Fees Payment appear here.
-          </p>
-        ) : (
-          <div className="overflow-x-auto -mx-5">
-            <table className="w-full text-[13px]">
-              <thead>
-                <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
-                  <th className="px-5 py-2.5 font-semibold">Student</th>
-                  <th className="px-5 py-2.5 font-semibold">Amount</th>
-                  <th className="px-5 py-2.5 font-semibold">Mode</th>
-                  <th className="px-5 py-2.5 font-semibold">Status</th>
-                  <th className="px-5 py-2.5 font-semibold">Created</th>
-                  <th className="px-5 py-2.5 font-semibold text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map((order) => (
-                  <tr key={order._id} className="border-b border-slate-100 hover:bg-paper/60">
-                    <td className="px-5 py-3 font-semibold text-ink">{order.admissionNo || order.studentId}</td>
-                    <td className="px-5 py-3 text-slate-text font-medium">₹{Number(order.amount).toLocaleString("en-IN")}</td>
-                    <td className="px-5 py-3 text-slate-text">{order.gatewayMode}</td>
-                    <td className="px-5 py-3">
-                      <Pill tone={ORDER_STATUS_TONES[order.status] || "neutral"}>
-                        {ORDER_STATUS_LABELS[order.status] || order.status}
-                      </Pill>
-                    </td>
-                    <td className="px-5 py-3 text-slate-text whitespace-nowrap">{formatDate(order.createdAt)}</td>
-                    <td className="px-5 py-3 text-right">
-                      <div className="inline-flex items-center gap-2">
-                        {order.status === "awaiting_manual_confirm" && canCollect && (
-                          <button
-                            onClick={() => confirmOrderManually(order)}
-                            disabled={orderBusyId === order._id}
-                            className="inline-flex items-center gap-1 text-[12px] font-medium text-emerald-600 hover:underline disabled:opacity-50"
-                          >
-                            <Loader2 size={13} className={orderBusyId === order._id ? "animate-spin" : "hidden"} />
-                            Mark Received
-                          </button>
-                        )}
-                        {order.status !== "completed" && order.status !== "cancelled" && (
-                          <button
-                            onClick={() => cancelOrder(order)}
-                            disabled={orderBusyId === order._id}
-                            className="inline-flex items-center gap-1 text-[12px] font-medium text-alert hover:underline disabled:opacity-50"
-                          >
-                            Cancel
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
+    
 
       <Card
         title="Reconciliation"
@@ -1630,7 +1583,7 @@ export default function FeesCollection() {
             <Button
               variant="outline"
               onClick={() => {
-                setConcessionForm(emptyConcessionForm());
+                setConcessionForm({ ...emptyConcessionForm(), session: activeSession || "" });
                 setShowConcessionModal(true);
               }}
             >
@@ -1983,30 +1936,17 @@ export default function FeesCollection() {
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">Session *</label>
-                  {distinctSessions.length > 0 ? (
-                    <Select
-                      value={concessionForm.session}
-                      onChange={(event) =>
-                        setConcessionForm({ ...concessionForm, session: event.target.value })
-                      }
-                      className="w-full"
-                    >
-                      <option value="">Select session…</option>
-                      {distinctSessions.map((session) => (
-                        <option key={session} value={session}>
-                          {session}
-                        </option>
-                      ))}
-                    </Select>
-                  ) : (
-                    <Input
-                      placeholder="e.g. 2025-26"
-                      value={concessionForm.session}
-                      onChange={(event) =>
-                        setConcessionForm({ ...concessionForm, session: event.target.value })
-                      }
-                    />
-                  )}
+                  <Select
+                    value={activeSession}
+                    disabled
+                    className="w-full"
+                  >
+                    {activeSession ? (
+                      <option value={activeSession}>{activeSession}</option>
+                    ) : (
+                      <option value="">No active session</option>
+                    )}
+                  </Select>
                 </div>
                 <div>
                   <label className="text-[12px] font-semibold text-ink mb-1.5 block">Fee Type</label>
@@ -2375,10 +2315,8 @@ export default function FeesCollection() {
                   </label>
                   <Input
                     placeholder="e.g. 2026-27"
-                    value={structureForm.session}
-                    onChange={(e) =>
-                      setStructureForm({ ...structureForm, session: e.target.value })
-                    }
+                    value={activeSession}
+                    disabled
                   />
                 </div>
                 <div>
@@ -2552,10 +2490,8 @@ export default function FeesCollection() {
                       </label>
                       <Input
                         placeholder="e.g. 2026-27"
-                        value={invoiceForm.session}
-                        onChange={(e) =>
-                          setInvoiceForm({ ...invoiceForm, session: e.target.value })
-                        }
+                        value={activeSession}
+                        disabled
                       />
                     </div>
                   </div>
