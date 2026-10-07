@@ -66,14 +66,12 @@ const ATT_DOT = {
   Present: "bg-emerald-500",
   Absent: "bg-rose-500",
   Leave: "bg-blue-600",
-  "Half Day": "bg-amber-500",
 };
 
 const ATT_VALUE = {
   Present: "text-emerald-600",
   Absent: "text-rose-500",
   Leave: "text-blue-600",
-  "Half Day": "text-amber-500",
 };
 
 const BADGE = {
@@ -536,12 +534,12 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
 
   const attPct = useMemo(() => {
     if (!attendance.length) return 0;
-    const counted = attendance.filter((a) => a.status === "Present" || a.status === "Half Day").length;
+    const counted = attendance.filter((a) => a.status === "Present").length;
     return Math.round((counted / attendance.length) * 100);
   }, [attendance]);
 
   const byStatus = useMemo(() => {
-    const m = { Present: 0, Absent: 0, Leave: 0, "Half Day": 0 };
+    const m = { Present: 0, Absent: 0, Leave: 0 };
     attendance.forEach((a) => {
       if (m[a.status] !== undefined) m[a.status] += 1;
     });
@@ -566,7 +564,7 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
       }
       const b = buckets.get(key);
       b.total += 1;
-      if (a.status === "Present" || a.status === "Half Day") b.hit += 1;
+      if (a.status === "Present") b.hit += 1;
     });
     return [...buckets.values()]
       .sort((a, b) => a.order - b.order)

@@ -55,24 +55,21 @@ import {
 
 const WEEK = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-const STATUSES = ["Present", "Absent", "Leave", "Half Day"];
+const STATUSES = ["Present", "Absent", "Leave"];
 const STATUS_STYLE = {
   Present: "bg-emerald-100 text-emerald-700 ring-1 ring-inset ring-emerald-200",
   Absent: "bg-rose-100 text-rose-600 ring-1 ring-inset ring-rose-200",
   Leave: "bg-sky-100 text-sky-700 ring-1 ring-inset ring-sky-200",
-  "Half Day": "bg-amber-100 text-amber-700 ring-1 ring-inset ring-amber-200",
 };
 const STATUS_DOT = {
   Present: "bg-emerald-500",
   Absent: "bg-rose-500",
   Leave: "bg-sky-500",
-  "Half Day": "bg-amber-500",
 };
 const STATUS_BAR = {
   Present: "bg-emerald-500",
   Absent: "bg-rose-500",
   Leave: "bg-sky-500",
-  "Half Day": "bg-amber-500",
 };
 
 function toMinutes(t) {
@@ -275,7 +272,7 @@ export default function TeacherDashboard() {
   const marked = Object.values(markMap).filter(Boolean);
   const presentCount = marked.filter((s) => s === "Present").length;
   const absentCount = marked.filter((s) => s === "Absent").length;
-  const leaveCount = marked.filter((s) => s === "Leave" || s === "Half Day").length;
+  const leaveCount = marked.filter((s) => s === "Leave").length;
   const unmarkedCount = students.length - marked.length;
 
   const todayIdx = new Date().getDay();
@@ -633,10 +630,10 @@ export default function TeacherDashboard() {
                     tone="text-rose-500"
                   />
                   <StatTile
-                    label="Leave / half"
+                    label="Leave"
                     value={leaveCount}
-                    dot={STATUS_DOT["Half Day"]}
-                    tone="text-amber-600"
+                    dot={STATUS_DOT.Leave}
+                    tone="text-sky-500"
                   />
                 </div>
 
@@ -801,9 +798,9 @@ export default function TeacherDashboard() {
                       { label: "Present today", value: presentCount, barClass: STATUS_BAR.Present },
                       { label: "Absent today", value: absentCount, barClass: STATUS_BAR.Absent },
                       {
-                        label: "Leave / half day",
+                        label: "On leave",
                         value: leaveCount,
-                        barClass: "bg-amber-500",
+                        barClass: STATUS_BAR.Leave,
                       },
                       { label: "Not marked", value: unmarkedCount, barClass: "bg-slate-300" },
                     ]}

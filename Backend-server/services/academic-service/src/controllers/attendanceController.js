@@ -263,7 +263,6 @@ const getAttendanceReport = async (req, res) => {
           presentCount: { $sum: { $cond: [{ $eq: ["$status", "Present"] }, 1, 0] } },
           absentCount: { $sum: { $cond: [{ $eq: ["$status", "Absent"] }, 1, 0] } },
           leaveCount: { $sum: { $cond: [{ $eq: ["$status", "Leave"] }, 1, 0] } },
-          halfDayCount: { $sum: { $cond: [{ $eq: ["$status", "Half Day"] }, 1, 0] } },
         },
       },
     ]);
@@ -319,7 +318,6 @@ const getAttendanceReport = async (req, res) => {
       presentCount,
       absentCount: totals?.absentCount || 0,
       leaveCount: totals?.leaveCount || 0,
-      halfDayCount: totals?.halfDayCount || 0,
       percentage: totalRecords ? ((presentCount / totalRecords) * 100).toFixed(2) : "0.00",
       classWise,
       dailyTrend,

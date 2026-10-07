@@ -194,9 +194,7 @@ const generateReportCardPdf = (data, school = {}, student = null) =>
         .fontSize(8)
         .font("Helvetica")
         .text(
-          `Attendance detail: ${data.attendance.present} present · ${data.attendance.absent} absent · ${data.attendance.leave} leave${
-            data.attendance.halfDays ? ` · ${data.attendance.halfDays} half days` : ""
-          } across ${data.attendance.workingDays} marked days.`,
+          `Attendance detail: ${data.attendance.present} present · ${data.attendance.absent} absent · ${data.attendance.leave} leave across ${data.attendance.workingDays} marked days.`,
           centerX,
           y,
           { width: pageW, align: "center" },

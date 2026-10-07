@@ -121,12 +121,11 @@ export const SERIES = [
 /** Attendance status → colour key. Shared by the donut, trend and status strip. */
 export const ATT_STATUS = {
   Present: { key: "success", soft: "#DCFCE7", label: "Present" },
-  "Half Day": { key: "warning", soft: "#FEF3C7", label: "Half day" },
   Leave: { key: "info", soft: "#DBEAFE", label: "On leave" },
   Absent: { key: "alert", soft: "#FEE2E2", label: "Absent" },
 };
 
-export const ATT_ORDER = ["Present", "Half Day", "Leave", "Absent"];
+export const ATT_ORDER = ["Present", "Leave", "Absent"];
 
 /** Marks a percentage as strong / on-track / needs-work. */
 export function performanceBand(pct) {

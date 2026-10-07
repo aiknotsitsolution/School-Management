@@ -175,7 +175,7 @@ Dashboard
 │  ├── Timetable Builder                       │
 │  │   └── Weekly schedule per class/section   │
 │  ├── Student Attendance                      │
-│  │   ├── Daily marking (P/A/HD/L)            │
+│  │   ├── Daily marking (P/A/L)                 │
 │  │   ├── Bulk mark (All Present/Absent)      │
 │  │   ├── Class/Section picker                │
 │  │   ├── Attendance trend chart              │
@@ -314,7 +314,7 @@ Dashboard
 - Student count for assigned classes
 - Active Class switcher (for teachers with multiple classes)
 - Stat Cards: Students, Present Today, Upcoming Exams, Open Homework
-- Mark Attendance (today's students with P/A/HD/L toggles)
+- Mark Attendance (today's students with P/A/L toggles)
 - Today's Timetable
 - Homework & Assignments
 - Upcoming Exams
@@ -332,7 +332,7 @@ Teacher Dashboard
 │  ├── My Class                             │
 │  │   └── View assigned students           │
 │  ├── Student Attendance                   │
-│  │   ├── Mark Present/Absent/Leave/HalfDay│
+│  │   ├── Mark Present/Absent/Leave        │
 │  │   └── Save Attendance                  │
 │  ├── Timetable                            │
 │  │   └── View my weekly schedule          │
@@ -380,7 +380,7 @@ Teacher Dashboard
 - Attendance %, Average Marks %
 - Stat Cards: Attendance, Homework, Exams, Fees Due
 - Today's Classes (timetable)
-- Attendance Overview (Present/Absent/Leave/Half Day)
+- Attendance Overview (Present/Absent/Leave)
 - Homework & Assignments
 - Upcoming Exams
 - Recent Results
@@ -596,7 +596,7 @@ My Profile
 | 10 | **Register Teacher** | Staff | 3-step wizard: Basics → Role → Subjects |
 | 11 | **Assign Teacher** | Staff | Assign to class and subject |
 | 12 | **Build Timetable** | Academics | Create weekly schedule |
-| 13 | **Mark Attendance** | Attendance | Daily attendance — mark students P/A/HD |
+| 13 | **Mark Attendance** | Attendance | Daily attendance — mark students P/A/L |
 | 14 | **Create Fee Structure** | Fees | Set fee types per class |
 | 15 | **Generate Invoices** | Fees | Bulk generate invoices |
 | 16 | **Collect Fees** | Fees | Record payment, print receipt |

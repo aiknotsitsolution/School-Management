@@ -287,7 +287,6 @@ export default function ReportCardSheet({
             <p className="text-[10px] text-slate-text/60 mt-0.5">
               {attendance.present}P · {attendance.absent}A ·{" "}
               {attendance.leave}L
-              {attendance.halfDays ? ` · ${attendance.halfDays}H` : ""}
             </p>
           )}
         </div>

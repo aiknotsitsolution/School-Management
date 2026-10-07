@@ -1,12 +1,10 @@
 import { useMemo, useState, useEffect } from "react";
 import {
   Check,
-  X,
   Download,
   Search,
   UserCheck,
   UserX,
-  Timer,
   CheckCircle2,
   AlertCircle,
   Users,
@@ -51,17 +49,36 @@ const CLASS_OPTIONS_FALLBACK = [
 
 const SECTION_OPTIONS_FALLBACK = ["A", "B", "C"];
 
-const DEFAULT_STATUSES = ["Present", "Absent", "Half Day", "Leave"];
-const STATUS_DISPLAY = { present: "Present", absent: "Absent", late: "Half Day", half_day: "Half Day", leave: "Leave" };
-const STATUS_TONES = { present: "success", absent: "alert", late: "warning", half_day: "warning", leave: "info" };
-const STATUS_LABELS = { present: "P", absent: "A", late: "HD", half_day: "HD", leave: "L" };
+// Student register statuses — mirrors the Attendance enum in academic-service
+// (Present / Absent / Leave). The student tab deliberately ignores the shared
+// attendance-status master: "Half Day" was removed from student attendance, so
+// a master entry can never put an unsupported button back on this register.
+const STUDENT_STATUSES = ["Present", "Absent", "Leave"];
+// Staff marking keeps Half Day — staff-service payroll still computes on it.
+const STAFF_STATUSES = ["Present", "Absent", "Half Day", "Leave"];
+const DEFAULT_STATUSES = STUDENT_STATUSES;
+const STATUS_DISPLAY = { present: "Present", absent: "Absent", half_day: "Half Day", leave: "Leave" };
+const STATUS_TONES = { present: "success", absent: "alert", half_day: "warning", leave: "info" };
+const STATUS_LABELS = { present: "P", absent: "A", half_day: "HD", leave: "L" };
 const ACTIVE_STYLES = {
   present: "bg-success text-white border-success",
   absent: "bg-alert text-white border-alert",
-  late: "bg-warning text-white border-warning",
   half_day: "bg-warning text-white border-warning",
   leave: "bg-info text-white border-info",
 };
+
+const statusKey = (name) => String(name).trim().toLowerCase().replace(/\s+/g, "_");
+
+const buildStatusConfig = (names) =>
+  names.reduce((cfg, name) => {
+    const key = statusKey(name);
+    cfg[key] = {
+      label: STATUS_LABELS[key] || name.charAt(0),
+      full: STATUS_DISPLAY[key] || name,
+      tone: STATUS_TONES[key] || "neutral",
+    };
+    return cfg;
+  }, {});
 
 function formatClassLabel(c) {
   if (["Nursery", "LKG", "UKG"].includes(c)) return c;
@@ -208,17 +225,18 @@ export default function Attendance() {
   const [staffPageSize, setStaffPageSize] = useState(20);
   const todayStr = new Date().toISOString().slice(0, 10);
 
+  const studentStatusConfig = useMemo(() => buildStatusConfig(STUDENT_STATUSES), []);
+
+  // Staff buttons stay master-driven but always include Half Day. The catalog
+  // has historically carried "HD" / "Late" spellings of the same bucket (both
+  // rendered as "Half Day" here), so they are collapsed into one entry instead
+  // of showing the HD button twice.
   const statusConfig = useMemo(() => {
-    const cfg = {};
-    attendanceStatusOptions.forEach((name) => {
-      const key = name.toLowerCase().replace(/\s+/g, "_");
-      cfg[key] = {
-        label: STATUS_LABELS[key] || name.charAt(0),
-        full: STATUS_DISPLAY[key] || name,
-        tone: STATUS_TONES[key] || "neutral",
-      };
-    });
-    return cfg;
+    const collapse = (name) =>
+      ["hd", "half_day", "late"].includes(statusKey(name)) ? "Half Day" : String(name).trim();
+    return buildStatusConfig(
+      [...new Set([...attendanceStatusOptions, ...STAFF_STATUSES].map(collapse))],
+    );
   }, [attendanceStatusOptions]);
   const CLASS_OPTIONS_WITH_ALL = useMemo(() => ["All", ...CLASS_OPTIONS], [CLASS_OPTIONS]);
   const filteredSections = useMemo(() => {
@@ -296,14 +314,15 @@ export default function Attendance() {
       )
       .forEach((record) => {
         const key = admToId[record.studentId] || record.studentId;
+        // Anything that is not Absent/Leave (including a stray Half Day row
+        // from before the status was removed) reads as Present, the register's
+        // default.
         existing[key] =
-          record.status === "Present"
-            ? "present"
-            : record.status === "Absent"
-              ? "absent"
-              : record.status === "Leave"
-                ? "leave"
-                : "late";
+          record.status === "Absent"
+            ? "absent"
+            : record.status === "Leave"
+              ? "leave"
+              : "present";
       });
     setMarks(existing);
     setSaved(false);
@@ -409,13 +428,13 @@ export default function Attendance() {
 
   const counts = useMemo(() => {
     const c = {};
-    Object.keys(statusConfig).forEach((k) => { c[k] = 0; });
+    Object.keys(studentStatusConfig).forEach((k) => { c[k] = 0; });
     list.forEach((s) => {
       const st = getStatus(s.id);
       c[st] = (c[st] || 0) + 1;
     });
     return c;
-  }, [list, marks, statusConfig]);
+  }, [list, marks, studentStatusConfig]);
 
   const handleSave = async () => {
     if (list.length === 0) {
@@ -432,7 +451,6 @@ export default function Attendance() {
           status: {
             present: "Present",
             absent: "Absent",
-            half_day: "Half Day",
             leave: "Leave",
           }[getStatus(student.id)],
         })),
@@ -464,7 +482,7 @@ export default function Attendance() {
       s.class,
       s.section,
       s.roll,
-      (statusConfig[getStatus(s.id)] || {}).full || "Present",
+      (studentStatusConfig[getStatus(s.id)] || {}).full || "Present",
     ]);
     const csv = [headers, ...rows]
       .map((row) =>
@@ -617,10 +635,10 @@ export default function Attendance() {
 
       {/* Summary Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {Object.entries(statusConfig).slice(0, 4).map(([key, cfg]) => (
+        {Object.entries(studentStatusConfig).map(([key, cfg]) => (
           <StatCard
             key={key}
-            icon={key === "present" ? UserCheck : key === "absent" ? UserX : key === "late" ? Timer : CheckCircle2}
+            icon={key === "present" ? UserCheck : key === "absent" ? UserX : CheckCircle2}
             label={cfg.full}
             value={String(counts[key] || 0)}
             sub={
@@ -702,9 +720,6 @@ export default function Attendance() {
               <span className="w-2.5 h-2.5 rounded-full bg-alert" /> Absent
             </span>
             <span className="flex items-center gap-1">
-              <span className="w-2.5 h-2.5 rounded-full bg-warning" /> Half Day
-            </span>
-            <span className="flex items-center gap-1">
               <span className="w-2.5 h-2.5 rounded-full bg-info" /> Leave
             </span>
           </div>
@@ -752,7 +767,7 @@ export default function Attendance() {
                   </div>
 
                   <div className="flex gap-1.5 shrink-0">
-                    {Object.entries(statusConfig).map(([key, cfg]) => {
+                    {Object.entries(studentStatusConfig).map(([key, cfg]) => {
                       const isActive = status === key;
                       return (
                         <button
@@ -809,7 +824,7 @@ export default function Attendance() {
             <div className="text-[12.5px] text-slate-text/70">
               Showing <strong className="text-ink">{list.length}</strong>{" "}
               students{" "}
-              {Object.entries(statusConfig).map(([key, cfg]) => (
+              {Object.entries(studentStatusConfig).map(([key, cfg]) => (
                 <span key={key}>
                   · {cfg.full}{" "}
                   <strong className={`text-${cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "warning" ? "amber-700" : cfg.tone === "primary" ? "primary-dark" : "info"}`}>
@@ -835,7 +850,7 @@ export default function Attendance() {
       {/* Quick tip */}
       <div className="rounded-xl bg-ink/5 border border-ink/10 px-4 py-3.5 text-[13px] text-slate-text">
         <strong className="text-ink">Tip:</strong> Default status is Present.
-        Use the P / A / HD / L buttons to mark each student. Changes are sent to
+        Use the P / A / L buttons to mark each student. Changes are sent to
         the backend when you click <strong>Save Attendance</strong>.
       </div>
         </>
@@ -851,7 +866,7 @@ export default function Attendance() {
             {Object.entries(statusConfig).slice(0, 4).map(([key, cfg]) => (
               <StatCard
                 key={key}
-                icon={key === "present" ? UserCheck : key === "absent" ? UserX : key === "late" ? Timer : CheckCircle2}
+                icon={key === "present" ? UserCheck : key === "absent" ? UserX : CheckCircle2}
                 label={cfg.full}
                 value={String(staffCounts[key] || 0)}
                 sub={
