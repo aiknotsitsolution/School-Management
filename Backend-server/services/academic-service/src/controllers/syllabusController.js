@@ -86,6 +86,34 @@ const getSyllabus = async (req, res) => {
       }
       filter.class = sectionClassName;
       filter.sectionId = section._id;
+    } else if (req.query.section) {
+      // scopeStudentSchedule({ section: true }) pins a student to their own
+      // section NAME, but syllabus rows are keyed by sectionId — resolve the
+      // name to an id. Always narrowing: it can only shrink the class read.
+      const sectionName = String(req.query.section).trim();
+      if (!sectionName || !filter.class) {
+        return res.status(400).json({ success: false, message: "A valid class and section are required" });
+      }
+      const schoolClass = await SchoolClass.findOne(
+        withBranchScope(req, { schoolId: req.tenantId, active: true, name: filter.class }),
+      ).lean();
+      if (!schoolClass) {
+        return res.status(400).json({ success: false, message: "Selected class is inactive or does not belong to this school" });
+      }
+      // Section names repeat across classes (every class has an "A"), so match
+      // the class too — by classId when the link exists, else by class name.
+      const candidates = await SchoolSection.find(
+        withBranchScope(req, { schoolId: req.tenantId, active: true, name: sectionName }),
+      ).lean();
+      const section = candidates.find(
+        (candidate) =>
+          (candidate.classId && String(candidate.classId) === String(schoolClass._id)) ||
+          (!candidate.classId && candidate.className === schoolClass.name),
+      );
+      if (!section) {
+        return res.status(400).json({ success: false, message: "Selected section is inactive or does not belong to this school" });
+      }
+      filter.sectionId = section._id;
     }
     if (req.query.subject) filter.subject = req.query.subject;
     if (req.query.term) filter.term = req.query.term;

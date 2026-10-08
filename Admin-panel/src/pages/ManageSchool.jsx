@@ -9,6 +9,7 @@ import {
   School,
   BookOpen,
   BookPlus,
+  ClipboardList,
   Layers,
   Wallet,
   X,
@@ -38,6 +39,7 @@ import {
 import { Pagination } from "../components/Pagination";
 import CustomMasterModal from "../components/CustomMasterModal";
 import BulkSubjectModal from "../components/BulkSubjectModal";
+import SyllabusManage from "./SyllabusManage";
 import { selectSchool, selectUser } from "../store/selectors";
 import { setSchool as setSchoolAction } from "../store/authSlice";
 import { hasPermission } from "../lib/permissions";
@@ -49,6 +51,7 @@ const TABS = [
   { key: "classes", label: "Classes", singular: "Class", icon: School, kind: "classes" },
   { key: "sections", label: "Sections", singular: "Section", icon: Layers, kind: "sections" },
   { key: "subjects", label: "Subjects", singular: "Subject", icon: BookOpen, kind: "subjects" },
+  { key: "syllabus", label: "Syllabus", singular: "Syllabus", icon: ClipboardList, kind: "syllabus" },
   { key: "fee-types", label: "Fee Types", singular: "Fee Type", icon: Wallet, kind: "fee-types" },
   { key: "attendance-statuses", label: "Attendance Statuses", singular: "Attendance Status", icon: CheckCircle2, kind: "attendance-statuses" },
   { key: "leave-types", label: "Leave Types", singular: "Leave Type", icon: CalendarDays, kind: "leave-types" },
@@ -777,6 +780,16 @@ export default function ManageSchool() {
   const [sectionsClassId, setSectionsClassId] = useState("");
   const [subjectsClassId, setSubjectsClassId] = useState("");
   const [subjectsSectionId, setSubjectsSectionId] = useState("");
+  const [syllabusCount, setSyllabusCount] = useState(0);
+
+  // Syllabus is managed by SyllabusManage, not the shared exam-masters list —
+  // fetch its row count separately so the tab tile can show a real number.
+  useEffect(() => {
+    api.syllabus
+      .list("")
+      .then((res) => setSyllabusCount(res?.data?.length || 0))
+      .catch(() => setSyllabusCount(0));
+  }, []);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
@@ -978,6 +991,7 @@ export default function ManageSchool() {
             classes: classCount,
             sections: sectionCount,
             subjects: subjectCount,
+            syllabus: syllabusCount,
             "fee-types": feeTypeCount,
             "attendance-statuses": attendanceStatusCount,
             "leave-types": leaveTypeCount,
@@ -1023,6 +1037,8 @@ export default function ManageSchool() {
         </Card>
       ) : activeTab === "school-board" ? (
         <SchoolBoardForm school={school} />
+      ) : activeTab === "syllabus" ? (
+        <SyllabusManage embedded />
       ) : (
         <Card
         title={tab?.label}

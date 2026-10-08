@@ -615,7 +615,7 @@ export const STUDENT_NAV = [
       {
         to: "/student/syllabus",
         icon: Description,
-        label: "Syllabus",
+        label: "My Syllabus",
         roles: ["student"],
       },
       {

@@ -2,12 +2,30 @@ import { useCallback, useEffect, useState } from "react";
 import { ClipboardList, ListPlus, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { PageIntro, Card, Button, Input, Select, toast } from "../components/UI";
 import { LoadingBlock, EmptyBlock, ErrorBlock } from "../components/StateViews";
+import { Pagination } from "../components/Pagination";
 import { usePermission } from "../lib/permissions"; 
 import { useMasterOptions } from "../hooks/useMasterOptions";
 import { api } from "../lib/api";
 
 const TERMS = ["Term 1", "Term 2", "Full Year"];
 const STATUSES = ["pending", "in_progress", "completed"];
+
+// Tab order for classes: Nursery/LKG/UKG first, then 1…10 numerically (not
+// lexicographically, so 2 comes before 10), then the 11/12 streams.
+const stageOrder = { nursery: 0, lkg: 1, ukg: 2 };
+const classSortKey = (name) => {
+  const raw = String(name || "").trim();
+  const lower = raw.toLowerCase();
+  if (lower in stageOrder) return [stageOrder[lower], 0, ""];
+  const digits = raw.match(/^\d+/);
+  if (digits) return [3, Number(digits[0]), raw];
+  return [4, 0, raw];
+};
+const byClassOrder = (a, b) => {
+  const ka = classSortKey(a);
+  const kb = classSortKey(b);
+  return ka[0] - kb[0] || ka[1] - kb[1] || ka[2].localeCompare(kb[2]);
+};
 
 const EMPTY_FORM = {
   class: "",
@@ -21,7 +39,7 @@ const EMPTY_FORM = {
 const isActiveMaster = (item) =>
   item && ("status" in item ? item.status === "active" : item.active !== false);
 
-export default function SyllabusManage() {
+export default function SyllabusManage({ embedded = false }) {
   const canWrite = usePermission("homework:write");
 
   const { rawItems: classMasters } = useMasterOptions("classes", []);
@@ -43,16 +61,18 @@ export default function SyllabusManage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [saving, setSaving] = useState(false);
 
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(20);
+
+  // One unfiltered fetch: the class tabs need a per-class count (a class with
+  // no syllabus yet must still appear as a 0 tab) and switching tabs should be
+  // instant. The server still scopes the read — a student only ever gets their
+  // own section, a teacher their assigned class.
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const params = new URLSearchParams();
-      if (filters.class) params.set("class", filters.class);
-      if (filters.sectionId) params.set("sectionId", filters.sectionId);
-      if (filters.subject) params.set("subject", filters.subject);
-      if (filters.term) params.set("term", filters.term);
-      const res = await api.syllabus.list(params.toString());
+      const res = await api.syllabus.list();
       setRows(res?.data || []);
     } catch (err) {
       setError(err.message || "Could not load syllabus");
@@ -60,7 +80,7 @@ export default function SyllabusManage() {
     } finally {
       setLoading(false);
     }
-  }, [filters]);
+  }, []);
 
   useEffect(() => {
     load();
@@ -83,6 +103,34 @@ export default function SyllabusManage() {
     activeSubjects.filter((subject) => String(subject.sectionId) === String(sectionId));
   const formSubjects = subjectsForSection(form.sectionId);
   const filterSubjects = subjectsForSection(filters.sectionId);
+  // Class tabs: every active class in teaching order, each carrying its row
+  // count so a class that has no syllabus yet is still reachable and creatable.
+  const classTabs = [...classOptions].sort(byClassOrder);
+  const pickClass = (value) => {
+    setPage(1);
+    setFilters((current) => ({ ...current, class: value, sectionId: "", subject: "" }));
+  };
+  const countsByClass = rows.reduce((acc, row) => {
+    const key = row.class || "";
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+  const visibleRows = rows.filter(
+    (row) =>
+      (!filters.class || row.class === filters.class) &&
+      (!filters.sectionId || String(row.sectionId) === String(filters.sectionId)) &&
+      (!filters.subject || row.subject === filters.subject) &&
+      (!filters.term || row.term === filters.term),
+  );
+
+  // Pagination. The table renders class → section → subject with rowSpan, so the
+  // slice happens FIRST and the page is then re-grouped: a rowSpan can never
+  // point at a row on another page. A class split across a page break simply
+  // shows its class cell again at the top of the next page.
+  const totalPages = Math.max(1, Math.ceil(visibleRows.length / pageSize));
+  const safePage = Math.min(page, totalPages);
+  const pageRows = visibleRows.slice((safePage - 1) * pageSize, safePage * pageSize);
+
   const toggleSectionSubject = (sectionId, subjectName) => {
     setForm((current) => {
       const selected = current.sectionSubjects[sectionId] || [];
@@ -98,6 +146,7 @@ export default function SyllabusManage() {
 
   const setFilter = (key) => (e) => {
     const value = e.target.value;
+    setPage(1);
     setFilters((current) => ({
       ...current,
       [key]: value,
@@ -108,7 +157,8 @@ export default function SyllabusManage() {
 
   const openCreate = () => {
     setEditing(null);
-    setForm({ ...EMPTY_FORM, sectionSubjects: {}, topics: [] });
+    // Start in the class whose tab is open, so "add here" lands on this class.
+    setForm({ ...EMPTY_FORM, class: filters.class, sectionSubjects: {}, topics: [] });
     setShowForm(true);
   };
 
@@ -222,7 +272,7 @@ export default function SyllabusManage() {
 
   const doneCount = (row) =>
     (row.topics || []).filter((t) => t.status === "completed").length;
-  const groupedRows = rows.reduce((classes, row) => {
+  const groupedRows = pageRows.reduce((classes, row) => {
     let classGroup = classes.find((group) => group.name === row.class);
     if (!classGroup) {
       classGroup = { name: row.class, sections: [] };
@@ -244,30 +294,67 @@ export default function SyllabusManage() {
 
   return (
     <div className="space-y-5">
-      <PageIntro
-        eyebrow="Academics"
-        title="Syllabus"
-        description="Plan the term-wise syllabus for every class and subject."
-        right={
-          canWrite && (
+      {embedded ? (
+        canWrite && (
+          <div className="flex justify-end">
             <Button variant="primary" onClick={openCreate}>
               <Plus size={15} /> Add Syllabus
             </Button>
-          )
-        }
-      />
+          </div>
+        )
+      ) : (
+        <PageIntro
+          eyebrow="Academics"
+          title="Syllabus"
+          description="Plan the term-wise syllabus for every class and subject."
+          right={
+            canWrite && (
+              <Button variant="primary" onClick={openCreate}>
+                <Plus size={15} /> Add Syllabus
+              </Button>
+            )
+          }
+        />
+      )}
+
+      {/* Class tabs — the class selector for this page. Counts come from the
+          one full fetch, so a class with no syllabus yet still shows 0 and can
+          be opened to add its first rows. */}
+      <div className="flex flex-wrap items-center gap-2">
+        {[{ label: "All classes", value: "" }, ...classTabs.map((name) => ({ label: name, value: name }))].map(
+          (tab) => {
+            const active = filters.class === tab.value;
+            const count = tab.value ? countsByClass[tab.value] || 0 : rows.length;
+            return (
+              <button
+                key={tab.value || "__all__"}
+                type="button"
+                onClick={() => pickClass(tab.value)}
+                aria-current={active ? "page" : undefined}
+                className={`inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-[13px] font-semibold transition-colors ${
+                  active
+                    ? "border-primary bg-primary text-white"
+                    : "border-slate-200 bg-white text-slate-text hover:border-primary/40 hover:text-ink"
+                }`}
+              >
+                {tab.label}
+                <span
+                  className={`rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                    active ? "bg-white/20 text-white" : "bg-paper text-slate-text/70"
+                  }`}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          },
+        )}
+      </div>
 
       <Card
+        title="Syllabus list"
         action={
           <div className="flex flex-wrap items-center gap-2">
-            <Select value={filters.class} onChange={setFilter("class")} className="w-32">
-              <option value="">All classes</option>
-              {classOptions.map((c) => (
-                <option key={c} value={c}>
-                  {c}
-                </option>
-              ))}
-            </Select>
             <Select
               value={filters.sectionId}
               onChange={setFilter("sectionId")}
@@ -312,7 +399,7 @@ export default function SyllabusManage() {
           <LoadingBlock label="Loading syllabus…" />
         ) : error ? (
           <ErrorBlock message={error} onRetry={load} />
-        ) : rows.length === 0 ? (
+        ) : visibleRows.length === 0 ? (
           <EmptyBlock
             title={
               filters.class || filters.subject || filters.term
@@ -420,6 +507,31 @@ export default function SyllabusManage() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loading && !error && visibleRows.length > 0 && (
+          <>
+            <div className="flex items-center justify-between pt-2">
+              <p className="text-[12px] text-slate-text/55">
+                Showing {visibleRows.length === 0 ? 0 : (safePage - 1) * pageSize + 1}–
+                {Math.min(safePage * pageSize, visibleRows.length)} of {visibleRows.length}
+              </p>
+              <Select
+                value={pageSize}
+                onChange={(e) => {
+                  setPageSize(Number(e.target.value));
+                  setPage(1);
+                }}
+                className="text-[12px]"
+              >
+                {[10, 20, 50, 100].map((n) => (
+                  <option key={n} value={n}>
+                    {n} / page
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <Pagination page={safePage} pages={totalPages} onPage={setPage} info={false} />
+          </>
         )}
       </Card>
 
