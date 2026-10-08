@@ -28,7 +28,7 @@ const getEvents = async (req, res) => {
     const filter = scopeQuery(Event, req, { schoolId: req.tenantId, $or: [{ audience: req.user.role }, { audience: "all" }] })
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      Event.find(filter).sort({ date: 1 }).skip(skip).limit(limit),
+      Event.find(filter).sort({ date: 1, _id: 1 }).skip(skip).limit(limit),
       Event.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

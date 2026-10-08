@@ -147,7 +147,7 @@ const listThreads = async (req, res) => {
     // staff roles: school-wide (no extra scoping)
     const { page, limit, skip } = paginate(req.query, { fallback: 20, max: 100 });
     const [data, total] = await Promise.all([
-      Thread.find(filter).sort({ lastMessageAt: -1 }).skip(skip).limit(limit),
+      Thread.find(filter).sort({ lastMessageAt: -1, _id: -1 }).skip(skip).limit(limit),
       Thread.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

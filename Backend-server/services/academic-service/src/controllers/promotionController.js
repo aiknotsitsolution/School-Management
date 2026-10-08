@@ -290,7 +290,7 @@ const history = async (req, res) => {
     if (status) filter.status = status;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      StudentAcademicRecord.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      StudentAcademicRecord.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
       StudentAcademicRecord.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

@@ -56,7 +56,7 @@ const listDiary = async (req, res) => {
     }
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      DiaryEntry.find(filter).sort({ date: -1, createdAt: -1 }).skip(skip).limit(limit),
+      DiaryEntry.find(filter).sort({ date: -1, createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       DiaryEntry.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

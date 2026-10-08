@@ -224,7 +224,7 @@ const getAttendance = async (req, res) => {
     }
     const { page, limit, skip } = paginate(req.query);
     const [data, total, present] = await Promise.all([
-      Attendance.find(filter).sort({ date: -1 }).skip(skip).limit(limit),
+      Attendance.find(filter).sort({ date: -1, _id: -1 }).skip(skip).limit(limit),
       Attendance.countDocuments(filter),
       studentId ? Attendance.countDocuments({ ...filter, status: "Present" }) : Promise.resolve(0),
     ]);

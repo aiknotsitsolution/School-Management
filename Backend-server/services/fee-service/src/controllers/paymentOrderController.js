@@ -369,7 +369,7 @@ const getOrders = async (req, res) => {
 
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      PaymentOrder.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      PaymentOrder.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       PaymentOrder.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

@@ -120,7 +120,7 @@ const getInvoices = async (req, res) => {
     if (session) filter.session = session;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      FeeInvoice.find(filter).sort({ dueDate: 1 }).skip(skip).limit(limit),
+      FeeInvoice.find(filter).sort({ dueDate: 1, _id: 1 }).skip(skip).limit(limit),
       FeeInvoice.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

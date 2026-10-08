@@ -70,7 +70,7 @@ const getPlans = async (req, res) => {
 
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      StudentFeePlan.find(filter).sort({ session: -1, updatedAt: -1 }).skip(skip).limit(limit).lean(),
+      StudentFeePlan.find(filter).sort({ session: -1, updatedAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
       StudentFeePlan.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
@@ -285,7 +285,7 @@ const getStudentSummary = async (req, res) => {
         studentId,
         ...(session ? { session } : {}),
       }),
-    ).sort({ dueDate: 1 }).lean();
+    ).sort({ dueDate: 1, _id: 1 }).lean();
 
     const invoiceIds = invoices.map((inv) => inv._id);
     const payments = invoiceIds.length

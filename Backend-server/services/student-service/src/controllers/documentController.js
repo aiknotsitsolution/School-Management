@@ -105,7 +105,7 @@ const getDocuments = async (req, res) => {
 
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      StudentDocument.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      StudentDocument.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       StudentDocument.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

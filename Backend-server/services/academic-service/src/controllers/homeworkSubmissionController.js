@@ -145,7 +145,7 @@ const getMySubmissions = async (req, res) => {
     if (req.query.homeworkId) filter.homeworkId = req.query.homeworkId;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      HomeworkSubmission.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      HomeworkSubmission.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       HomeworkSubmission.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
@@ -256,7 +256,7 @@ const homeworkFilter = withBranchScope(req, { schoolId: req.tenantId });
 
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      HomeworkSubmission.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      HomeworkSubmission.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       HomeworkSubmission.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

@@ -97,7 +97,7 @@ const getNotices = async (req, res) => {
     }
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      Notice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Notice.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       Notice.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

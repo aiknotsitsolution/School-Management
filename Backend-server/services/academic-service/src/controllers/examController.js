@@ -190,7 +190,7 @@ const getExams = async (req, res) => {
     if (cceTool) filter.cceTool = cceTool;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      Exam.find(filter).sort({ date: 1 }).skip(skip).limit(limit),
+      Exam.find(filter).sort({ date: 1, _id: 1 }).skip(skip).limit(limit),
       Exam.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
@@ -382,7 +382,7 @@ const getMarks = async (req, res) => {
       if (session) filter.session = session;
       const { page, limit, skip } = paginate(req.query);
       const [data, total] = await Promise.all([
-        Marks.find(filter).sort({ studentId: 1 }).skip(skip).limit(limit),
+        Marks.find(filter).sort({ studentId: 1, _id: 1 }).skip(skip).limit(limit),
         Marks.countDocuments(filter),
       ]);
       return res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
@@ -395,7 +395,7 @@ const getMarks = async (req, res) => {
     if (session) filter.session = session;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      Marks.find(filter).sort({ studentId: 1 }).skip(skip).limit(limit),
+      Marks.find(filter).sort({ studentId: 1, _id: 1 }).skip(skip).limit(limit),
       Marks.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

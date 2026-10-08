@@ -106,7 +106,7 @@ const getAttendance = async (req, res) => {
     const skip = (p - 1) * l;
 
     const [data, total] = await Promise.all([
-      StaffAttendance.find(filter).sort({ date: -1 }).skip(skip).limit(l),
+      StaffAttendance.find(filter).sort({ date: -1, _id: -1 }).skip(skip).limit(l),
       StaffAttendance.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, page: p, limit: l, pages: Math.ceil(total / l), data });

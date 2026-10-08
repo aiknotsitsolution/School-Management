@@ -72,7 +72,7 @@ const getLeaves = async (req, res) => {
     if (req.query.status) filter.status = req.query.status;
     const { page, limit, skip } = paginate(req.query);
     const [leaves, total] = await Promise.all([
-      Leave.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Leave.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       Leave.countDocuments(filter),
     ]);
     res.json({ success: true, count: leaves.length, total, ...pageInfo(total, page, limit), data: leaves });

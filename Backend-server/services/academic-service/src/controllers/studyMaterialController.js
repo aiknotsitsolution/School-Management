@@ -41,7 +41,7 @@ const getMaterials = async (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
     const skip = (page - 1) * limit;
     const [data, total] = await Promise.all([
-      StudyMaterial.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      StudyMaterial.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       StudyMaterial.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, page, pages: Math.ceil(total / limit), data });

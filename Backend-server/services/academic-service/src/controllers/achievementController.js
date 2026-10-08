@@ -62,7 +62,7 @@ const listAchievements = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const [data, total] = await Promise.all([
-      Achievement.find(filter).sort({ date: -1 }).skip(skip).limit(limitNum).lean(),
+      Achievement.find(filter).sort({ date: -1, _id: -1 }).skip(skip).limit(limitNum).lean(),
       Achievement.countDocuments(filter),
     ]);
 

@@ -145,7 +145,7 @@ const getHomework = async (req, res) => {
     }
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      Homework.find(filter).sort({ dueDate: 1 }).skip(skip).limit(limit),
+      Homework.find(filter).sort({ dueDate: 1, _id: 1 }).skip(skip).limit(limit),
       Homework.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });
@@ -169,7 +169,7 @@ const getMyHomework = async (req, res) => {
     });
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      Homework.find(filter).sort({ dueDate: 1 }).skip(skip).limit(limit),
+      Homework.find(filter).sort({ dueDate: 1, _id: 1 }).skip(skip).limit(limit),
       Homework.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

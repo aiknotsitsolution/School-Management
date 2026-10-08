@@ -98,7 +98,7 @@ const getPayroll = async (req, res) => {
     if (req.query.month) filter.month = req.query.month;
     if (req.query.year) filter.year = req.query.year;
     const [records, total] = await Promise.all([
-      Payroll.find(filter).sort({ year: -1, createdAt: -1 }).skip(skip).limit(limit),
+      Payroll.find(filter).sort({ year: -1, createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       Payroll.countDocuments(filter),
     ]);
     res.json({ success: true, count: records.length, total, ...pageInfo(total, page, limit), data: records });

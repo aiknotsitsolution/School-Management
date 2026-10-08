@@ -253,7 +253,7 @@ const listMyInvoices = async (req, res) => {
     }
 
     const [invoices, total] = await Promise.all([
-      BillingInvoice.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      BillingInvoice.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
       BillingInvoice.countDocuments(filter),
     ]);
 

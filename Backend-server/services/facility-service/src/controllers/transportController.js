@@ -234,7 +234,7 @@ const getRoutes = async (req, res) => {
     if (studentId) filter.assignedStudents = studentId;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      BusRoute.find(filter).skip(skip).limit(limit),
+      BusRoute.find(filter).sort({ _id: -1 }).skip(skip).limit(limit),
       BusRoute.countDocuments(filter),
     ]);
 

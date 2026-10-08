@@ -35,7 +35,7 @@ const getItems = async (req, res) => {
     if (category) filter.category = category;
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      InventoryItem.find(filter).skip(skip).limit(limit),
+      InventoryItem.find(filter).sort({ _id: -1 }).skip(skip).limit(limit),
       InventoryItem.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

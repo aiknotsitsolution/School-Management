@@ -40,7 +40,7 @@ const getRooms = async (req, res) => {
     }
     const { page, limit, skip } = paginate(req.query);
     const [data, total] = await Promise.all([
-      Hostel.find(filter).skip(skip).limit(limit),
+      Hostel.find(filter).sort({ _id: -1 }).skip(skip).limit(limit),
       Hostel.countDocuments(filter),
     ]);
     res.json({ success: true, count: data.length, total, ...pageInfo(total, page, limit), data });

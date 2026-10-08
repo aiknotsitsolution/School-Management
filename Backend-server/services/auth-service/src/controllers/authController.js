@@ -814,7 +814,7 @@ const listUsers = async (req, res) =>
     const skip = (p - 1) * l;
 
     const [users, total] = await Promise.all([
-      User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(l),
+      User.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(l),
       User.countDocuments(filter),
     ]);
     res.json({ success: true, count: users.length, total, page: p, limit: l, pages: Math.ceil(total / l), data: users.map(toPublicUser) });
@@ -1653,7 +1653,7 @@ const listSchools = async (req, res) =>
       filter.name = { $regex: String(req.query.q).trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" };
     }
     const [schools, total] = await Promise.all([
-      School.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      School.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       School.countDocuments(filter),
     ]);
     res.json({ success: true, count: schools.length, total, ...pageInfo(total, page, limit), data: schools });

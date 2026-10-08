@@ -52,7 +52,7 @@ const getNotifications = async (req, res) => {
     if (!isSuperAdmin) filter.schoolId = req.tenantId;
     if (unread === "true") filter.read = false;
     const [data, total] = await Promise.all([
-      Notification.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit),
+      Notification.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit),
       Notification.countDocuments(filter),
     ]);
     const unreadCount = await Notification.countDocuments(scopeQuery(Notification, req, {

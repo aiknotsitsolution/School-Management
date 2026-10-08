@@ -327,7 +327,7 @@ const listPlans = async (req, res) =>
     if (req.query.status === "inactive") filter.isActive = false;
     const { page, limit, skip } = paginate(req);
     const [plans, total] = await Promise.all([
-      Plan.find(filter).sort({ sortOrder: 1, createdAt: -1 }).skip(skip).limit(limit).lean(),
+      Plan.find(filter).sort({ sortOrder: 1, createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean(),
       Plan.countDocuments(filter),
     ]);
     res.json({ success: true, count: plans.length, total, page, limit, pages: Math.ceil(total / limit), data: plans });
@@ -1307,7 +1307,7 @@ const listPlatformUsers = async (req, res) =>
     }
 
     const total = await User.countDocuments(filter);
-    const docs = await User.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
+    const docs = await User.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean();
     res.json({ success: true, count: docs.length, total, page, pages: Math.ceil(total / limit) || 0, data: docs.map(toPlatformUserJson) });
   } catch (err)
   {
@@ -1410,7 +1410,7 @@ const listPlatformSchools = async (req, res) =>
     }
 
     const total = await School.countDocuments(filter);
-    const docs = await School.find(filter).sort({ createdAt: -1 }).skip(skip).limit(limit).lean();
+    const docs = await School.find(filter).sort({ createdAt: -1, _id: -1 }).skip(skip).limit(limit).lean();
     res.json({ success: true, count: docs.length, total, page, pages: Math.ceil(total / limit) || 0, data: docs.map(toSchoolJson) });
   } catch (err)
   {
