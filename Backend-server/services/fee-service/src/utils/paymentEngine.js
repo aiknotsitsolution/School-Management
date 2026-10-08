@@ -112,15 +112,29 @@ const completeOrder = async (order, { confirmedBy, paymentExtras = {} } = {}) =>
     },
     { new: true }
   );
-  if (!winner) return { already: true };
+  if (!winner) {
+    // A webhook (or a retried confirm) already completed this order. Hand back
+    // the payment that run minted, otherwise the caller is told "confirmed"
+    // with no receipt number to show the payer.
+    if (order.purpose !== "subscription_upgrade" && order.invoiceId) {
+      const payment = await Payment.findOne({
+        schoolId: order.schoolId,
+        invoiceId: order.invoiceId,
+        transactionId: order.providerOrderId || order.externalRef,
+      }).lean().catch(() => null);
+      return { already: true, payment: payment || null };
+    }
+    return { already: true };
+  }
 
   try {
+    let payment = null;
     if (winner.purpose === "subscription_upgrade") {
       await notifyAuthSubscriptionPaid(winner);
     } else {
-      await reconcileFeePayment(winner, paymentExtras);
+      payment = await reconcileFeePayment(winner, paymentExtras);
     }
-    return { already: false, order: winner };
+    return { already: false, order: winner, payment };
   } catch (err) {
     // Allow a later webhook/confirm to retry side effects for this order.
     await PaymentOrder.updateOne(
@@ -147,7 +161,7 @@ const reconcileFeePayment = async (order, extras = {}) => {
   const invoice = await FeeInvoice.findOne({ _id: order.invoiceId, schoolId: order.schoolId });
   if (!invoice) {
     console.error(`[fee-engine] invoice ${order.invoiceId} missing for completed order ${order._id}`);
-    return;
+    return null;
   }
   const transactionId = order.providerOrderId || order.externalRef;
   const existing = await Payment.findOne({
@@ -155,7 +169,9 @@ const reconcileFeePayment = async (order, extras = {}) => {
     invoiceId: invoice._id,
     transactionId,
   }).lean();
-  if (existing) return;
+  // Returned (not just skipped) so the confirm response can hand the caller the
+  // receipt number — the payer downloads their receipt from that same response.
+  if (existing) return existing;
 
   const payment = await createPaymentWithReceipt({
     schoolId: order.schoolId,
@@ -186,6 +202,7 @@ const reconcileFeePayment = async (order, extras = {}) => {
     await voidPayment(payment, `invoice ${invoice._id} rejected the order credit`);
     throw new Error(`Fee invoice ${invoice._id} could not be credited for order ${order._id}`);
   }
+  return payment;
 };
 
 // Subscription upgrades are applied by auth-service (single billing source).

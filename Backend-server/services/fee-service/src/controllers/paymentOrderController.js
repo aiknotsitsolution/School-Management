@@ -249,12 +249,31 @@ const initiateOrder = async (req, res) => {
 // signature (Razorpay order_id|payment_id HMAC with the school's/platform key
 // secret) — a forged confirm is cryptographically impossible. Webhooks remain
 // the primary path.
+// The receipt number belongs to the payer: whether the order completed on this
+// call or on an earlier one (webhook / retry), the confirm response must always
+// carry it, or the checkout has nothing to hand the payer.
+const paymentForOrder = async (order) => {
+  if (!order || order.purpose === "subscription_upgrade" || !order.invoiceId) return null;
+  try {
+    return await Payment.findOne({
+      schoolId: order.schoolId,
+      invoiceId: order.invoiceId,
+      transactionId: order.providerOrderId || order.externalRef,
+    }).lean();
+  } catch {
+    return null;
+  }
+};
+
 const confirmOrder = async (req, res) => {
   try {
     const order = await PaymentOrder.findOne(scopeQuery(PaymentOrder, req, { _id: req.params.id, schoolId: req.tenantId }));
     if (!order) return res.status(404).json({ success: false, message: "Order not found" });
     if (order.status === "completed") {
-      return res.json({ success: true, data: { order, note: "Already confirmed" } });
+      return res.json({
+        success: true,
+        data: { order, payment: await paymentForOrder(order), note: "Already confirmed" },
+      });
     }
     if (!["pending", "awaiting_confirmation"].includes(order.status)) {
       return res.status(400).json({ success: false, message: `Order is ${order.status}` });
@@ -276,7 +295,16 @@ const confirmOrder = async (req, res) => {
     const result = await engine.completeOrder(order, {
       confirmedBy: `signature:${req.body?.razorpay_payment_id || "verified"}`,
     });
-    res.json({ success: true, data: { order, note: result.already ? "Already confirmed" : "Confirmed" } });
+    // `payment` carries the minted receiptNo — the payer's checkout shows a
+    // Download Receipt button straight off this response.
+    res.json({
+      success: true,
+      data: {
+        order,
+        payment: result.payment || (await paymentForOrder(order)),
+        note: result.already ? "Already confirmed" : "Confirmed",
+      },
+    });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }
@@ -335,7 +363,11 @@ const manualConfirmOrder = async (req, res) => {
       },
     });
     const confirmed = await PaymentOrder.findById(order._id);
-    res.json({ success: true, data: { order: confirmed }, note: result.already ? "Already confirmed" : "Confirmed" });
+    res.json({
+      success: true,
+      data: { order: confirmed, payment: result.payment || (await paymentForOrder(order)) },
+      note: result.already ? "Already confirmed" : "Confirmed",
+    });
   } catch (err) {
     res.status(400).json({ success: false, message: err.message });
   }

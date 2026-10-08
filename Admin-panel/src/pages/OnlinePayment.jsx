@@ -45,12 +45,9 @@ const INVOICE_TONE = {
 };
 
 // Actions column copy for invoices that aren't settled yet — the invoice has
-// been raised, but View/Download only become available once it is Paid.
-const INVOICE_HINT = {
-  Unpaid: "Invoice generated · Pay this fee",
-  Overdue: "Payment overdue · Pay this fee",
-  Partial: "Part payment received · Pay the balance",
-};
+// been raised, so View/Download are available for every status: a Partial or
+// even Unpaid bill is still a document the payer may keep or dispute. The
+// status Pill beside it already says how much is left.
 
 const PICKER_PAGE_SIZE = 12;
 
@@ -119,6 +116,10 @@ export default function OnlinePayment() {
   // Transaction History → "View invoice": the PDF is fetched with the auth
   // token and shown in a modal (a plain /fees/:id/pdf URL can't carry it).
   const [invoicePreview, setInvoicePreview] = useState(null);
+  // Set straight off the confirm response: it hands back the freshly minted
+  // receipt, so the payer can save it immediately instead of hunting for it in
+  // a history table somewhere else.
+  const [paidReceipt, setPaidReceipt] = useState(null);
   // invoiceId -> { on, amount }: which fees go into the next order and for how
   // much. Defaults to "everything, full outstanding" so one click still pays
   // all dues; untick a row or trim its amount to pay only a part.
@@ -251,6 +252,7 @@ export default function OnlinePayment() {
     setStudent(s);
     setPickerOpen(false);
     setOrderNote(null);
+    setPaidReceipt(null);
   };
 
   const createOrder = async () => {
@@ -258,6 +260,7 @@ export default function OnlinePayment() {
     setCreating(true);
     setError("");
     setOrderNote(null);
+    setPaidReceipt(null);
     try {
       const created = [];
       for (const line of selectedLines) {
@@ -301,7 +304,11 @@ export default function OnlinePayment() {
           currency: chk.currency,
           description: "School fee payment",
         });
-        await api.fees.orders.confirm(orderId, payload);
+        const confirmed = await api.fees.orders.confirm(orderId, payload);
+        const receipt = confirmed?.data?.payment;
+        if (receipt?.receiptNo) {
+          setPaidReceipt({ receiptNo: receipt.receiptNo, amount: receipt.amount });
+        }
         toast("Payment confirmed", "success");
       } else if (chk) {
         if (chk.upiIntent || chk.upiId) setUpiCheckout({ ...chk, orderId });
@@ -332,6 +339,7 @@ export default function OnlinePayment() {
     setCreating(true);
     setError("");
     setOrderNote(null);
+    setPaidReceipt(null);
     try {
       const payload = { invoiceId: f._id, amount };
       if (payMode !== "auto") payload.mode = payMode;
@@ -399,6 +407,39 @@ export default function OnlinePayment() {
       {error && (
         <Card>
           <p className="text-sm text-red-600">{error}</p>
+        </Card>
+      )}
+
+      {/* Landing spot for the gateway receipt: the confirm response already
+          carries the minted receipt number, so the payer gets the download
+          the moment the money is credited. */}
+      {paidReceipt && (
+        <Card>
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="flex items-start gap-3">
+              <Receipt size={18} className="text-success mt-0.5 shrink-0" />
+              <div>
+                <p className="text-[13.5px] font-semibold text-ink">Payment received</p>
+                <p className="text-[12.5px] text-slate-text/80 mt-1">
+                  {paidReceipt.amount
+                    ? `₹${Number(paidReceipt.amount).toLocaleString("en-IN")} credited · `
+                    : ""}
+                  Receipt{" "}
+                  <span className="font-mono font-semibold text-ink">{paidReceipt.receiptNo}</span>
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() =>
+                api.fees.payments
+                  .downloadReceiptPdf(paidReceipt.receiptNo)
+                  .catch((e) => setError(e.message))
+              }
+            >
+              <Download size={14} /> Download receipt
+            </Button>
+          </div>
         </Card>
       )}
 
@@ -794,31 +835,26 @@ export default function OnlinePayment() {
                           {fmtDate(f.dueDate)}
                         </td>
                         <td className="py-2.5 text-right whitespace-nowrap">
-                          {f.status === "Paid" ? (
-                            <span className="inline-flex items-center gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => viewInvoice(f)}
-                                className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11.5px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
-                              >
-                                <Eye size={13} /> View invoice
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => downloadInvoice(f)}
-                                className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11.5px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
-                              >
-                                <Download size={13} /> Download invoice
-                              </button>
-                            </span>
-                          ) : (
-                            // Not settled yet — the invoice exists, but there is
-                            // nothing to keep until the fee is actually paid.
-                            <span className="inline-flex items-center gap-1.5 text-[11.5px] text-slate-text/70">
-                              <Receipt size={13} className="text-primary-dark/70 shrink-0" />
-                              {INVOICE_HINT[f.status] || INVOICE_HINT.Unpaid}
-                            </span>
-                          )}
+                          {/* Available for every status: the bill exists the
+                              moment it is raised, so there is no reason to
+                              withhold it until the last rupee lands. The status
+                              Pill in the previous column carries the balance. */}
+                          <span className="inline-flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => viewInvoice(f)}
+                              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11.5px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
+                            >
+                              <Eye size={13} /> View invoice
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => downloadInvoice(f)}
+                              className="rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11.5px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors inline-flex items-center gap-1.5"
+                            >
+                              <Download size={13} /> Download invoice
+                            </button>
+                          </span>
                         </td>
                       </tr>
                     );
