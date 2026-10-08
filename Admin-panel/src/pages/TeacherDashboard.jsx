@@ -276,7 +276,7 @@ export default function TeacherDashboard() {
   const unmarkedCount = students.length - marked.length;
 
   const todayIdx = new Date().getDay();
-  const todayPeriods = (timetable.find((t) => t.day === WEEK[todayIdx])?.periods || []).filter((p) => p.subject !== "Break");
+  const todayPeriods = timetable.find((t) => t.day === WEEK[todayIdx])?.periods || [];
   // Same rule as the student dashboard: the timetable says which days the school
   // runs (this one is Mon–Sat), so a hardcoded Sat/Sun check is only allowed to
   // choose the wording — never to hide a day that has periods.
@@ -287,7 +287,7 @@ export default function TeacherDashboard() {
     ? [...Array(7).keys()]
         .map((i) => WEEK[(todayIdx + 1 + i) % 7])
         .find((day) =>
-          (timetable.find((t) => t.day === day)?.periods || []).some((p) => p.subject !== "Break"),
+          (timetable.find((t) => t.day === day)?.periods || []).length > 0,
         )
     : null;
   const upcomingExams = exams.filter((e) => new Date(e.date) >= new Date()).sort((a, b) => new Date(a.date) - new Date(b.date));

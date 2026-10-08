@@ -591,7 +591,7 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
   const todayIdx = now.getDay();
   const nowMin = now.getHours() * 60 + now.getMinutes();
   const todayRow = timetable.find((t) => t.day === WEEK[todayIdx]);
-  const todayPeriods = (todayRow?.periods || []).filter((p) => p.subject !== "Break");
+  const todayPeriods = todayRow?.periods || [];
   // The timetable is the source of truth for which days the school runs — this
   // one is Mon–Sat, so a hardcoded Sat/Sun check used to report "weekend" on a
   // Saturday that has 5 periods and hide them. `isWeekendDay` now only picks
@@ -603,7 +603,7 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
     ? [...Array(7).keys()]
         .map((i) => WEEK[(todayIdx + 1 + i) % 7])
         .find((day) =>
-          (timetable.find((t) => t.day === day)?.periods || []).some((p) => p.subject !== "Break"),
+          (timetable.find((t) => t.day === day)?.periods || []).length > 0,
         )
     : null;
 

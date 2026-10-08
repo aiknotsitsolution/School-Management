@@ -86,6 +86,15 @@ export default function Timetable() {
     }
   }, [cls, section, rawSections]);
 
+  // The subject master is school-wide (one document per section), so the picker
+  // needs the section's own id to narrow its list down to this class-section.
+  const sectionId = useMemo(
+    () =>
+      rawSections.find((s) => s.className === cls && s.name === section)?._id ||
+      "",
+    [rawSections, cls, section],
+  );
+
   return (
     <div className="space-y-6">
       <PageIntro
@@ -119,7 +128,12 @@ export default function Timetable() {
         }
       />
 
-      <TimetableManager cls={cls} section={section} canWrite={canWrite} />
+      <TimetableManager
+        cls={cls}
+        section={section}
+        sectionId={sectionId}
+        canWrite={canWrite}
+      />
 
       <SubstitutionPanel cls={cls} section={section} canWrite={canWrite} />
     </div>

@@ -18,6 +18,20 @@ import { invalidateMasterCache } from "../../lib/masterCache";
 
 const DAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+// Non-academic slots the backend deliberately exempts from the subject catalog
+// (NON_ACADEMIC_PERIODS in academic-service/utils/masterRefs.js). Offered right
+// in the picker so adding a Break never creates a subject master.
+const NON_ACADEMIC_ITEMS = [
+  "Break",
+  "Lunch",
+  "Library",
+  "Assembly",
+  "Sports",
+  "Games",
+  "Free",
+  "Recess",
+].map((name) => ({ _id: `non-academic:${name.toLowerCase()}`, name }));
+
 function sortPeriods(periods) {
   return [...(periods || [])].sort((a, b) =>
     String(a.startTime || "").localeCompare(String(b.startTime || "")),
@@ -33,7 +47,12 @@ function timeLabel(value) {
   return `${hour}:${String(m ?? 0).padStart(2, "0")} ${period}`;
 }
 
-export default function TimetableManager({ cls, section, canWrite = false }) {
+export default function TimetableManager({
+  cls,
+  section,
+  sectionId = "",
+  canWrite = false,
+}) {
   const [timetable, setTimetable] = useState([]);
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -103,6 +122,38 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
     () => [...byDay.values()].reduce((sum, periods) => sum + periods.length, 0),
     [byDay],
   );
+
+  // The subject master holds one document per section, so an unfiltered picker
+  // shows every subject in the school — once for each section — which is why
+  // Nursery-A offered Accountancy seven times. Narrow it to this section.
+  const filterSubjectItems = (items) => {
+    if (!sectionId) return items;
+    const linked = items.filter(
+      (item) => String(item.sectionId || "") === sectionId,
+    );
+    // A section with nothing linked yet (masters not adopted) keeps the old list.
+    if (!linked.length) return items;
+    const seen = new Set();
+    const scoped = [];
+    linked.forEach((item) => {
+      const key = String(item.name || "")
+        .toLowerCase()
+        .replace(/\s+/g, " ")
+        .trim();
+      if (!key || seen.has(key)) return;
+      seen.add(key);
+      scoped.push(item);
+    });
+    // Never hide the value the form is already holding (a period being edited,
+    // or a custom subject that was just created for this section).
+    const chosen = items.find(
+      (item) => String(item._id) === String(draft.subjectId),
+    );
+    if (chosen && !scoped.some((item) => String(item._id) === String(chosen._id))) {
+      scoped.push(chosen);
+    }
+    return scoped;
+  };
 
   // `days` accepts a single day (the + on a day header) or an array (the page
   // level Add Period button opens with the whole week ticked).
@@ -688,6 +739,9 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
                   searchLabel="Search subjects..."
                   value={draft.subjectId}
                   fallbackLabel={draft.subject}
+                  filterItems={filterSubjectItems}
+                  extraItems={NON_ACADEMIC_ITEMS}
+                  extraItemsLabel="Non-academic"
                   onChange={(id, item) =>
                     setDraft((d) => ({
                       ...d,
@@ -1001,6 +1055,11 @@ export default function TimetableManager({ cls, section, canWrite = false }) {
           kind={customModal.kind}
           label={customModal.label}
           showDescription={customModal.showDescription}
+          extraPayload={
+            customModal.kind === "subjects" && sectionId
+              ? { sectionId, className: cls }
+              : {}
+          }
           onClose={() => setCustomModal(null)}
           onCreated={(created) => {
             invalidateMasterCache(customModal.kind);

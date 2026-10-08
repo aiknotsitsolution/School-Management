@@ -11,6 +11,9 @@ import { toast } from "./UI";
  *
  * Pass `initialItem` to edit an existing record (uses the update endpoint);
  * without it the modal creates a new record.
+ *
+ * `extraPayload` pins values the modal cannot ask the user for — e.g. the
+ * subject being added belongs to the class-section the caller is editing.
  */
 export default function CustomMasterModal({
   kind,
@@ -21,6 +24,7 @@ export default function CustomMasterModal({
   initialItem = null,
   parentFields = [],
   defaultParentValues = {},
+  extraPayload = {},
   onClose,
   onCreated,
   onUpdated,
@@ -48,6 +52,7 @@ export default function CustomMasterModal({
         .forEach((field) => {
           payload[field.name] = parentValues[field.name];
         });
+      Object.assign(payload, extraPayload);
       if (editing) {
         const response = await api.examMasters.update(kind, initialItem._id, payload);
         toast(`${label} "${response.data.name}" updated`);

@@ -106,7 +106,9 @@ export default function Timetable() {
       ) : (
         <div className="grid md:grid-cols-2 xl:grid-cols-3 gap-4">
           {rows.map(({ day, entry }, i) => {
-            const periods = (entry?.periods || []).filter((p) => p.subject !== "Break");
+            // Break and Lunch are part of the day too — the student sees the
+            // same rows the admin grid stores, nothing hidden.
+            const periods = entry?.periods || [];
             const today = isToday(day);
             const accent = ACCENTS[DAY_ACCENT[i]];
 
@@ -200,7 +202,8 @@ export default function Timetable() {
           <CalendarRange size={15} />
         </span>
         <p className="text-[12.5px] text-slate-text/80">
-          Timetable is set by the school. Periods marked as <span className="font-semibold text-ink">&quot;Break&quot;</span> are excluded from this view.
+          Timetable is set by the school. Break and Lunch appear at the time they
+          are scheduled.
         </p>
       </div>
     </div>

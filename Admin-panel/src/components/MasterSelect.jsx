@@ -32,6 +32,10 @@ export default function MasterSelect({
   renderLabel = (item) => item.name,
   fallbackLabel = "",
   filterItems = null,
+  // Rows appended after the master list — for values that are intentionally not
+  // masters (e.g. Break/Lunch timetable slots). null keeps behaviour as-is.
+  extraItems = null,
+  extraItemsLabel = "More",
   className = "",
   disabled = false,
 }) {
@@ -79,10 +83,19 @@ export default function MasterSelect({
   // Outside-click / Escape dismissal lives in PopoverPanel: the panel is
   // portalled to <body>, so clicks on it no longer land inside rootRef.
 
-  const selected = useMemo(
-    () => items.find((i) => String(i._id) === String(value)),
-    [items, value],
-  );
+  const selected = useMemo(() => {
+    const pool =
+      extraItems && extraItems.length ? [...items, ...extraItems] : items;
+    const byId = pool.find((i) => String(i._id) === String(value));
+    if (byId) return byId;
+    // Stored records do not always carry the master id back, so fall back to the
+    // label the caller already holds — the highlighted row then always matches
+    // the text the trigger is showing.
+    if (!value && fallbackLabel) {
+      return pool.find((i) => renderLabel(i) === fallbackLabel) || null;
+    }
+    return null;
+  }, [items, extraItems, value, fallbackLabel, renderLabel]);
 
   const baseItems = filterItems ? filterItems(items) : items;
 
@@ -92,11 +105,25 @@ export default function MasterSelect({
     return baseItems.filter((i) => normalizeLabel(renderLabel(i)).includes(q));
   }, [baseItems, query, renderLabel]);
 
+  const extraVisible = useMemo(() => {
+    if (!extraItems || !extraItems.length) return [];
+    const q = normalizeLabel(query);
+    if (!q) return extraItems;
+    return extraItems.filter((i) => normalizeLabel(renderLabel(i)).includes(q));
+  }, [extraItems, query, renderLabel]);
+
   const select = (item) => {
     onChange(String(item._id), item);
     setOpen(false);
     setQuery("");
   };
+
+  const rowClass = (item) =>
+    `w-full text-left px-4 py-2 text-[13px] hover:bg-paper transition-colors ${
+      selected && String(selected._id) === String(item._id)
+        ? "bg-primary/10 text-ink font-medium"
+        : "text-ink"
+    }`;
 
   return (
     <div ref={rootRef} className={`relative ${className}`}>
@@ -163,27 +190,40 @@ export default function MasterSelect({
                   Retry
                 </button>
               </div>
-            ) : filtered.length === 0 ? (
+            ) : filtered.length === 0 && extraVisible.length === 0 ? (
               <div className="px-4 py-6 text-center">
                 <p className="text-[13px] text-slate-text">
                   {query ? `No subjects found for "${query}"` : emptyLabel}
                 </p>
               </div>
             ) : (
-              filtered.map((item) => (
-                <button
-                  key={item._id}
-                  type="button"
-                  onClick={() => select(item)}
-                  className={`w-full text-left px-4 py-2 text-[13px] hover:bg-paper transition-colors ${
-                    selected && String(selected._id) === String(item._id)
-                      ? "bg-primary/10 text-ink font-medium"
-                      : "text-ink"
-                  }`}
-                >
-                  {renderLabel(item)}
-                </button>
-              ))
+              <>
+                {filtered.map((item) => (
+                  <button
+                    key={item._id}
+                    type="button"
+                    onClick={() => select(item)}
+                    className={rowClass(item)}
+                  >
+                    {renderLabel(item)}
+                  </button>
+                ))}
+                {extraVisible.length > 0 && (
+                  <div className="mt-1 border-t border-slate-200 px-4 pb-1 pt-2.5 text-[10.5px] font-semibold uppercase tracking-wider text-slate-text/50">
+                    {extraItemsLabel}
+                  </div>
+                )}
+                {extraVisible.map((item) => (
+                  <button
+                    key={item._id}
+                    type="button"
+                    onClick={() => select(item)}
+                    className={rowClass(item)}
+                  >
+                    {renderLabel(item)}
+                  </button>
+                ))}
+              </>
             )}
           </div>
 
