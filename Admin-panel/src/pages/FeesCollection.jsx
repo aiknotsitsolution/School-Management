@@ -89,9 +89,13 @@ function emptyStructureForm() {
 
 function emptyConcessionForm() {
   return {
+    // "student" = granted to one admissionNo (scholarship, sibling, manual);
+    // "category" = a rule addressed at every student carrying that social
+    // category, so a statutory quota is not granted one student at a time.
+    appliesTo: "student",
     studentId: "",
+    category: "General",
     kind: "Sibling",
-    name: "",
     type: "percent",
     value: "",
     session: "",
@@ -100,6 +104,15 @@ function emptyConcessionForm() {
     notes: "",
   };
 }
+
+// Mirrors FEE_CATEGORIES in the backend.
+const FEE_CATEGORY_OPTIONS = ["General", "OBC", "SC", "ST", "EWS"];
+
+// A category-wide grant is a statutory quota exactly when the category is
+// SC or ST; every other category-wide grant is filed as a Manual grant. So the
+// Kind can never contradict the Category it sits on — "Category: ST" is never
+// filed as Kind: SC.
+const kindForCategory = (category) => (["SC", "ST"].includes(category) ? category : "Manual");
 
 const inr = (value) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
 
@@ -807,12 +820,13 @@ export default function FeesCollection() {
   };
 
   const handleSaveConcession = async () => {
-    if (!concessionForm.studentId) {
+    const appliesTo = concessionForm.appliesTo === "category" ? "category" : "student";
+    if (appliesTo === "student" && !concessionForm.studentId) {
       toast("Select a student", "error");
       return;
     }
-    if (!concessionForm.name.trim()) {
-      toast("Enter a concession name", "error");
+    if (appliesTo === "category" && !FEE_CATEGORY_OPTIONS.includes(concessionForm.category)) {
+      toast("Select a category", "error");
       return;
     }
     const value = Number(concessionForm.value);
@@ -827,9 +841,13 @@ export default function FeesCollection() {
     setConcessionBusy(true);
     try {
       await api.fees.concessions.create({
-        studentId: concessionForm.studentId,
+        appliesTo,
+        ...(appliesTo === "student"
+          ? { studentId: concessionForm.studentId }
+          : { category: concessionForm.category }),
         kind: concessionForm.kind,
-        name: concessionForm.name.trim(),
+        // Kind IS the name — the form has no separate name field any more.
+        name: concessionForm.kind,
         type: concessionForm.type,
         value,
         session: concessionForm.session.trim(),
@@ -851,8 +869,14 @@ export default function FeesCollection() {
   const handleConcessionAction = async (concession, action) => {
     try {
       if (action === "approve") {
-        await api.fees.concessions.approve(concession._id);
-        toast("Concession approved");
+        const { retroApplied } = await api.fees.concessions.approve(concession._id);
+        // Approving also re-prices invoices raised before the grant existed —
+        // tell the admin how many, so the number they see on screen is explained.
+        toast(
+          retroApplied && retroApplied.updated
+            ? `Concession approved — ${retroApplied.updated} unpaid invoice${retroApplied.updated === 1 ? "" : "s"} re-priced`
+            : "Concession approved",
+        );
       } else if (action === "reject") {
         const reason = window.prompt("Rejection reason (optional):", "") || "";
         await api.fees.concessions.reject(concession._id, reason.trim());
@@ -1151,6 +1175,17 @@ export default function FeesCollection() {
       )
       .sort((a, b) => new Date(b.dueDate) - new Date(a.dueDate));
   }, [invoices, form.studentId]);
+
+  // What the selected invoice was actually billed at. The invoice carries its
+  // own concession snapshot, so this is the authoritative figure the counter
+  // collects against — surfaced so a concession is never invisible at the desk
+  // ("58,000 was asked, 55,100 received — why?").
+  const appliedConcession = useMemo(() => {
+    const invoice = studentInvoices.find((row) => String(row._id) === String(form.invoiceId));
+    if (!invoice || Number(invoice.concessionAmount || 0) <= 0) return null;
+    const meta = concessions.find((row) => String(row._id) === String(invoice.concessionId));
+    return { invoice, meta };
+  }, [studentInvoices, form.invoiceId, concessions]);
 
   const handleSelectStudent = (studentId) => {
     const firstInvoice = invoices.find(
@@ -2202,7 +2237,6 @@ export default function FeesCollection() {
                 <tr className="text-left text-slate-text/60 text-[11.5px] uppercase tracking-wide border-b border-slate-200">
                   <th className="px-5 py-2.5 font-semibold">Student</th>
                   <th className="px-5 py-2.5 font-semibold">Kind</th>
-                  <th className="px-5 py-2.5 font-semibold">Name</th>
                   <th className="px-5 py-2.5 font-semibold">Value</th>
                   <th className="px-5 py-2.5 font-semibold">Scope</th>
                   <th className="px-5 py-2.5 font-semibold">Status</th>
@@ -2215,14 +2249,24 @@ export default function FeesCollection() {
                   return (
                     <tr key={concession._id} className="border-b border-slate-100 hover:bg-paper/60">
                       <td className="px-5 py-3 font-semibold text-ink">
-                        {student?.name || concession.studentId}
+                        {concession.appliesTo === "category" ? (
+                          <span className="inline-flex items-center gap-1.5">
+                            <span className="inline-flex items-center rounded-full bg-violet-50 text-violet-700 border border-violet-200 px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap">
+                              Category: {concession.category}
+                            </span>
+                            <span className="text-[11px] font-normal text-slate-text/60">
+                              all students
+                            </span>
+                          </span>
+                        ) : (
+                          student?.name || concession.studentId
+                        )}
                       </td>
                       <td className="px-5 py-3">
                         <Pill tone={concession.kind === "Scholarship" ? "info" : "neutral"}>
                           {concession.kind}
                         </Pill>
                       </td>
-                      <td className="px-5 py-3 text-slate-text">{concession.name}</td>
                       <td className="px-5 py-3 font-medium text-ink">
                         {concession.type === "percent" ? `${concession.value}%` : `₹${Number(concession.value).toLocaleString("en-IN")}`}
                       </td>
@@ -2447,58 +2491,115 @@ export default function FeesCollection() {
 
             <div className="px-5 py-4 space-y-3 max-h-[70vh] overflow-y-auto">
               <div>
-                <label className="text-[12px] font-semibold text-ink mb-1.5 block">Student *</label>
-                <Select
-                  value={concessionForm.studentId}
-                  onChange={(event) =>
-                    setConcessionForm({ ...concessionForm, studentId: event.target.value })
-                  }
-                  className="w-full"
-                >
-                  <option value="">Select student…</option>
-                  {students.map((student) => (
-                    <option key={student.id} value={student.admissionNo || ""}>
-                      {student.name} · {student.admissionNo}
-                    </option>
+                <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                  Apply to *
+                </label>
+                <div className="grid grid-cols-2 gap-2">
+                  {[
+                    { id: "student", label: "One student", hint: "Scholarship, sibling, manual" },
+                    { id: "category", label: "Entire category", hint: "SC / ST / OBC quota rule" },
+                  ].map((option) => (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() =>
+                        setConcessionForm({
+                          ...concessionForm,
+                          appliesTo: option.id,
+                          // In category mode the Kind follows the Category, so
+                          // "Category: ST" is never filed as Kind: SC.
+                          kind:
+                            option.id === "category"
+                              ? kindForCategory(concessionForm.category)
+                              : concessionForm.kind,
+                        })
+                      }
+                      className={`rounded-xl border px-3 py-2.5 text-left transition-colors ${
+                        concessionForm.appliesTo === option.id
+                          ? "border-primary bg-primary/5"
+                          : "border-slate-200 bg-white hover:border-primary/40"
+                      }`}
+                    >
+                      <span className="block text-[12.5px] font-semibold text-ink">
+                        {option.label}
+                      </span>
+                      <span className="block text-[11px] text-slate-text/60">{option.hint}</span>
+                    </button>
                   ))}
-                </Select>
+                </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              {concessionForm.appliesTo === "category" ? (
                 <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Kind *</label>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Category *
+                  </label>
                   <Select
-                    value={concessionForm.kind}
+                    value={concessionForm.category}
+                    onChange={(event) => {
+                      const category = event.target.value;
+                      setConcessionForm({
+                        ...concessionForm,
+                        category,
+                        kind: kindForCategory(category),
+                      });
+                    }}
+                    className="w-full"
+                  >
+                    {FEE_CATEGORY_OPTIONS.map((category) => (
+                      <option key={category} value={category}>
+                        {category}
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="text-[11px] text-slate-text/60 mt-1.5">
+                    Applies to every student carrying this category. Approving also re-prices
+                    their unpaid invoices.
+                  </p>
+                </div>
+              ) : (
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Student *
+                  </label>
+                  <Select
+                    value={concessionForm.studentId}
                     onChange={(event) =>
-                      setConcessionForm({ ...concessionForm, kind: event.target.value })
+                      setConcessionForm({ ...concessionForm, studentId: event.target.value })
                     }
                     className="w-full"
                   >
-                    <option value="Sibling">Sibling Discount</option>
-                    <option value="Scholarship">Scholarship</option>
-                    {/* Statutory entitlements — government-backed quotas, not
-                        discretionary discounts. */}
-                    <option value="RTE">RTE Quota</option>
-                    <option value="SC/ST">SC / ST Concession</option>
-                    <option value="Manual">Manual</option>
+                    <option value="">Select student…</option>
+                    {students.map((student) => (
+                      <option key={student.id} value={student.admissionNo || ""}>
+                        {student.name} · {student.admissionNo}
+                      </option>
+                    ))}
                   </Select>
                 </div>
-                <div>
-                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">Name *</label>
-                  <Input
-                    placeholder={
-                      concessionForm.kind === "Sibling"
-                        ? "e.g. Second child 10% off"
-                        : concessionForm.kind === "Scholarship"
-                          ? "e.g. Merit scholarship"
-                          : "e.g. Staff ward concession"
-                    }
-                    value={concessionForm.name}
-                    onChange={(event) =>
-                      setConcessionForm({ ...concessionForm, name: event.target.value })
-                    }
-                  />
-                </div>
+              )}
+
+              {/* Kind doubles as the concession's name, so there is no
+                  separate free-text Name field any more. */}
+              <div>
+                <label className="text-[12px] font-semibold text-ink mb-1.5 block">Kind *</label>
+                <Select
+                  value={concessionForm.kind}
+                  onChange={(event) =>
+                    setConcessionForm({ ...concessionForm, kind: event.target.value })
+                  }
+                  className="w-full"
+                >
+                  <option value="Sibling">Sibling Discount</option>
+                  <option value="Scholarship">Scholarship</option>
+                  {/* Statutory entitlements — government-backed quotas, not
+                      discretionary discounts. SC and ST are separate so a quota
+                      rule names the community it actually applies to. */}
+                  <option value="RTE">RTE Quota</option>
+                  <option value="SC">SC Concession</option>
+                  <option value="ST">ST Concession</option>
+                  <option value="Manual">Manual</option>
+                </Select>
               </div>
 
               <div className="grid grid-cols-2 gap-3">
@@ -2599,7 +2700,13 @@ export default function FeesCollection() {
               <Button
                 variant="primary"
                 onClick={handleSaveConcession}
-                disabled={concessionBusy || !concessionForm.studentId || !concessionForm.session}
+                disabled={
+                  concessionBusy ||
+                  !concessionForm.session ||
+                  (concessionForm.appliesTo === "category"
+                    ? !FEE_CATEGORY_OPTIONS.includes(concessionForm.category)
+                    : !concessionForm.studentId)
+                }
               >
                 <Save size={15} /> {concessionBusy ? "Saving…" : "Request Concession"}
               </Button>
@@ -2687,6 +2794,31 @@ export default function FeesCollection() {
                       ))}
                     </Select>
                   </div>
+
+                  {appliedConcession && (
+                    <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-3 py-2.5">
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-[12px] font-semibold text-violet-800">
+                          Concession applied
+                        </span>
+                        <span className="text-[12px] font-semibold text-violet-800 whitespace-nowrap">
+                          − {inr(appliedConcession.invoice.concessionAmount)}
+                        </span>
+                      </div>
+                      <p className="text-[11.5px] text-violet-700/80 mt-0.5">
+                        {/* Name already carries the Kind, so echoing it would
+                            read "SC Concession · SC". */}
+                        {appliedConcession.meta?.name || appliedConcession.meta?.kind || "Concession"}
+                        {appliedConcession.meta?.type === "percent"
+                          ? ` · ${appliedConcession.meta.value}%`
+                          : ""}
+                      </p>
+                      <p className="text-[11.5px] text-violet-700/80 mt-1">
+                        Gross {inr(appliedConcession.invoice.grossAmount)} → net payable{" "}
+                        {inr(appliedConcession.invoice.amount)}
+                      </p>
+                    </div>
+                  )}
 
                   <div className="grid grid-cols-2 gap-3">
                     <div>

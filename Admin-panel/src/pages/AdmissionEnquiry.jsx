@@ -90,6 +90,11 @@ const SOURCE_OPTIONS = [
   "Other",
 ];
 
+// Mirrors FEE_CATEGORIES in the backend — an applicant's social category,
+// captured at enquiry time so it can be carried into onboarding and drive a
+// category-wide fee concession rule.
+const FEE_CATEGORY_OPTIONS = ["General", "OBC", "SC", "ST", "EWS"];
+
 const backendStatus = {
   New: "New",
   Contacted: "Contacted",
@@ -166,6 +171,9 @@ function emptyForm() {
     studentEmail: "",
     date: new Date().toISOString().slice(0, 10),
     source: "Website",
+    // General is the non-reserved default; nothing is assumed about an
+    // applicant until the counsellor records it.
+    feeCategory: "General",
     status: "New",
     followUp: "",
     admissionNo: "",
@@ -240,6 +248,7 @@ export default function AdmissionEnquiry() {
                   ? "Declined"
                   : item.status,
             admissionNo: item.admissionNo || "",
+            feeCategory: item.feeCategory || "General",
           })),
         );
       })
@@ -314,6 +323,7 @@ export default function AdmissionEnquiry() {
       studentEmail: item.email || "",
       date: item.date,
       source: item.source,
+      feeCategory: item.feeCategory || "General",
       status: item.status,
       followUp: item.followUp === "—" ? "" : item.followUp,
       admissionNo: item.admissionNo || "",
@@ -350,6 +360,9 @@ export default function AdmissionEnquiry() {
       contact: form.contact.trim(),
       email: form.studentEmail.trim() || undefined,
       source: backendSource[form.source] || "Other",
+      feeCategory: FEE_CATEGORY_OPTIONS.includes(form.feeCategory)
+        ? form.feeCategory
+        : "General",
       status: backendStatus[form.status] || "New",
       followUpDate: form.followUp || undefined,
       admissionNo: form.admissionNo.trim() || undefined,
@@ -622,6 +635,11 @@ export default function AdmissionEnquiry() {
                     </td>
                     <td className="px-4 py-2.5">
                       <span className="font-medium text-ink">{displayClass(e.classApplied)}</span>
+                      {e.feeCategory && e.feeCategory !== "General" && (
+                        <span className="ml-1.5 inline-flex items-center rounded-full bg-amber-50 text-amber-700 border border-amber-200 px-1.5 py-0.5 text-[10px] font-semibold whitespace-nowrap">
+                          {e.feeCategory}
+                        </span>
+                      )}
                     </td>
                     <td className="px-4 py-2.5">
                       <span className="inline-flex items-center gap-1 text-slate-text text-[12px] whitespace-nowrap">
@@ -881,6 +899,18 @@ export default function AdmissionEnquiry() {
                     </span>
                   </div>
                   <div className="flex items-center justify-between px-4 py-3">
+                    <span className="text-[12.5px] text-slate-text/70">Category</span>
+                    <span
+                      className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold border ${
+                        selected.feeCategory && selected.feeCategory !== "General"
+                          ? "bg-amber-50 text-amber-700 border-amber-200"
+                          : "bg-slate-100 text-slate-600 border-slate-200"
+                      }`}
+                    >
+                      {selected.feeCategory || "General"}
+                    </span>
+                  </div>
+                  <div className="flex items-center justify-between px-4 py-3">
                     <span className="text-[12.5px] text-slate-text/70 inline-flex items-center gap-2">
                       <CalendarDays size={13} className="text-slate-text/40" /> Enquiry date
                     </span>
@@ -1090,6 +1120,25 @@ export default function AdmissionEnquiry() {
                       </option>
                     ))}
                   </Select>
+                </div>
+
+                <div>
+                  <label className="text-[12px] font-semibold text-ink mb-1.5 block">
+                    Category
+                  </label>
+                  <Select
+                    value={form.feeCategory}
+                    onChange={(e) => updateForm("feeCategory", e.target.value)}
+                  >
+                    {FEE_CATEGORY_OPTIONS.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </Select>
+                  <p className="text-[11px] text-ink/50 mt-1.5">
+                    Carried into onboarding — drives category-wide fee concessions.
+                  </p>
                 </div>
 
                 <div>

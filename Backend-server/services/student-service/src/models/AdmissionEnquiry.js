@@ -1,4 +1,8 @@
 const mongoose = require("mongoose");
+const {
+  FEE_CATEGORIES,
+  DEFAULT_FEE_CATEGORY,
+} = require("@school-erp/shared/src/constants/feeCategories");
 
 const enquirySchema = new mongoose.Schema(
   {
@@ -26,6 +30,10 @@ const enquirySchema = new mongoose.Schema(
     // same Admission ID (never auto-creates a duplicate student).
     admissionNo: { type: String, default: null },
     section: { type: String, default: null },
+    // Social category captured at enquiry time so a category-wide fee
+    // concession rule ("SC -> 5%") can find the student the moment the
+    // admission is confirmed, rather than waiting for onboarding to fill it in.
+    feeCategory: { type: String, enum: FEE_CATEGORIES, default: DEFAULT_FEE_CATEGORY },
     source: { type: String, enum: ["Website", "Referral", "Walk-in", "Phone", "Other"], default: "Other" },
     status: {
       type: String,

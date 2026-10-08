@@ -52,6 +52,10 @@ const GENDER_OPTIONS = ["Male", "Female", "Other"];
 const HOUSE_OPTIONS = ["Red", "Blue", "Green", "Yellow"];
 const BLOOD_GROUP_OPTIONS = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 const MEDIUM_OPTIONS = ["English", "Hindi"];
+// Social category — mirrors FEE_CATEGORIES in the backend. Drives category-wide
+// fee concessions, so it is captured during onboarding (and pre-filled from the
+// admission enquiry that raised this shell).
+const FEE_CATEGORY_OPTIONS = ["General", "OBC", "SC", "ST", "EWS"];
 
 const EMPTY_FORM = {
   name: "",
@@ -64,6 +68,7 @@ const EMPTY_FORM = {
   house: "Red",
   bloodGroup: "O+",
   medium: "English",
+  feeCategory: "General",
   fatherName: "",
   motherName: "",
   phone: "",
@@ -224,6 +229,9 @@ export default function AddStudent() {
       house: student.house || "Red",
       bloodGroup: student.bloodGroup || "O+",
       medium: student.medium || "English",
+      // Autofilled from the admission enquiry that raised this shell, so an SC
+      // applicant reaches onboarding already flagged for the SC concession rule.
+      feeCategory: student.feeCategory || "General",
       fatherName: student.parentName || student.fatherName || "",
       motherName: student.motherName || "",
       phone: student.parentContact || "",
@@ -315,6 +323,9 @@ export default function AddStudent() {
         house: form.house,
         bloodGroup: form.bloodGroup,
         medium: form.medium,
+        feeCategory: FEE_CATEGORY_OPTIONS.includes(form.feeCategory)
+          ? form.feeCategory
+          : "General",
         fatherName: form.fatherName.trim() || undefined,
         motherName: form.motherName.trim() || undefined,
         phone: form.phone.trim(),
@@ -344,6 +355,7 @@ export default function AddStudent() {
           house: payload.house,
           bloodGroup: payload.bloodGroup,
           medium: payload.medium,
+          feeCategory: payload.feeCategory,
           parentName: payload.fatherName,
           parentContact: payload.phone,
           parentEmail: payload.email,
@@ -586,6 +598,22 @@ export default function AddStudent() {
                 {MEDIUM_OPTIONS.map((m) => (
                   <option key={m} value={m}>
                     {m}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+
+            <Field
+              label="Category"
+              hint="Drives category-wide fee concessions (e.g. SC -> 5% Tuition)"
+            >
+              <Select
+                value={form.feeCategory}
+                onChange={(e) => update("feeCategory", e.target.value)}
+              >
+                {FEE_CATEGORY_OPTIONS.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
                   </option>
                 ))}
               </Select>

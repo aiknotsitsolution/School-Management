@@ -1,4 +1,8 @@
 const mongoose = require("mongoose");
+const {
+  FEE_CATEGORIES,
+  DEFAULT_FEE_CATEGORY,
+} = require("@school-erp/shared/src/constants/feeCategories");
 
 const studentSchema = new mongoose.Schema(
   {
@@ -29,7 +33,10 @@ const studentSchema = new mongoose.Schema(
     house: { type: String },
     medium: { type: String, enum: ["English", "Hindi"], default: "English" },
     admissionDate: { type: Date, default: Date.now },
-    feeCategory: { type: String, default: "Regular" },
+    // Social category of the student, captured on the admission enquiry and
+    // carried through onboarding. Category-wide fee concession rules are
+    // expressed against these values.
+    feeCategory: { type: String, enum: FEE_CATEGORIES, default: DEFAULT_FEE_CATEGORY },
     status: {
       type: String,
       enum: ["Active", "Inactive", "Alumni", "Transferred"],

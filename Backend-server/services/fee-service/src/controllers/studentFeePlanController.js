@@ -298,14 +298,21 @@ const getStudentSummary = async (req, res) => {
         ).sort({ paidOn: -1 }).lean()
       : [];
 
-    const concessions = await Concession.find(
-      scopeQuery(Concession, req, {
-        schoolId: req.tenantId,
-        studentId,
-        status: "Active",
-        ...(session ? { session } : {}),
-      }),
-    ).lean();
+    // Read the grants off the invoices themselves: each invoice snapshots the
+    // concession it was netted with, so this is exactly what was applied — and
+    // unlike a studentId filter it also covers category-wide rules ("SC -> 5%"),
+    // whose rows carry no studentId at all.
+    const appliedConcessionIds = [
+      ...new Set(invoices.map((inv) => inv.concessionId).filter(Boolean).map(String)),
+    ];
+    const concessions = appliedConcessionIds.length
+      ? await Concession.find(
+          scopeQuery(Concession, req, {
+            schoolId: req.tenantId,
+            _id: { $in: appliedConcessionIds },
+          }),
+        ).lean()
+      : [];
 
     const invoiced = invoices.reduce((sum, inv) => sum + Number(inv.amount || 0), 0);
     const collected = payments.reduce((sum, p) => sum + Number(p.amount || 0), 0);
@@ -389,6 +396,8 @@ const getStudentSummary = async (req, res) => {
           type: c.type,
           value: c.value,
           feeType: c.feeType || null,
+          appliesTo: c.appliesTo || "student",
+          category: c.category || null,
         })),
       },
     });

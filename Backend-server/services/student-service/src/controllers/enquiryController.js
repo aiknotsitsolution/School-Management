@@ -5,11 +5,16 @@ const {
 const AdmissionEnquiry = require("../models/AdmissionEnquiry");
 const Student = require("../models/Student");
 const { assertAcademicRefs } = require("@school-erp/shared/src/master-data");
+const {
+  FEE_CATEGORIES,
+  DEFAULT_FEE_CATEGORY,
+  isFeeCategory,
+} = require("@school-erp/shared/src/constants/feeCategories");
 
 // Mass-assignment guard: only these fields may be set from the request body.
 const ENQUIRY_FIELDS = [
   "childName", "parentName", "classApplied", "contact", "email", "admissionNo",
-  "section", "source", "status", "followUpDate", "notes",
+  "section", "feeCategory", "source", "status", "followUpDate", "notes",
 ];
 const pick = (obj, keys) =>
   Object.fromEntries(keys.filter((k) => obj[k] !== undefined).map((k) => [k, obj[k]]));
@@ -37,6 +42,10 @@ const validateEnquiryPayload = (body) => {
   if (!contact) return "Contact is required";
   if (!PHONE_RE.test(contact)) return "Enter a valid 10-digit phone number";
   if (email && !EMAIL_RE.test(email)) return "Enter a valid email address";
+  const feeCategory = body.feeCategory;
+  if (feeCategory !== undefined && feeCategory !== null && String(feeCategory).trim() !== "") {
+    if (!isFeeCategory(feeCategory)) return `Category must be one of: ${FEE_CATEGORIES.join(", ")}`;
+  }
   return null;
 };
 
@@ -87,13 +96,25 @@ const ensureStudentShell = async ({
   email,
   classApplied,
   section,
+  feeCategory,
 }) => {
+  const declaredCategory = isFeeCategory(feeCategory) ? String(feeCategory).trim() : "";
   const existing = await Student.findOne(scopeQuery(Student, req, {
     schoolId: req.tenantId,
     admissionNo,
     deletedAt: null,
-  }));
-  if (existing) return { shell: existing, created: false };
+  })).lean();
+  if (existing) {
+    // Autofill, never overwrite: a shell with NO stored category carries no
+    // declaration of its own, so the enquiry is the better answer. A category
+    // the admin picked during onboarding is left untouched. The read is
+    // deliberately .lean() — hydrating would apply the schema default and
+    // make "never declared" indistinguishable from "declared General".
+    if (declaredCategory && declaredCategory !== DEFAULT_FEE_CATEGORY && !existing.feeCategory) {
+      await Student.updateOne({ _id: existing._id }, { $set: { feeCategory: declaredCategory } });
+    }
+    return { shell: existing, created: false };
+  }
 
     const data = {
       schoolId: req.tenantId,
@@ -101,6 +122,7 @@ const ensureStudentShell = async ({
       admissionNo,
     userId: null,
     name: String(childName || "").trim() || "Pending Student",
+    feeCategory: declaredCategory || DEFAULT_FEE_CATEGORY,
   };
   // Map the enquiry's academic picks onto the shell. The refs gate is a soft
   // integrity check (fail-open when academic-service is unreachable), so a
@@ -170,6 +192,7 @@ const createEnquiry = async (req, res) => {
         email: req.body.email,
         classApplied: req.body.classApplied,
         section: req.body.section,
+        feeCategory: req.body.feeCategory,
       });
       if (admitted.created) createdShellId = String(admitted.shell._id);
     }
@@ -255,6 +278,7 @@ const updateEnquiry = async (req, res) => {
         email: req.body.email !== undefined ? req.body.email : enquiry.email,
         classApplied: req.body.classApplied !== undefined ? req.body.classApplied : enquiry.classApplied,
         section: req.body.section !== undefined ? req.body.section : enquiry.section,
+        feeCategory: req.body.feeCategory !== undefined ? req.body.feeCategory : enquiry.feeCategory,
       });
       if (admitted.created) createdShellId = String(admitted.shell._id);
     }

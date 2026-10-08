@@ -15,8 +15,16 @@ const {
   normalizeKey,
 } = require("./master-data/index");
 const paymentGateways = require("./payment-gateways");
+const {
+  FEE_CATEGORIES,
+  DEFAULT_FEE_CATEGORY,
+  isFeeCategory,
+} = require("./constants/feeCategories");
 
 module.exports = {
+  FEE_CATEGORIES,
+  DEFAULT_FEE_CATEGORY,
+  isFeeCategory,
   getJwtSecret,
   MIN_JWT_SECRET_LENGTH,
   paginate,

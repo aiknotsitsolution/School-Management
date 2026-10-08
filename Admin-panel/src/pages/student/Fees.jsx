@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { CreditCard, Wallet, FileClock } from "lucide-react";
-import { PageIntro, Card, Pill } from "../../components/UI";
+import { CreditCard, Wallet, FileClock, Download } from "lucide-react";
+import { PageIntro, Card, Pill, toast } from "../../components/UI";
 import {
   BarRowChart,
   Donut,
@@ -50,6 +50,17 @@ export default function Fees() {
     () => [...payments].sort((a, b) => (a.paymentDate || a.createdAt || "") < (b.paymentDate || b.createdAt || "") ? 1 : -1),
     [payments],
   );
+
+  // The receipt is the student's own proof of payment, so they download it
+  // straight from their history instead of asking the office for a copy.
+  const downloadReceipt = async (receiptNo) => {
+    try {
+      await api.fees.payments.downloadReceiptPdf(receiptNo);
+      toast("Receipt PDF downloaded", "success");
+    } catch (err) {
+      toast(err.message || "Download failed", "error");
+    }
+  };
 
   /** How much of each invoice is settled, for the per-invoice bar chart. */
   const invoiceBars = useMemo(
@@ -191,10 +202,32 @@ export default function Fees() {
             )}
 
             {summary.concessions.length > 0 && (
-              <p className="text-[12.5px] text-slate-text/80">
-                Concessions applied:{" "}
-                {summary.concessions.map((c) => `${c.name} (${c.type} ${c.value}${c.type === "percent" ? "%" : ""})`).join(", ")}
-              </p>
+              <div className="rounded-xl border border-violet-200 bg-violet-50/60 px-3.5 py-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[12.5px] font-semibold text-violet-800">
+                    Concession applied
+                  </span>
+                  {summary.totals.concession > 0 && (
+                    <span className="text-[12.5px] font-semibold text-violet-800">
+                      − {fmtMoney(summary.totals.concession)}
+                    </span>
+                  )}
+                </div>
+                <p className="mt-0.5 text-[12px] text-violet-700/80">
+                  {/* The Kind is the name, so echoing both would read
+                      "SC Concession · SC". */}
+                  {summary.concessions
+                    .map(
+                      (c) =>
+                        `${c.name || c.kind}` +
+                        ` · ${c.type === "percent" ? `${c.value}%` : fmtMoney(c.value)}`,
+                    )
+                    .join(", ")}
+                </p>
+                <p className="mt-1 text-[11.5px] text-violet-700/70">
+                  Already adjusted into every amount on this page.
+                </p>
+              </div>
             )}
           </div>
         )}
@@ -285,7 +318,19 @@ export default function Fees() {
                         {inv.feeType || inv.title || "Fee invoice"}
                       </td>
                       <td className="px-3 py-2.5 text-slate-text/80">{fmtDate(inv.dueDate || inv.createdAt)}</td>
-                      <td className="px-3 py-2.5 font-semibold text-ink">{fmtMoney(inv.amount || 0)}</td>
+                      <td className="px-3 py-2.5 font-semibold text-ink">
+                        {fmtMoney(inv.amount || 0)}
+                        {Number(inv.concessionAmount || 0) > 0 && (
+                          <>
+                            <span className="ml-1.5 text-[11px] font-medium text-slate-text/45 line-through">
+                              {fmtMoney(inv.grossAmount || inv.amount)}
+                            </span>
+                            <span className="ml-1.5 rounded bg-violet-50 px-1.5 py-0.5 text-[10px] font-semibold text-violet-700 whitespace-nowrap">
+                              −{fmtMoney(inv.concessionAmount)}
+                            </span>
+                          </>
+                        )}
+                      </td>
                       <td className="px-3 py-2.5 text-success">{fmtMoney(inv.paidAmount || 0)}</td>
                       <td className="px-3 py-2.5">
                         <Pill tone={String(status).toLowerCase().includes("paid") ? "success" : "alert"}>{status}</Pill>
@@ -311,6 +356,7 @@ export default function Fees() {
                   <th className="px-3 py-2 font-semibold">Amount</th>
                   <th className="px-3 py-2 font-semibold">Txn / Receipt</th>
                   <th className="px-5 py-2 font-semibold">Mode</th>
+                  <th className="px-5 py-2 font-semibold text-right">Actions</th>
                 </tr>
               </thead>
               <tbody>
@@ -338,6 +384,19 @@ export default function Fees() {
                         <span className="ml-2 rounded bg-success/10 px-1.5 py-0.5 text-[10.5px] font-semibold uppercase text-success">
                           online
                         </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-2.5 text-right whitespace-nowrap">
+                      {p.receiptNo ? (
+                        <button
+                          type="button"
+                          onClick={() => downloadReceipt(p.receiptNo)}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-2.5 py-1.5 text-[11.5px] font-semibold text-slate-700 hover:bg-slate-50 transition-colors"
+                        >
+                          <Download size={13} /> Receipt
+                        </button>
+                      ) : (
+                        <span className="text-[11.5px] text-slate-text/50">—</span>
                       )}
                     </td>
                   </tr>

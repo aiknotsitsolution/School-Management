@@ -1,17 +1,29 @@
 const { scopeQuery, branchIdForWrite } = require("@school-erp/shared/src/middleware/branchScope");
+const { FEE_CATEGORIES, isFeeCategory } = require("@school-erp/shared/src/constants/feeCategories");
 const Concession = require("../models/Concession");
+const { applyConcessionToUnpaidInvoices } = require("../utils/retroApply");
 
 // Concession workflow (CLIENT-REQ-045/046/047): created as Requested,
-// approved to Active (or rejected) by a fee-structure manager. Only Active
-// rows are applied when invoices are generated.
+// approved to Active (or rejected) by a fee-structure manager. Approving a
+// row also nets the invoices that were raised before it existed (see
+// utils/retroApply) so a grant is never advertised but not applied.
 
-const KINDS = ["Sibling", "Scholarship", "Manual", "RTE", "SC/ST"];
+// SC and ST are separate grants: a quota rule has to name the community it
+// applies to, and each gets its own row so the duplicate check and the
+// approval history stay per-community.
+const KINDS = ["Sibling", "Scholarship", "Manual", "RTE", "SC", "ST"];
 
 const validate = (body) => {
-  const { studentId, kind, name, type, value, session } = body || {};
-  if (!studentId || !String(studentId).trim()) return "studentId is required";
+  const { appliesTo = "student", studentId, category, kind, type, value, session } = body || {};
+  if (appliesTo !== "student" && appliesTo !== "category") {
+    return "appliesTo must be 'student' or 'category'";
+  }
+  if (appliesTo === "category") {
+    if (!isFeeCategory(category)) return `category must be one of: ${FEE_CATEGORIES.join(", ")}`;
+  } else if (!studentId || !String(studentId).trim()) {
+    return "studentId is required";
+  }
   if (!KINDS.includes(kind)) return `kind must be one of: ${KINDS.join(", ")}`;
-  if (!name || !String(name).trim()) return "name is required";
   if (type !== "percent" && type !== "flat") return "type must be 'percent' or 'flat'";
   const num = Number(value);
   if (!Number.isFinite(num) || num < 0) return "value must be a non-negative number";
@@ -41,12 +53,17 @@ const createConcession = async (req, res) => {
     const error = validate(req.body);
     if (error) return res.status(400).json({ success: false, message: error });
 
-    const { studentId, kind, session } = req.body;
-    // One live (Requested/Active) row per student+kind+session — a Rejected
-    // row must not block a fresh request.
+    const appliesTo = (req.body.appliesTo === "category" ? "category" : "student");
+    const category = appliesTo === "category" ? String(req.body.category).trim() : "";
+    const studentId = appliesTo === "category" ? null : String(req.body.studentId).trim();
+    const { kind, session } = req.body;
+    // One live (Requested/Active) row per scope+kind+session — a Rejected row
+    // must not block a fresh request, and a blanket category rule never blocks
+    // an individual grant (or the other way round).
     const live = await Concession.findOne(scopeQuery(Concession, req, {
       schoolId: req.tenantId,
-      studentId: String(studentId).trim(),
+      appliesTo,
+      ...(appliesTo === "category" ? { category } : { studentId }),
       kind,
       session: String(session).trim(),
       status: { $ne: "Rejected" },
@@ -56,16 +73,23 @@ const createConcession = async (req, res) => {
     if (live) {
       return res.status(409).json({
         success: false,
-        message: `A ${kind} concession already exists for this student in ${session}`,
+        message: appliesTo === "category"
+          ? `A ${kind} concession already exists for the ${category} category in ${session}`
+          : `A ${kind} concession already exists for this student in ${session}`,
       });
     }
 
     const doc = await Concession.create({
       schoolId: req.tenantId,
 
-      branchId: branchIdForWrite(req),      studentId: String(studentId).trim(),
+      branchId: branchIdForWrite(req),
+      appliesTo,
+      studentId,
+      category,
       kind,
-      name: String(req.body.name).trim(),
+      // The Kind is the name — a caller may still send one (legacy API users),
+      // but it now defaults to the kind rather than being mandatory.
+      name: (req.body.name && String(req.body.name).trim()) || String(kind).trim(),
       type: req.body.type,
       value: Number(req.body.value),
       session: String(session).trim(),
@@ -98,7 +122,15 @@ const decideConcession = (action) => async (req, res) => {
       doc.rejectedReason = (req.body && req.body.reason && String(req.body.reason).trim()) || "";
     }
     await doc.save();
-    res.json({ success: true, data: doc });
+
+    // Approving is the moment a grant becomes real, so this is also where
+    // invoices raised BEFORE it existed get netted. Reported back so the
+    // caller can show how many invoices moved.
+    let retroApplied = null;
+    if (action === "approve") {
+      retroApplied = await applyConcessionToUnpaidInvoices(req.tenantId, doc);
+    }
+    res.json({ success: true, data: doc, retroApplied });
   } catch (err) {
     res.status(500).json({ success: false, message: err.message });
   }

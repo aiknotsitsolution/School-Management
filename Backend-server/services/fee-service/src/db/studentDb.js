@@ -1,4 +1,5 @@
 const mongoose = require("mongoose");
+const { DEFAULT_FEE_CATEGORY, FEE_CATEGORIES } = require("@school-erp/shared/src/constants/feeCategories");
 
 // The fee-service owns invoices/orders/payments; the authoritative student
 // record (who belongs to which school/class/section) lives in the
@@ -40,7 +41,7 @@ const studentSchema = new mongoose.Schema(
     motherName: { type: String },
     house: { type: String },
     admissionDate: { type: Date, default: Date.now },
-    feeCategory: { type: String, default: "Regular" },
+    feeCategory: { type: String, enum: FEE_CATEGORIES, default: DEFAULT_FEE_CATEGORY },
     status: {
       type: String,
       enum: ["Active", "Inactive", "Alumni", "Transferred"],
@@ -52,6 +53,9 @@ const studentSchema = new mongoose.Schema(
       default: "incomplete",
     },
     profileCompletedAt: { type: Date, default: null },
+    // Soft-delete marker kept in sync with the canonical Student model — a
+    // deleted student must never be netted by a category concession.
+    deletedAt: { type: Date, default: null },
   },
   { timestamps: true, collection: "students" },
 );

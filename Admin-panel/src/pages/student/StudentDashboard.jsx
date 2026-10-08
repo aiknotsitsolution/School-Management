@@ -587,6 +587,9 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
   const feesTotal = invoices.reduce((s, i) => s + Number(i.amount || 0), 0);
   const paidAmount = invoices.reduce((s, i) => s + Number(i.paidAmount || 0), 0);
   const pendingDue = Math.max(0, feesTotal - paidAmount);
+  // Already netted out of `feesTotal` above — surfaced so the student can see
+  // why their billed figure sits below the published fee package.
+  const concessionTotal = invoices.reduce((s, i) => s + Number(i.concessionAmount || 0), 0);
 
   const todayIdx = now.getDay();
   const nowMin = now.getHours() * 60 + now.getMinutes();
@@ -1269,6 +1272,11 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
                       <p className="mt-1 text-[12px] text-slate-text/70">
                         of {fmtMoney(feesTotal)} invoiced
                       </p>
+                      {concessionTotal > 0 && (
+                        <p className="mt-1 text-[11.5px] font-semibold text-violet-700">
+                          Concession −{fmtMoney(concessionTotal)} applied
+                        </p>
+                      )}
                     </div>
                   </div>
                   {nextInvoice && (
