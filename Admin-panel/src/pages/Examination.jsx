@@ -466,6 +466,26 @@ export default function Examination() {
       toast("A subject can only be scheduled once per exam format", "error");
       return;
     }
+    for (const sectionId of bulkForm.sectionIds) {
+      const section = bulkClassSections.find((item) => String(item._id) === String(sectionId));
+      for (let i = 0; i < schedules.length; i += 1) {
+        for (let j = i + 1; j < schedules.length; j += 1) {
+          const first = schedules[i];
+          const second = schedules[j];
+          if (
+            first.date === second.date &&
+            first.startTime < second.endTime &&
+            second.startTime < first.endTime
+          ) {
+            toast(
+              `${first.subject} and ${second.subject} overlap for section ${section?.name || ""} on ${first.date}`,
+              "error",
+            );
+            return;
+          }
+        }
+      }
+    }
 
     const selectedClass = rawClasses.find((item) => String(item._id) === String(bulkForm.classId));
     if (!selectedClass) {

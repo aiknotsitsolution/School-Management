@@ -21,6 +21,7 @@ const { fetchSessionWindow } = require("../utils/sessionWindow");
 const { resolveActiveSession } = require("@school-erp/shared/src/utils/teacherScope");
 const { generateReportCardPdf } = require("../utils/reportCardPdf");
 const { notifyClassStudents } = require("../utils/notify");
+const { TIME_RE, intervalsOverlap } = require("../utils/periodConflictLib");
 
 // Mass-assignment guard: only these fields may be set from the request body.
 const EXAM_FIELDS = [
@@ -48,6 +49,49 @@ function escapeRegExp(value) {
 
 function isObjectId(value) {
   return ObjectId.isValid(value) && String(new ObjectId(value)) === String(value);
+}
+
+function validateExamTimes(exam) {
+  const startTime = String(exam.startTime || "").trim();
+  const endTime = String(exam.endTime || "").trim();
+  if (!startTime && !endTime) return;
+  if (!TIME_RE.test(startTime) || !TIME_RE.test(endTime) || endTime <= startTime) {
+    const error = new Error("Exam start and end times must be valid and endTime must be after startTime");
+    error.status = 400;
+    throw error;
+  }
+}
+
+async function assertNoExamTimeConflict(req, exam, excludeId) {
+  if (!exam.class || !exam.date || !exam.startTime || !exam.endTime) return;
+  const date = new Date(exam.date);
+  if (Number.isNaN(date.getTime())) return;
+  const day = date.toISOString().slice(0, 10);
+  const dayStart = new Date(`${day}T00:00:00.000Z`);
+  const nextDay = new Date(dayStart.getTime() + 24 * 60 * 60 * 1000);
+  const filter = scopeQuery(Exam, req, {
+    schoolId: req.tenantId,
+    class: exam.class,
+    date: { $gte: dayStart, $lt: nextDay },
+    ...(exam.section
+      ? { section: { $in: [String(exam.section), ""] } }
+      : {}),
+    ...(excludeId ? { _id: { $ne: excludeId } } : {}),
+  });
+  const existing = await Exam.find(filter)
+    .select("examName subject section startTime endTime")
+    .lean();
+  const conflict = existing.find((item) =>
+    intervalsOverlap(exam.startTime, exam.endTime, item.startTime, item.endTime),
+  );
+  if (conflict) {
+    const sectionLabel = exam.section ? `-${exam.section}` : "";
+    const error = new Error(
+      `This class${sectionLabel} already has ${conflict.subject} scheduled on ${day} from ${conflict.startTime} to ${conflict.endTime}.`,
+    );
+    error.status = 409;
+    throw error;
+  }
 }
 
 // Result publishing state machine: draft -> reviewed -> published.
@@ -147,6 +191,7 @@ function toRefPayload(body) {
 
 const createExam = async (req, res) => {
   try {
+    validateExamTimes(req.body);
     await validateMasterRefs(req.tenantId, req.body, req.branchId);
     await assertSnapshotRefs(req.tenantId, req.body, null, req.branchId);
     const slot = toTimeSlotPayload(req.body) || {};
@@ -158,6 +203,7 @@ const createExam = async (req, res) => {
       const activeSession = await resolveActiveSession(req.tenantId);
       if (activeSession) payload.session = activeSession;
     }
+    await assertNoExamTimeConflict(req, payload);
     const exam = await Exam.create({
       ...payload,
       ...slot,
@@ -223,11 +269,13 @@ const updateExam = async (req, res) => {
       ...(slot.startTime || slot.endTime || slot.timeSlotId ? slot : {}),
       ...refs,
     };
+    validateExamTimes({ ...existing.toObject(), ...fields });
     // Self-heal exams created before session stamping existed.
     if (!fields.session && !existing.session) {
       const activeSession = await resolveActiveSession(req.tenantId);
       if (activeSession) fields.session = activeSession;
     }
+    await assertNoExamTimeConflict(req, { ...existing.toObject(), ...fields }, existing._id);
 
     const exam = await Exam.findOneAndUpdate(scopeQuery(Exam, req, 
       { _id: req.params.id, schoolId: req.tenantId }),
