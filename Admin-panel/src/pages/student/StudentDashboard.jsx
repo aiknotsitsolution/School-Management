@@ -457,7 +457,7 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
         api.attendance.list(),
         api.timetable.list(`class=${encodeURIComponent(scopedCls)}&section=${encodeURIComponent(scopedSection)}`),
         api.homework.list(`class=${encodeURIComponent(scopedCls)}&section=${encodeURIComponent(scopedSection)}`),
-        api.exams.list(`class=${encodeURIComponent(scopedCls)}`),
+        api.exams.list(`class=${encodeURIComponent(scopedCls)}${scopedSection ? `&section=${encodeURIComponent(scopedSection)}` : ""}`),
         api.marks.reportCard(),
         api.fees.invoices.list(),
         api.notices.list(),

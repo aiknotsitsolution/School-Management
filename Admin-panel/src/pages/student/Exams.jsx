@@ -15,17 +15,19 @@ export default function Exams() {
 
   useEffect(() => {
     const cls = user?.class || "";
+    const section = user?.section || "";
     setLoading(true);
     setError("");
+    const query = `class=${encodeURIComponent(cls)}${section ? `&section=${encodeURIComponent(section)}` : ""}`;
     api.exams
-      .list(`class=${encodeURIComponent(cls)}`)
+      .list(query)
       .then(({ data }) => setExams(data || []))
       .catch((err) => {
         setError(err?.message || "We couldn't load your exams.");
         setExams([]);
       })
       .finally(() => setLoading(false));
-  }, [user?.class]);
+  }, [user?.class, user?.section]);
 
   const today = dateOf(new Date());
   const upcoming = useMemo(
@@ -62,7 +64,7 @@ export default function Exams() {
       <PageIntro
         eyebrow="Academics"
         title="My Examinations" art="exams"
-        description={user?.class ? `Exam schedule for Class ${user.class}.` : "Your exam schedule."}
+        description={user?.class ? `Exam schedule for Class ${user.class}${user.section ? `-${user.section}` : ""}.` : "Your exam schedule."}
       />
 
       {loading ? (

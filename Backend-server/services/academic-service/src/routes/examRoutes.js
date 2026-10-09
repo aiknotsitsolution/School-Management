@@ -9,7 +9,7 @@ const { verifyToken, resolveTenant, requireTenant, requirePermission, scopeStude
 router.use(verifyToken, resolveTenant, requireTenant);
 
 router.post("/", requirePermission("exams:write"), ctrl.createExam);
-router.get("/", requirePermission("exams:read"), scopeStudentSchedule(), scopeClassTeacher, ctrl.getExams);
+router.get("/", requirePermission("exams:read"), scopeStudentSchedule({ section: true }), scopeClassTeacher, ctrl.getExams);
 // Must precede the "/:id" routes so "term-rollup" is never parsed as an id.
 router.get("/term-rollup", requirePermission("exams:read"), scopeClassTeacherAggregate, ctrl.getTermRollup);
 router.put("/:id", requirePermission("exams:write"), ctrl.updateExam);
