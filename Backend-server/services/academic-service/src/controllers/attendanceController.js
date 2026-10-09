@@ -1,6 +1,5 @@
 const {
   scopeQuery,
-  withBranchScope,
   branchIdForWrite,
 } = require("@school-erp/shared/src/middleware/branchScope");
 const mongoose = require("mongoose");
@@ -12,54 +11,11 @@ const {
   missingMessage,
 } = require("../utils/masterRefs");
 
-// Resolves the set of admissionNo values enrolled in the teacher's class +
-// section for this school. Returns null when the student DB is unreachable so
-// the caller can fail closed rather than trusting unvalidated studentIds.
-const getEnrolledStudentIds = async (tenantId, classLabel, section) => {
-  let Student;
-  try {
-    Student = await getStudentModel();
-  } catch (err) {
-    throw new Error("Student enrollment check unavailable: " + err.message);
-  }
-  const query = { schoolId: tenantId, class: classLabel };
-  if (section) query.section = section;
-  const enrolled = await Student.find(query).select("admissionNo").lean();
-  return new Set(enrolled.map((s) => String(s.admissionNo)));
-};
-
 const markAttendance = async (req, res) => {
   try {
     const { records } = req.body; // [{ studentId, class, section, date, status, remarks }]
     if (!Array.isArray(records) || records.length === 0) {
       return res.status(400).json({ success: false, message: "records array is required" });
-    }
-
-    // Teacher writes are tied to their assigned class/section (guardClassBody
-    // already validated every record against the teacherScope union). Every
-    // studentId must actually be enrolled there, or the whole submission is
-    // rejected — clients do not get to nominate arbitrary classmates.
-    if (req.teacherScope) {
-      const first = records.find((r) => r) || {};
-      let allowed;
-      try {
-        allowed = await getEnrolledStudentIds(
-          req.tenantId,
-          String(first.class || "").trim() || undefined,
-          String(first.section || "").trim() || undefined,
-        );
-      } catch (err) {
-        return res.status(503).json({ success: false, message: err.message });
-      }
-      const invalid = [...new Set(records.map((r) => String(r.studentId).trim()).filter(Boolean))]
-        .filter((id) => !allowed.has(id));
-      if (invalid.length > 0) {
-        return res.status(400).json({
-          success: false,
-          message: "Some studentIds are not enrolled in your class/section",
-          invalidStudentIds: invalid,
-        });
-      }
     }
 
     // Referential integrity: the class/section written on the records must
@@ -97,39 +53,40 @@ const markAttendance = async (req, res) => {
       const or = [{ admissionNo: { $in: submittedIds } }];
       if (asObjectIds.length > 0) or.push({ _id: { $in: asObjectIds } });
       const studentFilter = { schoolId: req.tenantId, $or: or };
-      if (req.branchId) studentFilter.branchId = req.branchId;
-      const owned = await Student.find(studentFilter).select("_id admissionNo").lean();
-      const ownedIds = new Set();
+      if (req.branchId) studentFilter.branchId = { $in: [req.branchId, null] };
+      const owned = await Student.find(studentFilter)
+        .select("_id admissionNo class section")
+        .lean();
+      const studentsById = new Map();
       for (const s of owned) {
-        ownedIds.add(String(s._id));
-        if (s.admissionNo) ownedIds.add(String(s.admissionNo));
+        studentsById.set(String(s._id), s);
+        if (s.admissionNo) studentsById.set(String(s.admissionNo), s);
       }
-      const notMine = submittedIds.filter((id) => !ownedIds.has(id));
+      const notMine = submittedIds.filter((id) => !studentsById.has(id));
       if (notMine.length > 0) {
-        console.error(
-          "[OWNERSHIP-DEBUG]",
-          JSON.stringify({
-            tenantId: req.tenantId,
-            branchId: req.branchId,
-            role: req.user && req.user.role,
-            submittedIds,
-            filter: studentFilter,
-            ownedCount: owned.length,
-            collection: Student.collection && Student.collection.collectionName,
-            dbName: Student.db && Student.db.name,
-            uriTail: (process.env.STUDENT_MONGODB_URI || "").slice(-30),
-            mongooseVer: mongoose.version,
-            strictQuery: Student.schema.options.strictQuery,
-            bySchoolOnly: await Student.countDocuments({ schoolId: req.tenantId }),
-            byAdmNo: await Student.countDocuments({ admissionNo: { $in: submittedIds } }),
-          }),
-        );
         return res.status(400).json({
           success: false,
           message: req.branchId
             ? "Some studentIds do not belong to this campus"
             : "Some studentIds do not belong to this school",
           invalidStudentIds: notMine,
+        });
+      }
+      const wrongClassOrSection = records
+        .filter((record) => {
+          const student = studentsById.get(String(record.studentId || "").trim());
+          return (
+            !student ||
+            String(student.class || "").trim() !== String(record.class || "").trim() ||
+            String(student.section || "").trim() !== String(record.section || "").trim()
+          );
+        })
+        .map((record) => String(record.studentId || "").trim());
+      if (wrongClassOrSection.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: "Some students do not belong to the selected class and section",
+          invalidStudentIds: [...new Set(wrongClassOrSection)],
         });
       }
     }
@@ -214,6 +171,7 @@ const getAttendance = async (req, res) => {
   try {
     const { studentId, class: cls, section, from, to } = req.query;
     const filter = scopeQuery(Attendance, req, { schoolId: req.tenantId })
+    if (req.branchId) filter.branchId = { $in: [req.branchId, null] };
     if (studentId) filter.studentId = studentId;
     if (cls) filter.class = cls;
     if (section) filter.section = section;
@@ -244,7 +202,8 @@ const getAttendance = async (req, res) => {
 const getAttendanceReport = async (req, res) => {
   try {
     const { from, to, class: cls, section, studentId } = req.query;
-      const match = withBranchScope(req, { schoolId: req.tenantId });
+    const match = { schoolId: req.tenantId };
+    if (req.branchId) match.branchId = { $in: [req.branchId, null] };
     if (cls) match.class = cls;
     if (section) match.section = section;
     if (studentId) match.studentId = studentId;

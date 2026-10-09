@@ -5,6 +5,7 @@ import {
   UserCheck,
   CalendarCheck,
   Clock3,
+  Pencil,
 } from "lucide-react";
 import {
   PageIntro,
@@ -42,6 +43,8 @@ export default function Attendance() {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(false);
+  const [editingAttendance, setEditingAttendance] = useState(false);
+  const [savedAttendanceDate, setSavedAttendanceDate] = useState("");
 
   useEffect(() => {
     if (!query) return;
@@ -82,17 +85,23 @@ export default function Attendance() {
     });
     return byStudent;
   }, [records]);
+  const hasTodayAttendance =
+    savedAttendanceDate === todayISO() || Object.keys(todayRecords).length > 0;
 
   useEffect(() => {
     const map = {};
     (students || []).forEach((s) => {
-      if (todayRecords[s.admissionNo]) map[s._id] = todayRecords[s.admissionNo];
+      const status = todayRecords[s.admissionNo] || todayRecords[s._id];
+      if (status) map[s._id] = status;
     });
     setMarks(map);
   }, [todayRecords, students]);
 
   const setMark = (id, status) =>
-    setMarks((m) => (m[id] === status ? { ...m, [id]: undefined } : { ...m, [id]: status }));
+    setMarks((m) => {
+      if (hasTodayAttendance && editingAttendance && m[id] === status) return m;
+      return m[id] === status ? { ...m, [id]: undefined } : { ...m, [id]: status };
+    });
 
   const markAll = (status) => {
     const next = { ...marks };
@@ -169,14 +178,30 @@ export default function Attendance() {
     setSaving(true);
     try {
       await api.attendance.mark(marked);
+      setSavedAttendanceDate(todayISO());
+      setEditingAttendance(false);
       toast(`Attendance saved for ${marked.length} student(s)`);
-      const { data: fresh } = await api.attendance.list(query);
-      setRecords(Array.isArray(fresh) ? fresh : []);
+      try {
+        const { data: fresh } = await api.attendance.list(query);
+        setRecords(Array.isArray(fresh) ? fresh : []);
+      } catch (refreshError) {
+        toast(`Attendance was saved, but the latest records could not be refreshed: ${refreshError.message}`, "error");
+      }
     } catch (e) {
       toast(e.message, "error");
     } finally {
       setSaving(false);
     }
+  };
+
+  const cancelEditing = () => {
+    const savedMarks = {};
+    students.forEach((student) => {
+      const status = todayRecords[student.admissionNo] || todayRecords[student._id];
+      if (status) savedMarks[student._id] = status;
+    });
+    setMarks(savedMarks);
+    setEditingAttendance(false);
   };
 
   if (!cls) {
@@ -278,9 +303,14 @@ export default function Attendance() {
       <Card
         title="Mark Today's Attendance"
         action={
-          <span className="text-[12.5px] font-medium text-slate-text/70">
-            {todayISO()}
-          </span>
+          <div className="flex items-center gap-3">
+            {hasTodayAttendance && !editingAttendance && (
+              <Button variant="outline" onClick={() => setEditingAttendance(true)}>
+                <Pencil size={14} /> Edit Attendance
+              </Button>
+            )}
+            <span className="text-[12.5px] font-medium text-slate-text/70">{todayISO()}</span>
+          </div>
         }
       >
         <div className="flex flex-wrap items-center justify-between gap-3 mb-4 pb-4 border-b border-slate-200">
@@ -289,7 +319,7 @@ export default function Attendance() {
               <button
                 key={status}
                 onClick={() => markAll(status)}
-                disabled={!students.length}
+                disabled={!students.length || (hasTodayAttendance && !editingAttendance)}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-paper text-slate-text hover:bg-black/5 disabled:opacity-50"
               >
                 Mark all {status}
@@ -297,7 +327,9 @@ export default function Attendance() {
             ))}
           </div>
           <span className="text-[11.5px] text-slate-text/60">
-            Tap a status to set it; tap again to clear.
+            {hasTodayAttendance
+              ? "Select a new status, then save your changes."
+              : "Tap a status to set it; tap again to clear."}
           </span>
         </div>
 
@@ -337,11 +369,12 @@ export default function Attendance() {
                         key={key}
                         title={cfg.full}
                         onClick={() => setMark(s._id, key)}
+                        disabled={hasTodayAttendance && !editingAttendance}
                         className={`w-9 h-9 rounded-lg text-[12px] font-bold border transition-all ${
                           status === key
                             ? cfg.active
                             : "bg-white text-slate-text/55 border-slate-300 hover:bg-paper hover:border-slate-400"
-                        }`}
+                        } disabled:cursor-not-allowed disabled:opacity-60`}
                       >
                         {cfg.label}
                       </button>
@@ -360,9 +393,14 @@ export default function Attendance() {
               {" · "}Absent <strong className="text-alert">{counts.Absent}</strong>
               {" · "}Leave <strong className="text-info">{counts.Leave}</strong>
             </div>
-            <Button variant="primary" onClick={saveAttendance} disabled={saving}>
-              <Save size={15} /> {saving ? "Saving…" : "Save Attendance"}
-            </Button>
+            {editingAttendance && (
+              <Button variant="outline" onClick={cancelEditing} disabled={saving}>Cancel</Button>
+            )}
+            {(!hasTodayAttendance || editingAttendance) && (
+              <Button variant="primary" onClick={saveAttendance} disabled={saving}>
+                <Save size={15} /> {saving ? "Saving…" : editingAttendance ? "Save Changes" : "Save Attendance"}
+              </Button>
+            )}
           </div>
         )}
       </Card>

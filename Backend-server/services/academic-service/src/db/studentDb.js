@@ -22,6 +22,12 @@ const studentSchema = new mongoose.Schema(
       required: true,
       index: true,
     },
+    branchId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Branch",
+      default: null,
+      index: true,
+    },
     admissionNo: { type: String, required: true },
     userId: { type: String, default: null },
     name: { type: String, required: true },

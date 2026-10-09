@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { CalendarDays } from "lucide-react";
-import { PageIntro, Card, Pill, Select } from "../../components/UI";
+import { PageIntro, Card, Pill, Select, toast } from "../../components/UI";
 import PageArtwork from "../../components/PageArtwork";
 import {
   TrendArea,
@@ -24,11 +24,25 @@ export default function Attendance() {
     api.attendance
       .list()
       .then(({ data }) => setRecords(data || []))
-      .catch(() => setRecords([]))
+      .catch((error) => {
+        toast(error.message || "Could not load attendance records", "error");
+      })
       .finally(() => setLoading(false));
   };
 
-  useEffect(refresh, []);
+  useEffect(() => {
+    refresh();
+    const unsubscribe = api.attendanceStream.subscribe({
+      onData: () => {
+        if (document.visibilityState !== "visible") return;
+        api.attendance
+          .list()
+          .then(({ data }) => setRecords(data || []))
+          .catch((error) => toast(error.message || "Could not refresh attendance records", "error"));
+      },
+    });
+    return unsubscribe;
+  }, []);
 
   const summary = useMemo(() => {
     const m = { Present: 0, Absent: 0, Leave: 0 };

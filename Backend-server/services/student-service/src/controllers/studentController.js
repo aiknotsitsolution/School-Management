@@ -268,6 +268,9 @@ const getStudents = async (req, res) => {
       limit = 20,
     } = req.query;
     const filter = scopeQuery(Student, req, { schoolId: req.tenantId })
+    // A campus-pinned roster excludes other campuses but retains legacy
+    // school-level students that have not been assigned a branch yet.
+    if (req.branchId) filter.branchId = { $in: [req.branchId, null] };
     // Soft-deleted students are hidden from every listing unless explicitly
     // requested (admin "deleted" views / restore flows).
     if (includeDeleted !== "true" && includeDeleted !== "1") filter.deletedAt = null;

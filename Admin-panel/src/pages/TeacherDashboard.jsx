@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Users,
   Save,
+  Pencil,
   Timer,
   GraduationCap,
   AlertTriangle,
@@ -186,6 +187,8 @@ export default function TeacherDashboard() {
   const [achievements, setAchievements] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [editingAttendance, setEditingAttendance] = useState(false);
+  const [savedAttendanceDate, setSavedAttendanceDate] = useState("");
 
   const q = useMemo(
     () =>
@@ -243,10 +246,17 @@ export default function TeacherDashboard() {
   useEffect(() => {
     const map = {};
     students.forEach((s) => {
-      if (todayAttendance[s.admissionNo]) map[s._id] = todayAttendance[s.admissionNo];
+      const status = todayAttendance[s.admissionNo] || todayAttendance[s._id];
+      if (status) map[s._id] = status;
     });
     setMarkMap(map);
   }, [todayAttendance, students]);
+  const hasTodayAttendance =
+    savedAttendanceDate === todayISO() || Object.keys(todayAttendance).length > 0;
+
+  useEffect(() => {
+    setEditingAttendance(false);
+  }, [cls, section]);
 
   // Live attendance: when anyone in the school marks attendance (SSE push
   // from academic-service via the comm-service hub), refresh this class view
@@ -301,9 +311,10 @@ export default function TeacherDashboard() {
     `class=${encodeURIComponent(scope.class)}${scope.section ? `&section=${encodeURIComponent(scope.section)}` : ""}`;
 
   const setStatus = (id, status) =>
-    setMarkMap((m) =>
-      m[id] === status ? { ...m, [id]: undefined } : { ...m, [id]: status },
-    );
+    setMarkMap((m) => {
+      if (hasTodayAttendance && editingAttendance && m[id] === status) return m;
+      return m[id] === status ? { ...m, [id]: undefined } : { ...m, [id]: status };
+    });
 
   const markAll = (status) => {
     setMarkMap((m) => {
@@ -342,9 +353,15 @@ export default function TeacherDashboard() {
     setSaving(true);
     try {
       await api.attendance.mark(records);
+      setSavedAttendanceDate(todayISO());
+      setEditingAttendance(false);
       toast(`Attendance saved for ${records.length} student(s)`);
-      const { data: fresh } = await api.attendance.list(q);
-      setAttendance(Array.isArray(fresh) ? fresh : []);
+      try {
+        const { data: fresh } = await api.attendance.list(q);
+        setAttendance(Array.isArray(fresh) ? fresh : []);
+      } catch (refreshError) {
+        toast(`Attendance was saved, but the latest records could not be refreshed: ${refreshError.message}`, "error");
+      }
     } catch (e) {
       toast(e.message, "error");
     } finally {
@@ -589,14 +606,16 @@ export default function TeacherDashboard() {
                   <button
                     type="button"
                     onClick={() => markAll("Present")}
-                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11.5px] font-bold text-emerald-700 transition hover:bg-emerald-100"
+                    disabled={hasTodayAttendance && !editingAttendance}
+                    className="inline-flex items-center gap-1 rounded-lg bg-emerald-50 px-2.5 py-1.5 text-[11.5px] font-bold text-emerald-700 transition hover:bg-emerald-100 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <Check size={12} /> All present
                   </button>
                   <button
                     type="button"
                     onClick={clearAll}
-                    className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11.5px] font-bold text-slate-600 transition hover:bg-slate-200"
+                    disabled={hasTodayAttendance}
+                    className="inline-flex items-center gap-1 rounded-lg bg-slate-100 px-2.5 py-1.5 text-[11.5px] font-bold text-slate-600 transition hover:bg-slate-200 disabled:cursor-not-allowed disabled:opacity-50"
                   >
                     <RotateCcw size={12} /> Reset
                   </button>
@@ -672,8 +691,9 @@ export default function TeacherDashboard() {
                               <button
                                 type="button"
                                 onClick={() => setStatus(s._id, st)}
+                                disabled={hasTodayAttendance && !editingAttendance}
                                 aria-pressed={markMap[s._id] === st}
-                                className={`min-w-[62px] rounded-full px-2.5 py-1.5 text-[11.5px] font-bold transition-all ${
+                                className={`min-w-[62px] rounded-full px-2.5 py-1.5 text-[11.5px] font-bold transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                                   markMap[s._id] === st
                                     ? `${STATUS_STYLE[st]} shadow-[0_2px_8px_-4px_rgba(15,23,42,0.4)]`
                                     : "text-slate-400 hover:bg-slate-100 hover:text-slate-600"
@@ -691,11 +711,41 @@ export default function TeacherDashboard() {
 
                 <div className="mt-4 flex flex-col items-center justify-between gap-3 border-t border-slate-200 pt-4 sm:flex-row">
                   <span className="text-[12px] text-slate-text/60">
-                    Tap a status to set it, tap again to clear. {unmarkedCount} unmarked.
+                    {hasTodayAttendance
+                      ? "Select a new status, then save your changes."
+                      : "Tap a status to set it, tap again to clear."}{" "}
+                    {unmarkedCount} unmarked.
                   </span>
-                  <Button onClick={saveAttendance} disabled={saving}>
-                    <Save size={15} /> {saving ? "Saving…" : "Save Attendance"}
-                  </Button>
+                  <div className="flex items-center gap-2">
+                    {hasTodayAttendance && !editingAttendance ? (
+                      <Button variant="outline" onClick={() => setEditingAttendance(true)}>
+                        <Pencil size={14} /> Edit Attendance
+                      </Button>
+                    ) : (
+                      <>
+                        {editingAttendance && (
+                          <Button
+                            variant="outline"
+                            onClick={() => {
+                              const savedMarks = {};
+                              students.forEach((student) => {
+                                const status = todayAttendance[student.admissionNo] || todayAttendance[student._id];
+                                if (status) savedMarks[student._id] = status;
+                              });
+                              setMarkMap(savedMarks);
+                              setEditingAttendance(false);
+                            }}
+                            disabled={saving}
+                          >
+                            Cancel
+                          </Button>
+                        )}
+                        <Button onClick={saveAttendance} disabled={saving}>
+                          <Save size={15} /> {saving ? "Saving…" : editingAttendance ? "Save Changes" : "Save Attendance"}
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </>
             )}

@@ -23,7 +23,7 @@ import {
   Trophy,
   Zap,
 } from "lucide-react";
-import { Card, StatCard } from "../../components/UI";
+import { Card, StatCard, toast } from "../../components/UI";
 import { QuickActions as QuickActionRail, ACCENTS } from "../../components/dashboard/DashKit";
 import PageArtwork, { artworkForLucide } from "../../components/PageArtwork";
 import {
@@ -486,6 +486,26 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
     run();
     return () => { alive = false; };
   }, [cls, section]);
+
+  useEffect(() => {
+    const unsubscribe = api.attendanceStream.subscribe({
+      onData: () => {
+        if (document.visibilityState !== "visible") return;
+        api.attendance
+          .list()
+          .then(({ data: attendance }) => {
+            setData((current) => ({
+              ...current,
+              attendance: Array.isArray(attendance) ? attendance : [],
+            }));
+          })
+          .catch((refreshError) => {
+            toast(refreshError.message || "Could not refresh attendance", "error");
+          });
+      },
+    });
+    return unsubscribe;
+  }, []);
 
   const { profile, attendance, timetable, homework, exams, marks, invoices, notices, submissions } = data;
 
