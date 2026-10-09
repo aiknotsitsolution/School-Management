@@ -74,7 +74,23 @@ const ATT_VALUE = {
   Leave: "text-blue-600",
 };
 
-function StudentAttendanceCalendar({ attendance, events }) {
+/**
+ * Dashboard card renders inside a 380px column, so a cell is ~39px wide — the
+ * full word never fits ("Mahatma Gandhi Jayanti" needs 100px). `mini` prints
+ * these single letters instead and keeps the full name on the chip's `title`,
+ * so hovering still reveals which holiday or status it is.
+ */
+const ATT_SHORT = { Present: "P", Absent: "A", Leave: "L" };
+
+/**
+ * School Calendar — attendance + Govt holidays in one month grid.
+ *
+ * `variant="mini"`  dashboard card: grid + legend only, nothing that pushes
+ *                   the greeting banner off the first screen.
+ * `variant="full"`  My Attendance: adds the month list and the selected-day
+ *                   detail rail beside the grid.
+ */
+export function StudentAttendanceCalendar({ attendance, events, variant = "full" }) {
   const [month, setMonth] = useState(() => {
     const today = new Date();
     return new Date(today.getFullYear(), today.getMonth(), 1);
@@ -87,6 +103,8 @@ function StudentAttendanceCalendar({ attendance, events }) {
   const firstDay = new Date(year, monthIndex, 1).getDay();
   const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
   const today = dateOf(new Date());
+  // "2026-10-" — the prefix every date key in the rendered month shares.
+  const monthKey = `${year}-${String(monthIndex + 1).padStart(2, "0")}-`;
 
   useEffect(() => {
     let active = true;
@@ -131,6 +149,22 @@ function StudentAttendanceCalendar({ attendance, events }) {
     return byDate;
   }, [events]);
 
+  // The legend doubles as the month's tally. The mini grid prints single
+  // letters, so this strip is where a student actually reads how the month
+  // went — hence a count beside each label rather than a bare word.
+  const legendCounts = useMemo(() => {
+    const counts = { Present: 0, Absent: 0, Leave: 0, Holiday: 0 };
+    attendanceByDate.forEach((record, key) => {
+      if (!key.startsWith(monthKey)) return;
+      if (record.status in counts) counts[record.status] += 1;
+    });
+    holidaysByDate.forEach((dayEvents, key) => {
+      if (!key.startsWith(monthKey)) return;
+      counts.Holiday += dayEvents.length;
+    });
+    return counts;
+  }, [attendanceByDate, holidaysByDate, monthKey]);
+
   const selectedAttendance = attendanceByDate.get(selectedDate);
   const selectedHolidays = holidaysByDate.get(selectedDate) || [];
   const monthItems = useMemo(() => {
@@ -170,11 +204,11 @@ function StudentAttendanceCalendar({ attendance, events }) {
               setMonth(previous);
               setSelectedDate(dateOf(previous));
             }}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-text transition hover:bg-paper"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-text transition hover:bg-paper"
           >
-            <ChevronLeft size={16} />
+            <ChevronLeft size={14} />
           </button>
-          <span className="min-w-[120px] text-center text-[13px] font-semibold text-ink">
+          <span className="min-w-[104px] text-center text-[12.5px] font-semibold text-ink">
             {month.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
           </span>
           <button
@@ -185,13 +219,17 @@ function StudentAttendanceCalendar({ attendance, events }) {
               setMonth(next);
               setSelectedDate(dateOf(next));
             }}
-            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-text transition hover:bg-paper"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-text transition hover:bg-paper"
           >
-            <ChevronRight size={16} />
+            <ChevronRight size={14} />
           </button>
         </div>
       }
     >
+      {/* `mini` renders a plain block (grid + legend stacked); `full` splits
+          into grid | detail so the rail sits beside it instead of under it. */}
+      <div className={variant === "full" ? "grid gap-4 lg:grid-cols-[minmax(0,1fr)_272px]" : ""}>
+        <div>
       <div className="grid grid-cols-7 gap-1 text-center">
         {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
           <div key={day} className="py-2 text-[10px] font-bold uppercase tracking-wide text-slate-text/55">
@@ -207,10 +245,17 @@ function StudentAttendanceCalendar({ attendance, events }) {
           const dayAttendance = attendanceByDate.get(dayDate);
           const dayHolidays = holidaysByDate.get(dayDate) || [];
           const isSelected = dayDate === selectedDate;
-          const attendanceBadge = {
-            Present: { label: "P", style: "bg-emerald-100 text-emerald-700", cell: "bg-emerald-50/80" },
-            Absent: { label: "A", style: "bg-rose-100 text-rose-700", cell: "bg-rose-50/80" },
-            Leave: { label: "L", style: "bg-blue-100 text-blue-700", cell: "bg-blue-50/80" },
+          // Full-word chips instead of the old P/A/L/H monograms — the whole
+          // point of the compact card is that a day reads at a glance.
+          const attendanceChip = {
+            Present: { text: "Present", style: "bg-emerald-100 text-emerald-700" },
+            Absent: { text: "Absent", style: "bg-rose-100 text-rose-700" },
+            Leave: { text: "Leave", style: "bg-blue-100 text-blue-700" },
+          }[dayAttendance?.status];
+          const cellTint = {
+            Present: "bg-emerald-50/80",
+            Absent: "bg-rose-50/80",
+            Leave: "bg-blue-50/80",
           }[dayAttendance?.status];
           const hasHoliday = dayHolidays.length > 0;
           return (
@@ -219,30 +264,39 @@ function StudentAttendanceCalendar({ attendance, events }) {
               type="button"
               aria-label={`${dayDate}${dayAttendance ? `, ${dayAttendance.status}` : ""}${dayHolidays.length ? `, Holiday: ${dayHolidays.map((event) => event.title).join(", ")}` : ""}`}
               onClick={() => setSelectedDate(dayDate)}
-              className={`flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl border text-[12px] transition ${
+              className={`flex min-h-[46px] flex-col items-center justify-center gap-1 rounded-lg border px-0.5 py-1 transition ${
                 isSelected
                   ? "border-info bg-info/10 font-bold text-info"
                   : hasHoliday
-                    ? "border-amber-200 bg-amber-50 font-semibold text-amber-900 hover:bg-amber-100"
-                    : attendanceBadge
-                      ? `border-transparent ${attendanceBadge.cell} font-semibold text-ink hover:border-slate-200`
+                    ? "border-teal-200 bg-teal-50/70 font-semibold text-ink hover:bg-teal-100"
+                    : cellTint
+                      ? `border-transparent ${cellTint} font-semibold text-ink hover:border-slate-200`
                   : dayDate === today
                     ? "border-info/40 bg-info/5 font-semibold text-ink"
                     : "border-transparent text-ink hover:border-slate-200 hover:bg-paper"
               }`}
             >
-              <span>{day}</span>
-              <span className="flex min-h-3 items-center justify-center gap-0.5">
-                {attendanceBadge && (
-                  <span className={`rounded px-1 text-[8px] font-extrabold leading-3 ${attendanceBadge.style}`}>
-                    {attendanceBadge.label}
+              <span className="text-[12px] font-bold leading-none">{day}</span>
+              <span className="flex w-full min-h-[13px] flex-col items-stretch gap-[2px]">
+                {attendanceChip && (
+                  <span
+                    title={attendanceChip.text}
+                    className={`truncate rounded px-1 text-center text-[7.5px] font-extrabold uppercase leading-[11px] tracking-tight ${attendanceChip.style}`}
+                  >
+                    {variant === "mini"
+                      ? ATT_SHORT[attendanceChip.text] || attendanceChip.text
+                      : attendanceChip.text}
                   </span>
                 )}
-                {dayHolidays.length > 0 && (
-                  <span className="rounded bg-amber-100 px-1 text-[8px] font-extrabold leading-3 text-amber-800">
-                    H
+                {dayHolidays.slice(0, 2).map((event) => (
+                  <span
+                    key={event._id || event.title}
+                    title={event.title || "Holiday"}
+                    className="truncate rounded bg-[#0D9488] px-1 text-center text-[7.5px] font-extrabold leading-[11px] text-white"
+                  >
+                    {variant === "mini" ? "Holiday" : event.title || "Holiday"}
                   </span>
-                )}
+                ))}
               </span>
             </button>
           );
@@ -251,20 +305,31 @@ function StudentAttendanceCalendar({ attendance, events }) {
       {calendarError && (
         <p role="status" className="mt-3 text-[12px] text-rose-600">{calendarError}</p>
       )}
-      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-3 text-[11px] text-slate-text/70">
+      {/* Legend uses the exact chip styles the grid renders, so the legend
+          doubles as the colour key for what the student sees in a cell. */}
+      <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">
         {[
-          ["bg-emerald-500", "Present"],
-          ["bg-rose-500", "Absent"],
-          ["bg-blue-500", "Leave"],
-          ["bg-amber-500", "Holiday"],
-        ].map(([color, label]) => (
-          <span key={label} className="inline-flex items-center gap-1.5">
-            <span className={`h-2 w-2 rounded-full ${color}`} />
-            {label}
+          ["bg-emerald-100 text-emerald-700", "Present"],
+          ["bg-rose-100 text-rose-700", "Absent"],
+          ["bg-blue-100 text-blue-700", "Leave"],
+          ["bg-[#0D9488] text-white", "Holiday"],
+        ].map(([style, label]) => (
+          <span
+            key={label}
+            title={`${legendCounts[label]} ${label.toLowerCase()} in ${month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}`}
+            className={`rounded px-2 py-0.5 text-[10px] font-bold tabular-nums ${style}`}
+          >
+            {label} {legendCounts[label]}
           </span>
         ))}
       </div>
-      <div className="mt-4 border-t border-slate-100 pt-3">
+        </div>
+
+        {/* Right rail — the month list and the selected day sit beside the
+            grid instead of stacked under it. Hidden in `mini`. */}
+        {variant === "full" && (
+        <div className="space-y-3 lg:border-l lg:border-slate-100 lg:pl-4">
+      <div className="border-t border-slate-100 pt-3 lg:border-t-0 lg:pt-0">
         <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-text/55">
           Attendance and holidays this month
         </p>
@@ -295,7 +360,7 @@ function StudentAttendanceCalendar({ attendance, events }) {
                     </span>
                   )}
                   {holidays.map((event) => (
-                    <span key={event._id || event.title} className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                    <span key={event._id || event.title} className="rounded-full bg-[#0D9488] px-2 py-0.5 text-[10px] font-bold text-white">
                       Holiday{event.title ? `: ${event.title}` : ""}
                     </span>
                   ))}
@@ -305,7 +370,7 @@ function StudentAttendanceCalendar({ attendance, events }) {
           </div>
         )}
       </div>
-      <div className="mt-3 rounded-xl bg-paper/70 px-3.5 py-3">
+      <div className="rounded-xl bg-paper/70 px-3.5 py-3">
         <p className="text-[11px] font-semibold text-slate-text/60">
           {new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-IN", {
             weekday: "long",
@@ -320,7 +385,7 @@ function StudentAttendanceCalendar({ attendance, events }) {
           </p>
         )}
         {selectedHolidays.map((event) => (
-          <p key={event._id || event.title} className="mt-1 text-[13px] font-semibold text-amber-700">
+          <p key={event._id || event.title} className="mt-1 text-[13px] font-semibold text-teal-600">
             Holiday: {event.title}
           </p>
         ))}
@@ -328,6 +393,9 @@ function StudentAttendanceCalendar({ attendance, events }) {
           <p className="mt-1 text-[12px] text-slate-text/65">
             No attendance record or holiday announced for this date.
           </p>
+        )}
+      </div>
+        </div>
         )}
       </div>
     </Card>
@@ -583,7 +651,7 @@ function NoticeItem({ n }) {
   );
 }
 
-function ClassCard({ period, cls, section, nowMin }) {
+function ClassCard({ period, cls, section, nowMin, compact = false }) {
   const st = classStatus(period, nowMin);
   const statusTone = {
     ongoing: "bg-emerald-100 text-emerald-700",
@@ -596,44 +664,71 @@ function ClassCard({ period, cls, section, nowMin }) {
   return (
     <article
       role="listitem"
-      className="relative flex w-[248px] shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white p-4 transition-shadow hover:shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)]"
+      className={`relative flex shrink-0 snap-start flex-col overflow-hidden rounded-2xl border border-slate-200 bg-white transition-shadow hover:shadow-[0_12px_30px_-18px_rgba(15,23,42,0.45)] ${
+        compact ? "w-[190px] p-3" : "w-[248px] p-4"
+      }`}
     >
       <span
-        className="pointer-events-none absolute -right-6 -top-7 h-16 w-16 rounded-full bg-blue-50"
+        className={`pointer-events-none absolute -right-6 -top-7 rounded-full bg-blue-50 ${compact ? "h-12 w-12" : "h-16 w-16"}`}
         aria-hidden="true"
       />
       <div className="relative flex items-center justify-between gap-2">
-        <span className="rounded-md bg-violet-100 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-violet-600">
+        <span
+          className={`rounded-md bg-violet-100 font-bold uppercase tracking-wide text-violet-600 ${
+            compact ? "px-1.5 py-0.5 text-[9px]" : "px-1.5 py-0.5 text-[10px]"
+          }`}
+        >
           {amPm(period)}
         </span>
-        <span className="text-[12px] font-semibold tabular-nums text-slate-text/90">{timeRange(period)}</span>
+        <span
+          className={`font-semibold tabular-nums text-slate-text/90 ${compact ? "text-[11px]" : "text-[12px]"}`}
+        >
+          {timeRange(period)}
+        </span>
       </div>
-      <div className="relative mt-3 flex items-center gap-2.5">
-        <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-lg ${subjectTone(period.subject)}`} aria-hidden="true">
-          <BookOpen size={16} />
+      <div className={`relative flex items-center gap-2.5 ${compact ? "mt-2" : "mt-3"}`}>
+        <span
+          className={`flex shrink-0 items-center justify-center rounded-lg ${
+            compact ? "h-7 w-7" : "h-9 w-9"
+          } ${subjectTone(period.subject)}`}
+          aria-hidden="true"
+        >
+          <BookOpen size={compact ? 13 : 16} />
         </span>
         <div className="min-w-0">
-          <p className="truncate font-display text-[15px] font-bold leading-tight text-ink">
+          <p
+            className={`truncate font-display font-bold leading-tight text-ink ${
+              compact ? "text-[13px]" : "text-[15px]"
+            }`}
+          >
             {period.subject || "—"}
           </p>
-          <p className="truncate text-[12px] text-slate-text/70">
+          <p className={`truncate text-slate-text/70 ${compact ? "text-[11px]" : "text-[12px]"}`}>
             {period.teacherName || "Teacher not assigned"}
           </p>
         </div>
       </div>
-      <p className="relative mt-1.5 text-[11.5px] text-slate-text/60">
-        {cls ? `Class ${cls}${section ? `-${section}` : ""}` : ""}
-      </p>
-      <div className="relative mt-auto pt-3.5">
-        <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-bold ${statusTone}`}>
+      {/* The class line is dropped in `compact` — the greeting banner right
+          above this card already shows "Class 1-A", so it would only repeat. */}
+      {!compact && (
+        <p className="relative mt-1.5 text-[11.5px] text-slate-text/60">
+          {cls ? `Class ${cls}${section ? `-${section}` : ""}` : ""}
+        </p>
+      )}
+      <div className={`relative mt-auto ${compact ? "pt-2" : "pt-3.5"}`}>
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full font-bold ${
+            compact ? "px-2 py-0.5 text-[10px]" : "px-2.5 py-1 text-[11px]"
+          } ${statusTone}`}
+        >
           {st.key === "ongoing" ? (
-            <CheckCircle2 size={12} className={isLive ? "animate-pulse" : ""} aria-hidden="true" />
+            <CheckCircle2 size={compact ? 10 : 12} className={isLive ? "animate-pulse" : ""} aria-hidden="true" />
           ) : st.key === "upcoming_soon" ? (
-            <Plus size={12} aria-hidden="true" />
+            <Plus size={compact ? 10 : 12} aria-hidden="true" />
           ) : st.key === "completed" ? (
-            <CheckCircle2 size={12} aria-hidden="true" />
+            <CheckCircle2 size={compact ? 10 : 12} aria-hidden="true" />
           ) : (
-            <Clock size={12} aria-hidden="true" />
+            <Clock size={compact ? 10 : 12} aria-hidden="true" />
           )}
           {st.label}
         </span>
@@ -1048,9 +1143,13 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
 
   return (
     <div className="space-y-5 sm:space-y-6">
-      <StudentAttendanceCalendar attendance={attendance} events={events} />
-
-      {/* ── Greeting banner ─────────────────────────────────────────── */}
+      {/* Halved greeting beside a compact month view. The detail rail (month
+          list + selected day) lives on My Attendance instead, so everything
+          here clears the fold the moment a student logs in. */}
+      <div className="grid items-start gap-5 lg:grid-cols-[minmax(0,1fr)_380px]">
+        {/* Left column: the halved greeting with Today's Classes tucked into
+            the band the taller calendar card leaves beside it. */}
+        <div className="space-y-5">
       <section
         aria-label="Greeting"
         className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-[#0A39A3] via-[#0C47CF] to-[#2B4180] ring-1 ring-inset ring-white/15"
@@ -1068,45 +1167,163 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
         <span className="pointer-events-none absolute -left-16 -top-24 h-64 w-64 rounded-full bg-white/10" aria-hidden="true" />
         <span className="pointer-events-none absolute -bottom-24 left-16 h-56 w-56 rounded-full bg-white/5" aria-hidden="true" />
 
-        <div className="relative z-10 flex min-h-[206px] items-center gap-6 p-6 sm:min-h-[228px] sm:p-8">
-          <div className="min-w-0 max-w-full lg:max-w-[44%]">
-            <p className="flex items-center gap-2.5 text-[11px] font-bold uppercase tracking-[0.16em] text-white/80">
-              <Sun size={15} className="text-amber-300" aria-hidden="true" />
+        {/* Halved from the original 206/228px. Nothing was dropped — the
+            greeting, date pill and both CTAs share one row, with the name and
+            meta stacked underneath, so the same content fits the shorter
+            banner and leaves room for the calendar card beside it. */}
+        {/* `justify-start`, not `justify-center`: the banner is ~224px tall to
+            match the calendar beside it, and centering left a dead band above
+            the greeting that made it read as mid-card rather than at the top. */}
+        <div className="relative z-10 flex min-h-[196px] flex-col justify-start gap-2.5 p-5 sm:min-h-[224px] sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+            <p className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.16em] text-white/80">
+              <Sun size={14} className="text-amber-300" aria-hidden="true" />
               {greeting()},
+              <span className="ml-1.5 inline-flex items-center gap-1.5 rounded-full bg-white/15 px-2.5 py-0.5 text-[11.5px] font-medium normal-case tracking-normal text-white">
+                <CalendarDays size={12} aria-hidden="true" />
+                {dateLabel}
+              </span>
             </p>
-            <h1 className="mt-2 font-display text-[30px] font-bold leading-[1.06] tracking-tight text-white sm:text-[42px]">
-              {firstName}
-            </h1>
-            {heroMeta ? (
-              <p className="mt-2 text-[13.5px] leading-relaxed text-white/85">{heroMeta}</p>
-            ) : null}
-            <span className="mt-3.5 inline-flex items-center gap-2 rounded-full bg-white/15 px-3.5 py-1.5 text-[12.5px] font-medium text-white">
-              <CalendarDays size={14} aria-hidden="true" />
-              {dateLabel}
-            </span>
-
-            <div className="mt-4 flex flex-wrap items-center gap-2.5">
+            <div className="flex flex-wrap items-center gap-2">
               <Link
                 to="/student/timetable"
-                className="group inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-[12.5px] font-semibold text-ink shadow-[0_12px_28px_-18px_rgba(11,25,44,0.95)] transition-colors hover:bg-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+                className="group inline-flex items-center gap-1.5 rounded-full bg-white px-3.5 py-1.5 text-[12px] font-semibold text-ink shadow-[0_12px_28px_-18px_rgba(11,25,44,0.95)] transition-colors hover:bg-white/90 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
               >
                 View timetable
                 <ArrowRight
-                  size={14}
+                  size={13}
                   className="transition-transform group-hover:translate-x-0.5"
                   aria-hidden="true"
                 />
               </Link>
               <Link
                 to="/student/results"
-                className="inline-flex items-center gap-2 rounded-full border border-white/45 bg-white/10 px-4 py-2 text-[12.5px] font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
+                className="inline-flex items-center gap-2 rounded-full border border-white/45 bg-white/10 px-3.5 py-1.5 text-[12px] font-semibold text-white backdrop-blur-sm transition-colors hover:bg-white/20 focus:outline-none focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-transparent"
               >
                 See progress
               </Link>
             </div>
           </div>
+
+          <div className="min-w-0">
+            <h1 className="font-display text-[26px] font-bold leading-[1.06] tracking-tight text-white sm:text-[32px]">
+              {firstName}
+            </h1>
+            {heroMeta ? (
+              <p className="mt-0.5 truncate text-[12.5px] text-white/85">{heroMeta}</p>
+            ) : null}
+          </div>
         </div>
       </section>
+
+          {/* Today's Classes fills the band the 446px calendar leaves below the
+              224px greeting, so the top row no longer has dead space beside the
+              taller card. Card and period tiles are compacted to fit it. */}
+          <Card
+            title={
+              <span className="flex items-center gap-2.5">
+                <PanelIcon>
+                  <CalendarDays size={15} />
+                </PanelIcon>
+                <span className="font-display text-[15px] font-bold text-ink">Today's Classes</span>
+              </span>
+            }
+            action={<ViewLink to="/student/timetable">Full timetable</ViewLink>}
+            headerClassName="px-4 pt-4 pb-0"
+            bodyClassName="px-4 pb-4 pt-3"
+            decor="periods"
+          >
+            {/* Same soft-circle decor as OnTrackCard ("Needs attention"): theme
+                tokens at 8% opacity, so both hues flip with the mode instead of
+                a fixed pastel that only reads on a light surface. */}
+            <span
+              className="pointer-events-none absolute -right-10 -top-14 h-40 w-40 rounded-full bg-primary/8"
+              aria-hidden="true"
+            />
+            <span
+              className="pointer-events-none absolute -left-12 -bottom-10 h-32 w-32 rounded-full bg-[#E9424E]/8"
+              aria-hidden="true"
+            />
+            {isDayOff ? (
+              <EmptyPanel
+                icon={CalendarCheck}
+                iconTone="bg-emerald-50 text-emerald-500"
+                title={isWeekendDay ? "Weekend — no classes today" : "No classes scheduled today"}
+                text={
+                  nextClassDay
+                    ? `${isWeekendDay ? "Enjoy your day off. " : ""}Your next classes are on ${nextClassDay}.`
+                    : isWeekendDay
+                      ? "Enjoy your day off."
+                      : "No classes are scheduled today."
+                }
+                action={<ViewLink to="/student/timetable">Full timetable</ViewLink>}
+              />
+            ) : todayPeriods.length ? (
+              <div className="relative">
+                <div
+                  role="list"
+                  aria-label="Today's classes"
+                  tabIndex={0}
+                  ref={classesRef}
+                  onScroll={syncClassScroll}
+                  onKeyDown={handleClassesKeyDown}
+                  className="scrollbar-hidden flex snap-x snap-mandatory gap-2.5 overflow-x-auto pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40 rounded-xl"
+                >
+                  {todayPeriods.map((p, i) => (
+                    <ClassCard
+                      key={`${p.subject}-${p.startTime}-${i}`}
+                      period={p}
+                      cls={activeCls}
+                      section={activeSection}
+                      nowMin={nowMin}
+                      compact
+                    />
+                  ))}
+                </div>
+
+                {todayPeriods.length > 1 && (
+                  <button
+                    type="button"
+                    onClick={() => scrollClasses(-1)}
+                    disabled={!canScroll.left}
+                    aria-label="Scroll classes left"
+                    className="absolute -left-2 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-text shadow-md transition hover:text-info disabled:cursor-not-allowed disabled:opacity-40 sm:flex"
+                  >
+                    <ChevronLeft size={18} />
+                  </button>
+                )}
+                {todayPeriods.length > 1 && (
+                  <>
+                    <span
+                      aria-hidden="true"
+                      className="pointer-events-none absolute right-0 top-0 hidden h-full w-14 bg-gradient-to-l from-white via-white/80 to-transparent sm:block"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => scrollClasses(1)}
+                      disabled={!canScroll.right}
+                      aria-label="Scroll classes right"
+                      className="absolute -right-2 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-info text-white shadow-[0_10px_24px_-10px_rgba(37,99,235,0.9)] transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40 sm:flex"
+                    >
+                      <ChevronRight size={18} />
+                    </button>
+                  </>
+                )}
+              </div>
+            ) : (
+              <EmptyPanel
+                icon={CalendarDays}
+                title="No timetable published for today"
+                text="Your class teacher has not published a timetable for today yet."
+                action={<ViewLink to="/student/timetable">Full timetable</ViewLink>}
+              />
+            )}
+          </Card>
+        </div>
+
+        {/* Compact month view — chips only, no detail rail. */}
+        <StudentAttendanceCalendar variant="mini" attendance={attendance} events={events} />
+      </div>
 
       {error && (
         <div role="alert" className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3">
@@ -1184,102 +1401,6 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
               sub={feesTotal ? `of ${fmtMoney(feesTotal)} invoiced` : "No invoices yet"}
             />
           </section>
-
-          {/* ── Today's classes ─────────────────────────────────────── */}
-          <Card
-            title={
-              <span className="flex items-center gap-2.5">
-                <PanelIcon>
-                  <CalendarDays size={15} />
-                </PanelIcon>
-                <span className="font-display text-[15.5px] font-bold text-ink">Today's Classes</span>
-              </span>
-            }
-            action={<ViewLink to="/student/timetable">Full timetable</ViewLink>}
-            headerClassName="px-5 sm:px-6 pt-5 pb-0"
-            bodyClassName="px-5 sm:px-6 pb-5 pt-4"
-            decor="periods"
-          >
-            {/* Same soft-circle decor as OnTrackCard ("Needs attention"): theme
-                tokens at 8% opacity, so both hues flip with the mode instead of
-                a fixed pastel that only reads on a light surface. */}
-            <span
-              className="pointer-events-none absolute -right-10 -top-14 h-40 w-40 rounded-full bg-primary/8"
-              aria-hidden="true"
-            />
-            <span
-              className="pointer-events-none absolute -left-12 -bottom-10 h-32 w-32 rounded-full bg-[#E9424E]/8"
-              aria-hidden="true"
-            />
-            {isDayOff ? (
-              <EmptyPanel
-                icon={CalendarCheck}
-                iconTone="bg-emerald-50 text-emerald-500"
-                title={isWeekendDay ? "Weekend — no classes today" : "No classes scheduled today"}
-                text={
-                  nextClassDay
-                    ? `${isWeekendDay ? "Enjoy your day off. " : ""}Your next classes are on ${nextClassDay}.`
-                    : isWeekendDay
-                      ? "Enjoy your day off."
-                      : "No classes are scheduled today."
-                }
-                action={<ViewLink to="/student/timetable">Full timetable</ViewLink>}
-              />
-            ) : todayPeriods.length ? (
-              <div className="relative">
-                <div
-                  role="list"
-                  aria-label="Today's classes"
-                  tabIndex={0}
-                  ref={classesRef}
-                  onScroll={syncClassScroll}
-                  onKeyDown={handleClassesKeyDown}
-                  className="scrollbar-hidden flex snap-x snap-mandatory gap-3.5 overflow-x-auto pb-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-info/40 rounded-xl"
-                >
-                  {todayPeriods.map((p, i) => (
-                    <ClassCard key={`${p.subject}-${p.startTime}-${i}`} period={p} cls={activeCls} section={activeSection} nowMin={nowMin} />
-                  ))}
-                </div>
-
-                {todayPeriods.length > 1 && (
-                  <button
-                    type="button"
-                    onClick={() => scrollClasses(-1)}
-                    disabled={!canScroll.left}
-                    aria-label="Scroll classes left"
-                    className="absolute -left-2 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-text shadow-md transition hover:text-info disabled:cursor-not-allowed disabled:opacity-40 sm:flex"
-                  >
-                    <ChevronLeft size={18} />
-                  </button>
-                )}
-                {todayPeriods.length > 1 && (
-                  <>
-                    <span
-                      aria-hidden="true"
-                      className="pointer-events-none absolute right-0 top-0 hidden h-full w-14 bg-gradient-to-l from-white via-white/80 to-transparent sm:block"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => scrollClasses(1)}
-                      disabled={!canScroll.right}
-                      aria-label="Scroll classes right"
-                      className="absolute -right-2 top-1/2 z-10 hidden h-9 w-9 -translate-y-1/2 items-center justify-center rounded-full bg-info text-white shadow-[0_10px_24px_-10px_rgba(37,99,235,0.9)] transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40 sm:flex"
-                    >
-                      <ChevronRight size={18} />
-                    </button>
-                  </>
-                )}
-              </div>
-            ) : (
-              <EmptyPanel
-                icon={CalendarDays}
-                title="No timetable published for today"
-                text="Your class teacher has not published a timetable for today yet."
-                action={<ViewLink to="/student/timetable">Full timetable</ViewLink>}
-              />
-            )}
-
-          </Card>
 
           <OnTrackCard
             attendancePct={attPct}
