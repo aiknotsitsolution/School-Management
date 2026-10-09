@@ -9,6 +9,7 @@ import {
   AlertCircle,
   Users,
   Briefcase,
+  Pencil,
 } from "lucide-react";
 import {
   PageIntro,
@@ -206,6 +207,10 @@ export default function Attendance() {
   const [query, setQuery] = useState("");
   const [marks, setMarks] = useState({});
   const [saved, setSaved] = useState(false);
+  const [editingAttendance, setEditingAttendance] = useState(false);
+  const [savingAttendance, setSavingAttendance] = useState(false);
+  const [registerRecords, setRegisterRecords] = useState([]);
+  const [registerLoading, setRegisterLoading] = useState(false);
   const [error, setError] = useState("");
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [date] = useState(todayLabel());
@@ -295,38 +300,76 @@ export default function Attendance() {
         api.attendance.list().then((res) => {
           setAttendanceRecords(res.data || []);
           setTrendError("");
-        }).catch(() => {});
+        }).catch((refreshError) => {
+          setTrendError(refreshError.message || "Could not refresh attendance trends");
+        });
       },
     });
     return unsubscribe;
   }, []);
 
-  // Update marks when date changes
+  const scopedStudents = useMemo(
+    () =>
+      students.filter(
+        (student) =>
+          (cls === "All" || student.class === cls) &&
+          (section === "All" || student.section === section),
+      ),
+    [students, cls, section],
+  );
+
+  const selectedDayQuery = useMemo(() => {
+    const params = new URLSearchParams({
+      from: selectedDate,
+      to: selectedDate,
+      limit: "1000",
+    });
+    if (cls !== "All") params.set("class", cls);
+    if (section !== "All") params.set("section", section);
+    return params.toString();
+  }, [cls, section, selectedDate]);
+
   useEffect(() => {
+    let alive = true;
+    setRegisterLoading(true);
+    setRegisterRecords([]);
+    setError("");
+    setSaved(false);
+    setEditingAttendance(false);
+    api.attendance
+      .list(selectedDayQuery)
+      .then(({ data }) => {
+        if (alive) setRegisterRecords(Array.isArray(data) ? data : []);
+      })
+      .catch((requestError) => {
+        if (alive) setError(requestError.message || "Could not load the selected day's attendance");
+      })
+      .finally(() => {
+        if (alive) setRegisterLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [selectedDayQuery]);
+
+  // Update the selected class/section roster from records for the chosen day.
+  useEffect(() => {
+    if (editingAttendance) return;
     const existing = {};
     // Build admissionNo → _id map for matching teacher-saved records
     const admToId = {};
     students.forEach((s) => { if (s.admissionNo) admToId[s.admissionNo] = s.id; });
-    attendanceRecords
-      .filter(
-        (record) =>
-          new Date(record.date).toISOString().slice(0, 10) === selectedDate,
-      )
-      .forEach((record) => {
-        const key = admToId[record.studentId] || record.studentId;
-        // Anything that is not Absent/Leave (including a stray Half Day row
-        // from before the status was removed) reads as Present, the register's
-        // default.
-        existing[key] =
-          record.status === "Absent"
-            ? "absent"
-            : record.status === "Leave"
-              ? "leave"
-              : "present";
-      });
+    registerRecords.forEach((record) => {
+      const key = admToId[record.studentId] || record.studentId;
+      existing[key] =
+        record.status === "Absent"
+          ? "absent"
+          : record.status === "Leave"
+            ? "leave"
+            : "present";
+    });
     setMarks(existing);
-    setSaved(false);
-  }, [selectedDate, attendanceRecords, students]);
+  }, [registerRecords, students, editingAttendance]);
 
   // Fetch all staff attendance for trend chart (runs once on mount)
   useEffect(() => {
@@ -412,12 +455,13 @@ export default function Attendance() {
     return list.slice(start, start + attPageSize);
   }, [list, attSafePage, attPageSize]);
 
-  // Reset marks when class/section changes
+  // Clear temporary selections when the roster scope changes.
   useEffect(() => {
     setMarks({});
     setSaved(false);
+    setEditingAttendance(false);
     setAttPage(1);
-  }, [cls, section, query]);
+  }, [cls, section]);
 
   const setMark = (id, val) => {
     setMarks((m) => ({ ...m, [id]: val }));
@@ -437,13 +481,14 @@ export default function Attendance() {
   }, [list, marks, studentStatusConfig]);
 
   const handleSave = async () => {
-    if (list.length === 0) {
+    if (scopedStudents.length === 0) {
       setError("No students found for this class and section.");
       return;
     }
+    setSavingAttendance(true);
     try {
       await api.attendance.mark(
-        list.map((student) => ({
+        scopedStudents.map((student) => ({
           studentId: student.admissionNo || student.id,
           class: student.class,
           section: student.section,
@@ -455,14 +500,20 @@ export default function Attendance() {
           }[getStatus(student.id)],
         })),
       );
-      // Refresh attendance records so the useEffect picks up saved data
-      const { data } = await api.attendance.list();
-      setAttendanceRecords(data || []);
+      const [{ data: freshRegister }, { data: freshHistory }] = await Promise.all([
+        api.attendance.list(selectedDayQuery),
+        api.attendance.list("limit=1000"),
+      ]);
+      setRegisterRecords(Array.isArray(freshRegister) ? freshRegister : []);
+      setAttendanceRecords(Array.isArray(freshHistory) ? freshHistory : []);
       setError("");
+      setEditingAttendance(false);
       setSaved(true);
       setTimeout(() => setSaved(false), 3500);
     } catch (requestError) {
       setError(requestError.message);
+    } finally {
+      setSavingAttendance(false);
     }
   };
 
@@ -710,6 +761,9 @@ export default function Attendance() {
           </div>
         }
       >
+        {registerLoading && (
+          <p className="mb-3 text-[12px] text-slate-text/60">Loading attendance for this date…</p>
+        )}
         {/* Quick actions + legend */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 pb-4 border-b border-slate-200">
           <div className="flex flex-wrap gap-2 text-[11.5px] text-slate-text/70">
@@ -774,7 +828,8 @@ export default function Attendance() {
                           key={key}
                           title={cfg.full}
                           onClick={() => setMark(s.id, key)}
-                          className={`w-9 h-9 rounded-lg text-[12px] font-bold border transition-all ${
+                          disabled={registerLoading || (registerRecords.length > 0 && !editingAttendance)}
+                          className={`w-9 h-9 rounded-lg text-[12px] font-bold border transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                             isActive
                               ? (ACTIVE_STYLES[key] || "bg-primary text-white border-primary")
                               : "bg-white text-slate-text/55 border-slate-300 hover:bg-paper hover:border-slate-400"
@@ -839,9 +894,33 @@ export default function Attendance() {
                   <CheckCircle2 size={16} /> Attendance saved
                 </span>
               )}
-              <Button variant="primary" onClick={handleSave}>
-                <Check size={15} /> Save Attendance
-              </Button>
+              {registerRecords.length > 0 && !editingAttendance ? (
+                <Button variant="outline" onClick={() => setEditingAttendance(true)}>
+                  <Pencil size={14} /> Edit Attendance
+                </Button>
+              ) : (
+                <>
+                  {editingAttendance && (
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setEditingAttendance(false);
+                        setSaved(false);
+                      }}
+                      disabled={savingAttendance}
+                    >
+                      Cancel
+                    </Button>
+                  )}
+                  <Button
+                    variant="primary"
+                    onClick={handleSave}
+                    disabled={savingAttendance || registerLoading}
+                  >
+                    <Check size={15} /> {savingAttendance ? "Saving…" : editingAttendance ? "Save Changes" : "Save Attendance"}
+                  </Button>
+                </>
+              )}
             </div>
           </div>
         )}
