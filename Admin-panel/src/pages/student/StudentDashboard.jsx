@@ -74,6 +74,266 @@ const ATT_VALUE = {
   Leave: "text-blue-600",
 };
 
+function StudentAttendanceCalendar({ attendance, events }) {
+  const [month, setMonth] = useState(() => {
+    const today = new Date();
+    return new Date(today.getFullYear(), today.getMonth(), 1);
+  });
+  const [selectedDate, setSelectedDate] = useState(() => dateOf(new Date()));
+  const [monthAttendance, setMonthAttendance] = useState([]);
+  const [calendarError, setCalendarError] = useState("");
+  const year = month.getFullYear();
+  const monthIndex = month.getMonth();
+  const firstDay = new Date(year, monthIndex, 1).getDay();
+  const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+  const today = dateOf(new Date());
+
+  useEffect(() => {
+    let active = true;
+    const from = `${year}-${String(monthIndex + 1).padStart(2, "0")}-01`;
+    const to = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+    const params = new URLSearchParams({ from, to, limit: "1000" });
+    setCalendarError("");
+    api.attendance
+      .list(params.toString())
+      .then(({ data }) => {
+        if (active) setMonthAttendance(Array.isArray(data) ? data : []);
+      })
+      .catch((error) => {
+        if (!active) return;
+        setMonthAttendance([]);
+        setCalendarError(error.message || "Attendance for this month could not be loaded.");
+      });
+    return () => {
+      active = false;
+    };
+  }, [year, monthIndex, daysInMonth]);
+
+  const attendanceByDate = useMemo(() => {
+    const byDate = new Map();
+    [...attendance, ...monthAttendance].forEach((record) => {
+      const key = dateOf(record.date);
+      if (key) byDate.set(key, record);
+    });
+    return byDate;
+  }, [attendance, monthAttendance]);
+
+  const holidaysByDate = useMemo(() => {
+    const byDate = new Map();
+    events
+      .filter((event) => String(event.category || "").toLowerCase() === "holiday")
+      .forEach((event) => {
+        const key = dateOf(event.date);
+        if (!key) return;
+        if (!byDate.has(key)) byDate.set(key, []);
+        byDate.get(key).push(event);
+      });
+    return byDate;
+  }, [events]);
+
+  const selectedAttendance = attendanceByDate.get(selectedDate);
+  const selectedHolidays = holidaysByDate.get(selectedDate) || [];
+  const monthItems = useMemo(() => {
+    const dates = new Set();
+    for (const day of attendanceByDate.keys()) {
+      if (day.startsWith(`${year}-${String(monthIndex + 1).padStart(2, "0")}-`)) dates.add(day);
+    }
+    for (const day of holidaysByDate.keys()) {
+      if (day.startsWith(`${year}-${String(monthIndex + 1).padStart(2, "0")}-`)) dates.add(day);
+    }
+    return [...dates]
+      .sort()
+      .map((day) => ({
+        day,
+        attendance: attendanceByDate.get(day),
+        holidays: holidaysByDate.get(day) || [],
+      }));
+  }, [attendanceByDate, holidaysByDate, year, monthIndex]);
+
+  return (
+    <Card
+      title={
+        <span className="flex items-center gap-2.5">
+          <span className="flex h-8 w-8 items-center justify-center rounded-xl bg-info/10 text-info">
+            <CalendarDays size={16} />
+          </span>
+          <span className="font-display text-[15.5px] font-bold text-ink">School Calendar</span>
+        </span>
+      }
+      action={
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            aria-label="Previous month"
+            onClick={() => {
+              const previous = new Date(year, monthIndex - 1, 1);
+              setMonth(previous);
+              setSelectedDate(dateOf(previous));
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-text transition hover:bg-paper"
+          >
+            <ChevronLeft size={16} />
+          </button>
+          <span className="min-w-[120px] text-center text-[13px] font-semibold text-ink">
+            {month.toLocaleDateString("en-IN", { month: "long", year: "numeric" })}
+          </span>
+          <button
+            type="button"
+            aria-label="Next month"
+            onClick={() => {
+              const next = new Date(year, monthIndex + 1, 1);
+              setMonth(next);
+              setSelectedDate(dateOf(next));
+            }}
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-slate-text transition hover:bg-paper"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
+      }
+    >
+      <div className="grid grid-cols-7 gap-1 text-center">
+        {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map((day) => (
+          <div key={day} className="py-2 text-[10px] font-bold uppercase tracking-wide text-slate-text/55">
+            {day}
+          </div>
+        ))}
+        {Array.from({ length: firstDay }, (_, index) => (
+          <div key={`blank-${index}`} aria-hidden="true" />
+        ))}
+        {Array.from({ length: daysInMonth }, (_, index) => {
+          const day = index + 1;
+          const dayDate = `${year}-${String(monthIndex + 1).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+          const dayAttendance = attendanceByDate.get(dayDate);
+          const dayHolidays = holidaysByDate.get(dayDate) || [];
+          const isSelected = dayDate === selectedDate;
+          const attendanceBadge = {
+            Present: { label: "P", style: "bg-emerald-100 text-emerald-700", cell: "bg-emerald-50/80" },
+            Absent: { label: "A", style: "bg-rose-100 text-rose-700", cell: "bg-rose-50/80" },
+            Leave: { label: "L", style: "bg-blue-100 text-blue-700", cell: "bg-blue-50/80" },
+          }[dayAttendance?.status];
+          const hasHoliday = dayHolidays.length > 0;
+          return (
+            <button
+              key={dayDate}
+              type="button"
+              aria-label={`${dayDate}${dayAttendance ? `, ${dayAttendance.status}` : ""}${dayHolidays.length ? `, Holiday: ${dayHolidays.map((event) => event.title).join(", ")}` : ""}`}
+              onClick={() => setSelectedDate(dayDate)}
+              className={`flex min-h-[54px] flex-col items-center justify-center gap-1 rounded-xl border text-[12px] transition ${
+                isSelected
+                  ? "border-info bg-info/10 font-bold text-info"
+                  : hasHoliday
+                    ? "border-amber-200 bg-amber-50 font-semibold text-amber-900 hover:bg-amber-100"
+                    : attendanceBadge
+                      ? `border-transparent ${attendanceBadge.cell} font-semibold text-ink hover:border-slate-200`
+                  : dayDate === today
+                    ? "border-info/40 bg-info/5 font-semibold text-ink"
+                    : "border-transparent text-ink hover:border-slate-200 hover:bg-paper"
+              }`}
+            >
+              <span>{day}</span>
+              <span className="flex min-h-3 items-center justify-center gap-0.5">
+                {attendanceBadge && (
+                  <span className={`rounded px-1 text-[8px] font-extrabold leading-3 ${attendanceBadge.style}`}>
+                    {attendanceBadge.label}
+                  </span>
+                )}
+                {dayHolidays.length > 0 && (
+                  <span className="rounded bg-amber-100 px-1 text-[8px] font-extrabold leading-3 text-amber-800">
+                    H
+                  </span>
+                )}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {calendarError && (
+        <p role="status" className="mt-3 text-[12px] text-rose-600">{calendarError}</p>
+      )}
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-2 border-t border-slate-100 pt-3 text-[11px] text-slate-text/70">
+        {[
+          ["bg-emerald-500", "Present"],
+          ["bg-rose-500", "Absent"],
+          ["bg-blue-500", "Leave"],
+          ["bg-amber-500", "Holiday"],
+        ].map(([color, label]) => (
+          <span key={label} className="inline-flex items-center gap-1.5">
+            <span className={`h-2 w-2 rounded-full ${color}`} />
+            {label}
+          </span>
+        ))}
+      </div>
+      <div className="mt-4 border-t border-slate-100 pt-3">
+        <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-text/55">
+          Attendance and holidays this month
+        </p>
+        {monthItems.length === 0 ? (
+          <p className="text-[12px] text-slate-text/65">
+            No attendance or holiday records for this month.
+          </p>
+        ) : (
+          <div className="max-h-48 space-y-1.5 overflow-y-auto">
+            {monthItems.map(({ day, attendance: record, holidays }) => (
+              <button
+                key={day}
+                type="button"
+                onClick={() => setSelectedDate(day)}
+                className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left transition hover:bg-paper"
+              >
+                <span className="text-[12px] font-medium text-ink">
+                  {new Date(`${day}T00:00:00`).toLocaleDateString("en-IN", {
+                    day: "numeric",
+                    month: "short",
+                    weekday: "short",
+                  })}
+                </span>
+                <span className="flex flex-wrap justify-end gap-1.5">
+                  {record && (
+                    <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${record.status === "Present" ? "bg-emerald-100 text-emerald-700" : record.status === "Absent" ? "bg-rose-100 text-rose-700" : "bg-blue-100 text-blue-700"}`}>
+                      {record.status}
+                    </span>
+                  )}
+                  {holidays.map((event) => (
+                    <span key={event._id || event.title} className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800">
+                      Holiday{event.title ? `: ${event.title}` : ""}
+                    </span>
+                  ))}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+      <div className="mt-3 rounded-xl bg-paper/70 px-3.5 py-3">
+        <p className="text-[11px] font-semibold text-slate-text/60">
+          {new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-IN", {
+            weekday: "long",
+            day: "numeric",
+            month: "long",
+            year: "numeric",
+          })}
+        </p>
+        {selectedAttendance && (
+          <p className={`mt-1 text-[13px] font-semibold ${ATT_VALUE[selectedAttendance.status] || "text-ink"}`}>
+            Attendance: {selectedAttendance.status}
+          </p>
+        )}
+        {selectedHolidays.map((event) => (
+          <p key={event._id || event.title} className="mt-1 text-[13px] font-semibold text-amber-700">
+            Holiday: {event.title}
+          </p>
+        ))}
+        {!selectedAttendance && selectedHolidays.length === 0 && (
+          <p className="mt-1 text-[12px] text-slate-text/65">
+            No attendance record or holiday announced for this date.
+          </p>
+        )}
+      </div>
+    </Card>
+  );
+}
+
 const BADGE = {
   success: "bg-emerald-100 text-emerald-700",
   alert: "bg-rose-100 text-rose-600",
@@ -414,6 +674,7 @@ export default function StudentDashboard() {
     invoices: [],
     notices: [],
     submissions: [],
+    events: [],
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -462,12 +723,16 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
         api.fees.invoices.list(),
         api.notices.list(),
         api.homework.submissions.myList(),
+        api.events.list(),
       ]);
       if (!alive) return;
 
       const value = (i) => (results[i].status === "fulfilled" ? results[i].value.data : null);
       if (results[0].status === "rejected") {
         setError("We couldn't load your data. Please sign out and sign in again.");
+      }
+      if (results[9].status === "rejected") {
+        toast(results[9].reason?.message || "Could not load school holidays", "error");
       }
       setData({
         profile: value(0),
@@ -479,6 +744,7 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
         invoices: value(6) || [],
         notices: value(7) || [],
         submissions: value(8) || [],
+        events: value(9) || [],
       });
       setLoading(false);
     };
@@ -507,7 +773,7 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
     return unsubscribe;
   }, []);
 
-  const { profile, attendance, timetable, homework, exams, marks, invoices, notices, submissions } = data;
+  const { profile, attendance, timetable, homework, exams, marks, invoices, notices, submissions, events } = data;
 
   // Class/section for display. /students/me is authoritative; the JWT claim is
   // only a fallback so the first paint is never blank.
@@ -782,6 +1048,8 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
 
   return (
     <div className="space-y-5 sm:space-y-6">
+      <StudentAttendanceCalendar attendance={attendance} events={events} />
+
       {/* ── Greeting banner ─────────────────────────────────────────── */}
       <section
         aria-label="Greeting"

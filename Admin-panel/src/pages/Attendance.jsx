@@ -10,6 +10,7 @@ import {
   Users,
   Briefcase,
   Pencil,
+  X,
 } from "lucide-react";
 import {
   PageIntro,
@@ -220,8 +221,11 @@ export default function Attendance() {
   // Staff attendance state
   const [staffList, setStaffList] = useState([]);
   const [staffMarks, setStaffMarks] = useState({});
+  const [staffDayRecords, setStaffDayRecords] = useState([]);
   const [staffLoading, setStaffLoading] = useState(true);
   const [staffSaved, setStaffSaved] = useState(false);
+  const [editingStaffAttendance, setEditingStaffAttendance] = useState(false);
+  const [savingStaffAttendance, setSavingStaffAttendance] = useState(false);
   const [staffQuery, setStaffQuery] = useState("");
   const [staffAttendanceRecords, setStaffAttendanceRecords] = useState([]);
   const [staffTrendLoading, setStaffTrendLoading] = useState(true);
@@ -404,7 +408,9 @@ export default function Attendance() {
         }));
         setStaffList(allStaff);
         const existing = {};
-        (attRes.data || []).forEach((r) => {
+        const dayRecords = attRes.data || [];
+        setStaffDayRecords(dayRecords);
+        dayRecords.forEach((r) => {
           existing[r.staffId] =
             r.status === "Present"
               ? "present"
@@ -415,6 +421,8 @@ export default function Attendance() {
                   : "leave";
         });
         setStaffMarks(existing);
+        setStaffSaved(dayRecords.length > 0);
+        setEditingStaffAttendance(false);
       })
       .catch((err) => toast(err.message, "error"))
       .finally(() => setStaffLoading(false));
@@ -607,9 +615,14 @@ export default function Attendance() {
     );
   }, [staffList, staffQuery]);
 
-  const getStaffMark = (id) => staffMarks[id] || "present";
+  const hasSavedStaffAttendance = staffDayRecords.length > 0;
+  const getStaffMark = (id) => {
+    if (staffMarks[id]) return staffMarks[id];
+    return hasSavedStaffAttendance ? "" : "present";
+  };
 
   const setStaffMark = (id, val) => {
+    if (hasSavedStaffAttendance && !editingStaffAttendance) return;
     setStaffMarks((m) => ({ ...m, [id]: val }));
     setStaffSaved(false);
   };
@@ -632,6 +645,7 @@ export default function Attendance() {
 
   const handleSaveStaff = async () => {
     if (filteredStaff.length === 0) return;
+    setSavingStaffAttendance(true);
     try {
       const apiMap = { present: "Present", absent: "Absent", half_day: "Half Day", leave: "Leave" };
       await Promise.all(
@@ -643,12 +657,50 @@ export default function Attendance() {
           }),
         ),
       );
+      const [{ data: freshToday }, { data: freshHistory }] = await Promise.all([
+        api.staff.attendance.list(`date=${todayStr}&limit=2000`),
+        api.staff.attendance.list("limit=5000"),
+      ]);
+      const dayRecords = Array.isArray(freshToday) ? freshToday : [];
+      const refreshedMarks = {};
+      dayRecords.forEach((record) => {
+        refreshedMarks[record.staffId] =
+          record.status === "Present"
+            ? "present"
+            : record.status === "Absent"
+              ? "absent"
+              : record.status === "Half Day" || record.status === "Late"
+                ? "half_day"
+                : "leave";
+      });
+      setStaffDayRecords(dayRecords);
+      setStaffMarks(refreshedMarks);
+      setStaffAttendanceRecords(Array.isArray(freshHistory) ? freshHistory : []);
+      setEditingStaffAttendance(false);
       setStaffSaved(true);
       toast("Staff attendance saved");
-      setTimeout(() => setStaffSaved(false), 3500);
     } catch (err) {
       toast(err.message || "Failed to save staff attendance", "error");
+    } finally {
+      setSavingStaffAttendance(false);
     }
+  };
+
+  const cancelStaffAttendanceEdit = () => {
+    const savedMarks = {};
+    staffDayRecords.forEach((record) => {
+      savedMarks[record.staffId] =
+        record.status === "Present"
+          ? "present"
+          : record.status === "Absent"
+            ? "absent"
+            : record.status === "Half Day" || record.status === "Late"
+              ? "half_day"
+              : "leave";
+    });
+    setStaffMarks(savedMarks);
+    setEditingStaffAttendance(false);
+    setStaffSaved(true);
   };
 
   const TABS = [
@@ -1023,6 +1075,14 @@ export default function Attendance() {
               <div className="divide-y divide-slate-100">
                 {paginatedStaff.map((s) => {
                   const status = getStaffMark(s.id);
+                  const savedRecord = staffDayRecords.find((record) => String(record.staffId) === String(s.id));
+                  const savedStatus = savedRecord
+                    ? savedRecord.status === "Present"
+                      ? "Present"
+                      : savedRecord.status === "Absent"
+                        ? "Absent"
+                        : savedRecord.status
+                    : null;
                   return (
                     <div key={s.id} className="flex items-center gap-3 py-3 hover:bg-paper/60 -mx-2 px-2 rounded-lg transition-colors">
                       <Avatar src={s.photoUrl} name={s.name} size={38} />
@@ -1030,6 +1090,9 @@ export default function Attendance() {
                         <p className="text-[13.5px] font-semibold text-ink truncate">{s.name}</p>
                         <p className="text-[11.5px] text-slate-text/60 mt-0.5">
                           {s.designation} {s.employeeId ? `· ${s.employeeId}` : ""}
+                        </p>
+                        <p className={`mt-1 text-[11px] font-semibold ${savedRecord ? "text-success" : "text-slate-text/45"}`}>
+                          {savedRecord ? `Recorded today · ${savedStatus}` : "Not marked today"}
                         </p>
                         {staffAssignmentsMap[s.id]?.length > 0 && (
                           <p className="text-[11px] text-primary font-medium mt-0.5">
@@ -1045,7 +1108,8 @@ export default function Attendance() {
                               key={key}
                               title={cfg.full}
                               onClick={() => setStaffMark(s.id, key)}
-                              className={`w-9 h-9 rounded-lg text-[12px] font-bold border transition-all ${
+                              disabled={hasSavedStaffAttendance && !editingStaffAttendance}
+                              className={`w-9 h-9 rounded-lg text-[12px] font-bold border transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                                 isActive
                                   ? (ACTIVE_STYLES[key] || "bg-primary text-white border-primary")
                                   : "bg-white text-slate-text/55 border-slate-300 hover:bg-paper hover:border-slate-400"
@@ -1106,12 +1170,33 @@ export default function Attendance() {
                 <div className="flex items-center gap-3">
                   {staffSaved && (
                     <span className="inline-flex items-center gap-1.5 text-[13px] font-medium text-success">
-                      <CheckCircle2 size={16} /> Attendance saved
+                      <CheckCircle2 size={16} /> Attendance saved for {staffDayRecords.length} staff
                     </span>
                   )}
-                  <Button variant="primary" onClick={handleSaveStaff}>
-                    <Check size={15} /> Save Attendance
-                  </Button>
+                  {hasSavedStaffAttendance && !editingStaffAttendance ? (
+                    <Button variant="outline" onClick={() => setEditingStaffAttendance(true)}>
+                      <Pencil size={14} /> Edit Attendance
+                    </Button>
+                  ) : (
+                    <>
+                      {editingStaffAttendance && (
+                        <Button
+                          variant="outline"
+                          onClick={cancelStaffAttendanceEdit}
+                          disabled={savingStaffAttendance}
+                        >
+                          <X size={14} /> Cancel
+                        </Button>
+                      )}
+                      <Button
+                        variant="primary"
+                        onClick={handleSaveStaff}
+                        disabled={savingStaffAttendance}
+                      >
+                        <Check size={15} /> {savingStaffAttendance ? "Saving…" : editingStaffAttendance ? "Save Changes" : "Save Attendance"}
+                      </Button>
+                    </>
+                  )}
                 </div>
               </div>
             )}
