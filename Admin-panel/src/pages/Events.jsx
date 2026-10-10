@@ -23,6 +23,7 @@ import {
 import ImageDropzone from "../components/upload/ImageDropzone";
 import { api } from "../lib/api";
 import { invalidateMasterCache } from "../lib/masterCache";
+import { dateKey, formatHolidayDate } from "../lib/date";
 const initialEvents = [];
 
 const CATEGORIES = [
@@ -65,7 +66,7 @@ const CATEGORY_IMAGES = {
 
 function formatDate(d) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-IN", {
+  return formatHolidayDate(d, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -77,6 +78,7 @@ function normalizeEvent(event) {
   return {
     ...event,
     id: event._id || event.id,
+    date: dateKey(event.date),
     category: event.category || "Other",
     time: event.time || "—",
     venue: event.venue || "Venue to be announced",
@@ -292,8 +294,8 @@ export default function Events() {
     }
   };
 
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const todayKey = dateKey(new Date());
+  const todayMonth = todayKey.slice(0, 7);
 
   const cats = useMemo(
     () => ["All", ...new Set(events.map((e) => e.category))],
@@ -311,9 +313,8 @@ export default function Events() {
           e.venue.toLowerCase().includes(q) ||
           e.category.toLowerCase().includes(q);
 
-        const eventDate = new Date(e.date);
-        eventDate.setHours(0, 0, 0, 0);
-        const isUpcoming = eventDate >= today;
+        const eventDate = dateKey(e.date);
+        const isUpcoming = Boolean(eventDate) && eventDate >= todayKey;
         const matchView =
           view === "all" ||
           (view === "upcoming" && isUpcoming) ||
@@ -321,26 +322,25 @@ export default function Events() {
 
         return matchCat && matchQuery && matchView;
       })
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-  }, [events, filter, query, view]);
+      .sort((a, b) => dateKey(a.date).localeCompare(dateKey(b.date)));
+  }, [events, filter, query, view, todayKey]);
 
   const stats = useMemo(() => {
-    const upcoming = events.filter((e) => new Date(e.date) >= today).length;
-    const past = events.length - upcoming;
-    const thisMonth = events.filter((e) => {
-      const d = new Date(e.date);
-      return (
-        d.getMonth() === today.getMonth() &&
-        d.getFullYear() === today.getFullYear()
-      );
+    const upcoming = events.filter((e) => {
+      const key = dateKey(e.date);
+      return Boolean(key) && key >= todayKey;
     }).length;
+    const past = events.length - upcoming;
+    const thisMonth = events.filter((e) =>
+      dateKey(e.date).startsWith(todayMonth),
+    ).length;
     return {
       total: events.length,
       upcoming,
       past,
       thisMonth,
     };
-  }, [events]);
+  }, [events, todayKey, todayMonth]);
 
   const openAdd = () => {
     setEditId(null);
@@ -533,7 +533,8 @@ export default function Events() {
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
           {filtered.map((e) => {
-            const isPast = new Date(e.date) < today;
+            const eventDate = dateKey(e.date);
+            const isPast = Boolean(eventDate) && eventDate < todayKey;
             return (
               <Card
                 key={e.id}

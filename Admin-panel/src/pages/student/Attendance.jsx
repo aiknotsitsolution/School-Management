@@ -22,6 +22,7 @@ export default function Attendance() {
   // Holidays are Events with category "Holiday" — the calendar needs them
   // alongside attendance, and this page is now their home.
   const [events, setEvents] = useState([]);
+  const [holidayError, setHolidayError] = useState("");
   const [loading, setLoading] = useState(true);
   const [month, setMonth] = useState(() => dateOf(new Date()).slice(0, 7));
 
@@ -38,10 +39,22 @@ export default function Attendance() {
 
   useEffect(() => {
     refresh();
-    api.events
-      .list()
-      .then(({ data }) => setEvents(data || []))
-      .catch(() => setEvents([]));
+    Promise.allSettled([api.events.list("limit=1000"), api.events.indiaHolidays()])
+      .then((results) => {
+        const schoolEvents =
+          results[0].status === "fulfilled" && Array.isArray(results[0].value.data)
+            ? results[0].value.data
+            : [];
+        const indiaHolidays =
+          results[1].status === "fulfilled" && Array.isArray(results[1].value.data)
+            ? results[1].value.data
+            : [];
+        const errors = results
+          .filter((result) => result.status === "rejected")
+          .map((result) => result.reason?.message || "Could not load holidays");
+        setEvents([...schoolEvents, ...indiaHolidays]);
+        setHolidayError(errors.join(" "));
+      });
     const unsubscribe = api.attendanceStream.subscribe({
       onData: () => {
         if (document.visibilityState !== "visible") return;
@@ -129,7 +142,12 @@ export default function Attendance() {
       {/* Full-detail School Calendar: grid plus the month list and the
           selected-day rail, which need this page's space rather than the
           dashboard fold. */}
-      <StudentAttendanceCalendar variant="full" attendance={records} events={events} />
+      <StudentAttendanceCalendar
+        variant="full"
+        attendance={records}
+        events={events}
+        holidayError={holidayError}
+      />
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card className="lg:col-span-1">

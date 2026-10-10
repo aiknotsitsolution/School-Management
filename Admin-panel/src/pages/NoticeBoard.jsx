@@ -12,6 +12,7 @@ import {
 } from "../components/UI";
 import { api } from "../lib/api";
 import { invalidateMasterCache } from "../lib/masterCache";
+import { dateKey, formatHolidayDate } from "../lib/date";
 import { selectUser } from "../store/selectors";
 
 const initialNotices = [];
@@ -50,7 +51,7 @@ const categoryTone = {
 
 function formatDate(d) {
   if (!d) return "—";
-  return new Date(d).toLocaleDateString("en-IN", {
+  return formatHolidayDate(d, {
     day: "numeric",
     month: "short",
     year: "numeric",
@@ -61,7 +62,7 @@ function emptyForm() {
   return {
     title: "",
     category: "Academic",
-    date: new Date().toISOString().slice(0, 10),
+    date: dateKey(new Date()),
     audience: "All",
     body: "",
     pinned: false,
@@ -86,7 +87,7 @@ function normalizeNotice(notice) {
     ...notice,
     id: notice._id || notice.id,
     category: notice.category || "General",
-    date: notice.expiryDate || notice.createdAt,
+    date: dateKey(notice.expiryDate || notice.createdAt),
     audience: Array.isArray(notice.audience) ? audience : ["all"],
     audienceLabel: notice.audienceLabel
       ? notice.audienceLabel
@@ -284,6 +285,7 @@ function SearchableSelect({ options, value, onChange, placeholder, onAddCustom }
 
 export default function NoticeBoard() {
   const user = useSelector(selectUser);
+  const todayKey = dateKey(new Date());
   const isTeacher = user?.role === "teacher";
   const canPublish = user?.role === "school_admin" || user?.role === "super_admin" || isTeacher;
   const [notices, setNotices] = useState(initialNotices);
@@ -404,26 +406,22 @@ export default function NoticeBoard() {
         // Pinned first, then by date desc
         if (a.pinned && !b.pinned) return -1;
         if (!a.pinned && b.pinned) return 1;
-        return new Date(b.date) - new Date(a.date);
+        return dateKey(b.date).localeCompare(dateKey(a.date));
       });
   }, [notices, filter, query]);
 
   const stats = useMemo(() => {
     const pinned = notices.filter((n) => n.pinned).length;
-    const thisMonth = notices.filter((n) => {
-      const d = new Date(n.date);
-      const now = new Date();
-      return (
-        d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
-      );
-    }).length;
+    const thisMonth = notices.filter((n) =>
+      dateKey(n.date).startsWith(todayKey.slice(0, 7)),
+    ).length;
     return {
       total: notices.length,
       pinned,
       thisMonth,
       categories: new Set(notices.map((n) => n.category)).size,
     };
-  }, [notices]);
+  }, [notices, todayKey]);
 
   const openAdd = () => {
     setEditId(null);

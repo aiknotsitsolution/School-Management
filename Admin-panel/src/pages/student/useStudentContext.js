@@ -1,3 +1,4 @@
+import { dateKey } from "../../lib/date";
 import { useState } from "react";
 import { useSelector } from "react-redux";
 import { selectUser, selectSchool } from "../../store/selectors";
@@ -60,11 +61,7 @@ export function todayISO() {
 }
 
 export function dateOf(value) {
-  const d = new Date(value);
-  if (Number.isNaN(d.getTime())) return "";
-  const off = d.getTimezoneOffset();
-  const local = new Date(d.getTime() - off * 60000);
-  return local.toISOString().slice(0, 10);
+  return dateKey(value);
 }
 
 export function greeting() {

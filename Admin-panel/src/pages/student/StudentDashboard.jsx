@@ -37,6 +37,7 @@ import {
 import { ATT_ORDER, ATT_STATUS, toneFor } from "../../components/studentcharts/theme";
 import { computeGrade } from "../../lib/grading";
 import { api } from "../../lib/api";
+import { dateKey, formatHolidayDate } from "../../lib/date";
 import useStudentContext, {
   fmtDate,
   fmtMoney,
@@ -82,18 +83,20 @@ const ATT_VALUE = {
  */
 const ATT_SHORT = { Present: "P", Absent: "A", Leave: "L" };
 
+
 /**
- * School Calendar — attendance + Govt holidays in one month grid.
- *
- * `variant="mini"`  dashboard card: grid + legend only, nothing that pushes
- *                   the greeting banner off the first screen.
- * `variant="full"`  My Attendance: adds the month list and the selected-day
- *                   detail rail beside the grid.
+ * School Calendar — attendance and school-published holidays in one month
+ * grid. The mini variant is used on the dashboard; full is used on Attendance.
  */
-export function StudentAttendanceCalendar({ attendance, events, variant = "full" }) {
+export function StudentAttendanceCalendar({
+  attendance = [],
+  events = [],
+  holidayError = "",
+  variant = "full",
+}) {
   const [month, setMonth] = useState(() => {
-    const today = new Date();
-    return new Date(today.getFullYear(), today.getMonth(), 1);
+    const [year, monthNumber] = dateKey(new Date()).split("-").map(Number);
+    return new Date(year, monthNumber - 1, 1);
   });
   const [selectedDate, setSelectedDate] = useState(() => dateOf(new Date()));
   const [monthAttendance, setMonthAttendance] = useState([]);
@@ -139,12 +142,16 @@ export function StudentAttendanceCalendar({ attendance, events, variant = "full"
   const holidaysByDate = useMemo(() => {
     const byDate = new Map();
     events
-      .filter((event) => String(event.category || "").toLowerCase() === "holiday")
+      .filter((event) => String(event.category || "").trim().toLowerCase() === "holiday")
       .forEach((event) => {
         const key = dateOf(event.date);
         if (!key) return;
         if (!byDate.has(key)) byDate.set(key, []);
-        byDate.get(key).push(event);
+        const dayEvents = byDate.get(key);
+        const titleKey = String(event.title || "Holiday").trim().toLowerCase();
+        if (!dayEvents.some((item) => String(item.title || "Holiday").trim().toLowerCase() === titleKey)) {
+          dayEvents.push(event);
+        }
       });
     return byDate;
   }, [events]);
@@ -305,6 +312,11 @@ export function StudentAttendanceCalendar({ attendance, events, variant = "full"
       {calendarError && (
         <p role="status" className="mt-3 text-[12px] text-rose-600">{calendarError}</p>
       )}
+      {holidayError && (
+        <p role="status" className="mt-2 text-[12px] text-rose-600">
+          School holidays could not be loaded: {holidayError}
+        </p>
+      )}
       {/* Legend uses the exact chip styles the grid renders, so the legend
           doubles as the colour key for what the student sees in a cell. */}
       <div className="mt-3 flex flex-wrap gap-1.5 border-t border-slate-100 pt-3">
@@ -331,12 +343,14 @@ export function StudentAttendanceCalendar({ attendance, events, variant = "full"
         <div className="space-y-3 lg:border-l lg:border-slate-100 lg:pl-4">
       <div className="border-t border-slate-100 pt-3 lg:border-t-0 lg:pt-0">
         <p className="mb-2 text-[11px] font-bold uppercase tracking-wide text-slate-text/55">
-          Attendance and holidays this month
+        Attendance and India / school holidays this month
         </p>
         {monthItems.length === 0 ? (
           <p className="text-[12px] text-slate-text/65">
-            No attendance or holiday records for this month.
-          </p>
+          {holidayError
+            ? "Holiday calendars could not be loaded."
+            : "No attendance or India / school holidays for this month."}
+        </p>
         ) : (
           <div className="max-h-48 space-y-1.5 overflow-y-auto">
             {monthItems.map(({ day, attendance: record, holidays }) => (
@@ -347,7 +361,7 @@ export function StudentAttendanceCalendar({ attendance, events, variant = "full"
                 className="flex w-full flex-wrap items-center justify-between gap-2 rounded-lg px-2.5 py-2 text-left transition hover:bg-paper"
               >
                 <span className="text-[12px] font-medium text-ink">
-                  {new Date(`${day}T00:00:00`).toLocaleDateString("en-IN", {
+                  {formatHolidayDate(day, {
                     day: "numeric",
                     month: "short",
                     weekday: "short",
@@ -372,7 +386,7 @@ export function StudentAttendanceCalendar({ attendance, events, variant = "full"
       </div>
       <div className="rounded-xl bg-paper/70 px-3.5 py-3">
         <p className="text-[11px] font-semibold text-slate-text/60">
-          {new Date(`${selectedDate}T00:00:00`).toLocaleDateString("en-IN", {
+          {formatHolidayDate(selectedDate, {
             weekday: "long",
             day: "numeric",
             month: "long",
@@ -773,7 +787,8 @@ export default function StudentDashboard() {
   });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-const [now, setNow] = useState(() => new Date());
+  const [holidayError, setHolidayError] = useState("");
+  const [now, setNow] = useState(() => new Date());
 const [canScroll, setCanScroll] = useState({ left: false, right: true });
 
   useEffect(() => {
@@ -785,6 +800,7 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
     let alive = true;
     setLoading(true);
     setError("");
+    setHolidayError("");
 
     const run = async () => {
       // /students/me is the authoritative profile and needs no class/section, so
@@ -818,7 +834,8 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
         api.fees.invoices.list(),
         api.notices.list(),
         api.homework.submissions.myList(),
-        api.events.list(),
+        api.events.list("limit=1000"),
+        api.events.indiaHolidays(),
       ]);
       if (!alive) return;
 
@@ -827,8 +844,22 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
         setError("We couldn't load your data. Please sign out and sign in again.");
       }
       if (results[9].status === "rejected") {
-        toast(results[9].reason?.message || "Could not load school holidays", "error");
+        const message = results[9].reason?.message || "Could not load school holidays";
+        toast(message, "error");
       }
+      if (results[10].status === "rejected") {
+        const message = results[10].reason?.message || "Could not load India holidays";
+        toast(message, "error");
+      }
+      const holidayErrors = [
+        results[9].status === "rejected"
+          ? results[9].reason?.message || "School holidays could not be loaded."
+          : "",
+        results[10].status === "rejected"
+          ? results[10].reason?.message || "India holidays could not be loaded."
+          : "",
+      ].filter(Boolean);
+      setHolidayError(holidayErrors.join(" "));
       setData({
         profile: value(0),
         attendance: value(1) || [],
@@ -839,7 +870,7 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
         invoices: value(6) || [],
         notices: value(7) || [],
         submissions: value(8) || [],
-        events: value(9) || [],
+        events: [...(value(9) || []), ...(value(10) || [])],
       });
       setLoading(false);
     };
@@ -1322,7 +1353,12 @@ const [canScroll, setCanScroll] = useState({ left: false, right: true });
         </div>
 
         {/* Compact month view — chips only, no detail rail. */}
-        <StudentAttendanceCalendar variant="mini" attendance={attendance} events={events} />
+        <StudentAttendanceCalendar
+          variant="mini"
+          attendance={attendance}
+          events={events}
+          holidayError={holidayError}
+        />
       </div>
 
       {error && (

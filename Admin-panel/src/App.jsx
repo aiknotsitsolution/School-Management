@@ -2,7 +2,7 @@ import { BrowserRouter, Navigate, Routes, Route } from "react-router-dom";
 import { lazy, Suspense, useEffect } from "react";
 import { useSelector, useDispatch } from "react-redux";
 import { Ban } from "lucide-react";
-import Layout from "./layout/Layout";
+const Layout = lazy(() => import("./layout/Layout"));
 import { loadActiveGradingScale } from "./lib/grading";
 import { logout } from "./store/authSlice";
 import RouteFallback from "./components/RouteFallback";

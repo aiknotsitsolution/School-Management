@@ -20,6 +20,7 @@ const upload = multer({
 
 router.post("/upload-image", requirePermission("events:publish"), upload.single("image"), ctrl.uploadEventImage);
 router.post("/", requirePermission("events:publish"), ctrl.createEvent);
+router.get("/india-holidays", requirePermission("events:read"), ctrl.getIndiaHolidays);
 router.get("/", requirePermission("events:read"), ctrl.getEvents);
 router.put("/:id", requirePermission("events:publish"), ctrl.updateEvent);
 router.delete("/:id", requirePermission("events:publish"), ctrl.deleteEvent);

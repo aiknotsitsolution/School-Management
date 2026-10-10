@@ -97,6 +97,13 @@ function todayLabel() {
   });
 }
 
+function localDateString(value = new Date()) {
+  const year = value.getFullYear();
+  const month = String(value.getMonth() + 1).padStart(2, "0");
+  const day = String(value.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 function StaffMonthlySummary() {
   const [monthData, setMonthData] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -213,7 +220,7 @@ export default function Attendance() {
   const [registerRecords, setRegisterRecords] = useState([]);
   const [registerLoading, setRegisterLoading] = useState(false);
   const [error, setError] = useState("");
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedDate, setSelectedDate] = useState(localDateString);
   const [date] = useState(todayLabel());
   const [classTeacherMap, setClassTeacherMap] = useState({});
   const [staffAssignmentsMap, setStaffAssignmentsMap] = useState({});
@@ -232,7 +239,7 @@ export default function Attendance() {
   const [staffTrendError, setStaffTrendError] = useState("");
   const [staffPage, setStaffPage] = useState(1);
   const [staffPageSize, setStaffPageSize] = useState(20);
-  const todayStr = new Date().toISOString().slice(0, 10);
+  const todayStr = localDateString();
 
   const studentStatusConfig = useMemo(() => buildStatusConfig(STUDENT_STATUSES), []);
 
@@ -365,12 +372,10 @@ export default function Attendance() {
     students.forEach((s) => { if (s.admissionNo) admToId[s.admissionNo] = s.id; });
     registerRecords.forEach((record) => {
       const key = admToId[record.studentId] || record.studentId;
-      existing[key] =
-        record.status === "Absent"
-          ? "absent"
-          : record.status === "Leave"
-            ? "leave"
-            : "present";
+      const status = String(record.status || "").trim().toLowerCase();
+      if (status === "present" || status === "absent" || status === "leave") {
+        existing[key] = status;
+      }
     });
     setMarks(existing);
   }, [registerRecords, students, editingAttendance]);
@@ -447,9 +452,9 @@ export default function Attendance() {
       .filter(
         (s) =>
           !query ||
-          s.name.toLowerCase().includes(query.toLowerCase()) ||
+          String(s.name || "").toLowerCase().includes(query.toLowerCase()) ||
           String(s.roll).includes(query) ||
-          s.id.toLowerCase().includes(query.toLowerCase()),
+          String(s.id || "").toLowerCase().includes(query.toLowerCase()),
       )
       .sort((a, b) => String(a.roll).localeCompare(String(b.roll)));
   }, [cls, section, query, students]);
@@ -476,27 +481,48 @@ export default function Attendance() {
     setSaved(false);
   };
 
-  const getStatus = (id) => marks[id] || "present";
+  const getStatus = (id) => marks[id] || "";
 
   const counts = useMemo(() => {
-    const c = {};
+    const c = { unmarked: 0 };
     Object.keys(studentStatusConfig).forEach((k) => { c[k] = 0; });
     list.forEach((s) => {
-      const st = getStatus(s.id);
-      c[st] = (c[st] || 0) + 1;
+      const st = marks[s.id] || "";
+      if (st) c[st] = (c[st] || 0) + 1;
+      else c.unmarked += 1;
     });
     return c;
   }, [list, marks, studentStatusConfig]);
+
+  const hasSavedStudentAttendance = (student) =>
+    registerRecords.some((record) =>
+      [student.admissionNo, student.id]
+        .filter(Boolean)
+        .some((id) => String(id) === String(record.studentId)),
+    );
+  const pendingAttendanceCount = scopedStudents.filter((student) =>
+    Boolean(getStatus(student.id)) &&
+    (editingAttendance || !hasSavedStudentAttendance(student)),
+  ).length;
 
   const handleSave = async () => {
     if (scopedStudents.length === 0) {
       setError("No students found for this class and section.");
       return;
     }
+    const studentsToSave = scopedStudents.filter((student) =>
+      Boolean(getStatus(student.id)) &&
+      (editingAttendance || !hasSavedStudentAttendance(student)),
+    );
+    if (studentsToSave.length === 0) {
+      setError("Choose Present, Absent or Leave for at least one unmarked student.");
+      return;
+    }
+    setError("");
     setSavingAttendance(true);
     try {
       await api.attendance.mark(
-        scopedStudents.map((student) => ({
+        studentsToSave.map((student) => ({
           studentId: student.admissionNo || student.id,
           class: student.class,
           section: student.section,
@@ -541,7 +567,7 @@ export default function Attendance() {
       s.class,
       s.section,
       s.roll,
-      (studentStatusConfig[getStatus(s.id)] || {}).full || "Present",
+      (studentStatusConfig[getStatus(s.id)] || {}).full || "Not marked",
     ]);
     const csv = [headers, ...rows]
       .map((row) =>
@@ -561,7 +587,7 @@ export default function Attendance() {
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.href = url;
-    link.download = `attendance-${cls}-${section}-${new Date().toISOString().slice(0, 10)}.csv`;
+    link.download = `attendance-${cls}-${section}-${localDateString()}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -752,6 +778,13 @@ export default function Attendance() {
             accent={cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "primary" ? "primary" : "info"}
           />
         ))}
+        <StatCard
+          icon={AlertCircle}
+          label="Not marked"
+          value={String(counts.unmarked || 0)}
+          sub="Students awaiting a status"
+          accent="neutral"
+        />
       </div>
 
       {/* Trend Chart */}
@@ -858,9 +891,10 @@ export default function Attendance() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <p className="text-[13.5px] font-semibold text-ink truncate">
-                        {s.name}
+                        {s.name || "—"}
                       </p>
                       <Pill tone="neutral">#{s.roll}</Pill>
+                      {!status && <Pill tone="neutral">Not marked</Pill>}
                     </div>
                     <p className="text-[11.5px] text-slate-text/60 mt-0.5">
                       {s.admissionNo || "—"} · {s.gender} · {s.house} House
@@ -880,7 +914,7 @@ export default function Attendance() {
                           key={key}
                           title={cfg.full}
                           onClick={() => setMark(s.id, key)}
-                          disabled={registerLoading || (registerRecords.length > 0 && !editingAttendance)}
+                          disabled={registerLoading || (hasSavedStudentAttendance(s) && !editingAttendance)}
                           className={`w-9 h-9 rounded-lg text-[12px] font-bold border transition-all disabled:cursor-not-allowed disabled:opacity-60 ${
                             isActive
                               ? (ACTIVE_STYLES[key] || "bg-primary text-white border-primary")
@@ -929,16 +963,12 @@ export default function Attendance() {
         {list.length > 0 && (
           <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mt-5 pt-4 border-t border-slate-200">
             <div className="text-[12.5px] text-slate-text/70">
-              Showing <strong className="text-ink">{list.length}</strong>{" "}
-              students{" "}
-              {Object.entries(studentStatusConfig).map(([key, cfg]) => (
-                <span key={key}>
-                  · {cfg.full}{" "}
-                  <strong className={`text-${cfg.tone === "success" ? "success" : cfg.tone === "alert" ? "alert" : cfg.tone === "warning" ? "amber-700" : cfg.tone === "primary" ? "primary-dark" : "info"}`}>
-                    {counts[key] || 0}
-                  </strong>
-                </span>
-              ))}
+              <strong className="text-ink">{list.length}</strong> students ·{" "}
+              <strong className="text-success">{counts.present || 0}</strong> present ·{" "}
+              <strong className="text-alert">{counts.absent || 0}</strong> absent ·{" "}
+              <strong className="text-info">{counts.leave || 0}</strong> leave ·{" "}
+              <strong className="text-slate-text">{counts.unmarked || 0}</strong> not marked
+              {" "}
             </div>
             <div className="flex items-center gap-3">
               {saved && (
@@ -946,33 +976,30 @@ export default function Attendance() {
                   <CheckCircle2 size={16} /> Attendance saved
                 </span>
               )}
-              {registerRecords.length > 0 && !editingAttendance ? (
+              {registerRecords.length > 0 && !editingAttendance && (
                 <Button variant="outline" onClick={() => setEditingAttendance(true)}>
                   <Pencil size={14} /> Edit Attendance
                 </Button>
-              ) : (
-                <>
-                  {editingAttendance && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        setEditingAttendance(false);
-                        setSaved(false);
-                      }}
-                      disabled={savingAttendance}
-                    >
-                      Cancel
-                    </Button>
-                  )}
-                  <Button
-                    variant="primary"
-                    onClick={handleSave}
-                    disabled={savingAttendance || registerLoading}
-                  >
-                    <Check size={15} /> {savingAttendance ? "Saving…" : editingAttendance ? "Save Changes" : "Save Attendance"}
-                  </Button>
-                </>
               )}
+              {editingAttendance && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setEditingAttendance(false);
+                    setSaved(false);
+                  }}
+                  disabled={savingAttendance}
+                >
+                  Cancel
+                </Button>
+              )}
+              <Button
+                variant="primary"
+                onClick={handleSave}
+                disabled={savingAttendance || registerLoading || pendingAttendanceCount === 0}
+              >
+                <Check size={15} /> {savingAttendance ? "Saving…" : editingAttendance ? "Save Changes" : "Save Marked"}
+              </Button>
             </div>
           </div>
         )}
@@ -980,9 +1007,11 @@ export default function Attendance() {
 
       {/* Quick tip */}
       <div className="rounded-xl bg-ink/5 border border-ink/10 px-4 py-3.5 text-[13px] text-slate-text">
-        <strong className="text-ink">Tip:</strong> Default status is Present.
-        Use the P / A / L buttons to mark each student. Changes are sent to
-        the backend when you click <strong>Save Attendance</strong>.
+        <strong className="text-ink">Tip:</strong> Students start as{" "}
+        <strong className="text-ink">Not marked</strong>. Select P / A / L for the
+        students whose attendance you are recording, then click{" "}
+        <strong>Save Marked</strong>. Existing records stay unchanged unless you
+        choose <strong>Edit Attendance</strong>.
       </div>
         </>
       )}

@@ -735,7 +735,8 @@ export const api = {
     reply: (id, body) => request(`/conversations/${id}/reply`, json("POST", { body })),
   },
   events: {
-    list: () => request("/events"),
+    list: (params = "") => request(`/events${params ? `?${params}` : ""}`),
+    indiaHolidays: () => request("/events/india-holidays"),
     create: (item) => request("/events", json("POST", item)),
     update: (id, item) => request(`/events/${id}`, json("PUT", item)),
     remove: (id) => request(`/events/${id}`, { method: "DELETE" }),
