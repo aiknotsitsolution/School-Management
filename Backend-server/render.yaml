@@ -1,6 +1,6 @@
 services:
   # ============================================================
-  # MONOLITH BACKEND — all 8 microservices + API gateway
+  # MONOLITH BACKEND — all 9 microservices + API gateway
   # in a single Render Web Service ($7/mo Starter plan)
   # ============================================================
   - type: web
@@ -14,7 +14,7 @@ services:
       - key: NODE_ENV
         value: production
       - key: MONOLITH_SERVICES
-        value: auth,student,staff,academic,fee,communication,accounting,gateway
+        value: auth,student,staff,academic,fee,communication,library,facility,accounting,gateway
 
       # ── Secrets (set these in Render Dashboard, NOT here) ──────
       - key: JWT_SECRET

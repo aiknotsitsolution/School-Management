@@ -12,7 +12,7 @@ import { setTokens } from "../store/authSlice";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
-  "/api";
+  "http://15.135.215.62:5000/api";
 
 let refreshPromise = null;
 let refreshTimer = null;
