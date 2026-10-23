@@ -19,7 +19,7 @@ export default function MyClass() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   // A failed load must not masquerade as an empty roster — the teacher would
-  // conclude the class has no students (Sales report A1/A4).
+  // conclude the class has no students (Sales report A1/A4). 
   const [loadError, setLoadError] = useState(null);
   const [search, setSearch] = useState("");
   const [profileId, setProfileId] = useState(null);

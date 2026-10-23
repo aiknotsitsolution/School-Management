@@ -76,6 +76,7 @@ function inDays(n) {
   return d.toISOString().slice(0, 10);
 }
 
+
 export default function Leave() {
   const [requests, setRequests] = useState(leaveSeed);
   const [balance, setBalance] = useState([]);
