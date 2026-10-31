@@ -4,8 +4,8 @@ import { onSocket } from "./socket";
 import { refreshAccessToken, scheduleRefresh } from "./tokenRefresh";
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "/api";
+  import.meta.env.VITE_BACKEND_API_URL ||
+  (import.meta.env.PROD ? "https://15.135.215.62/api" : "/api");
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
 

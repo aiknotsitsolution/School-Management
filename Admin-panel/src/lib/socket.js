@@ -14,14 +14,14 @@ import { refreshAccessToken } from "./tokenRefresh";
 // REST calls use, so an expired token shows up as a `connect_error` and is
 // retried once after the shared refresh helper has rotated it.
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "/api";
+  import.meta.env.VITE_BACKEND_API_URL ||
+  (import.meta.env.PROD ? "https://15.135.215.62/api" : "/api");
 
 // The gateway serves REST under /api but the socket upgrade is a bare-origin
-// path, so strip the /api suffix. VITE_SOCKET_URL overrides this for a split
-// deployment where realtime lives on its own host.
+// path, so strip the /api suffix. VITE_BACKEND_SOCKET_URL overrides this for
+// a split deployment where realtime lives on its own host.
 const SOCKET_URL =
-  import.meta.env.VITE_SOCKET_URL || API_BASE_URL.replace(/\/api\/?$/, "");
+  import.meta.env.VITE_BACKEND_SOCKET_URL || API_BASE_URL.replace(/\/api\/?$/, "");
 
 let socket = null;
 let connecting = null;

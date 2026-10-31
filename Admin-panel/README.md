@@ -30,22 +30,17 @@ Vite proxies API requests and Socket.IO connections to `http://localhost:5000`.
    ```
 
    Open the Vite URL shown in the terminal (usually `http://localhost:5173`).
-   The sample `.env` connects to AWS. To use a locally running backend instead,
-   set `VITE_API_URL=/api` and leave `VITE_SOCKET_URL` empty so API and realtime
-   traffic use the local Vite proxy.
+   The sample `.env` uses the local Vite proxy. To use AWS, set
+   `VITE_BACKEND_API_URL=https://15.135.215.62/api` and
+   `VITE_BACKEND_SOCKET_URL=https://15.135.215.62`.
 
 If frontend dependencies are not installed yet, run `npm install` in
 `Admin-panel`.
 
-Production builds use same-origin `/api` and Socket.IO URLs, so the browser
-does not make cross-origin requests. Deploy the frontend and backend behind the
-same HTTPS origin, with the frontend Nginx forwarding `/api/`, `/socket.io/`,
-and `/health` to the API gateway. This makes
-`https://15.135.215.62/health` available through the frontend origin as well.
-The Docker image already uses `/api` and proxies these paths to the gateway
-container. A separately hosted static frontend needs a same-origin reverse
-proxy; otherwise the backend's `CORS_ORIGIN` must include its exact public
-frontend URL.
+Production Vite builds connect to the AWS API and Socket.IO endpoints.
+The backend's `CORS_ORIGIN` must include the exact frontend origin
+`https://school-management-tau-kohl.vercel.app`. Docker deployments instead
+use same-origin `/api` and Socket.IO paths, which Nginx proxies to the gateway.
 
 ## Run the complete stack with Docker
 

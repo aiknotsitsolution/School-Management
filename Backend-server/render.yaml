@@ -20,7 +20,7 @@ services:
       - key: JWT_SECRET
         sync: false
       - key: CORS_ORIGIN
-        sync: false
+        value: https://school-management-tau-kohl.vercel.app
       - key: FRONTEND_URL
         sync: false
       - key: INTERNAL_NOTIFY_KEY
@@ -83,7 +83,7 @@ services:
   # ============================================================
   # FRONTEND — React/Vite static site (free tier)
   # ============================================================
-  - type: static_site
+  -type: static_site
     name: zipschool-frontend
     rootDir: Admin-panel
     buildCommand: npm install && npm run build

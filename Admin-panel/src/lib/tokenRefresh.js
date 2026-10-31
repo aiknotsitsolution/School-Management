@@ -11,8 +11,8 @@ import { setTokens } from "../store/authSlice";
 // coalesce concurrent callers so only ONE network request is in flight.
 
 const API_BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "/api";
+  import.meta.env.VITE_BACKEND_API_URL ||
+  (import.meta.env.PROD ? "https://15.135.215.62/api" : "/api");
 
 let refreshPromise = null;
 let refreshTimer = null;

@@ -147,9 +147,12 @@ MongoDB authentication was enabled need an administrator to provision the
 configured account before the services can use them; do not remove the volume
 to work around an authentication error.
 
-For production, set `CORS_ORIGIN` and `DOCKER_FRONTEND_URL` to the exact public
-HTTPS origin, protect `.env` with host-level access controls or a secrets
-manager, and terminate TLS at a reverse proxy. Take regular backups of
+For production, allow the exact frontend HTTPS origin in `CORS_ORIGIN` (for
+example, `https://school-management-tau-kohl.vercel.app`; do not add a trailing
+slash) and set `DOCKER_FRONTEND_URL` to the deployed frontend origin when using
+Docker. Keep other required origins comma-separated; never use `*` with
+credentialed requests. Protect `.env` with host-level access controls or a
+secrets manager, and terminate TLS at a reverse proxy. Take regular backups of
 `mongo_data` and test restoring them before handling production data.
 
 ## 5. Quick Test Flow
