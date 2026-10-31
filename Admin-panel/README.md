@@ -37,12 +37,15 @@ Vite proxies API requests and Socket.IO connections to `http://localhost:5000`.
 If frontend dependencies are not installed yet, run `npm install` in
 `Admin-panel`.
 
-Production Vite builds use `Admin-panel\.env.production` to connect to the AWS
-API gateway at `https://15.135.215.62`. The gateway health check is
-`https://15.135.215.62/health`; application requests use `/api`, and realtime
-connections use the gateway origin. Local `.env` settings can override these
-values for development. The Docker image intentionally keeps using `/api` and
-its Nginx proxy to the gateway container.
+Production builds use same-origin `/api` and Socket.IO URLs, so the browser
+does not make cross-origin requests. Deploy the frontend and backend behind the
+same HTTPS origin, with the frontend Nginx forwarding `/api/`, `/socket.io/`,
+and `/health` to the API gateway. This makes
+`https://15.135.215.62/health` available through the frontend origin as well.
+The Docker image already uses `/api` and proxies these paths to the gateway
+container. A separately hosted static frontend needs a same-origin reverse
+proxy; otherwise the backend's `CORS_ORIGIN` must include its exact public
+frontend URL.
 
 ## Run the complete stack with Docker
 
