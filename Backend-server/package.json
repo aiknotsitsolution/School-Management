@@ -8,9 +8,9 @@
     "start": "node monolith.js",
     "start:gateway": "npm --prefix api-gateway start",
     "dev:all": "node scripts/dev-all.js",
-    "docker:up": "docker-compose up --build",
-    "docker:down": "docker-compose down",
-    "docker:logs": "docker-compose logs -f",
+    "docker:up": "docker compose up --build -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
     "db:clean": "node scripts/clean-db.js",
     "bootstrap:super-admin": "node scripts/bootstrap-super-admin.js"
   },

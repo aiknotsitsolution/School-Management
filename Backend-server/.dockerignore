@@ -1,9 +1,11 @@
 # Dependencies (each service installs its own inside the container)
-node_modules/
+**/node_modules/
+**/coverage/
+**/dist/
 
 # Environment files (secrets — never baked into images)
-.env
-.env.*
+**/.env
+**/.env.*
 !.env.example
 
 # Logs
@@ -11,7 +13,7 @@ node_modules/
 npm-debug.log*
 
 # Git
-.git
+**/.git/
 .gitignore
 
 # IDE / Editor
@@ -25,8 +27,8 @@ npm-debug.log*
 Thumbs.db
 
 # Docker compose (not needed inside containers)
-docker-compose.yml
-docker-compose*.yml
+**/docker-compose.yml
+**/docker-compose*.yml
 
 # Documentation
 *.md

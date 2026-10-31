@@ -5,7 +5,7 @@ import { refreshAccessToken, scheduleRefresh } from "./tokenRefresh";
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL ||
-  "http://15.135.215.62:5000/api";
+  "/api";
 
 const json = (method, body) => ({ method, body: JSON.stringify(body) });
 

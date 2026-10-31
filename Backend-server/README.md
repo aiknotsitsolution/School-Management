@@ -95,19 +95,62 @@ npm run dev:all
 > username/password) to this README or any other repo file. Use `mongodb://localhost:27017/<db>`
 > in documentation.
 
-## 4. Run with Docker (recommended)
+## 4. Run the full stack with Docker Compose
 
-```bash
-cp .env.example .env
-docker-compose up --build
+From `Backend-server`, create `.env` only if it does not already exist. Preserve
+existing environment files, then configure a 32-character-or-longer `JWT_SECRET`,
+the Docker MongoDB root password, and any required integration credentials:
+
+```powershell
+Copy-Item .env.example .env  # only if .env does not already exist
+$rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+foreach ($name in 'JWT_SECRET', 'MONGO_INITDB_ROOT_PASSWORD', 'MONGO_APP_PASSWORD') {
+  $bytes = New-Object byte[] 32
+  $rng.GetBytes($bytes)
+  "$name=$([BitConverter]::ToString($bytes).Replace('-', '').ToLowerInvariant())"
+}
+$rng.Dispose()
 ```
 
-This starts MongoDB + all 8 microservices + the gateway with one command. Gateway is exposed at `http://localhost:5000`.
+Put each generated value in its matching variable in `.env`. The MongoDB root
+and application accounts are created only when the data volume is first
+initialized. The application account is limited to read/write access on ERP
+databases; root credentials are only passed to MongoDB. Keep `.env` private and
+never commit it.
 
-```bash
-docker-compose down          # stop everything
-docker-compose logs -f       # tail logs
+For local development, set `PAYMENT_PROVIDER_ENABLED=false` unless a real
+payment provider and its webhook secret are configured. Production refuses to
+start the fee service when provider payments are enabled with an invalid secret.
+
+Build and start the frontend, authenticated MongoDB, API gateway, and all
+microservices:
+
+```powershell
+docker compose up --build -d
+docker compose ps
 ```
+
+Open `http://localhost:8080`. The frontend container proxies `/api` and
+`/socket.io` to the internal gateway. Only the frontend is published to the
+host; MongoDB and backend service ports stay on the private Compose network.
+The frontend binds to `127.0.0.1` by default so a host-based TLS reverse proxy
+can securely expose it. Set `FRONTEND_BIND_ADDRESS` only when your deployment
+requires a different bind address, and restrict access with a firewall.
+
+```powershell
+docker compose logs -f
+docker compose down              # stop containers; preserve MongoDB data
+```
+
+MongoDB persists in the `mongo_data` volume. Existing volumes created before
+MongoDB authentication was enabled need an administrator to provision the
+configured account before the services can use them; do not remove the volume
+to work around an authentication error.
+
+For production, set `CORS_ORIGIN` and `DOCKER_FRONTEND_URL` to the exact public
+HTTPS origin, protect `.env` with host-level access controls or a secrets
+manager, and terminate TLS at a reverse proxy. Take regular backups of
+`mongo_data` and test restoring them before handling production data.
 
 ## 5. Quick Test Flow
 

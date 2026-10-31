@@ -1,0 +1,12 @@
+node_modules
+dist
+coverage
+.git
+.github
+.vscode
+.idea
+!.env.example
+*.log
+npm-debug.log*
+playwright-report
+test-results

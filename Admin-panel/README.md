@@ -1,37 +1,71 @@
-# Brightwood International School — ERP (Frontend Demo)
+# School ERP — Admin Panel
 
-A responsive, frontend-only School ERP built with **React + Vite + Tailwind CSS**.
-All data is realistic dummy data (no backend). Images load from free stock sources
-(Unsplash) and generated initials avatars (ui-avatars.com) at runtime over the internet.
+The React/Vite frontend connects to the backend API gateway. In local development,
+Vite proxies API requests and Socket.IO connections to `http://localhost:5000`.
 
-## Modules included
-Dashboard · Attendance · Admission Enquiry · Communication (1:1 & broadcast) ·
-Notice Board · Homework · Events · Timetable · Student Database · Examination ·
-Fees Collection · Report Card · Reports & Analytics · Inventory Management ·
-Bus Tracking (live map mock) · Online Fees Payment
+## Run locally (Windows)
 
-## How to run (Windows)
+1. Configure and start the backend:
 
-1. Extract this folder anywhere on your `E:\` drive, e.g. `E:\School-ERP`
-2. Install **Node.js** (v18 or newer) from https://nodejs.org if you don't have it
-3. Open a terminal (PowerShell / CMD) in that folder:
+   ```powershell
+   cd "<path-to-repository>\Backend-server"
+   Copy-Item .env.example .env  # only if .env does not already exist
    ```
-   cd E:\School-ERP
-   npm install
+
+   Set a 32-character-or-longer `JWT_SECRET` and the MongoDB URIs in
+   `Backend-server\.env`, and make sure MongoDB is running on port `27017`.
+   Install the backend dependencies once, then start the services:
+
+   ```powershell
+   npm run install:all
+   npm run dev:all
+   ```
+
+2. In a second terminal, configure and start the frontend:
+
+   ```powershell
+   cd "<path-to-repository>\Admin-panel"
+   Copy-Item .env.example .env  # only if .env does not already exist
    npm run dev
    ```
-4. Open the URL shown in the terminal (usually `http://localhost:5173`) in your browser
 
-## Build for production / static hosting
+   Open the Vite URL shown in the terminal (usually `http://localhost:5173`).
+   The sample `.env` connects to AWS. To use a locally running backend instead,
+   set `VITE_API_URL=/api` and leave `VITE_SOCKET_URL` empty so API and realtime
+   traffic use the local Vite proxy.
 
+If frontend dependencies are not installed yet, run `npm install` in
+`Admin-panel`.
+
+Production Vite builds use `Admin-panel\.env.production` to connect to the AWS
+API gateway at `https://15.135.215.62`. The gateway health check is
+`https://15.135.215.62/health`; application requests use `/api`, and realtime
+connections use the gateway origin. Local `.env` settings can override these
+values for development. The Docker image intentionally keeps using `/api` and
+its Nginx proxy to the gateway container.
+
+## Run the complete stack with Docker
+
+From `Backend-server`, configure `.env` as described in the backend Docker
+instructions, including random MongoDB passwords and a 32-character-or-longer
+`JWT_SECRET`. Then build and run the whole stack:
+
+```powershell
+docker compose up --build -d
+docker compose ps
 ```
-npm run build
-```
-This creates a `dist/` folder you can deploy anywhere (Netlify, Vercel, IIS, etc.) or open directly.
 
-## Notes
-- This is a **UI/UX design prototype** — no backend, no real database, no authentication.
-  The login screen is decorative and simply takes you to the dashboard.
-- All student/staff names, fee figures, admission enquiries etc. are fictional sample data.
-- Requires an internet connection to load the Google Fonts and stock images used for decoration.
-- Built with: React 18, React Router, Tailwind CSS v4, Recharts, Lucide Icons.
+Open `http://localhost:8080`. The frontend container serves the production
+build and proxies `/api` and `/socket.io` to the private backend gateway.
+MongoDB and backend services are not published to host ports.
+
+To stop the containers without deleting database data:
+
+```powershell
+docker compose down
+```
+
+For production deployments, put an HTTPS reverse proxy in front of the frontend,
+set `CORS_ORIGIN` to the public HTTPS origin, protect the backend `.env` with
+host-level access controls or a secrets manager, and regularly back up and test
+restores of the MongoDB volume.
